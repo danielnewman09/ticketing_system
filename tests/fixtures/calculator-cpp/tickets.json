@@ -1,0 +1,171 @@
+[
+  {
+    "id": 1,
+    "title": "CMake Project Configuration with Presets",
+    "ticket_type": "feature",
+    "priority": "Critical",
+    "complexity": "Medium",
+    "created_date": "2026-03-02",
+    "author": null,
+    "summary": "Set up the CMake build system for the Calculator GUI application. This includes the top-level CMakeLists.txt, CMake presets for Debug, Release, and Test configurations, dependency management for the GUI toolkit (Qt6 or Dear ImGui via SDL2), and the foundational project structure. All subsequent tickets depend on this configuration being in place.",
+    "parent_id": null,
+    "target_components": "Build System",
+    "languages": "C++, CMake",
+    "requires_math": false,
+    "generate_tutorial": false,
+    "acceptance_criteria": [
+      {"description": "All requirements with Verification=Automated have passing tests"},
+      {"description": "cmake --preset test && ctest --preset test succeeds end-to-end"},
+      {"description": "Code review approved"},
+      {"description": "Directory structure matches Design Notes specification"}
+    ],
+    "files": [
+      {"file_path": "CMakeLists.txt", "change_type": "new", "description": "Top-level build configuration"},
+      {"file_path": "CMakePresets.json", "change_type": "new", "description": "CMake preset definitions"},
+      {"file_path": "src/CMakeLists.txt", "change_type": "new", "description": "Source target definitions"},
+      {"file_path": "src/main.cpp", "change_type": "new", "description": "Minimal application entry point"},
+      {"file_path": "tests/CMakeLists.txt", "change_type": "new", "description": "Test target definitions"}
+    ],
+    "high_level_requirement_ids": [1],
+    "references": [
+      {"ref_type": "blocks", "ref_target": "2"},
+      {"ref_type": "blocks", "ref_target": "3"},
+      {"ref_type": "blocks", "ref_target": "4"}
+    ]
+  },
+  {
+    "id": 2,
+    "title": "GUI Window Creation",
+    "ticket_type": "feature",
+    "priority": "High",
+    "complexity": "Medium",
+    "created_date": "2026-03-02",
+    "author": null,
+    "summary": "Create the main application window for the Calculator using a cross-platform GUI toolkit. The window should have a fixed size appropriate for a calculator layout, a title bar reading \"Calculator\", and a clean application lifecycle (initialize, run event loop, teardown). The architecture must cleanly separate the windowing/rendering layer from the calculator logic to support testability.",
+    "parent_id": null,
+    "target_components": "GUI, Application",
+    "languages": "C++",
+    "requires_math": false,
+    "generate_tutorial": false,
+    "acceptance_criteria": [
+      {"description": "All requirements with Verification=Automated have passing tests"},
+      {"description": "Manual inspection confirms window renders with correct title"},
+      {"description": "Code review confirms separation of concerns (R5)"},
+      {"description": "Builds cleanly with all three CMake presets"}
+    ],
+    "files": [
+      {"file_path": "include/calculator/Application.h", "change_type": "new", "description": "Application class declaration"},
+      {"file_path": "src/Application.cpp", "change_type": "new", "description": "Application class implementation"},
+      {"file_path": "include/calculator/Calculator.h", "change_type": "new", "description": "Calculator class stub declaration"},
+      {"file_path": "src/Calculator.cpp", "change_type": "new", "description": "Calculator class stub implementation"},
+      {"file_path": "src/main.cpp", "change_type": "modified", "description": "Updated to instantiate Application and call run()"},
+      {"file_path": "src/CMakeLists.txt", "change_type": "modified", "description": "Add new source files to calculator target"}
+    ],
+    "high_level_requirement_ids": [2],
+    "references": [
+      {"ref_type": "ticket", "ref_target": "1"},
+      {"ref_type": "blocks", "ref_target": "3"}
+    ]
+  },
+  {
+    "id": 3,
+    "title": "Calculator UI Components and Logic",
+    "ticket_type": "feature",
+    "priority": "High",
+    "complexity": "Large",
+    "created_date": "2026-03-02",
+    "author": null,
+    "summary": "Build the full calculator user interface and computation logic. This includes a display screen showing input and results, a number pad (0-9 with decimal point), arithmetic operation buttons (+, -, x, /), an Enter/equals button to evaluate, and a Clear button to reset. The calculator logic must be fully decoupled from the GUI rendering so that the Calculator class can be tested independently without any GUI dependencies.",
+    "parent_id": null,
+    "target_components": "GUI, Calculator Logic",
+    "languages": "C++",
+    "requires_math": false,
+    "generate_tutorial": false,
+    "acceptance_criteria": [
+      {"description": "All requirements with Verification=Automated have passing tests"},
+      {"description": "Code review confirms Calculator class has zero GUI dependencies (R10)"},
+      {"description": "Manual inspection confirms UI layout matches Design Notes grid"},
+      {"description": "Builds cleanly with all three CMake presets"}
+    ],
+    "files": [
+      {"file_path": "include/calculator/Operator.h", "change_type": "new", "description": "Operator enum definition"},
+      {"file_path": "include/calculator/Calculator.h", "change_type": "modified", "description": "Full calculator interface"},
+      {"file_path": "src/Calculator.cpp", "change_type": "modified", "description": "Calculator logic implementation"},
+      {"file_path": "src/Application.cpp", "change_type": "modified", "description": "Wire UI rendering and input handling to Calculator"},
+      {"file_path": "include/calculator/Application.h", "change_type": "modified", "description": "Add render/input helpers if needed"},
+      {"file_path": "src/CMakeLists.txt", "change_type": "modified", "description": "Add any new source files"}
+    ],
+    "high_level_requirement_ids": [3],
+    "references": [
+      {"ref_type": "ticket", "ref_target": "1"},
+      {"ref_type": "ticket", "ref_target": "2"},
+      {"ref_type": "blocks", "ref_target": "4"}
+    ]
+  },
+  {
+    "id": 4,
+    "title": "Unit Tests with GTest — 100% Code Coverage",
+    "ticket_type": "feature",
+    "priority": "High",
+    "complexity": "Large",
+    "created_date": "2026-03-02",
+    "author": null,
+    "summary": "Write comprehensive unit tests for the Calculator class using Google Test (GTest). Tests must achieve 100% line and branch coverage of the Calculator class logic. The test executable is built exclusively under the test CMake preset and run via ctest --preset test. Coverage reports are generated using gcov/lcov and validated as part of the quality gate.",
+    "parent_id": null,
+    "target_components": "Tests, Calculator Logic",
+    "languages": "C++",
+    "requires_math": false,
+    "generate_tutorial": false,
+    "acceptance_criteria": [
+      {"description": "All requirements with Verification=Automated have passing tests"},
+      {"description": "ctest --preset test runs all tests successfully"},
+      {"description": "Coverage report shows 100% line coverage on Calculator.cpp and Calculator.h"},
+      {"description": "Code review approved"}
+    ],
+    "files": [
+      {"file_path": "tests/CalculatorTest.cpp", "change_type": "new", "description": "GTest test suite for Calculator class"},
+      {"file_path": "cmake/Coverage.cmake", "change_type": "new", "description": "CMake module for coverage report generation (optional, may inline in tests/CMakeLists.txt)"},
+      {"file_path": "tests/CMakeLists.txt", "change_type": "modified", "description": "Add CalculatorTest target, link GTest, register with CTest"},
+      {"file_path": "CMakePresets.json", "change_type": "modified", "description": "Add coverage report generation step if needed"}
+    ],
+    "high_level_requirement_ids": [4],
+    "references": [
+      {"ref_type": "ticket", "ref_target": "1"},
+      {"ref_type": "ticket", "ref_target": "3"},
+      {"ref_type": "blocks", "ref_target": "5"}
+    ]
+  },
+  {
+    "id": 5,
+    "title": "CI Integration and Coverage Reporting",
+    "ticket_type": "feature",
+    "priority": "Medium",
+    "complexity": "Medium",
+    "created_date": "2026-03-02",
+    "author": null,
+    "summary": "Create a GitHub Actions CI pipeline that builds the calculator project with all three CMake presets, runs the test suite, generates a coverage report, and enforces the 100% coverage gate on the Calculator class. This provides the traceability loop: ticket -> code -> test -> coverage -> CI verification, ensuring the project can serve as a traceable reference implementation.",
+    "parent_id": null,
+    "target_components": "CI/CD, Build System",
+    "languages": "C++, CMake, YAML",
+    "requires_math": false,
+    "generate_tutorial": false,
+    "acceptance_criteria": [
+      {"description": "All requirements with Verification=Automated have passing tests"},
+      {"description": "CI pipeline runs green on a clean push to main"},
+      {"description": "Coverage report artifact is downloadable from CI"},
+      {"description": "Code review approved"}
+    ],
+    "files": [
+      {"file_path": ".github/workflows/ci.yml", "change_type": "new", "description": "GitHub Actions CI pipeline"},
+      {"file_path": "scripts/check-coverage.sh", "change_type": "new", "description": "Script to parse lcov output and enforce coverage thresholds"},
+      {"file_path": "scripts/traceability-summary.sh", "change_type": "new", "description": "Script to generate the traceability summary"},
+      {"file_path": "CMakePresets.json", "change_type": "modified", "description": "Add CI-specific preset if needed (e.g., -Werror flag)"},
+      {"file_path": "tests/CMakeLists.txt", "change_type": "modified", "description": "Ensure JUnit XML output is configured for GTest"}
+    ],
+    "high_level_requirement_ids": [5],
+    "references": [
+      {"ref_type": "ticket", "ref_target": "1"},
+      {"ref_type": "ticket", "ref_target": "4"}
+    ]
+  }
+]

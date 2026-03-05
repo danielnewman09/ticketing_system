@@ -11,7 +11,6 @@ from __future__ import annotations
 def search_tickets_fts(
     query: str,
     *,
-    phase: str | None = None,
     priority: str | None = None,
     component: str | None = None,
 ) -> tuple[str, list]:
@@ -20,12 +19,11 @@ def search_tickets_fts(
     Uses bm25 ranking on the tickets_fts virtual table.
     Results are ordered by relevance and capped at 20.
 
-    Optional filters narrow results to a specific phase, priority,
-    or component.
+    Optional filters narrow results to a specific priority or component.
     """
     sql = """
-        SELECT t.ticket_number, t.title, t.canonical_phase, t.priority,
-               t.summary, t.target_components, t.source_file,
+        SELECT t.id, t.title, t.priority,
+               t.summary, t.target_components,
                bm25(tickets_fts) as rank
         FROM tickets_fts fts
         JOIN tickets t ON t.id = fts.rowid
@@ -33,9 +31,6 @@ def search_tickets_fts(
     """
     params: list = [query]
 
-    if phase:
-        sql += " AND t.canonical_phase = ?"
-        params.append(phase)
     if priority:
         sql += " AND t.priority = ?"
         params.append(priority)
@@ -50,7 +45,6 @@ def search_tickets_fts(
 def search_tickets_like(
     words: list[str],
     *,
-    phase: str | None = None,
     priority: str | None = None,
     component: str | None = None,
 ) -> tuple[str, list]:
@@ -59,8 +53,7 @@ def search_tickets_like(
     Builds a WHERE clause requiring every word to appear in at least one
     of: title or summary.  Results capped at 20.
 
-    Optional filters narrow results to a specific phase, priority,
-    or component.
+    Optional filters narrow results to a specific priority or component.
     """
     word_clauses = []
     params: list = []
@@ -70,15 +63,12 @@ def search_tickets_like(
         params.extend([pattern] * 2)
 
     sql = f"""
-        SELECT ticket_number, title, canonical_phase, priority,
-               summary, target_components, source_file
+        SELECT id, title, priority,
+               summary, target_components
         FROM tickets
         WHERE {' AND '.join(word_clauses)}
     """
 
-    if phase:
-        sql += " AND canonical_phase = ?"
-        params.append(phase)
     if priority:
         sql += " AND priority = ?"
         params.append(priority)
@@ -92,26 +82,22 @@ def search_tickets_like(
 
 def list_tickets_filtered(
     *,
-    phase: str | None = None,
     priority: str | None = None,
     component: str | None = None,
     limit: int = 50,
 ) -> tuple[str, list]:
-    """List tickets filtered by phase, priority, and/or component.
+    """List tickets filtered by priority and/or component.
 
-    Returns up to ``limit`` tickets ordered by ticket_number.
+    Returns up to ``limit`` tickets ordered by id.
     """
     sql = """
-        SELECT ticket_number, title, canonical_phase, priority,
-               complexity, target_components, ticket_type, source_file
+        SELECT id, title, priority,
+               complexity, target_components, ticket_type
         FROM tickets
         WHERE 1=1
     """
     params: list = []
 
-    if phase:
-        sql += " AND canonical_phase = ?"
-        params.append(phase)
     if priority:
         sql += " AND priority = ?"
         params.append(priority)
@@ -119,60 +105,44 @@ def list_tickets_filtered(
         sql += " AND target_components LIKE ?"
         params.append(f"%{component}%")
 
-    sql += " ORDER BY ticket_number LIMIT ?"
+    sql += " ORDER BY id LIMIT ?"
     params.append(limit)
     return sql, params
 
 
-def get_ticket_detail(ticket_number: str) -> tuple[str, list]:
-    """Fetch a single ticket row by ticket_number."""
-    return "SELECT * FROM tickets WHERE ticket_number = ?", [ticket_number]
+def get_ticket_detail(ticket_id: int) -> tuple[str, list]:
+    """Fetch a single ticket row by id."""
+    return "SELECT * FROM tickets WHERE id = ?", [ticket_id]
 
 
-def get_ticket_requirements(ticket_number: str) -> tuple[str, list]:
-    """Testable requirements for a ticket."""
-    sql = """SELECT requirement_id, description, verification_method,
-                    test_link, status
-             FROM ticket_requirements
-             WHERE ticket_number = ?"""
-    return sql, [ticket_number]
+def get_ticket_requirements(ticket_id: int) -> tuple[str, list]:
+    """High-level requirements linked to a ticket."""
+    sql = """SELECT hlr.id, hlr.description
+             FROM high_level_requirements hlr
+             JOIN ticket_requirements tr ON tr.high_level_requirement_id = hlr.id
+             WHERE tr.ticket_id = ?"""
+    return sql, [ticket_id]
 
 
-def get_ticket_acceptance_criteria(ticket_number: str) -> tuple[str, list]:
+def get_ticket_acceptance_criteria(ticket_id: int) -> tuple[str, list]:
     """Acceptance criteria for a ticket."""
-    sql = """SELECT criterion_id, description, is_met, category
+    sql = """SELECT id, description
              FROM ticket_acceptance_criteria
-             WHERE ticket_number = ?"""
-    return sql, [ticket_number]
+             WHERE ticket_id = ?"""
+    return sql, [ticket_id]
 
 
-def get_ticket_workflow_log(ticket_number: str) -> tuple[str, list]:
-    """Workflow log entries for a ticket, ordered by id."""
-    sql = """SELECT id, phase_name, started_at, completed_at,
-                    branch, pr_url, status, notes
-             FROM ticket_workflow_log
-             WHERE ticket_number = ?
-             ORDER BY id"""
-    return sql, [ticket_number]
-
-
-def get_ticket_artifacts(workflow_log_id: int) -> tuple[str, list]:
-    """Artifacts for a specific workflow log entry."""
-    sql = "SELECT artifact_path FROM ticket_artifacts WHERE workflow_log_id = ?"
-    return sql, [workflow_log_id]
-
-
-def get_ticket_files(ticket_number: str) -> tuple[str, list]:
+def get_ticket_files(ticket_id: int) -> tuple[str, list]:
     """File declarations for a ticket."""
     sql = """SELECT file_path, change_type, description
              FROM ticket_files
-             WHERE ticket_number = ?"""
-    return sql, [ticket_number]
+             WHERE ticket_id = ?"""
+    return sql, [ticket_id]
 
 
-def get_ticket_references(ticket_number: str) -> tuple[str, list]:
+def get_ticket_references(ticket_id: int) -> tuple[str, list]:
     """References for a ticket."""
     sql = """SELECT ref_type, ref_target
              FROM ticket_references
-             WHERE ticket_number = ?"""
-    return sql, [ticket_number]
+             WHERE ticket_id = ?"""
+    return sql, [ticket_id]

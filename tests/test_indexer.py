@@ -2,7 +2,7 @@
 
 Validates:
 - Markdown parsing: title, summary, requirements, acceptance criteria,
-  workflow log, files, references, canonical phase mapping
+  files, references
 - Database round-trip: index_single_ticket, index_tickets
 - TicketQuerier: search, get, list, create
 """
@@ -12,17 +12,18 @@ from pathlib import Path
 import pytest
 
 from ticketing_system.indexer import (
-    _map_canonical_phase,
     _parse_title,
     _parse_summary,
     _parse_requirements,
     _parse_acceptance_criteria,
-    _parse_workflow_log,
     _parse_files,
     _parse_references,
     _detect_ticket_type,
     index_single_ticket,
     index_tickets,
+    load_high_level_requirements,
+    load_low_level_requirements,
+    load_tickets,
 )
 from ticketing_system.querier import TicketQuerier
 
@@ -33,19 +34,6 @@ from ticketing_system.querier import TicketQuerier
 
 SAMPLE_TICKET = """\
 # Feature Ticket: Collision Detection Narrow Phase
-
-## Status
-- [x] Draft
-- [x] Ready for Design
-- [x] Design Complete — Awaiting Review
-- [x] Design Approved — Ready for Prototype
-- [ ] Prototype Complete — Awaiting Review
-- [ ] Ready for Implementation
-- [ ] Implementation Complete — Awaiting Test Writing
-- [ ] Test Writing Complete — Awaiting Quality Gate
-- [ ] Quality Gate Passed — Awaiting Review
-- [ ] Approved — Ready to Merge
-- [ ] Merged / Complete
 
 ## Metadata
 - **Created**: 2025-06-15
@@ -61,7 +49,7 @@ SAMPLE_TICKET = """\
 
 ## Summary
 Implement narrow-phase collision detection using GJK and EPA algorithms
-for convex polytopes. This builds on the broad-phase sweep from ticket 0040.
+for convex polytopes. This builds on the broad-phase sweep from ticket 40.
 
 ## Requirements
 
@@ -77,20 +65,6 @@ for convex polytopes. This builds on the broad-phase sweep from ticket 0040.
 - [ ] AC2: EPA provides contact normal and penetration depth
 - [ ] AC3: Performance meets 60fps target for 100 bodies
 
-## Workflow Log
-
-### Design Phase
-- **Started**: 2025-06-16T10:00:00Z
-- **Completed**: 2025-06-18T14:30:00Z
-- **Branch**: 0050-design
-- **Artifacts**:
-  - `docs/designs/0050_collision_narrow/design.md`
-  - `docs/designs/0050_collision_narrow/collision.puml`
-- **Notes**: Approved with minor revisions
-
-### Implementation Phase
-- **Started**: 2025-06-20T09:00:00Z
-
 ## Files
 
 ### New Files
@@ -101,38 +75,13 @@ for convex polytopes. This builds on the broad-phase sweep from ticket 0040.
 - `msd/msd-sim/src/collision/pipeline.cpp` — Integration with collision pipeline
 
 ## References
-- Ticket 0040 — Broad phase sweep and prune
+- Ticket 40 — Broad phase sweep and prune
 - `msd/msd-sim/src/collision/broad_phase.cpp`
 
 ## Dependencies
-- Parent ticket 0035
-- Blocks 0060
+- Parent ticket 35
+- Blocks 60
 """
-
-
-# ===========================================================================
-# Canonical phase mapping
-# ===========================================================================
-
-
-def test_map_canonical_phase_draft():
-    assert _map_canonical_phase("Draft") == "draft"
-
-
-def test_map_canonical_phase_design_complete():
-    assert _map_canonical_phase("Design Complete — Awaiting Review") == "design"
-
-
-def test_map_canonical_phase_design_approved():
-    assert _map_canonical_phase("Design Approved — Ready for Prototype") == "design_review"
-
-
-def test_map_canonical_phase_merged():
-    assert _map_canonical_phase("Merged / Complete") == "merged"
-
-
-def test_map_canonical_phase_unknown_defaults_to_draft():
-    assert _map_canonical_phase("Something Unknown") == "draft"
 
 
 # ===========================================================================
@@ -177,32 +126,16 @@ def test_parse_requirements_table_count():
     assert len(reqs) == 4
 
 
-def test_parse_requirements_table_ids():
+def test_parse_requirements_table_descriptions():
     reqs = _parse_requirements(SAMPLE_TICKET)
-    ids = [r["requirement_id"] for r in reqs]
-    assert ids == ["R1", "R2", "R3", "R4"]
+    assert "GJK" in reqs[0]["description"]
+    assert "EPA" in reqs[1]["description"]
 
 
-def test_parse_requirements_table_verification_methods():
+def test_parse_requirements_table_verification():
     reqs = _parse_requirements(SAMPLE_TICKET)
-    methods = [r["verification_method"] for r in reqs]
+    methods = [r["verification"] for r in reqs]
     assert methods == ["automated", "automated", "automated", "review"]
-
-
-def test_parse_requirements_table_test_links():
-    reqs = _parse_requirements(SAMPLE_TICKET)
-    r1 = next(r for r in reqs if r["requirement_id"] == "R1")
-    assert r1["test_link"] == "tests/collision/test_gjk.cpp::Intersection"
-    r4 = next(r for r in reqs if r["requirement_id"] == "R4")
-    assert r4["test_link"] is None
-
-
-def test_parse_requirements_table_status():
-    reqs = _parse_requirements(SAMPLE_TICKET)
-    r2 = next(r for r in reqs if r["requirement_id"] == "R2")
-    assert r2["status"] == "verified"
-    r1 = next(r for r in reqs if r["requirement_id"] == "R1")
-    assert r1["status"] == "draft"
 
 
 def test_parse_requirements_legacy_format():
@@ -217,9 +150,8 @@ def test_parse_requirements_legacy_format():
 """
     reqs = _parse_requirements(content)
     assert len(reqs) == 2
-    assert reqs[0]["requirement_id"] == "R1"
-    assert reqs[0]["verification_method"] == "review"
-    assert reqs[0]["status"] == "draft"
+    assert "First Requirement" in reqs[0]["description"]
+    assert reqs[0]["verification"] == "review"
 
 
 def test_parse_requirements_empty():
@@ -236,49 +168,20 @@ def test_parse_acceptance_criteria_count():
     assert len(criteria) == 3
 
 
-def test_parse_acceptance_criteria_ids():
+def test_parse_acceptance_criteria_descriptions():
     criteria = _parse_acceptance_criteria(SAMPLE_TICKET)
-    ids = [c["criterion_id"] for c in criteria]
-    assert "AC1" in ids
+    descriptions = [c["description"] for c in criteria]
+    assert "GJK algorithm correctly determines intersection" in descriptions
 
 
-def test_parse_acceptance_criteria_met_status():
+def test_parse_acceptance_criteria_descriptions_detail():
     criteria = _parse_acceptance_criteria(SAMPLE_TICKET)
-    ac1 = next(c for c in criteria if c["criterion_id"] == "AC1")
-    ac2 = next(c for c in criteria if c["criterion_id"] == "AC2")
-    assert ac1["is_met"] is True
-    assert ac2["is_met"] is False
+    assert "EPA" in criteria[1]["description"]
+    assert "Performance" in criteria[2]["description"]
 
 
 def test_parse_acceptance_criteria_empty():
     assert _parse_acceptance_criteria("# No criteria") == []
-
-
-# ===========================================================================
-# Workflow log parsing
-# ===========================================================================
-
-
-def test_parse_workflow_log_count():
-    entries = _parse_workflow_log(SAMPLE_TICKET)
-    assert len(entries) == 2
-
-
-def test_parse_workflow_log_phase_names():
-    entries = _parse_workflow_log(SAMPLE_TICKET)
-    phases = [e["phase_name"] for e in entries]
-    assert "Design" in phases
-    assert "Implementation" in phases
-
-
-def test_parse_workflow_log_artifacts():
-    entries = _parse_workflow_log(SAMPLE_TICKET)
-    design = next(e for e in entries if e["phase_name"] == "Design")
-    assert len(design["artifacts"]) == 2
-
-
-def test_parse_workflow_log_empty():
-    assert _parse_workflow_log("# No log") == []
 
 
 # ===========================================================================
@@ -311,13 +214,13 @@ def test_parse_references_ticket_refs():
     refs = _parse_references(SAMPLE_TICKET)
     ticket_refs = [r for r in refs if r["ref_type"] == "ticket"]
     targets = [r["ref_target"] for r in ticket_refs]
-    assert "0040" in targets
+    assert "40" in targets
 
 
 def test_parse_references_parent():
     refs = _parse_references(SAMPLE_TICKET)
     parent_refs = [r for r in refs if r["ref_type"] == "parent"]
-    assert any(r["ref_target"] == "0035" for r in parent_refs)
+    assert any(r["ref_target"] == "35" for r in parent_refs)
 
 
 def test_parse_references_empty():
@@ -343,42 +246,53 @@ def test_detect_ticket_type_debug():
 
 
 def test_index_single_ticket_basic(conn):
-    result = index_single_ticket(conn, "0050", SAMPLE_TICKET, "tickets/0050_collision.md")
+    result = index_single_ticket(conn, SAMPLE_TICKET, ticket_id=50)
     conn.commit()
 
-    assert result["ticket_number"] == "0050"
+    assert result["id"] == 50
     assert result["title"] == "Collision Detection Narrow Phase"
-    assert result["canonical_phase"] == "design_review"
 
-    row = conn.execute("SELECT * FROM tickets WHERE ticket_number = '0050'").fetchone()
+    row = conn.execute("SELECT * FROM tickets WHERE id = 50").fetchone()
     assert row is not None
     assert row["title"] == "Collision Detection Narrow Phase"
 
 
 def test_index_single_ticket_stores_requirements(conn):
-    index_single_ticket(conn, "0050", SAMPLE_TICKET, "tickets/0050_collision.md")
+    index_single_ticket(conn, SAMPLE_TICKET, ticket_id=50)
     conn.commit()
 
-    rows = conn.execute(
-        "SELECT * FROM ticket_requirements WHERE ticket_number = '0050'"
+    # 4 low-level requirements created in standalone table
+    count = conn.execute("SELECT COUNT(*) FROM low_level_requirements").fetchone()[0]
+    assert count == 4
+
+    # Verify requirement content
+    reqs = conn.execute(
+        "SELECT description, verification FROM low_level_requirements"
     ).fetchall()
-    assert len(rows) == 4
-    r1 = next(r for r in rows if r["requirement_id"] == "R1")
-    assert r1["verification_method"] == "automated"
-    assert "test_gjk" in r1["test_link"]
+    assert any("GJK" in r["description"] for r in reqs)
+    assert any(r["verification"] == "automated" for r in reqs)
 
 
 def test_index_single_ticket_replaces_existing(conn):
-    index_single_ticket(conn, "0050", SAMPLE_TICKET, "tickets/0050_collision.md")
+    index_single_ticket(conn, SAMPLE_TICKET, ticket_id=50)
     conn.commit()
 
     updated = SAMPLE_TICKET.replace("Collision Detection Narrow Phase", "Updated Title")
-    result = index_single_ticket(conn, "0050", updated, "tickets/0050_collision.md")
+    result = index_single_ticket(conn, updated, ticket_id=50)
     conn.commit()
 
     assert result["title"] == "Updated Title"
-    count = conn.execute("SELECT COUNT(*) FROM tickets WHERE ticket_number = '0050'").fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM tickets WHERE id = 50").fetchone()[0]
     assert count == 1
+
+
+def test_index_single_ticket_auto_id(conn):
+    result = index_single_ticket(conn, SAMPLE_TICKET)
+    conn.commit()
+
+    assert result["id"] is not None
+    row = conn.execute("SELECT * FROM tickets WHERE id = ?", (result["id"],)).fetchone()
+    assert row["title"] == "Collision Detection Narrow Phase"
 
 
 # ===========================================================================
@@ -389,7 +303,7 @@ def test_index_single_ticket_replaces_existing(conn):
 def test_index_tickets_basic(conn, tmp_path):
     tickets_dir = tmp_path / "tickets"
     tickets_dir.mkdir()
-    (tickets_dir / "0050_collision_narrow.md").write_text(SAMPLE_TICKET)
+    (tickets_dir / "50_collision_narrow.md").write_text(SAMPLE_TICKET)
 
     result = index_tickets(conn, str(tmp_path), tickets_dir="tickets")
     assert result["new_count"] == 1
@@ -399,7 +313,7 @@ def test_index_tickets_basic(conn, tmp_path):
 def test_index_tickets_incremental_skips_unchanged(conn, tmp_path):
     tickets_dir = tmp_path / "tickets"
     tickets_dir.mkdir()
-    (tickets_dir / "0050_collision_narrow.md").write_text(SAMPLE_TICKET)
+    (tickets_dir / "50_collision_narrow.md").write_text(SAMPLE_TICKET)
 
     result1 = index_tickets(conn, str(tmp_path), tickets_dir="tickets")
     result2 = index_tickets(conn, str(tmp_path), tickets_dir="tickets")
@@ -423,9 +337,9 @@ def test_index_tickets_missing_dir(conn, tmp_path):
 def querier_with_tickets(conn, tmp_path):
     tickets_dir = tmp_path / "tickets"
     tickets_dir.mkdir()
-    (tickets_dir / "0050_collision_narrow.md").write_text(SAMPLE_TICKET)
-    (tickets_dir / "0051_physics.md").write_text(
-        "# Feature Ticket: Physics Engine\n\n## Status\n- [x] Draft\n\n"
+    (tickets_dir / "50_collision_narrow.md").write_text(SAMPLE_TICKET)
+    (tickets_dir / "51_physics.md").write_text(
+        "# Feature Ticket: Physics Engine\n\n"
         "## Metadata\n- **Priority**: Medium\n- **Target Component(s)**: msd-sim\n\n"
         "## Summary\nPhysics engine for rigid body dynamics.\n"
     )
@@ -436,22 +350,21 @@ def querier_with_tickets(conn, tmp_path):
 def test_search_tickets(querier_with_tickets):
     results = querier_with_tickets.search("collision")
     assert len(results) >= 1
-    assert any(r["ticket_number"] == "0050" for r in results)
+    assert any(r["id"] == 50 for r in results)
 
 
 def test_get_ticket_full_detail(querier_with_tickets):
-    result = querier_with_tickets.get("0050")
+    result = querier_with_tickets.get(50)
     assert "error" not in result
     assert result["title"] == "Collision Detection Narrow Phase"
-    assert len(result["requirements"]) == 4
+    assert len(result["requirements"]) == 0  # no HLR linkage from markdown
     assert len(result["acceptance_criteria"]) == 3
-    assert len(result["workflow_log"]) == 2
     assert len(result["files"]) >= 3
     assert len(result["references"]) >= 2
 
 
 def test_get_ticket_not_found(querier_with_tickets):
-    result = querier_with_tickets.get("9999")
+    result = querier_with_tickets.get(9999)
     assert "error" in result
 
 
@@ -463,16 +376,13 @@ def test_list_tickets_all(querier_with_tickets):
 def test_list_tickets_filter_priority(querier_with_tickets):
     results = querier_with_tickets.list(priority="High")
     assert len(results) == 1
-    assert results[0]["ticket_number"] == "0050"
+    assert results[0]["id"] == 50
 
 
 def test_create_ticket(conn, tmp_path):
     querier = TicketQuerier(conn)
     content = """\
 # Feature Ticket: Widget Factory
-
-## Status
-- [x] Draft
 
 ## Metadata
 - **Priority**: Medium
@@ -483,13 +393,13 @@ Implement a widget factory.
 ## Acceptance Criteria
 - [ ] AC1: Factory creates widgets
 """
-    result = querier.create("0090", content, str(tmp_path))
+    result = querier.create(content, str(tmp_path))
     assert "error" not in result
-    assert result["ticket_number"] == "0090"
+    assert result["id"] is not None
     assert result["title"] == "Widget Factory"
 
     # Verify it's queryable
-    ticket = querier.get("0090")
+    ticket = querier.get(result["id"])
     assert ticket["title"] == "Widget Factory"
 
 
@@ -498,24 +408,82 @@ Implement a widget factory.
 # ===========================================================================
 
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures" / "calculator-cpp" / "tickets"
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "calculator-cpp"
 
 
-def test_index_calculator_fixtures(conn):
-    """All 5 calculator tickets index successfully with requirements."""
-    if not FIXTURES_DIR.exists():
+def test_load_calculator_fixtures(conn):
+    """All 5 calculator tickets, 5 high-level and 45 low-level requirements load from JSON."""
+    tickets_json = FIXTURES_DIR / "tickets.json"
+    llr_json = FIXTURES_DIR / "requirements.json"
+    hlr_json = FIXTURES_DIR / "high_level_requirements.json"
+    if not tickets_json.exists():
         pytest.skip("Calculator fixtures not found")
 
-    result = index_tickets(conn, str(FIXTURES_DIR.parent.parent), tickets_dir="calculator-cpp/tickets")
-    assert result["total"] == 5
+    # Load high-level requirements first
+    hlr_result = load_high_level_requirements(conn, str(hlr_json))
+    assert hlr_result["total"] == 5
 
-    # Verify ticket 0001 has requirements
-    rows = conn.execute(
-        "SELECT * FROM ticket_requirements WHERE ticket_number = '0001'"
+    # Load low-level requirements (reference high-level ones)
+    llr_result = load_low_level_requirements(conn, str(llr_json))
+    assert llr_result["total"] == 45
+
+    # Load tickets (which reference high-level requirements)
+    ticket_result = load_tickets(conn, str(tickets_json))
+    assert ticket_result["total"] == 5
+
+    # Verify ticket 1 data
+    row = conn.execute("SELECT * FROM tickets WHERE id = 1").fetchone()
+    assert row["title"] == "CMake Project Configuration with Presets"
+    assert row["priority"] == "Critical"
+
+    # Verify acceptance criteria
+    ac = conn.execute(
+        "SELECT * FROM ticket_acceptance_criteria WHERE ticket_id = 1"
     ).fetchall()
-    assert len(rows) == 8  # R1-R8
+    assert len(ac) == 4
 
-    # Verify requirements have correct verification methods
-    r1 = next(r for r in rows if r["requirement_id"] == "R1")
-    assert r1["verification_method"] == "automated"
-    assert r1["test_link"] is not None
+    # Verify files
+    files = conn.execute(
+        "SELECT * FROM ticket_files WHERE ticket_id = 1"
+    ).fetchall()
+    assert len(files) == 5
+
+    # Verify references
+    refs = conn.execute(
+        "SELECT * FROM ticket_references WHERE ticket_id = 1"
+    ).fetchall()
+    assert len(refs) == 3
+
+    # Verify ticket 1 links to HLR 1 via join table
+    links = conn.execute(
+        "SELECT * FROM ticket_requirements WHERE ticket_id = 1"
+    ).fetchall()
+    assert len(links) == 1
+    assert links[0]["high_level_requirement_id"] == 1
+
+    # Verify high-level requirement content via join
+    hlrs = conn.execute(
+        """SELECT hlr.id, hlr.description
+           FROM high_level_requirements hlr
+           JOIN ticket_requirements tr ON tr.high_level_requirement_id = hlr.id
+           WHERE tr.ticket_id = 1"""
+    ).fetchall()
+    assert len(hlrs) == 1
+    assert "CMake" in hlrs[0]["description"]
+
+    # Verify low-level requirements link to high-level requirements
+    llr = conn.execute(
+        """SELECT llr.id, llr.high_level_requirement_id, hlr.description
+           FROM low_level_requirements llr
+           JOIN high_level_requirements hlr ON hlr.id = llr.high_level_requirement_id
+           WHERE llr.id = 1"""
+    ).fetchone()
+    assert llr is not None
+    assert llr["high_level_requirement_id"] == 1
+    assert "CMake" in llr["description"]
+
+    # All 8 low-level requirements with HLR 1
+    llr_count = conn.execute(
+        "SELECT COUNT(*) FROM low_level_requirements WHERE high_level_requirement_id = 1"
+    ).fetchone()[0]
+    assert llr_count == 8

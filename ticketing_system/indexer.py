@@ -2,58 +2,18 @@
 Ticket Content Indexer
 
 Parses ticket markdown files and stores their content, metadata,
-acceptance criteria, workflow log, file declarations, and cross-references
-into the traceability database.
-
-Reuses parse_status_checkboxes, get_current_status, and parse_metadata
-from workflow_engine.engine.markdown_sync.
+acceptance criteria, file declarations, and cross-references
+into the database.
 """
 
-import os
+import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .markdown_parser import (
-    get_current_status,
-    parse_metadata,
-    parse_status_checkboxes,
-)
-
-# ---------------------------------------------------------------------------
-# Canonical phase mapping
-# ---------------------------------------------------------------------------
-
-# Maps substring patterns (lowercased) in status checkbox labels to canonical phases.
-# Order matters: first match wins.
-_PHASE_MAP: list[tuple[str, str]] = [
-    ("merged", "merged"),
-    ("documentation complete", "documentation"),
-    ("test writing complete", "testing"),
-    ("quality gate", "quality_gate"),
-    ("implementation complete", "implementation"),
-    ("ready for implementation", "prototype"),
-    ("prototype complete", "prototype"),
-    ("design approved", "design_review"),
-    ("design complete", "design"),
-    ("math review", "math"),
-    ("math formulation", "math"),
-    ("ready for design", "draft"),
-    ("ready for math", "draft"),
-    ("approved", "review"),
-    ("draft", "draft"),
-]
-
-
-def _map_canonical_phase(raw_status: str) -> str:
-    """Map a raw status label to a canonical phase."""
-    lower = raw_status.lower()
-    for pattern, phase in _PHASE_MAP:
-        if pattern in lower:
-            return phase
-    return "draft"
+from .markdown_parser import parse_metadata
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +26,7 @@ def _parse_title(content: str) -> str:
     for line in content.splitlines():
         stripped = line.strip()
         # "# Feature Ticket: <title>" or "# Ticket NNNN: <title>" or just "# <title>"
-        m = re.match(r"^#\s+(?:Feature\s+)?(?:Ticket:?\s*(?:\d{4}[a-z]?:?\s*)?)?(.+)", stripped, re.IGNORECASE)
+        m = re.match(r"^#\s+(?:Feature\s+)?(?:Ticket:?\s*(?:\d+:?\s*)?)?(.+)", stripped, re.IGNORECASE)
         if m:
             return m.group(1).strip()
     return "Untitled"
@@ -106,13 +66,15 @@ def _parse_requirements(content: str) -> list[dict[str, Any]]:
     Supports two formats:
 
     1. **Table format** (preferred):
-       | ID | Requirement | Verification | Test/Proof | Status |
-       |----|-------------|--------------|------------|--------|
-       | R1 | Description | Automated    | test_link  | Draft  |
+       | Description | Verification |
+       |-------------|--------------|
+       | Description | Automated    |
 
-    2. **List format** (legacy, treated as verification=review, status=draft):
+    2. **List format** (legacy, treated as verification=review):
        ### R1: Title
        - Description text
+
+    Returns dicts with 'description' and 'verification' keys.
     """
     section = _extract_section(content, "Requirements")
     if not section:
@@ -120,60 +82,64 @@ def _parse_requirements(content: str) -> list[dict[str, Any]]:
 
     requirements: list[dict[str, Any]] = []
 
-    # Try table format first: look for a header row with "ID" and "Requirement"
+    # Try table format first: look for a header row with "Requirement" or "Description"
     lines = section.splitlines()
     table_header_idx = None
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith("|") and "Requirement" in stripped:
+        if stripped.startswith("|") and ("Requirement" in stripped or "Description" in stripped):
             table_header_idx = i
             break
 
     if table_header_idx is not None:
-        # Parse table rows (skip header and separator)
+        # Determine column positions from header
+        header_cells = [c.strip() for c in lines[table_header_idx].strip().split("|")]
+        if header_cells and header_cells[0] == "":
+            header_cells = header_cells[1:]
+        if header_cells and header_cells[-1] == "":
+            header_cells = header_cells[:-1]
+
+        # Find description and verification column indexes
+        desc_col = None
+        verif_col = None
+        for idx, h in enumerate(header_cells):
+            h_lower = h.strip().lower()
+            if h_lower in ("requirement", "description"):
+                desc_col = idx
+            elif h_lower == "verification":
+                verif_col = idx
+
+        if desc_col is None:
+            desc_col = 1 if len(header_cells) > 1 else 0
+
         for line in lines[table_header_idx + 2:]:
             stripped = line.strip()
             if not stripped.startswith("|"):
                 continue
             cells = [c.strip() for c in stripped.split("|")]
-            # Split produces empty strings at start/end from leading/trailing |
-            # Strip those off, keeping interior empty cells
             if cells and cells[0] == "":
                 cells = cells[1:]
             if cells and cells[-1] == "":
                 cells = cells[:-1]
-            if len(cells) < 2:
+            if len(cells) < 1:
                 continue
-            # Skip separator rows
             if all(set(c) <= {"-", " ", ""} for c in cells):
                 continue
 
-            req_id = cells[0].strip() if len(cells) > 0 else None
-            description = cells[1].strip() if len(cells) > 1 else ""
-            verification = cells[2].strip().lower() if len(cells) > 2 else "review"
-            test_link = cells[3].strip().strip("`") if len(cells) > 3 else None
-            status = cells[4].strip().lower() if len(cells) > 4 else "draft"
+            description = cells[desc_col].strip() if desc_col < len(cells) else ""
+            verification = "review"
+            if verif_col is not None and verif_col < len(cells):
+                verification = cells[verif_col].strip().lower()
 
-            if not description or (req_id and set(req_id) <= {"-", " "}):
+            if not description:
                 continue
 
-            # Normalize verification method
             if verification not in ("automated", "review", "inspection"):
                 verification = "review"
 
-            # Normalize status
-            if status not in ("draft", "test_written", "implemented", "verified"):
-                status = "draft"
-
-            if test_link == "" or test_link == "—" or test_link == "-":
-                test_link = None
-
             requirements.append({
-                "requirement_id": req_id if req_id else None,
                 "description": description,
-                "verification_method": verification,
-                "test_link": test_link,
-                "status": status,
+                "verification": verification,
             })
 
         return requirements
@@ -184,29 +150,23 @@ def _parse_requirements(content: str) -> list[dict[str, Any]]:
 
     for line in lines:
         stripped = line.strip()
-        heading_match = re.match(r"^###\s+(R\d+):\s*(.+)", stripped)
+        heading_match = re.match(r"^###\s+(?:R\d+:?\s*)?(.+)", stripped)
         if heading_match:
             if current_id and current_lines:
                 requirements.append({
-                    "requirement_id": current_id,
                     "description": "\n".join(current_lines).strip(),
-                    "verification_method": "review",
-                    "test_link": None,
-                    "status": "draft",
+                    "verification": "review",
                 })
             current_id = heading_match.group(1)
-            current_lines = [heading_match.group(2).strip()]
+            current_lines = [current_id.strip()]
             continue
         if current_id is not None:
             current_lines.append(line)
 
     if current_id and current_lines:
         requirements.append({
-            "requirement_id": current_id,
             "description": "\n".join(current_lines).strip(),
-            "verification_method": "review",
-            "test_link": None,
-            "status": "draft",
+            "verification": "review",
         })
 
     return requirements
@@ -219,95 +179,19 @@ def _parse_acceptance_criteria(content: str) -> list[dict[str, Any]]:
         return []
 
     criteria: list[dict[str, Any]] = []
-    current_category: str | None = None
 
     for line in section.splitlines():
         stripped = line.strip()
 
-        # Detect category sub-headings like "### Math Formulation" or "### Implementation"
-        cat_match = re.match(r"^###\s+(.+)", stripped)
-        if cat_match:
-            current_category = cat_match.group(1).strip()
-            continue
-
-        # Checked: "- [x] AC1: Description" or "- [x] Description"
-        m = re.match(r"-\s+\[([xX ])\]\s+(?:([A-Z]+\d+):\s+)?(.+)", stripped)
+        # "- [x] AC1: Description" or "- [x] Description" or "- [ ] Description"
+        m = re.match(r"-\s+\[[xX ]\]\s+(?:[A-Z]+\d+:\s+)?(.+)", stripped)
         if m:
-            is_met = m.group(1).lower() == "x"
-            criterion_id = m.group(2)
-            description = m.group(3).strip()
+            description = m.group(1).strip()
             criteria.append({
-                "criterion_id": criterion_id,
                 "description": description,
-                "is_met": is_met,
-                "category": current_category,
             })
 
     return criteria
-
-
-def _parse_workflow_log(content: str) -> list[dict[str, Any]]:
-    """Extract workflow log entries from ## Workflow Log section."""
-    section = _extract_section(content, "Workflow Log")
-    if not section:
-        return []
-
-    entries: list[dict[str, Any]] = []
-    current_entry: dict[str, Any] | None = None
-
-    for line in section.splitlines():
-        stripped = line.strip()
-
-        # Phase heading: "### Implementation Phase"
-        phase_match = re.match(r"^###\s+(.+?)\s+Phase\s*$", stripped)
-        if phase_match:
-            if current_entry:
-                entries.append(current_entry)
-            current_entry = {
-                "phase_name": phase_match.group(1).strip(),
-                "started_at": None,
-                "completed_at": None,
-                "branch": None,
-                "pr_url": None,
-                "status": None,
-                "notes": None,
-                "artifacts": [],
-            }
-            continue
-
-        if current_entry is None:
-            continue
-
-        # Key-value: "- **Key**: Value"
-        kv_match = re.match(r"-\s+\*\*(.+?)\*\*:\s*(.*)", stripped)
-        if kv_match:
-            key = kv_match.group(1).strip().lower()
-            value = kv_match.group(2).strip()
-            if key == "started":
-                current_entry["started_at"] = value or None
-            elif key == "completed":
-                current_entry["completed_at"] = value or None
-            elif key == "branch":
-                current_entry["branch"] = value or None
-            elif key == "pr":
-                current_entry["pr_url"] = value or None
-            elif key == "status" or key == "result":
-                current_entry["status"] = value or None
-            elif key == "notes":
-                current_entry["notes"] = value or None
-            elif key == "artifacts":
-                pass  # artifacts follow on indented lines
-            continue
-
-        # Artifact list item: "  - `path/to/file`"
-        artifact_match = re.match(r"-\s+`(.+?)`", stripped)
-        if artifact_match and current_entry:
-            current_entry["artifacts"].append(artifact_match.group(1))
-
-    if current_entry:
-        entries.append(current_entry)
-
-    return entries
 
 
 def _parse_files(content: str) -> list[dict[str, Any]]:
@@ -413,8 +297,8 @@ def _parse_references(content: str) -> list[dict[str, Any]]:
             if not stripped or stripped.startswith("#"):
                 continue
 
-            # Ticket reference: "0085", "ticket 0085", "#0085"
-            ticket_match = re.findall(r"\b(\d{4}[a-z]?)\b", stripped)
+            # Ticket reference: "85", "ticket 85", "#85"
+            ticket_match = re.findall(r"\b(\d+)\b", stripped)
             for t in ticket_match:
                 ref_type = "ticket"
                 # Determine more specific ref_type from context
@@ -452,36 +336,35 @@ def _detect_ticket_type(content: str) -> str:
 
 def index_single_ticket(
     conn: sqlite3.Connection,
-    ticket_number: str,
     content: str,
-    source_file: str,
+    *,
+    ticket_id: int | None = None,
 ) -> dict:
     """Parse and index a single ticket from its markdown content.
 
-    Deletes any existing rows for the ticket (full replace), then inserts
-    the parsed fields into the database. Does NOT commit or rebuild FTS —
-    callers are responsible for that.
+    If ticket_id is provided and a ticket with that ID exists, it is
+    replaced. If ticket_id is provided and no ticket exists, the ticket
+    is inserted with that explicit ID. If ticket_id is None, the DB
+    auto-assigns an ID.
+
+    Does NOT commit or rebuild FTS — callers are responsible for that.
 
     Args:
-        conn: Open SQLite connection to the traceability database.
-        ticket_number: The ticket number (e.g. "0050" or "0050a").
+        conn: Open SQLite connection to the database.
         content: The full markdown content of the ticket.
-        source_file: Relative path to the ticket file (for provenance).
+        ticket_id: Optional explicit ticket ID.
 
     Returns:
-        Dict with parsed ticket metadata: ticket_number, title, canonical_phase.
+        Dict with parsed ticket metadata: id, title.
     """
     now = datetime.now(timezone.utc).isoformat()
 
     # Parse all fields
     title = _parse_title(content)
-    raw_status = get_current_status(content)
-    canonical_phase = _map_canonical_phase(raw_status)
     metadata = parse_metadata(content)
     summary = _parse_summary(content)
     requirements = _parse_requirements(content)
     criteria = _parse_acceptance_criteria(content)
-    workflow_log = _parse_workflow_log(content)
     files = _parse_files(content)
     references = _parse_references(content)
     ticket_type = _detect_ticket_type(content)
@@ -494,88 +377,83 @@ def index_single_ticket(
     languages = metadata.get("Languages", "C++")
     requires_math = 1 if (metadata.get("Requires Math Design") or "").lower() in ("yes", "true") else 0
     generate_tutorial = 1 if (metadata.get("Generate Tutorial") or "").lower() in ("yes", "true") else 0
-    parent_ticket = metadata.get("Parent Ticket")
+    parent_id_str = metadata.get("Parent Ticket")
+    parent_id = int(parent_id_str) if parent_id_str and parent_id_str.strip().isdigit() else None
 
     # Delete existing rows for this ticket (full replace)
-    _delete_ticket(conn, ticket_number)
+    if ticket_id is not None:
+        _delete_ticket(conn, ticket_id)
 
     # Insert core ticket
-    conn.execute(
-        """INSERT INTO tickets (
-            ticket_number, title, canonical_phase, raw_status,
-            priority, complexity, created_date, author, summary,
-            ticket_type, parent_ticket, target_components, languages,
-            requires_math, generate_tutorial, source_file, indexed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            ticket_number, title, canonical_phase, raw_status,
-            priority, complexity, created_date, author, summary,
-            ticket_type, parent_ticket, target_components, languages,
-            requires_math, generate_tutorial, source_file, now,
-        ),
-    )
+    if ticket_id is not None:
+        cursor = conn.execute(
+            """INSERT INTO tickets (
+                id, title,
+                priority, complexity, created_date, author, summary,
+                ticket_type, parent_id, target_components, languages,
+                requires_math, generate_tutorial, last_modified
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                ticket_id, title,
+                priority, complexity, created_date, author, summary,
+                ticket_type, parent_id, target_components, languages,
+                requires_math, generate_tutorial, now,
+            ),
+        )
+    else:
+        cursor = conn.execute(
+            """INSERT INTO tickets (
+                title,
+                priority, complexity, created_date, author, summary,
+                ticket_type, parent_id, target_components, languages,
+                requires_math, generate_tutorial, last_modified
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                title,
+                priority, complexity, created_date, author, summary,
+                ticket_type, parent_id, target_components, languages,
+                requires_math, generate_tutorial, now,
+            ),
+        )
+        ticket_id = cursor.lastrowid
 
-    # Insert requirements
+    # Insert low-level requirements parsed from markdown
     for req in requirements:
         conn.execute(
-            """INSERT INTO ticket_requirements
-               (ticket_number, requirement_id, description,
-                verification_method, test_link, status)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (ticket_number, req["requirement_id"], req["description"],
-             req["verification_method"], req["test_link"], req["status"]),
+            "INSERT INTO low_level_requirements (description, verification) VALUES (?, ?)",
+            (req["description"], req["verification"]),
         )
 
     # Insert acceptance criteria
     for ac in criteria:
         conn.execute(
             """INSERT INTO ticket_acceptance_criteria
-               (ticket_number, criterion_id, description, is_met, category)
-               VALUES (?, ?, ?, ?, ?)""",
-            (ticket_number, ac["criterion_id"], ac["description"],
-             1 if ac["is_met"] else 0, ac["category"]),
+               (ticket_id, description)
+               VALUES (?, ?)""",
+            (ticket_id, ac["description"]),
         )
-
-    # Insert workflow log entries and artifacts
-    for entry in workflow_log:
-        cursor = conn.execute(
-            """INSERT INTO ticket_workflow_log
-               (ticket_number, phase_name, started_at, completed_at,
-                branch, pr_url, status, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (ticket_number, entry["phase_name"], entry["started_at"],
-             entry["completed_at"], entry["branch"], entry["pr_url"],
-             entry["status"], entry["notes"]),
-        )
-        log_id = cursor.lastrowid
-        for artifact in entry.get("artifacts", []):
-            conn.execute(
-                "INSERT INTO ticket_artifacts (workflow_log_id, artifact_path) VALUES (?, ?)",
-                (log_id, artifact),
-            )
 
     # Insert file declarations
     for f in files:
         conn.execute(
             """INSERT INTO ticket_files
-               (ticket_number, file_path, change_type, description)
+               (ticket_id, file_path, change_type, description)
                VALUES (?, ?, ?, ?)""",
-            (ticket_number, f["file_path"], f["change_type"], f["description"]),
+            (ticket_id, f["file_path"], f["change_type"], f["description"]),
         )
 
     # Insert references
     for ref in references:
         conn.execute(
             """INSERT INTO ticket_references
-               (ticket_number, ref_type, ref_target)
+               (ticket_id, ref_type, ref_target)
                VALUES (?, ?, ?)""",
-            (ticket_number, ref["ref_type"], ref["ref_target"]),
+            (ticket_id, ref["ref_type"], ref["ref_target"]),
         )
 
     return {
-        "ticket_number": ticket_number,
+        "id": ticket_id,
         "title": title,
-        "canonical_phase": canonical_phase,
     }
 
 
@@ -585,10 +463,13 @@ def index_tickets(
     *,
     tickets_dir: str = "tickets",
 ) -> dict:
-    """Index ticket markdown files into the traceability database.
+    """Index ticket markdown files into the database.
+
+    Ticket IDs are derived from the numeric prefix of the filename
+    (e.g. 0050_collision.md → id 50).
 
     Args:
-        conn: Open SQLite connection to the traceability database.
+        conn: Open SQLite connection to the database.
         repo_root: Path to the git repository root.
         tickets_dir: Relative path to tickets directory.
 
@@ -600,37 +481,36 @@ def index_tickets(
         return {"new_count": 0, "updated_count": 0, "total": 0}
 
     # Get existing indexed timestamps
-    existing: dict[str, str] = {}
+    existing: dict[int, str] = {}
     try:
         rows = conn.execute(
-            "SELECT ticket_number, indexed_at FROM tickets"
+            "SELECT id, last_modified FROM tickets"
         ).fetchall()
-        existing = {row["ticket_number"]: row["indexed_at"] for row in rows}
+        existing = {row["id"]: row["last_modified"] for row in rows}
     except sqlite3.OperationalError:
         pass
 
-    id_regex = r"^(\d{4}[a-z]?)_"
+    id_regex = r"^(\d+)_"
     new_count = 0
     updated_count = 0
 
     for md_file in sorted(tickets_path.glob("*.md")):
-        # Extract ticket number from filename
+        # Extract ticket ID from filename
         match = re.match(id_regex, md_file.name)
         if not match:
             continue
-        ticket_number = match.group(1)
+        ticket_id = int(match.group(1))
 
         # Check if file is newer than indexed version
         file_mtime = datetime.fromtimestamp(md_file.stat().st_mtime, tz=timezone.utc).isoformat()
-        if ticket_number in existing:
-            if file_mtime <= existing[ticket_number]:
+        if ticket_id in existing:
+            if file_mtime <= existing[ticket_id]:
                 continue
 
         content = md_file.read_text(encoding="utf-8")
-        source_file = str(md_file.relative_to(repo_root))
 
-        is_update = ticket_number in existing
-        index_single_ticket(conn, ticket_number, content, source_file)
+        is_update = ticket_id in existing
+        index_single_ticket(conn, content, ticket_id=ticket_id)
 
         if is_update:
             updated_count += 1
@@ -650,17 +530,149 @@ def index_tickets(
     return {"new_count": new_count, "updated_count": updated_count, "total": total}
 
 
-def _delete_ticket(conn: sqlite3.Connection, ticket_number: str) -> None:
+def _delete_ticket(conn: sqlite3.Connection, ticket_id: int) -> None:
     """Delete all rows for a ticket (for re-indexing)."""
-    # Delete artifacts via workflow log
-    conn.execute(
-        """DELETE FROM ticket_artifacts WHERE workflow_log_id IN
-           (SELECT id FROM ticket_workflow_log WHERE ticket_number = ?)""",
-        (ticket_number,),
-    )
-    conn.execute("DELETE FROM ticket_workflow_log WHERE ticket_number = ?", (ticket_number,))
-    conn.execute("DELETE FROM ticket_requirements WHERE ticket_number = ?", (ticket_number,))
-    conn.execute("DELETE FROM ticket_acceptance_criteria WHERE ticket_number = ?", (ticket_number,))
-    conn.execute("DELETE FROM ticket_files WHERE ticket_number = ?", (ticket_number,))
-    conn.execute("DELETE FROM ticket_references WHERE ticket_number = ?", (ticket_number,))
-    conn.execute("DELETE FROM tickets WHERE ticket_number = ?", (ticket_number,))
+    conn.execute("DELETE FROM ticket_requirements WHERE ticket_id = ?", (ticket_id,))
+    conn.execute("DELETE FROM ticket_acceptance_criteria WHERE ticket_id = ?", (ticket_id,))
+    conn.execute("DELETE FROM ticket_files WHERE ticket_id = ?", (ticket_id,))
+    conn.execute("DELETE FROM ticket_references WHERE ticket_id = ?", (ticket_id,))
+    conn.execute("DELETE FROM tickets WHERE id = ?", (ticket_id,))
+
+
+def load_high_level_requirements(conn: sqlite3.Connection, json_path: str) -> dict:
+    """Load high-level requirements from a JSON file into the database.
+
+    Each entry must have: description.
+    Optional: id (explicit integer ID).
+
+    Returns a dict with total count.
+    """
+    with open(json_path) as f:
+        hlrs = json.load(f)
+
+    for hlr in hlrs:
+        hlr_id = hlr.get("id")
+        if hlr_id is not None:
+            conn.execute(
+                "INSERT INTO high_level_requirements (id, description) VALUES (?, ?)",
+                (hlr_id, hlr["description"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO high_level_requirements (description) VALUES (?)",
+                (hlr["description"],),
+            )
+
+    conn.commit()
+    return {"total": len(hlrs)}
+
+
+def load_low_level_requirements(conn: sqlite3.Connection, json_path: str) -> dict:
+    """Load low-level requirements from a JSON file into the database.
+
+    Each entry must have: description, verification.
+    Optional: id (explicit integer ID),
+              high_level_requirement_id (FK to high_level_requirements).
+
+    Returns a dict with total count.
+    """
+    with open(json_path) as f:
+        requirements = json.load(f)
+
+    for req in requirements:
+        req_id = req.get("id")
+        hlr_id = req.get("high_level_requirement_id")
+        if req_id is not None:
+            conn.execute(
+                """INSERT INTO low_level_requirements
+                   (id, high_level_requirement_id, description, verification)
+                   VALUES (?, ?, ?, ?)""",
+                (req_id, hlr_id, req["description"], req["verification"]),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO low_level_requirements
+                   (high_level_requirement_id, description, verification)
+                   VALUES (?, ?, ?)""",
+                (hlr_id, req["description"], req["verification"]),
+            )
+
+    conn.commit()
+    return {"total": len(requirements)}
+
+
+def load_tickets(conn: sqlite3.Connection, json_path: str) -> dict:
+    """Load tickets from a JSON file into the database.
+
+    Each entry must have at minimum: id, title, summary.
+    Optional fields: priority, complexity, created_date, author, ticket_type,
+    parent_id, target_components, languages, requires_math, generate_tutorial,
+    acceptance_criteria, files, references, high_level_requirement_ids.
+
+    Returns a dict with total count.
+    """
+    with open(json_path) as f:
+        tickets = json.load(f)
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    for ticket in tickets:
+        tid = ticket["id"]
+
+        # Delete existing rows for this ticket (full replace)
+        _delete_ticket(conn, tid)
+
+        conn.execute(
+            """INSERT INTO tickets (
+                id, title,
+                priority, complexity, created_date, author, summary,
+                ticket_type, parent_id, target_components, languages,
+                requires_math, generate_tutorial, last_modified
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                tid, ticket["title"],
+                ticket.get("priority"), ticket.get("complexity"),
+                ticket.get("created_date"), ticket.get("author"),
+                ticket.get("summary"),
+                ticket.get("ticket_type", "feature"),
+                ticket.get("parent_id"),
+                ticket.get("target_components"),
+                ticket.get("languages", "C++"),
+                1 if ticket.get("requires_math") else 0,
+                1 if ticket.get("generate_tutorial") else 0,
+                now,
+            ),
+        )
+
+        for ac in ticket.get("acceptance_criteria", []):
+            conn.execute(
+                """INSERT INTO ticket_acceptance_criteria
+                   (ticket_id, description)
+                   VALUES (?, ?)""",
+                (tid, ac["description"]),
+            )
+
+        for f in ticket.get("files", []):
+            conn.execute(
+                """INSERT INTO ticket_files
+                   (ticket_id, file_path, change_type, description)
+                   VALUES (?, ?, ?, ?)""",
+                (tid, f["file_path"], f["change_type"], f.get("description")),
+            )
+
+        for ref in ticket.get("references", []):
+            conn.execute(
+                """INSERT INTO ticket_references
+                   (ticket_id, ref_type, ref_target)
+                   VALUES (?, ?, ?)""",
+                (tid, ref["ref_type"], ref["ref_target"]),
+            )
+
+        for hlr_id in ticket.get("high_level_requirement_ids", []):
+            conn.execute(
+                "INSERT OR IGNORE INTO ticket_requirements (ticket_id, high_level_requirement_id) VALUES (?, ?)",
+                (tid, hlr_id),
+            )
+
+    conn.commit()
+    return {"total": len(tickets)}

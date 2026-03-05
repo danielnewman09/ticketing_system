@@ -1,15 +1,23 @@
 """Shared fixtures for ticketing_system tests."""
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
-from ticketing_system.content_schema import create_ticket_tables, create_ticket_fts
+from ticketing_system.schema.content_schema import create_ticket_tables, create_ticket_fts
+
+TEST_DB_DIR = Path(__file__).parent / "test_dbs"
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return str(tmp_path / "test.db")
+def db_path(request):
+    TEST_DB_DIR.mkdir(exist_ok=True)
+    name = request.node.name.replace("/", "_").replace("::", "_")
+    path = TEST_DB_DIR / f"{name}.db"
+    if path.exists():
+        path.unlink()
+    return str(path)
 
 
 @pytest.fixture

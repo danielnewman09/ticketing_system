@@ -1,0 +1,272 @@
+[
+  {
+    "id": 1,
+    "high_level_requirement_id": 1,
+    "description": "C++17 standard is enforced (CMAKE_CXX_STANDARD 17, REQUIRED ON, EXTENSIONS OFF)",
+    "verification": "automated"
+  },
+  {
+    "id": 2,
+    "high_level_requirement_id": 1,
+    "description": "CMakePresets.json defines configure presets for debug, release, and test",
+    "verification": "automated"
+  },
+  {
+    "id": 3,
+    "high_level_requirement_id": 1,
+    "description": "CMakePresets.json defines build presets inheriting from each configure preset",
+    "verification": "automated"
+  },
+  {
+    "id": 4,
+    "high_level_requirement_id": 1,
+    "description": "CMakePresets.json defines a test preset that runs CTest with --output-on-failure",
+    "verification": "automated"
+  },
+  {
+    "id": 5,
+    "high_level_requirement_id": 1,
+    "description": "Test configure preset enables coverage flags (--coverage or -fprofile-arcs -ftest-coverage)",
+    "verification": "automated"
+  },
+  {
+    "id": 6,
+    "high_level_requirement_id": 1,
+    "description": "GTest v1.14+ is available via FetchContent under the test configuration",
+    "verification": "automated"
+  },
+  {
+    "id": 7,
+    "high_level_requirement_id": 1,
+    "description": "All three presets configure and build with zero warnings under -Wall -Wextra -Wpedantic",
+    "verification": "automated"
+  },
+  {
+    "id": 8,
+    "high_level_requirement_id": 1,
+    "description": "cmake --preset test && ctest --preset test executes successfully",
+    "verification": "automated"
+  },
+  {
+    "id": 9,
+    "high_level_requirement_id": 2,
+    "description": "Application launches and displays a window titled \"Calculator\"",
+    "verification": "inspection"
+  },
+  {
+    "id": 10,
+    "high_level_requirement_id": 2,
+    "description": "Window dimensions are 320x480 pixels",
+    "verification": "automated"
+  },
+  {
+    "id": 11,
+    "high_level_requirement_id": 2,
+    "description": "Window is not resizable",
+    "verification": "automated"
+  },
+  {
+    "id": 12,
+    "high_level_requirement_id": 2,
+    "description": "Closing the window exits the application with code 0",
+    "verification": "automated"
+  },
+  {
+    "id": 13,
+    "high_level_requirement_id": 2,
+    "description": "Application class is separate from Calculator class (no calculator logic in Application)",
+    "verification": "review"
+  },
+  {
+    "id": 14,
+    "high_level_requirement_id": 2,
+    "description": "Calculator class stub exists with default constructor and destructor",
+    "verification": "automated"
+  },
+  {
+    "id": 15,
+    "high_level_requirement_id": 2,
+    "description": "No memory leaks or resource leaks on shutdown",
+    "verification": "automated"
+  },
+  {
+    "id": 16,
+    "high_level_requirement_id": 2,
+    "description": "Builds cleanly with all three CMake presets from ticket 1",
+    "verification": "automated"
+  },
+  {
+    "id": 17,
+    "high_level_requirement_id": 3,
+    "description": "Display shows \"0\" on initial state and after clear",
+    "verification": "automated"
+  },
+  {
+    "id": 18,
+    "high_level_requirement_id": 3,
+    "description": "Pressing digit buttons updates the display with the entered number",
+    "verification": "automated"
+  },
+  {
+    "id": 19,
+    "high_level_requirement_id": 3,
+    "description": "Leading zeros are suppressed (except \"0.\")",
+    "verification": "automated"
+  },
+  {
+    "id": 20,
+    "high_level_requirement_id": 3,
+    "description": "Decimal point appends correctly and cannot be entered twice per number",
+    "verification": "automated"
+  },
+  {
+    "id": 21,
+    "high_level_requirement_id": 3,
+    "description": "All four arithmetic operations (+, -, x, /) produce correct results",
+    "verification": "automated"
+  },
+  {
+    "id": 22,
+    "high_level_requirement_id": 3,
+    "description": "Operator chaining evaluates intermediate results before applying the new operator",
+    "verification": "automated"
+  },
+  {
+    "id": 23,
+    "high_level_requirement_id": 3,
+    "description": "Division by zero displays \"Error\" and blocks input until Clear",
+    "verification": "automated"
+  },
+  {
+    "id": 24,
+    "high_level_requirement_id": 3,
+    "description": "Clear resets display to \"0\" and restores full functionality from any state",
+    "verification": "automated"
+  },
+  {
+    "id": 25,
+    "high_level_requirement_id": 3,
+    "description": "Keyboard keys 0-9, ., +, -, *, /, Enter/=, Escape/C map to calculator actions",
+    "verification": "automated"
+  },
+  {
+    "id": 26,
+    "high_level_requirement_id": 3,
+    "description": "Calculator class has no dependency on any GUI headers or libraries",
+    "verification": "review"
+  },
+  {
+    "id": 27,
+    "high_level_requirement_id": 3,
+    "description": "Display shows up to 10 significant digits with trailing zeros stripped",
+    "verification": "automated"
+  },
+  {
+    "id": 28,
+    "high_level_requirement_id": 4,
+    "description": "tests/CalculatorTest.cpp exists and compiles under the test preset",
+    "verification": "automated"
+  },
+  {
+    "id": 29,
+    "high_level_requirement_id": 4,
+    "description": "All digits 0-9 are individually tested for entry and display",
+    "verification": "automated"
+  },
+  {
+    "id": 30,
+    "high_level_requirement_id": 4,
+    "description": "All four arithmetic operations are tested with at least 2 cases each",
+    "verification": "automated"
+  },
+  {
+    "id": 31,
+    "high_level_requirement_id": 4,
+    "description": "Division by zero produces \"Error\" and blocks further input until Clear",
+    "verification": "automated"
+  },
+  {
+    "id": 32,
+    "high_level_requirement_id": 4,
+    "description": "Operator chaining is tested with at least 2 chain scenarios",
+    "verification": "automated"
+  },
+  {
+    "id": 33,
+    "high_level_requirement_id": 4,
+    "description": "Clear resets from every state (mid-entry, post-result, post-error)",
+    "verification": "automated"
+  },
+  {
+    "id": 34,
+    "high_level_requirement_id": 4,
+    "description": "Decimal point behavior is tested (entry, leading decimal, duplicate rejection)",
+    "verification": "automated"
+  },
+  {
+    "id": 35,
+    "high_level_requirement_id": 4,
+    "description": "Coverage report can be generated via the test preset toolchain",
+    "verification": "automated"
+  },
+  {
+    "id": 36,
+    "high_level_requirement_id": 4,
+    "description": "Calculator.cpp achieves 100% line coverage",
+    "verification": "automated"
+  },
+  {
+    "id": 37,
+    "high_level_requirement_id": 4,
+    "description": "Calculator.h achieves 100% line coverage (all inline methods exercised)",
+    "verification": "automated"
+  },
+  {
+    "id": 38,
+    "high_level_requirement_id": 4,
+    "description": "All tests pass when run via ctest --preset test",
+    "verification": "automated"
+  },
+  {
+    "id": 39,
+    "high_level_requirement_id": 5,
+    "description": ".github/workflows/ci.yml exists and is valid YAML",
+    "verification": "automated"
+  },
+  {
+    "id": 40,
+    "high_level_requirement_id": 5,
+    "description": "CI triggers on push to main and pull requests targeting main",
+    "verification": "automated"
+  },
+  {
+    "id": 41,
+    "high_level_requirement_id": 5,
+    "description": "All three presets build successfully in CI with zero warnings (-Werror)",
+    "verification": "automated"
+  },
+  {
+    "id": 42,
+    "high_level_requirement_id": 5,
+    "description": "Test results are reported in the CI job summary (JUnit XML via --gtest_output)",
+    "verification": "inspection"
+  },
+  {
+    "id": 43,
+    "high_level_requirement_id": 5,
+    "description": "Coverage report is generated and uploaded as a build artifact",
+    "verification": "inspection"
+  },
+  {
+    "id": 44,
+    "high_level_requirement_id": 5,
+    "description": "Pipeline fails if Calculator.cpp line coverage drops below 100%",
+    "verification": "automated"
+  },
+  {
+    "id": 45,
+    "high_level_requirement_id": 5,
+    "description": "Traceability summary artifact is generated with commit SHA, test counts, and coverage data",
+    "verification": "automated"
+  }
+]
