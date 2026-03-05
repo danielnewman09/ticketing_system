@@ -1,20 +1,19 @@
 """Schema creation for the ticketing system.
 
-Creates content indexing tables (ticket_requirements, acceptance_criteria,
-workflow_log, artifacts, files, references) and optional FTS.
+Creates content indexing tables and vector embeddings for similarity search.
 """
 
 import sqlite3
 from pathlib import Path
 
-from .content_schema import create_ticket_tables, create_ticket_fts
+from ticketing_system.tickets import create_ticket_tables, create_ticket_embeddings_table
 
 
 def create_content_db(db_path: str | Path) -> sqlite3.Connection:
     """Create or open a content database.
 
     Sets WAL mode, busy_timeout, and foreign_keys.
-    Creates all content tables and FTS if supported.
+    Creates all content tables and the vector embeddings table.
     """
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -24,9 +23,6 @@ def create_content_db(db_path: str | Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     create_ticket_tables(conn)
-    try:
-        create_ticket_fts(conn)
-    except sqlite3.OperationalError:
-        pass
+    create_ticket_embeddings_table(conn)
     conn.commit()
     return conn

@@ -7,7 +7,10 @@ name = "ticketing-system"
 version = "0.1.0"
 description = "Independent ticketing system: markdown-based ticket management with workflow orchestration"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "sqlite-vec>=0.1.6",
+    "sentence-transformers>=3.0",
+]
 
 [project.optional-dependencies]
 yaml = ["pyyaml>=6.0"]

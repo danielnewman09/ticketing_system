@@ -11,19 +11,21 @@ from pathlib import Path
 
 import pytest
 
-from ticketing_system.indexer import (
-    _parse_title,
-    _parse_summary,
-    _parse_requirements,
-    _parse_acceptance_criteria,
-    _parse_files,
-    _parse_references,
-    _detect_ticket_type,
+from ticketing_system.tickets import (
+    parse_title,
+    parse_summary,
+    parse_requirements,
+    parse_acceptance_criteria,
+    parse_files,
+    parse_references,
+    detect_ticket_type,
     index_single_ticket,
     index_tickets,
+    load_tickets,
+)
+from ticketing_system.requirements import (
     load_high_level_requirements,
     load_low_level_requirements,
-    load_tickets,
 )
 from ticketing_system.querier import TicketQuerier
 
@@ -89,16 +91,16 @@ for convex polytopes. This builds on the broad-phase sweep from ticket 40.
 # ===========================================================================
 
 
-def test_parse_title_feature_ticket():
-    assert _parse_title(SAMPLE_TICKET) == "Collision Detection Narrow Phase"
+def testparse_title_feature_ticket():
+    assert parse_title(SAMPLE_TICKET) == "Collision Detection Narrow Phase"
 
 
-def test_parse_title_plain_heading():
-    assert _parse_title("# My Simple Title\n\nSome text.") == "My Simple Title"
+def testparse_title_plain_heading():
+    assert parse_title("# My Simple Title\n\nSome text.") == "My Simple Title"
 
 
-def test_parse_title_empty_content():
-    assert _parse_title("") == "Untitled"
+def testparse_title_empty_content():
+    assert parse_title("") == "Untitled"
 
 
 # ===========================================================================
@@ -106,14 +108,14 @@ def test_parse_title_empty_content():
 # ===========================================================================
 
 
-def test_parse_summary():
-    summary = _parse_summary(SAMPLE_TICKET)
+def testparse_summary():
+    summary = parse_summary(SAMPLE_TICKET)
     assert summary is not None
     assert "GJK" in summary
 
 
-def test_parse_summary_missing():
-    assert _parse_summary("# No summary here") is None
+def testparse_summary_missing():
+    assert parse_summary("# No summary here") is None
 
 
 # ===========================================================================
@@ -121,24 +123,24 @@ def test_parse_summary_missing():
 # ===========================================================================
 
 
-def test_parse_requirements_table_count():
-    reqs = _parse_requirements(SAMPLE_TICKET)
+def testparse_requirements_table_count():
+    reqs = parse_requirements(SAMPLE_TICKET)
     assert len(reqs) == 4
 
 
-def test_parse_requirements_table_descriptions():
-    reqs = _parse_requirements(SAMPLE_TICKET)
+def testparse_requirements_table_descriptions():
+    reqs = parse_requirements(SAMPLE_TICKET)
     assert "GJK" in reqs[0]["description"]
     assert "EPA" in reqs[1]["description"]
 
 
-def test_parse_requirements_table_verification():
-    reqs = _parse_requirements(SAMPLE_TICKET)
+def testparse_requirements_table_verification():
+    reqs = parse_requirements(SAMPLE_TICKET)
     methods = [r["verification"] for r in reqs]
     assert methods == ["automated", "automated", "automated", "review"]
 
 
-def test_parse_requirements_legacy_format():
+def testparse_requirements_legacy_format():
     content = """\
 ## Requirements
 
@@ -148,14 +150,14 @@ def test_parse_requirements_legacy_format():
 ### R2: Second Requirement
 - Description of the second requirement
 """
-    reqs = _parse_requirements(content)
+    reqs = parse_requirements(content)
     assert len(reqs) == 2
     assert "First Requirement" in reqs[0]["description"]
     assert reqs[0]["verification"] == "review"
 
 
-def test_parse_requirements_empty():
-    assert _parse_requirements("# No requirements") == []
+def testparse_requirements_empty():
+    assert parse_requirements("# No requirements") == []
 
 
 # ===========================================================================
@@ -163,25 +165,25 @@ def test_parse_requirements_empty():
 # ===========================================================================
 
 
-def test_parse_acceptance_criteria_count():
-    criteria = _parse_acceptance_criteria(SAMPLE_TICKET)
+def testparse_acceptance_criteria_count():
+    criteria = parse_acceptance_criteria(SAMPLE_TICKET)
     assert len(criteria) == 3
 
 
-def test_parse_acceptance_criteria_descriptions():
-    criteria = _parse_acceptance_criteria(SAMPLE_TICKET)
+def testparse_acceptance_criteria_descriptions():
+    criteria = parse_acceptance_criteria(SAMPLE_TICKET)
     descriptions = [c["description"] for c in criteria]
     assert "GJK algorithm correctly determines intersection" in descriptions
 
 
-def test_parse_acceptance_criteria_descriptions_detail():
-    criteria = _parse_acceptance_criteria(SAMPLE_TICKET)
+def testparse_acceptance_criteria_descriptions_detail():
+    criteria = parse_acceptance_criteria(SAMPLE_TICKET)
     assert "EPA" in criteria[1]["description"]
     assert "Performance" in criteria[2]["description"]
 
 
-def test_parse_acceptance_criteria_empty():
-    assert _parse_acceptance_criteria("# No criteria") == []
+def testparse_acceptance_criteria_empty():
+    assert parse_acceptance_criteria("# No criteria") == []
 
 
 # ===========================================================================
@@ -189,20 +191,20 @@ def test_parse_acceptance_criteria_empty():
 # ===========================================================================
 
 
-def test_parse_files_count():
-    files = _parse_files(SAMPLE_TICKET)
+def testparse_files_count():
+    files = parse_files(SAMPLE_TICKET)
     assert len(files) >= 3
 
 
-def test_parse_files_change_types():
-    files = _parse_files(SAMPLE_TICKET)
+def testparse_files_change_types():
+    files = parse_files(SAMPLE_TICKET)
     types = {f["change_type"] for f in files}
     assert "new" in types
     assert "modified" in types
 
 
-def test_parse_files_empty():
-    assert _parse_files("# No files") == []
+def testparse_files_empty():
+    assert parse_files("# No files") == []
 
 
 # ===========================================================================
@@ -210,21 +212,21 @@ def test_parse_files_empty():
 # ===========================================================================
 
 
-def test_parse_references_ticket_refs():
-    refs = _parse_references(SAMPLE_TICKET)
+def testparse_references_ticket_refs():
+    refs = parse_references(SAMPLE_TICKET)
     ticket_refs = [r for r in refs if r["ref_type"] == "ticket"]
     targets = [r["ref_target"] for r in ticket_refs]
     assert "40" in targets
 
 
-def test_parse_references_parent():
-    refs = _parse_references(SAMPLE_TICKET)
+def testparse_references_parent():
+    refs = parse_references(SAMPLE_TICKET)
     parent_refs = [r for r in refs if r["ref_type"] == "parent"]
     assert any(r["ref_target"] == "35" for r in parent_refs)
 
 
-def test_parse_references_empty():
-    assert _parse_references("# No references") == []
+def testparse_references_empty():
+    assert parse_references("# No references") == []
 
 
 # ===========================================================================
@@ -232,12 +234,12 @@ def test_parse_references_empty():
 # ===========================================================================
 
 
-def test_detect_ticket_type_feature():
-    assert _detect_ticket_type(SAMPLE_TICKET) == "feature"
+def testdetect_ticket_type_feature():
+    assert detect_ticket_type(SAMPLE_TICKET) == "feature"
 
 
-def test_detect_ticket_type_debug():
-    assert _detect_ticket_type("# Debug Ticket: Fix crash") == "debug"
+def testdetect_ticket_type_debug():
+    assert detect_ticket_type("# Debug Ticket: Fix crash") == "debug"
 
 
 # ===========================================================================

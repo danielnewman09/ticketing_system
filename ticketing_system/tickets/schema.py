@@ -1,6 +1,9 @@
-"""Schema: requirements, tickets, acceptance criteria, files, references, and FTS."""
+"""Schema: tickets, acceptance criteria, files, references, and vector embeddings."""
 
 import sqlite3
+import sqlite_vec
+
+from ticketing_system.requirements import create_requirements_tables
 
 
 def create_tickets_table(conn: sqlite3.Connection, prefix: str = "") -> None:
@@ -73,7 +76,6 @@ def create_ticket_acceptance_criteria_table(conn: sqlite3.Connection, prefix: st
         CREATE INDEX IF NOT EXISTS {prefix}idx_tac_ticket ON {prefix}ticket_acceptance_criteria(ticket_id);
     """)
 
-
 def create_ticket_files_table(conn: sqlite3.Connection, prefix: str = "") -> None:
     """Files declared in ticket New/Modified/Removed sections.
 
@@ -102,7 +104,6 @@ def create_ticket_files_table(conn: sqlite3.Connection, prefix: str = "") -> Non
         CREATE INDEX IF NOT EXISTS {prefix}idx_tf_path ON {prefix}ticket_files(file_path);
     """)
 
-
 def create_ticket_references_table(conn: sqlite3.Connection, prefix: str = "") -> None:
     """Cross-references between tickets, code, and documentation.
 
@@ -127,101 +128,28 @@ def create_ticket_references_table(conn: sqlite3.Connection, prefix: str = "") -
         CREATE INDEX IF NOT EXISTS {prefix}idx_tr_ticket ON {prefix}ticket_references(ticket_id);
     """)
 
+def create_ticket_embeddings_table(conn: sqlite3.Connection) -> None:
+    """Virtual table for vector similarity search over tickets.
 
-def create_ticket_fts(conn: sqlite3.Connection) -> None:
-    """FTS5 virtual table for full-text search over tickets.
+    Uses sqlite-vec's vec0 module with 384-dimensional float embeddings
+    (matching the all-MiniLM-L6-v2 sentence-transformers model).
 
-    Content-synced with tickets via content= directive.
-    Uses Porter stemming and Unicode tokenization.
-
-    Does not support schema prefixes — only for standalone databases.
+    Each row's rowid corresponds to a ticket id.
     """
+    conn.enable_load_extension(True)
+    sqlite_vec.load(conn)
+    conn.enable_load_extension(False)
     conn.execute("""
-        CREATE VIRTUAL TABLE IF NOT EXISTS tickets_fts USING fts5(
-            title,
-            summary,
-            content=tickets,
-            content_rowid=id,
-            tokenize='porter unicode61'
+        CREATE VIRTUAL TABLE IF NOT EXISTS ticket_embeddings USING vec0(
+            embedding float[384]
         )
-    """)
-
-
-def create_high_level_requirements_table(conn: sqlite3.Connection, prefix: str = "") -> None:
-    """High-level requirements that capture broad project goals.
-
-    These are decomposed into low-level requirements (in the
-    ``low_level_requirements`` table) that are concrete and verifiable.
-
-    Columns:
-        id:          Integer primary key.
-        description: Full text of the high-level requirement.
-    """
-    conn.executescript(f"""
-        CREATE TABLE IF NOT EXISTS {prefix}high_level_requirements (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            description     TEXT NOT NULL
-        );
-    """)
-
-
-def create_low_level_requirements_table(conn: sqlite3.Connection, prefix: str = "") -> None:
-    """Low-level requirements — concrete, verifiable decompositions
-    of high-level requirements.
-
-    Each low-level requirement optionally references a high-level
-    requirement it helps fulfill.
-
-    Columns:
-        id:                         Auto-incrementing integer primary key.
-        high_level_requirement_id:  FK to high_level_requirements.id (optional).
-        description:                Full text of the requirement.
-        verification:               How the requirement is verified
-                                    ("automated", "review", "inspection").
-
-    Indexes:
-        idx_llr_hlr: Lookup by high-level requirement.
-    """
-    conn.executescript(f"""
-        CREATE TABLE IF NOT EXISTS {prefix}low_level_requirements (
-            id                          INTEGER PRIMARY KEY AUTOINCREMENT,
-            high_level_requirement_id   INTEGER REFERENCES {prefix}high_level_requirements(id),
-            description                 TEXT NOT NULL,
-            verification                TEXT NOT NULL DEFAULT 'review'
-        );
-        CREATE INDEX IF NOT EXISTS {prefix}idx_llr_hlr ON {prefix}low_level_requirements(high_level_requirement_id);
-    """)
-
-
-def create_ticket_requirements_table(conn: sqlite3.Connection, prefix: str = "") -> None:
-    """Join table linking tickets to the high-level requirements they fulfill.
-
-    Columns:
-        ticket_id:                  FK to tickets.id.
-        high_level_requirement_id:  FK to high_level_requirements.id.
-
-    Indexes:
-        idx_treq_ticket: Lookup requirements by ticket.
-        idx_treq_hlr:    Lookup tickets by requirement.
-    """
-    conn.executescript(f"""
-        CREATE TABLE IF NOT EXISTS {prefix}ticket_requirements (
-            id                          INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticket_id                   INTEGER NOT NULL REFERENCES {prefix}tickets(id),
-            high_level_requirement_id   INTEGER NOT NULL REFERENCES {prefix}high_level_requirements(id),
-            UNIQUE(ticket_id, high_level_requirement_id)
-        );
-        CREATE INDEX IF NOT EXISTS {prefix}idx_treq_ticket ON {prefix}ticket_requirements(ticket_id);
-        CREATE INDEX IF NOT EXISTS {prefix}idx_treq_hlr ON {prefix}ticket_requirements(high_level_requirement_id);
     """)
 
 
 def create_ticket_tables(conn: sqlite3.Connection, prefix: str = "") -> None:
     """Create all tables: requirements, tickets, and child tables."""
-    create_high_level_requirements_table(conn, prefix)
-    create_low_level_requirements_table(conn, prefix)
+    create_requirements_tables(conn, prefix)
     create_tickets_table(conn, prefix)
-    create_ticket_requirements_table(conn, prefix)
     create_ticket_acceptance_criteria_table(conn, prefix)
     create_ticket_files_table(conn, prefix)
     create_ticket_references_table(conn, prefix)

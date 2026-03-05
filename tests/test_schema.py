@@ -27,6 +27,13 @@ def test_create_content_db_has_tables():
     assert "ticket_acceptance_criteria" in tables
     assert "ticket_files" in tables
     assert "ticket_references" in tables
+    # ticket_embeddings is a virtual table
+    vtables = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' OR sql LIKE '%virtual%'"
+        ).fetchall()
+    }
     conn.close()
 
 

@@ -7,17 +7,17 @@ listing, and creation.  Delegates SQL construction to queries.py.
 import sqlite3
 from pathlib import Path
 
-from .queries import (
+from ticketing_system.embeddings import embed_text
+from ticketing_system.requirements import get_ticket_requirements
+from ticketing_system.tickets import (
     get_ticket_acceptance_criteria,
     get_ticket_detail,
     get_ticket_files,
     get_ticket_references,
-    get_ticket_requirements,
     list_tickets_filtered,
-    search_tickets_fts,
-    search_tickets_like,
+    search_tickets_vec,
 )
-from .utils import rows_to_dicts, slugify, split_pascal_case
+from ticketing_system.utils import rows_to_dicts, slugify
 
 
 class TicketQuerier:
@@ -32,42 +32,24 @@ class TicketQuerier:
         priority: str | None = None,
         component: str | None = None,
     ) -> list[dict]:
-        """Search tickets by keyword, with FTS5 ranked search
-        and automatic LIKE fallback.
+        """Search tickets by semantic similarity using vector embeddings.
 
         If query is empty, delegates to list() for filter-based listing.
 
         Args:
-            query: Free-text search string (supports PascalCase splitting).
+            query: Free-text search string.
             priority: Optional priority filter.
             component: Optional component substring filter.
 
         Returns:
-            List of matching ticket dicts, ordered by relevance (max 20).
+            List of matching ticket dicts, ordered by similarity (max 20).
         """
         if not query.strip():
             return self.list(priority=priority, component=component)
 
-        results = []
-
-        try:
-            sql, params = search_tickets_fts(
-                query, priority=priority, component=component
-            )
-            cursor = self.conn.execute(sql, params)
-            results = rows_to_dicts(cursor.fetchall())
-        except sqlite3.OperationalError:
-            pass
-
-        if results:
-            return results
-
-        words = split_pascal_case(query)
-        if not words:
-            return []
-
-        sql, params = search_tickets_like(
-            words, priority=priority, component=component
+        query_embedding = embed_text(query)
+        sql, params = search_tickets_vec(
+            query_embedding, priority=priority, component=component
         )
         cursor = self.conn.execute(sql, params)
         return rows_to_dicts(cursor.fetchall())
@@ -146,10 +128,7 @@ class TicketQuerier:
             Dict with id, file_path, and title on success,
             or a dict with an "error" key on failure.
         """
-        from .indexer import (
-            _parse_title,
-            index_single_ticket,
-        )
+        from ticketing_system.tickets import index_single_ticket
 
         result = index_single_ticket(self.conn, content)
         ticket_id = result["id"]
@@ -163,11 +142,6 @@ class TicketQuerier:
         file_path = tickets_path / filename
 
         file_path.write_text(content, encoding="utf-8")
-
-        try:
-            self.conn.execute("INSERT INTO tickets_fts(tickets_fts) VALUES('rebuild')")
-        except sqlite3.OperationalError:
-            pass
         self.conn.commit()
 
         return {
