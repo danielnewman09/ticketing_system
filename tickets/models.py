@@ -1,38 +1,5 @@
 from django.db import models
-
-
-class HighLevelRequirement(models.Model):
-    description = models.TextField()
-
-    class Meta:
-        db_table = "high_level_requirements"
-
-    def __str__(self):
-        return self.description[:80]
-
-
-class LowLevelRequirement(models.Model):
-    VERIFICATION_CHOICES = [
-        ("automated", "Automated"),
-        ("review", "Review"),
-        ("inspection", "Inspection"),
-    ]
-
-    high_level_requirement = models.ForeignKey(
-        HighLevelRequirement,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="low_level_requirements",
-    )
-    description = models.TextField()
-    verification = models.CharField(max_length=20, choices=VERIFICATION_CHOICES, default="review")
-
-    class Meta:
-        db_table = "low_level_requirements"
-
-    def __str__(self):
-        return self.description[:80]
+from requirements.models import HighLevelRequirement, LowLevelRequirement
 
 
 class Ticket(models.Model):
@@ -53,7 +20,7 @@ class Ticket(models.Model):
     last_modified = models.CharField(max_length=50, blank=True, null=True)
     low_level_requirements = models.ManyToManyField(
         LowLevelRequirement,
-        through="TicketRequirement",
+        through="requirements.TicketRequirement",
         related_name="tickets",
         blank=True,
     )
@@ -69,18 +36,6 @@ class Ticket(models.Model):
         return HighLevelRequirement.objects.filter(
             low_level_requirements__in=self.low_level_requirements.all()
         ).distinct()
-
-
-class TicketRequirement(models.Model):
-    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE)
-    low_level_requirement = models.ForeignKey(LowLevelRequirement, on_delete=models.CASCADE)
-
-    class Meta:
-        db_table = "ticket_requirements"
-        unique_together = [("ticket", "low_level_requirement")]
-
-    def __str__(self):
-        return f"Ticket {self.ticket_id} -> LLR {self.low_level_requirement_id}"
 
 
 class TicketAcceptanceCriteria(models.Model):

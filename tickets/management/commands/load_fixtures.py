@@ -3,14 +3,16 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
-from tickets.models import (
+from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
+    TicketRequirement,
+)
+from tickets.models import (
     Ticket,
     TicketAcceptanceCriteria,
     TicketFile,
     TicketReference,
-    TicketRequirement,
 )
 
 
@@ -116,7 +118,7 @@ class Command(BaseCommand):
         self.stdout.write(f"Loaded {len(tickets)} tickets")
 
         # Generate embeddings for all tickets
-        from tickets.embeddings import upsert_ticket_embedding
+        from search.embeddings import upsert_ticket_embedding
         for ticket in Ticket.objects.all():
             upsert_ticket_embedding(ticket.id, ticket.title, ticket.summary)
         self.stdout.write(f"Generated embeddings for {Ticket.objects.count()} tickets")
