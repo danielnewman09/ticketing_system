@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Components{% endblock %}
 {% block content %}
-<h1 class="mb-3">Components</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Components</h1>
+    <a href="{% url 'component_create' %}" class="btn btn-success">+ New Component</a>
+</div>
 
 <div class="row">
     {% for component in components %}

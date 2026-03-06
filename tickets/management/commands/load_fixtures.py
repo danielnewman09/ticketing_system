@@ -9,9 +9,8 @@ from requirements.models import (
     LowLevelRequirement,
     TicketRequirement,
 )
+from components.models import Component, Language
 from tickets.models import (
-    Component,
-    Language,
     Ticket,
     TicketAcceptanceCriteria,
     TicketFile,

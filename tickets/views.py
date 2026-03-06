@@ -1,7 +1,7 @@
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from requirements.models import TicketRequirement
-from .models import Component, Ticket
+from .models import Ticket
 from .forms import TicketForm
 
 
@@ -35,27 +35,6 @@ class TicketDetailView(DetailView):
         ticket = self.object
         context["llrs"] = ticket.low_level_requirements.select_related("high_level_requirement").all()
         context["hlrs"] = ticket.get_hlrs()
-        return context
-
-
-class ComponentListView(ListView):
-    model = Component
-    template_name = "tickets/component_list.html"
-    context_object_name = "components"
-
-    def get_queryset(self):
-        from django.db.models import Count
-        return super().get_queryset().annotate(ticket_count=Count("tickets"))
-
-
-class ComponentDetailView(DetailView):
-    model = Component
-    template_name = "tickets/component_detail.html"
-    context_object_name = "component"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["tickets"] = self.object.tickets.order_by("id")
         return context
 
 
