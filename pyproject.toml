@@ -5,19 +5,20 @@ build-backend = "hatchling.build"
 [project]
 name = "ticketing-system"
 version = "0.1.0"
-description = "Independent ticketing system: markdown-based ticket management with workflow orchestration"
+description = "Django-based ticket management with requirements traceability and semantic search"
 requires-python = ">=3.12"
 dependencies = [
+    "django>=5.0",
     "sqlite-vec>=0.1.6",
     "sentence-transformers>=3.0",
 ]
 
 [project.optional-dependencies]
-yaml = ["pyyaml>=6.0"]
 dev = [
     "pytest>=8.0",
-    "pyyaml>=6.0",
+    "pytest-django>=4.5",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+DJANGO_SETTINGS_MODULE = "config.settings"
+testpaths = ["tickets/tests"]

@@ -15,12 +15,13 @@ from tickets.models import (
 
 
 class Command(BaseCommand):
-    help = "Load ticket fixture data from JSON files in tests/fixtures/calculator-cpp/"
+    help = "Load ticket fixture data from JSON files"
 
     def add_arguments(self, parser):
+        default_dir = Path(__file__).resolve().parent.parent.parent / "fixtures" / "calculator-cpp"
         parser.add_argument(
             "--fixtures-dir",
-            default="tests/fixtures/calculator-cpp",
+            default=str(default_dir),
             help="Path to the fixtures directory",
         )
 
