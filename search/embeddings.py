@@ -48,7 +48,7 @@ def search_tickets(query: str, limit: int = 20) -> list[dict]:
     """Search tickets by semantic similarity.
 
     Returns a list of dicts with ticket id, title, priority, summary,
-    target_components, and distance (lower = more similar).
+    and distance (lower = more similar).
     """
     query_embedding = embed_text(query)
     blob = serialize_float32(query_embedding)
@@ -56,8 +56,7 @@ def search_tickets(query: str, limit: int = 20) -> list[dict]:
     cursor = conn.execute(
         """
         SELECT t.id, t.title, t.priority,
-               t.summary, t.target_components,
-               e.distance
+               t.summary, e.distance
         FROM ticket_embeddings e
         JOIN tickets t ON t.id = e.rowid
         WHERE e.embedding MATCH ?

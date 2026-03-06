@@ -1,23 +1,63 @@
 from django.db import models
+from django.utils import timezone
 from requirements.models import HighLevelRequirement, LowLevelRequirement
 
 
+class Component(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        db_table = "components"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Language(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        db_table = "languages"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Ticket(models.Model):
+    PRIORITY_CHOICES = [
+        ("critical", "Critical"),
+        ("high", "High"),
+        ("medium", "Medium"),
+        ("low", "Low"),
+    ]
+    COMPLEXITY_CHOICES = [
+        ("small", "Small"),
+        ("medium", "Medium"),
+        ("large", "Large"),
+    ]
+    TYPE_CHOICES = [
+        ("feature", "Feature"),
+        ("bug", "Bug"),
+        ("task", "Task"),
+    ]
+
     title = models.CharField(max_length=200)
-    priority = models.CharField(max_length=50, blank=True, null=True)
-    complexity = models.CharField(max_length=50, blank=True, null=True)
-    created_date = models.CharField(max_length=50, blank=True, null=True)
-    author = models.CharField(max_length=200, blank=True, null=True)
-    summary = models.TextField(blank=True, null=True)
-    ticket_type = models.CharField(max_length=50, default="feature")
+    priority = models.CharField(max_length=50, choices=PRIORITY_CHOICES, blank=True)
+    complexity = models.CharField(max_length=50, choices=COMPLEXITY_CHOICES, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+    author = models.CharField(max_length=200, blank=True)
+    summary = models.TextField(blank=True)
+    ticket_type = models.CharField(max_length=50, choices=TYPE_CHOICES, default="feature")
     parent = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="children"
     )
-    target_components = models.CharField(max_length=500, blank=True, null=True)
-    languages = models.CharField(max_length=200, default="C++")
+    components = models.ManyToManyField(Component, related_name="tickets", blank=True)
+    languages = models.ManyToManyField(Language, related_name="tickets", blank=True)
     requires_math = models.BooleanField(default=False)
     generate_tutorial = models.BooleanField(default=False)
-    last_modified = models.CharField(max_length=50, blank=True, null=True)
     low_level_requirements = models.ManyToManyField(
         LowLevelRequirement,
         through="requirements.TicketRequirement",
@@ -53,7 +93,7 @@ class TicketFile(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="files")
     file_path = models.CharField(max_length=500)
     change_type = models.CharField(max_length=20)
-    description = models.CharField(max_length=500, blank=True, null=True)
+    description = models.CharField(max_length=500, blank=True)
 
     class Meta:
         db_table = "ticket_files"

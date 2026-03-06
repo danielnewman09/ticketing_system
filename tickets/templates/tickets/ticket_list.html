@@ -28,7 +28,6 @@
             {% if is_search %}<th>Similarity</th>{% else %}<th>Type</th>{% endif %}
             <th>Priority</th>
             {% if not is_search %}<th>Complexity</th>{% endif %}
-            <th>Components</th>
         </tr>
     </thead>
     <tbody>
@@ -39,11 +38,10 @@
             {% if is_search %}
             <td><span class="badge bg-info">{{ ticket.distance|floatformat:3 }}</span></td>
             {% else %}
-            <td>{{ ticket.ticket_type }}</td>
+            <td>{{ ticket.get_ticket_type_display }}</td>
             {% endif %}
-            <td>{{ ticket.priority }}</td>
-            {% if not is_search %}<td>{{ ticket.complexity }}</td>{% endif %}
-            <td>{{ ticket.target_components }}</td>
+            <td>{% if is_search %}{{ ticket.priority }}{% else %}{{ ticket.get_priority_display }}{% endif %}</td>
+            {% if not is_search %}<td>{{ ticket.get_complexity_display }}</td>{% endif %}
         </tr>
         {% empty %}
         <tr><td colspan="6">{% if is_search %}No results found.{% else %}No tickets found. Run <code>python manage.py load_fixtures</code> to load data.{% endif %}</td></tr>

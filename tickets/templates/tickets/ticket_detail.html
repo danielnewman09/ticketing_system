@@ -19,12 +19,15 @@
         <div class="card">
             <div class="card-body">
                 <dl>
-                    <dt>Type</dt><dd>{{ ticket.ticket_type }}</dd>
-                    <dt>Priority</dt><dd>{{ ticket.priority }}</dd>
-                    <dt>Complexity</dt><dd>{{ ticket.complexity }}</dd>
-                    <dt>Components</dt><dd>{{ ticket.target_components }}</dd>
-                    <dt>Languages</dt><dd>{{ ticket.languages }}</dd>
-                    <dt>Created</dt><dd>{{ ticket.created_date }}</dd>
+                    <dt>Type</dt><dd>{{ ticket.get_ticket_type_display }}</dd>
+                    <dt>Priority</dt><dd>{{ ticket.get_priority_display }}</dd>
+                    <dt>Complexity</dt><dd>{{ ticket.get_complexity_display }}</dd>
+                    <dt>Components</dt>
+                    <dd>{% for c in ticket.components.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">-</span>{% endfor %}</dd>
+                    <dt>Languages</dt>
+                    <dd>{% for l in ticket.languages.all %}{{ l.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">-</span>{% endfor %}</dd>
+                    <dt>Created</dt><dd>{{ ticket.created_at|date:"Y-m-d H:i" }}</dd>
+                    <dt>Updated</dt><dd>{{ ticket.updated_at|date:"Y-m-d H:i" }}</dd>
                 </dl>
             </div>
         </div>

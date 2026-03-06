@@ -15,15 +15,15 @@ class TicketForm(forms.ModelForm):
     class Meta:
         model = Ticket
         fields = ["title", "priority", "complexity", "summary", "ticket_type",
-                  "target_components", "languages", "requires_math", "generate_tutorial"]
+                  "components", "languages", "requires_math", "generate_tutorial"]
         widgets = {
             "title": forms.TextInput(attrs={"class": "form-control"}),
-            "priority": forms.TextInput(attrs={"class": "form-control"}),
-            "complexity": forms.TextInput(attrs={"class": "form-control"}),
+            "priority": forms.Select(attrs={"class": "form-select"}),
+            "complexity": forms.Select(attrs={"class": "form-select"}),
             "summary": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
-            "ticket_type": forms.TextInput(attrs={"class": "form-control"}),
-            "target_components": forms.TextInput(attrs={"class": "form-control"}),
-            "languages": forms.TextInput(attrs={"class": "form-control"}),
+            "ticket_type": forms.Select(attrs={"class": "form-select"}),
+            "components": forms.CheckboxSelectMultiple,
+            "languages": forms.CheckboxSelectMultiple,
             "requires_math": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "generate_tutorial": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Components{% endblock %}
+{% block content %}
+<h1 class="mb-3">Components</h1>
+
+<div class="row">
+    {% for component in components %}
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <a href="{% url 'component_detail' component.pk %}">{{ component.name }}</a>
+                </h5>
+                <p class="card-text text-muted">
+                    {{ component.ticket_count }} ticket{{ component.ticket_count|pluralize }}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <p>No components found.</p>
+    {% endfor %}
+</div>
+{% endblock %}
