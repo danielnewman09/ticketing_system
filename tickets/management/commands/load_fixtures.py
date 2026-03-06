@@ -113,4 +113,11 @@ class Command(BaseCommand):
                     )
 
         self.stdout.write(f"Loaded {len(tickets)} tickets")
+
+        # Generate embeddings for all tickets
+        from tickets.embeddings import upsert_ticket_embedding
+        for ticket in Ticket.objects.all():
+            upsert_ticket_embedding(ticket.id, ticket.title, ticket.summary)
+        self.stdout.write(f"Generated embeddings for {Ticket.objects.count()} tickets")
+
         self.stdout.write(self.style.SUCCESS("Done!"))

@@ -5,14 +5,29 @@
     <h1>Tickets</h1>
     <a href="{% url 'ticket_create' %}" class="btn btn-success">+ New Ticket</a>
 </div>
+
+<form method="get" class="mb-3">
+    <div class="input-group">
+        <input type="text" name="q" class="form-control" placeholder="Semantic search tickets..." value="{{ search_query|default:'' }}">
+        <button type="submit" class="btn btn-outline-primary">Search</button>
+        {% if is_search %}
+        <a href="{% url 'ticket_list' %}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+    </div>
+</form>
+
+{% if is_search %}
+<p class="text-muted">Search results for "{{ search_query }}"</p>
+{% endif %}
+
 <table class="table table-striped">
     <thead>
         <tr>
             <th>ID</th>
             <th>Title</th>
-            <th>Type</th>
+            {% if is_search %}<th>Similarity</th>{% else %}<th>Type</th>{% endif %}
             <th>Priority</th>
-            <th>Complexity</th>
+            {% if not is_search %}<th>Complexity</th>{% endif %}
             <th>Components</th>
         </tr>
     </thead>
@@ -20,14 +35,18 @@
         {% for ticket in tickets %}
         <tr>
             <td>{{ ticket.id }}</td>
-            <td><a href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.title }}</a></td>
+            <td><a href="{% url 'ticket_detail' ticket.id %}">{{ ticket.title }}</a></td>
+            {% if is_search %}
+            <td><span class="badge bg-info">{{ ticket.distance|floatformat:3 }}</span></td>
+            {% else %}
             <td>{{ ticket.ticket_type }}</td>
+            {% endif %}
             <td>{{ ticket.priority }}</td>
-            <td>{{ ticket.complexity }}</td>
+            {% if not is_search %}<td>{{ ticket.complexity }}</td>{% endif %}
             <td>{{ ticket.target_components }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6">No tickets found. Run <code>python manage.py load_fixtures</code> to load data.</td></tr>
+        <tr><td colspan="6">{% if is_search %}No results found.{% else %}No tickets found. Run <code>python manage.py load_fixtures</code> to load data.{% endif %}</td></tr>
         {% endfor %}
     </tbody>
 </table>

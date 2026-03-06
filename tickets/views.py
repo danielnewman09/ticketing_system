@@ -9,6 +9,15 @@ from .forms import TicketForm, LowLevelRequirementForm, HighLevelRequirementForm
 
 
 def ticket_list(request):
+    query = request.GET.get("q", "").strip()
+    if query:
+        from .embeddings import search_tickets
+        results = search_tickets(query)
+        return render(request, "tickets/ticket_list.html", {
+            "tickets": results,
+            "search_query": query,
+            "is_search": True,
+        })
     tickets = Ticket.objects.all().order_by("id")
     return render(request, "tickets/ticket_list.html", {"tickets": tickets})
 
