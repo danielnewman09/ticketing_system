@@ -51,8 +51,8 @@ class Ticket(models.Model):
     requires_math = models.BooleanField(default=False)
     generate_tutorial = models.BooleanField(default=False)
     last_modified = models.CharField(max_length=50, blank=True, null=True)
-    high_level_requirements = models.ManyToManyField(
-        HighLevelRequirement,
+    low_level_requirements = models.ManyToManyField(
+        LowLevelRequirement,
         through="TicketRequirement",
         related_name="tickets",
         blank=True,
@@ -64,17 +64,23 @@ class Ticket(models.Model):
     def __str__(self):
         return self.title
 
+    def get_hlrs(self):
+        """Derive high-level requirements transitively via linked LLRs."""
+        return HighLevelRequirement.objects.filter(
+            low_level_requirements__in=self.low_level_requirements.all()
+        ).distinct()
+
 
 class TicketRequirement(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE)
-    high_level_requirement = models.ForeignKey(HighLevelRequirement, on_delete=models.CASCADE)
+    low_level_requirement = models.ForeignKey(LowLevelRequirement, on_delete=models.CASCADE)
 
     class Meta:
         db_table = "ticket_requirements"
-        unique_together = [("ticket", "high_level_requirement")]
+        unique_together = [("ticket", "low_level_requirement")]
 
     def __str__(self):
-        return f"Ticket {self.ticket_id} -> HLR {self.high_level_requirement_id}"
+        return f"Ticket {self.ticket_id} -> LLR {self.low_level_requirement_id}"
 
 
 class TicketAcceptanceCriteria(models.Model):

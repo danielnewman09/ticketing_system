@@ -15,14 +15,12 @@ def ticket_list(request):
 
 def ticket_detail(request, pk):
     ticket = get_object_or_404(Ticket, pk=pk)
-    hlrs = ticket.high_level_requirements.all()
-    llrs = LowLevelRequirement.objects.filter(
-        high_level_requirement__in=hlrs
-    ).select_related("high_level_requirement")
+    llrs = ticket.low_level_requirements.select_related("high_level_requirement").all()
+    hlrs = ticket.get_hlrs()
     return render(request, "tickets/ticket_detail.html", {
         "ticket": ticket,
-        "hlrs": hlrs,
         "llrs": llrs,
+        "hlrs": hlrs,
     })
 
 
@@ -31,8 +29,8 @@ def ticket_create(request):
         form = TicketForm(request.POST)
         if form.is_valid():
             ticket = form.save()
-            for hlr in form.cleaned_data["link_hlrs"]:
-                TicketRequirement.objects.get_or_create(ticket=ticket, high_level_requirement=hlr)
+            for llr in form.cleaned_data["link_llrs"]:
+                TicketRequirement.objects.get_or_create(ticket=ticket, low_level_requirement=llr)
             return redirect("ticket_detail", pk=ticket.pk)
     else:
         form = TicketForm()
@@ -45,14 +43,11 @@ def ticket_update(request, pk):
         form = TicketForm(request.POST, instance=ticket)
         if form.is_valid():
             form.save()
-            # Sync HLR linkages
-            selected_hlrs = set(form.cleaned_data["link_hlrs"].values_list("id", flat=True))
-            existing = set(TicketRequirement.objects.filter(ticket=ticket).values_list("high_level_requirement_id", flat=True))
-            # Add new links
-            for hlr_id in selected_hlrs - existing:
-                TicketRequirement.objects.create(ticket=ticket, high_level_requirement_id=hlr_id)
-            # Remove deselected links
-            TicketRequirement.objects.filter(ticket=ticket, high_level_requirement_id__in=existing - selected_hlrs).delete()
+            selected = set(form.cleaned_data["link_llrs"].values_list("id", flat=True))
+            existing = set(TicketRequirement.objects.filter(ticket=ticket).values_list("low_level_requirement_id", flat=True))
+            for llr_id in selected - existing:
+                TicketRequirement.objects.create(ticket=ticket, low_level_requirement_id=llr_id)
+            TicketRequirement.objects.filter(ticket=ticket, low_level_requirement_id__in=existing - selected).delete()
             return redirect("ticket_detail", pk=pk)
     else:
         form = TicketForm(instance=ticket)

@@ -31,15 +31,6 @@
     </div>
 </div>
 
-{% if hlrs %}
-<h3>High-Level Requirements</h3>
-<ul class="list-group mb-4">
-    {% for hlr in hlrs %}
-    <li class="list-group-item">HLR {{ hlr.id }}: {{ hlr.description }}</li>
-    {% endfor %}
-</ul>
-{% endif %}
-
 {% if llrs %}
 <h3>Low-Level Requirements</h3>
 <table class="table table-sm mb-4">
@@ -52,12 +43,22 @@
             <td>{{ llr.id }}</td>
             <td>{{ llr.description }}</td>
             <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
-            <td>{{ llr.high_level_requirement_id }}</td>
+            <td>{% if llr.high_level_requirement %}{{ llr.high_level_requirement_id }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
             <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+{% endif %}
+
+{% if hlrs %}
+<h3>Derived High-Level Requirements</h3>
+<p class="text-muted small">These HLRs are satisfied transitively via the linked low-level requirements above.</p>
+<ul class="list-group mb-4">
+    {% for hlr in hlrs %}
+    <li class="list-group-item">HLR {{ hlr.id }}: {{ hlr.description }}</li>
+    {% endfor %}
+</ul>
 {% endif %}
 
 {% if ticket.acceptance_criteria.all %}

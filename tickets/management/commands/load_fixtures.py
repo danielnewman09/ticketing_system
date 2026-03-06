@@ -102,11 +102,15 @@ class Command(BaseCommand):
                     ref_target=ref["ref_target"],
                 )
 
-            # HLR linkage
+            # Link ticket to LLRs that belong to its HLRs
             for hlr_id in t.get("high_level_requirement_ids", []):
-                TicketRequirement.objects.get_or_create(
-                    ticket=ticket, high_level_requirement_id=hlr_id
-                )
+                llr_ids = LowLevelRequirement.objects.filter(
+                    high_level_requirement_id=hlr_id
+                ).values_list("id", flat=True)
+                for llr_id in llr_ids:
+                    TicketRequirement.objects.get_or_create(
+                        ticket=ticket, low_level_requirement_id=llr_id
+                    )
 
         self.stdout.write(f"Loaded {len(tickets)} tickets")
         self.stdout.write(self.style.SUCCESS("Done!"))

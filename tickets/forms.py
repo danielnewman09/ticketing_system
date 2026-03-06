@@ -1,13 +1,14 @@
+from django.db import models
 from django import forms
 from .models import Ticket, LowLevelRequirement, HighLevelRequirement
 
 
 class TicketForm(forms.ModelForm):
-    link_hlrs = forms.ModelMultipleChoiceField(
-        queryset=HighLevelRequirement.objects.none(),
+    link_llrs = forms.ModelMultipleChoiceField(
+        queryset=LowLevelRequirement.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
-        label="Link High-Level Requirements",
+        label="Link Low-Level Requirements",
     )
 
     class Meta:
@@ -29,17 +30,17 @@ class TicketForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
-            # Editing: show already-linked HLRs plus unlinked ones
-            linked_ids = self.instance.high_level_requirements.values_list("id", flat=True)
-            self.fields["link_hlrs"].queryset = HighLevelRequirement.objects.filter(
+            # Editing: show already-linked LLRs plus unlinked ones
+            linked_ids = self.instance.low_level_requirements.values_list("id", flat=True)
+            self.fields["link_llrs"].queryset = LowLevelRequirement.objects.filter(
                 models.Q(id__in=linked_ids) | ~models.Q(tickets__isnull=False)
-            ).distinct()
-            self.fields["link_hlrs"].initial = linked_ids
+            ).distinct().select_related("high_level_requirement")
+            self.fields["link_llrs"].initial = linked_ids
         else:
-            # Creating: show only HLRs not linked to any ticket
-            self.fields["link_hlrs"].queryset = HighLevelRequirement.objects.exclude(
+            # Creating: show only LLRs not linked to any ticket
+            self.fields["link_llrs"].queryset = LowLevelRequirement.objects.exclude(
                 tickets__isnull=False
-            )
+            ).select_related("high_level_requirement")
 
 
 class HighLevelRequirementForm(forms.ModelForm):
