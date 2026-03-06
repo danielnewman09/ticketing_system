@@ -1,61 +1,73 @@
-from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse_lazy
+from django.views.generic import ListView, CreateView, UpdateView
 from .models import HighLevelRequirement, LowLevelRequirement
 from .forms import HighLevelRequirementForm, LowLevelRequirementForm
 
 
-def requirement_list(request):
-    hlrs = HighLevelRequirement.objects.prefetch_related("low_level_requirements").all()
-    unlinked_llrs = LowLevelRequirement.objects.filter(high_level_requirement__isnull=True)
-    return render(request, "requirements/requirement_list.html", {
-        "hlrs": hlrs,
-        "unlinked_llrs": unlinked_llrs,
-    })
+class RequirementListView(ListView):
+    model = HighLevelRequirement
+    template_name = "requirements/requirement_list.html"
+    context_object_name = "hlrs"
+
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related("low_level_requirements")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["unlinked_llrs"] = LowLevelRequirement.objects.filter(high_level_requirement__isnull=True)
+        return context
 
 
-def hlr_create(request):
-    if request.method == "POST":
-        form = HighLevelRequirementForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect("requirement_list")
-    else:
-        form = HighLevelRequirementForm()
-    return render(request, "requirements/hlr_form.html", {"form": form, "title": "Create High-Level Requirement"})
+class HLRCreateView(CreateView):
+    model = HighLevelRequirement
+    form_class = HighLevelRequirementForm
+    template_name = "requirements/hlr_form.html"
+    success_url = reverse_lazy("requirement_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["title"] = "Create High-Level Requirement"
+        return context
 
 
-def hlr_update(request, pk):
-    hlr = get_object_or_404(HighLevelRequirement, pk=pk)
-    if request.method == "POST":
-        form = HighLevelRequirementForm(request.POST, instance=hlr)
-        if form.is_valid():
-            form.save()
-            return redirect("requirement_list")
-    else:
-        form = HighLevelRequirementForm(instance=hlr)
-    return render(request, "requirements/hlr_form.html", {"form": form, "title": f"Edit HLR #{hlr.pk}"})
+class HLRUpdateView(UpdateView):
+    model = HighLevelRequirement
+    form_class = HighLevelRequirementForm
+    template_name = "requirements/hlr_form.html"
+    success_url = reverse_lazy("requirement_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["title"] = f"Edit HLR #{self.object.pk}"
+        return context
 
 
-def llr_create(request):
-    if request.method == "POST":
-        form = LowLevelRequirementForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect("requirement_list")
-    else:
-        form = LowLevelRequirementForm()
-        hlr_id = request.GET.get("hlr")
+class LLRCreateView(CreateView):
+    model = LowLevelRequirement
+    form_class = LowLevelRequirementForm
+    template_name = "requirements/requirement_form.html"
+    success_url = reverse_lazy("requirement_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["title"] = "Create Low-Level Requirement"
+        return context
+
+    def get_initial(self):
+        initial = super().get_initial()
+        hlr_id = self.request.GET.get("hlr")
         if hlr_id:
-            form.initial["high_level_requirement"] = hlr_id
-    return render(request, "requirements/requirement_form.html", {"form": form, "title": "Create Low-Level Requirement"})
+            initial["high_level_requirement"] = hlr_id
+        return initial
 
 
-def requirement_update(request, pk):
-    llr = get_object_or_404(LowLevelRequirement, pk=pk)
-    if request.method == "POST":
-        form = LowLevelRequirementForm(request.POST, instance=llr)
-        if form.is_valid():
-            form.save()
-            return redirect("requirement_list")
-    else:
-        form = LowLevelRequirementForm(instance=llr)
-    return render(request, "requirements/requirement_form.html", {"form": form, "title": f"Edit Requirement #{llr.pk}"})
+class LLRUpdateView(UpdateView):
+    model = LowLevelRequirement
+    form_class = LowLevelRequirementForm
+    template_name = "requirements/requirement_form.html"
+    success_url = reverse_lazy("requirement_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["title"] = f"Edit Requirement #{self.object.pk}"
+        return context
