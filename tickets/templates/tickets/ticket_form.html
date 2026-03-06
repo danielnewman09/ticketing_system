@@ -1,0 +1,46 @@
+{% extends "tickets/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="mb-3">
+        {% if field.name == "requires_math" or field.name == "generate_tutorial" %}
+        <div class="form-check">
+            {{ field }}
+            <label for="{{ field.id_for_label }}" class="form-check-label">{{ field.label }}</label>
+        </div>
+        {% elif field.name == "link_hlrs" %}
+        <label class="form-label">{{ field.label }}</label>
+        {% if field.field.queryset.exists %}
+        <div class="card">
+            <div class="card-body">
+                {% for choice in field %}
+                <div class="form-check">
+                    {{ choice }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="form-text">Only HLRs not currently linked to another ticket are shown.</div>
+        {% else %}
+        <p class="text-muted">All high-level requirements are already linked to tickets.</p>
+        {% endif %}
+        {% else %}
+        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% endif %}
+        {% if field.errors %}
+        <div class="invalid-feedback d-block">{{ field.errors }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Save</button>
+    {% if form.instance.pk %}
+    <a href="{% url 'ticket_detail' form.instance.pk %}" class="btn btn-secondary">Cancel</a>
+    {% else %}
+    <a href="{% url 'ticket_list' %}" class="btn btn-secondary">Cancel</a>
+    {% endif %}
+</form>
+{% endblock %}

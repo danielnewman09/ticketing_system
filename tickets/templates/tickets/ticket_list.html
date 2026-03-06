@@ -1,0 +1,34 @@
+{% extends "tickets/base.html" %}
+{% block title %}Tickets{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Tickets</h1>
+    <a href="{% url 'ticket_create' %}" class="btn btn-success">+ New Ticket</a>
+</div>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Priority</th>
+            <th>Complexity</th>
+            <th>Components</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ticket in tickets %}
+        <tr>
+            <td>{{ ticket.id }}</td>
+            <td><a href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.title }}</a></td>
+            <td>{{ ticket.ticket_type }}</td>
+            <td>{{ ticket.priority }}</td>
+            <td>{{ ticket.complexity }}</td>
+            <td>{{ ticket.target_components }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">No tickets found. Run <code>python manage.py load_fixtures</code> to load data.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

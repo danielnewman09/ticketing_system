@@ -1,0 +1,98 @@
+{% extends "tickets/base.html" %}
+{% block title %}Ticket #{{ ticket.id }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Ticket #{{ ticket.id }}: {{ ticket.title }}</h1>
+    <a href="{% url 'ticket_update' ticket.pk %}" class="btn btn-primary">Edit</a>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Summary</h5>
+                <p>{{ ticket.summary }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <dl>
+                    <dt>Type</dt><dd>{{ ticket.ticket_type }}</dd>
+                    <dt>Priority</dt><dd>{{ ticket.priority }}</dd>
+                    <dt>Complexity</dt><dd>{{ ticket.complexity }}</dd>
+                    <dt>Components</dt><dd>{{ ticket.target_components }}</dd>
+                    <dt>Languages</dt><dd>{{ ticket.languages }}</dd>
+                    <dt>Created</dt><dd>{{ ticket.created_date }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if hlrs %}
+<h3>High-Level Requirements</h3>
+<ul class="list-group mb-4">
+    {% for hlr in hlrs %}
+    <li class="list-group-item">HLR {{ hlr.id }}: {{ hlr.description }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if llrs %}
+<h3>Low-Level Requirements</h3>
+<table class="table table-sm mb-4">
+    <thead>
+        <tr><th>ID</th><th>Description</th><th>Verification</th><th>HLR</th><th></th></tr>
+    </thead>
+    <tbody>
+        {% for llr in llrs %}
+        <tr>
+            <td>{{ llr.id }}</td>
+            <td>{{ llr.description }}</td>
+            <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
+            <td>{{ llr.high_level_requirement_id }}</td>
+            <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if ticket.acceptance_criteria.all %}
+<h3>Acceptance Criteria</h3>
+<ul class="list-group mb-4">
+    {% for ac in ticket.acceptance_criteria.all %}
+    <li class="list-group-item">{{ ac.description }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if ticket.files.all %}
+<h3>Files</h3>
+<table class="table table-sm mb-4">
+    <thead><tr><th>Path</th><th>Change</th><th>Description</th></tr></thead>
+    <tbody>
+        {% for f in ticket.files.all %}
+        <tr>
+            <td><code>{{ f.file_path }}</code></td>
+            <td><span class="badge bg-{% if f.change_type == 'new' %}success{% else %}primary{% endif %}">{{ f.change_type }}</span></td>
+            <td>{{ f.description }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if ticket.references.all %}
+<h3>References</h3>
+<ul class="list-group mb-4">
+    {% for ref in ticket.references.all %}
+    <li class="list-group-item">{{ ref.ref_type }}: {{ ref.ref_target }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<a href="{% url 'ticket_list' %}" class="btn btn-secondary">Back to list</a>
+{% endblock %}

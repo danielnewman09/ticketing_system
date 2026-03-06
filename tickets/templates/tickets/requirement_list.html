@@ -1,0 +1,66 @@
+{% extends "tickets/base.html" %}
+{% block title %}Requirements{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Requirements</h1>
+    <div>
+        <a href="{% url 'hlr_create' %}" class="btn btn-success">+ High-Level Requirement</a>
+        <a href="{% url 'llr_create' %}" class="btn btn-primary">+ Low-Level Requirement</a>
+    </div>
+</div>
+{% for hlr in hlrs %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><strong>HLR {{ hlr.id }}:</strong> {{ hlr.description }}</span>
+        <div>
+            <a href="{% url 'llr_create' %}?hlr={{ hlr.id }}" class="btn btn-sm btn-outline-primary">+ LLR</a>
+            <a href="{% url 'hlr_update' hlr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if hlr.low_level_requirements.all %}
+        <table class="table table-sm mb-0">
+            <thead><tr><th>ID</th><th>Description</th><th>Verification</th><th></th></tr></thead>
+            <tbody>
+                {% for llr in hlr.low_level_requirements.all %}
+                <tr>
+                    <td>{{ llr.id }}</td>
+                    <td>{{ llr.description }}</td>
+                    <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
+                    <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted mb-0">No low-level requirements.</p>
+        {% endif %}
+    </div>
+</div>
+{% empty %}
+<p>No high-level requirements found.</p>
+{% endfor %}
+
+{% if unlinked_llrs %}
+<div class="card mb-3 border-warning">
+    <div class="card-header bg-warning bg-opacity-25">
+        <strong>Unlinked Low-Level Requirements</strong>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>ID</th><th>Description</th><th>Verification</th><th></th></tr></thead>
+            <tbody>
+                {% for llr in unlinked_llrs %}
+                <tr>
+                    <td>{{ llr.id }}</td>
+                    <td>{{ llr.description }}</td>
+                    <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
+                    <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
