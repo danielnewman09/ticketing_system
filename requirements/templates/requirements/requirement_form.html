@@ -4,19 +4,114 @@
 <h1>{{ title }}</h1>
 <form method="post">
     {% csrf_token %}
-    {% for field in form %}
     <div class="mb-3">
-        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-        {{ field }}
-        {% if field.errors %}
-        <div class="invalid-feedback d-block">{{ field.errors }}</div>
-        {% endif %}
-        {% if field.name == "high_level_requirement" %}
+        <label for="{{ form.high_level_requirement.id_for_label }}" class="form-label">Parent HLR</label>
+        {{ form.high_level_requirement }}
+        {% if form.high_level_requirement.errors %}<div class="invalid-feedback d-block">{{ form.high_level_requirement.errors }}</div>{% endif %}
         <div class="form-text">Select which high-level requirement this decomposes. Leave blank if unlinked.</div>
-        {% endif %}
     </div>
-    {% endfor %}
+    <div class="card mb-3">
+        <div class="card-header">Actor / Action / Subject</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.actor.id_for_label }}" class="form-label">Actor</label>
+                    {{ form.actor }}
+                    {% if form.actor.errors %}<div class="invalid-feedback d-block">{{ form.actor.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.action.id_for_label }}" class="form-label">Action</label>
+                    {{ form.action }}
+                    {% if form.action.errors %}<div class="invalid-feedback d-block">{{ form.action.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.subject.id_for_label }}" class="form-label">Subject</label>
+                    {{ form.subject }}
+                    {% if form.subject.errors %}<div class="invalid-feedback d-block">{{ form.subject.errors }}</div>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card mb-3">
+        <div class="card-header">Verification Methods</div>
+        <div class="card-body">
+            {{ verification_formset.management_form }}
+            {% if verification_formset.non_form_errors %}
+            <div class="alert alert-danger">{{ verification_formset.non_form_errors }}</div>
+            {% endif %}
+            <table class="table table-sm" id="verification-table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Confirmation</th>
+                        <th>Test Name</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vform in verification_formset %}
+                    <tr>
+                        <td>
+                            {{ vform.id }}
+                            {{ vform.method }}
+                            {% if vform.method.errors %}<div class="invalid-feedback d-block">{{ vform.method.errors }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {{ vform.confirmation }}
+                            {% if vform.confirmation.errors %}<div class="invalid-feedback d-block">{{ vform.confirmation.errors }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {{ vform.test_name }}
+                            {% if vform.test_name.errors %}<div class="invalid-feedback d-block">{{ vform.test_name.errors }}</div>{% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if vform.instance.pk %}
+                            <div class="form-check">{{ vform.DELETE }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="add-verification">+ Add Verification</button>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label for="{{ form.components.id_for_label }}" class="form-label">Components</label>
+        {{ form.components }}
+        {% if form.components.errors %}<div class="invalid-feedback d-block">{{ form.components.errors }}</div>{% endif %}
+        <div class="form-text">Which components implement this requirement?</div>
+    </div>
+    <div class="mb-3">
+        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+        {{ form.description }}
+        {% if form.description.errors %}<div class="invalid-feedback d-block">{{ form.description.errors }}</div>{% endif %}
+    </div>
     <button type="submit" class="btn btn-primary">Save</button>
     <a href="{% url 'requirement_list' %}" class="btn btn-secondary">Cancel</a>
 </form>
+<script>
+document.getElementById('add-verification').addEventListener('click', function() {
+    const tbody = document.querySelector('#verification-table tbody');
+    const totalForms = document.getElementById('id_verifications-TOTAL_FORMS');
+    const idx = Number.parseInt(totalForms.value);
+    const lastRow = tbody.querySelector('tr:last-child');
+    const newRow = lastRow.cloneNode(true);
+    newRow.innerHTML = newRow.innerHTML.replaceAll(
+        'verifications-' + (idx - 1) + '-',
+        'verifications-' + idx + '-'
+    );
+    newRow.querySelectorAll('input, select').forEach(function(el) {
+        if (el.type === 'hidden' && el.name.endsWith('-id')) {
+            el.value = '';
+        } else if (el.type !== 'hidden') {
+            el.value = '';
+        }
+    });
+    const deleteCell = newRow.querySelector('td:last-child');
+    deleteCell.innerHTML = '';
+    tbody.appendChild(newRow);
+    totalForms.value = idx + 1;
+});
+</script>
 {% endblock %}

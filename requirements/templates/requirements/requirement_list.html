@@ -26,7 +26,11 @@
                 <tr>
                     <td>{{ llr.id }}</td>
                     <td>{{ llr.description }}</td>
-                    <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
+                    <td>
+                        {% for v in llr.verifications.all %}
+                        <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>
+                        {% empty %}<span class="text-muted">-</span>{% endfor %}
+                    </td>
                     <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
                 </tr>
                 {% endfor %}
@@ -54,7 +58,11 @@
                 <tr>
                     <td>{{ llr.id }}</td>
                     <td>{{ llr.description }}</td>
-                    <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
+                    <td>
+                        {% for v in llr.verifications.all %}
+                        <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>
+                        {% empty %}<span class="text-muted">-</span>{% endfor %}
+                    </td>
                     <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
                 </tr>
                 {% endfor %}

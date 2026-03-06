@@ -72,7 +72,7 @@ class TicketFile(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="files")
     file_path = models.CharField(max_length=500)
     change_type = models.CharField(max_length=20)
-    description = models.CharField(max_length=500, blank=True)
+    description = models.CharField(max_length=500, blank=True, null=True)
 
     class Meta:
         db_table = "ticket_files"

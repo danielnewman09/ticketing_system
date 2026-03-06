@@ -6,6 +6,38 @@
     <a href="{% url 'component_list' %}" class="btn btn-secondary">All Components</a>
 </div>
 
+{% if requirements %}
+<h3>Requirements</h3>
+<table class="table table-striped mb-4">
+    <thead>
+        <tr>
+            <th>LLR ID</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Subject</th>
+            <th>Parent HLR</th>
+            <th>Verification</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for llr in requirements %}
+        <tr>
+            <td>{{ llr.id }}</td>
+            <td><span class="badge bg-secondary">{{ llr.actor }}</span></td>
+            <td><span class="text-primary fw-bold">{{ llr.action }}</span></td>
+            <td><span class="badge bg-info text-dark">{{ llr.subject }}</span></td>
+            <td>
+                {% if llr.high_level_requirement %}
+                HLR {{ llr.high_level_requirement.id }}: {{ llr.high_level_requirement.statement }}
+                {% else %}-{% endif %}
+            </td>
+            <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
 <h3>Tickets</h3>
 <table class="table table-striped">
     <thead>

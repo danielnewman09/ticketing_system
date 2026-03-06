@@ -22,6 +22,9 @@ class ComponentDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["tickets"] = self.object.tickets.order_by("id")
+        context["requirements"] = self.object.low_level_requirements.select_related(
+            "high_level_requirement"
+        ).order_by("id")
         return context
 
 
