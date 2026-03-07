@@ -1,5 +1,5 @@
 from django import forms
-from .models import OntologyNode, OntologyEdge
+from .models import OntologyNode, OntologyTriple
 
 
 class OntologyNodeForm(forms.ModelForm):
@@ -15,13 +15,12 @@ class OntologyNodeForm(forms.ModelForm):
         }
 
 
-class OntologyEdgeForm(forms.ModelForm):
+class OntologyTripleForm(forms.ModelForm):
     class Meta:
-        model = OntologyEdge
-        fields = ["source", "target", "relationship", "label"]
+        model = OntologyTriple
+        fields = ["subject", "predicate", "object"]
         widgets = {
-            "source": forms.Select(attrs={"class": "form-select"}),
-            "target": forms.Select(attrs={"class": "form-select"}),
-            "relationship": forms.Select(attrs={"class": "form-select"}),
-            "label": forms.TextInput(attrs={"class": "form-control", "placeholder": "Optional label"}),
+            "subject": forms.Select(attrs={"class": "form-select"}),
+            "predicate": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., inherits, composes, compiles"}),
+            "object": forms.Select(attrs={"class": "form-select"}),
         }

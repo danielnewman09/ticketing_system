@@ -15,9 +15,9 @@
             <div class="card-header py-2 small fw-bold">Requirement Statement</div>
             <div class="card-body">
                 <table class="table table-sm mb-0">
-                    <tr><th style="width:120px">Actor</th><td>{{ llr.actor|default:"-" }}{% if llr.actor_compound_refid %} <code class="ms-2 small">{{ llr.actor_compound_refid }}</code>{% endif %}</td></tr>
+                    <tr><th style="width:120px">Actor</th><td>{{ llr.actor|default:"-" }}</td></tr>
                     <tr><th>Action</th><td>{{ llr.action|default:"-" }}</td></tr>
-                    <tr><th>Subject</th><td>{{ llr.subject|default:"-" }}{% if llr.subject_compound_refid %} <code class="ms-2 small">{{ llr.subject_compound_refid }}</code>{% endif %}</td></tr>
+                    <tr><th>Subject</th><td>{{ llr.subject|default:"-" }}</td></tr>
                 </table>
                 {% if llr.description %}
                 <p class="mt-2 mb-0 small text-muted">{{ llr.description }}</p>
@@ -70,6 +70,27 @@
     </div>
 
     <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Ontology Triples</div>
+            <div class="card-body p-0">
+                {% if llr.triples.all %}
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead>
+                    <tbody>
+                        {% for t in llr.triples.all %}
+                        <tr>
+                            <td>{{ t.subject.name }}</td>
+                            <td><code>{{ t.predicate }}</code></td>
+                            <td>{{ t.object.name }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0 p-3 small">No triples linked.</p>
+                {% endif %}
+            </div>
+        </div>
         <div class="card mb-3">
             <div class="card-header py-2 small fw-bold">Ontology Graph</div>
             <div class="card-body p-0">

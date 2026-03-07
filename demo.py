@@ -5,7 +5,7 @@ Demo: end-to-end workflow from requirements to ontology design.
 Workflow:
   1. Flush all data (clean slate, no re-migration)
   2. Decompose HLR descriptions into structured Actor/Action/Subject + LLRs
-  3. Run the design agent to derive ontology nodes, edges, and requirement links
+  3. Run the design agent to derive ontology nodes, triples, and requirement links
   4. Print summary and launch instructions
 
 Usage:
@@ -30,7 +30,7 @@ from django.db.models import F
 
 from agents.decompose_hlr import decompose
 from agents.design_ontology import design
-from codebase.models import OntologyNode, OntologyEdge
+from codebase.models import OntologyNode, OntologyTriple
 from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
@@ -130,67 +130,71 @@ def step_design():
             qname_to_node[node_data.qualified_name] = node
             print(f"  Node: {node_data.qualified_name} ({node_data.kind})")
 
-        # Save ontology edges
-        for edge_data in result.edges:
-            src = qname_to_node.get(edge_data.source_qualified_name)
-            tgt = qname_to_node.get(edge_data.target_qualified_name)
-            if src and tgt:
-                OntologyEdge.objects.create(
-                    source=src,
-                    target=tgt,
-                    relationship=edge_data.relationship,
-                    label=edge_data.label,
+        # Save ontology triples in order (index-based lookup for requirement links)
+        saved_triples = []
+        for triple_data in result.triples:
+            subj = qname_to_node.get(triple_data.subject_qualified_name)
+            obj = qname_to_node.get(triple_data.object_qualified_name)
+            if subj and obj:
+                triple, _ = OntologyTriple.objects.get_or_create(
+                    subject=subj,
+                    predicate=triple_data.predicate,
+                    object=obj,
                 )
-                print(f"  Edge: {src.name} --{edge_data.relationship}--> {tgt.name}")
+                saved_triples.append(triple)
+                print(f"  Triple [{len(saved_triples)-1}]: {subj.name} --{triple_data.predicate}--> {obj.name}")
             else:
-                missing = edge_data.source_qualified_name if not src else edge_data.target_qualified_name
-                print(f"  Edge skipped (missing node: {missing})")
+                saved_triples.append(None)
+                missing = triple_data.subject_qualified_name if not subj else triple_data.object_qualified_name
+                print(f"  Triple [{len(saved_triples)-1}] skipped (missing node: {missing})")
 
-        # Apply requirement links — set compound_refid on HLR/LLR actor/subject
+        # Apply requirement links
         linked = 0
+        skipped = 0
         for link in result.requirement_links:
-            node = qname_to_node.get(link.node_qualified_name)
-            if not node:
+            triple = None
+            if 0 <= link.triple_index < len(saved_triples):
+                triple = saved_triples[link.triple_index]
+
+            if not triple:
+                skipped += 1
+                print(f"    Link skipped (triple_index={link.triple_index}): {link.requirement_type} {link.requirement_id}")
                 continue
 
-            refid = node.compound_refid
             if link.requirement_type == "hlr":
-                obj = HighLevelRequirement.objects.filter(pk=link.requirement_id).first()
+                req = HighLevelRequirement.objects.filter(pk=link.requirement_id).first()
             else:
-                obj = LowLevelRequirement.objects.filter(pk=link.requirement_id).first()
+                req = LowLevelRequirement.objects.filter(pk=link.requirement_id).first()
 
-            if not obj:
-                continue
-
-            if link.role == "actor":
-                obj.actor_compound_refid = refid
+            if req:
+                req.triples.add(triple)
+                linked += 1
             else:
-                obj.subject_compound_refid = refid
-            obj.save()
-            linked += 1
+                skipped += 1
+                print(f"    Link skipped (no matching {link.requirement_type} {link.requirement_id})")
 
     print(f"\n  Design phase complete:")
-    print(f"    {len(result.nodes)} nodes, {len(result.edges)} edges")
-    print(f"    {linked} requirement-to-node links applied\n")
+    print(f"    {len(result.nodes)} nodes, {len(result.triples)} triples")
+    print(f"    {linked} requirement-to-triple links applied, {skipped} skipped\n")
 
 
 def step_summary():
     print("=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    print(f"  HLRs:           {HighLevelRequirement.objects.count()}")
-    print(f"  LLRs:           {LowLevelRequirement.objects.count()}")
-    print(f"  Verifications:  {LLRVerification.objects.count()}")
-    print(f"  Ontology nodes: {OntologyNode.objects.count()}")
-    print(f"  Ontology edges: {OntologyEdge.objects.count()}")
+    print(f"  HLRs:             {HighLevelRequirement.objects.count()}")
+    print(f"  LLRs:             {LowLevelRequirement.objects.count()}")
+    print(f"  Verifications:    {LLRVerification.objects.count()}")
+    print(f"  Ontology nodes:   {OntologyNode.objects.count()}")
+    print(f"  Ontology triples: {OntologyTriple.objects.count()}")
 
     # Show which HLRs got linked
-    for hlr in HighLevelRequirement.objects.all():
-        actor_link = hlr.actor_compound_refid or "(none)"
-        subject_link = hlr.subject_compound_refid or "(none)"
+    for hlr in HighLevelRequirement.objects.prefetch_related("triples__subject", "triples__object").all():
         print(f"\n  HLR {hlr.pk}: {hlr.actor} | {hlr.action} | {hlr.subject}")
-        print(f"    actor  -> {actor_link}")
-        print(f"    subject -> {subject_link}")
+        for triple in hlr.triples.all():
+            print(f"    -> {triple.subject.name} --{triple.predicate}--> {triple.object.name}")
+        if not hlr.triples.exists():
+            print(f"    (no triples linked)")
 
     print("\n" + "=" * 60)
     print("Start the server to explore:")

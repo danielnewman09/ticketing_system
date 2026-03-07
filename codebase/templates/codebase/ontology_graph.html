@@ -6,7 +6,7 @@
     <div>
         <a href="{% url 'ontology_node_list' %}" class="btn btn-outline-secondary btn-sm">Node List</a>
         <a href="{% url 'ontology_node_create' %}" class="btn btn-success btn-sm">+ Node</a>
-        <a href="{% url 'ontology_edge_create' %}" class="btn btn-primary btn-sm">+ Relationship</a>
+        <a href="{% url 'ontology_triple_create' %}" class="btn btn-primary btn-sm">+ Triple</a>
     </div>
 </div>
 
@@ -97,17 +97,8 @@ const KIND_COLORS = {
     "llr": "#9467bd",
 };
 
-const EDGE_COLORS = {
-    "inherits": "#e15759",
-    "composes": "#4e79a7",
-    "aggregates": "#59a14f",
-    "depends_on": "#999",
-    "calls": "#f28e2b",
-    "implements": "#b07aa1",
-    "uses": "#76b7b2",
-    "actor": "#ff7f0e",
-    "subject": "#9467bd",
-};
+// Default edge color; all edges are now triples with free-text predicates
+const DEFAULT_EDGE_COLOR = "#888";
 
 // Build legend
 const legend = document.getElementById("legend");
@@ -145,9 +136,9 @@ addLegendSection("Requirements", [
     ["hlr", "High-Level Req", KIND_COLORS.hlr],
     ["llr", "Low-Level Req", KIND_COLORS.llr],
 ], "rect");
-addLegendSection("Relationships", Object.entries(EDGE_COLORS).map(
-    ([k, v]) => [k, k.replace("_", " "), v]
-), "line");
+addLegendSection("Edges", [
+    ["triple", "Predicate (triple)", DEFAULT_EDGE_COLOR],
+], "line");
 
 // Initialize Cytoscape
 let cy = null;
@@ -173,17 +164,15 @@ function initGraph(data) {
         });
     });
 
-    data.edges.forEach(e => {
+    data.edges.forEach((e, i) => {
         elements.push({
             group: "edges",
             data: {
-                id: `${e.source}-${e.relationship}-${e.target}`,
+                id: `${e.source}-${e.predicate}-${e.target}-${i}`,
                 source: e.source,
                 target: e.target,
-                relationship: e.relationship,
-                label: e.label || e.relationship,
-                color: EDGE_COLORS[e.relationship] || "#999",
-                dashed: (e.relationship === "actor" || e.relationship === "subject"),
+                label: e.predicate,
+                color: DEFAULT_EDGE_COLOR,
             },
         });
     });
@@ -248,13 +237,6 @@ function initGraph(data) {
                     "color": "#666",
                     "text-rotation": "autorotate",
                     "text-margin-y": -10,
-                },
-            },
-            {
-                selector: "edge[?dashed]",
-                style: {
-                    "line-style": "dashed",
-                    "line-dash-pattern": [6, 3],
                 },
             },
             {

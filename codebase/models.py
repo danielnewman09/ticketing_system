@@ -222,32 +222,36 @@ class OntologyNode(models.Model):
         ).first()
 
 
-EDGE_TYPES = [
-    ("inherits", "Inherits"),
-    ("composes", "Composes"),
-    ("aggregates", "Aggregates"),
-    ("depends_on", "Depends On"),
-    ("calls", "Calls"),
-    ("implements", "Implements"),
-    ("uses", "Uses"),
+PREDICATE_SUGGESTIONS = [
+    "inherits",
+    "composes",
+    "aggregates",
+    "depends_on",
+    "calls",
+    "implements",
+    "uses",
 ]
 
 
-class OntologyEdge(models.Model):
-    """A directed, typed relationship between two ontology nodes."""
+class OntologyTriple(models.Model):
+    """A semantic triple: subject --predicate--> object.
 
-    source = models.ForeignKey(
-        OntologyNode, on_delete=models.CASCADE, related_name="outgoing_edges",
+    Unifies ontology edges and requirement-to-ontology links into a single
+    structure. The predicate is free text (commonly a verb like "inherits",
+    "compiles", "displays").
+    """
+
+    subject = models.ForeignKey(
+        OntologyNode, on_delete=models.CASCADE, related_name="triples_as_subject",
     )
-    target = models.ForeignKey(
-        OntologyNode, on_delete=models.CASCADE, related_name="incoming_edges",
+    predicate = models.CharField(max_length=200)
+    object = models.ForeignKey(
+        OntologyNode, on_delete=models.CASCADE, related_name="triples_as_object",
     )
-    relationship = models.CharField(max_length=20, choices=EDGE_TYPES)
-    label = models.CharField(max_length=200, blank=True, default="")
 
     class Meta:
-        db_table = "ontology_edges"
-        unique_together = [("source", "target", "relationship")]
+        db_table = "ontology_triples"
+        unique_together = [("subject", "predicate", "object")]
 
     def __str__(self):
-        return f"{self.source} --{self.relationship}--> {self.target}"
+        return f"{self.subject} --{self.predicate}--> {self.object}"

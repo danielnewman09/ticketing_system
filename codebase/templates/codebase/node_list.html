@@ -6,12 +6,12 @@
     <div>
         <a href="{% url 'ontology_graph' %}" class="btn btn-outline-secondary">Graph View</a>
         <a href="{% url 'ontology_node_create' %}" class="btn btn-success">+ Node</a>
-        <a href="{% url 'ontology_edge_create' %}" class="btn btn-primary">+ Relationship</a>
+        <a href="{% url 'ontology_triple_create' %}" class="btn btn-primary">+ Triple</a>
     </div>
 </div>
 <table class="table">
     <thead>
-        <tr><th>Name</th><th>Kind</th><th>Qualified Name</th><th>Compound</th><th>Edges</th><th></th></tr>
+        <tr><th>Name</th><th>Kind</th><th>Qualified Name</th><th>Compound</th><th>Triples</th><th></th></tr>
     </thead>
     <tbody>
         {% for node in nodes %}
@@ -20,7 +20,7 @@
             <td><span class="badge bg-secondary">{{ node.get_kind_display }}</span></td>
             <td><code>{{ node.qualified_name }}</code></td>
             <td>{% if node.compound_refid %}<code>{{ node.compound_refid }}</code>{% else %}<span class="text-muted">-</span>{% endif %}</td>
-            <td>{{ node.outgoing_edges.count }} out / {{ node.incoming_edges.count }} in</td>
+            <td>{{ node.triples_as_subject.count }} out / {{ node.triples_as_object.count }} in</td>
             <td><a href="{% url 'ontology_node_update' node.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
         </tr>
         {% empty %}

@@ -1,35 +1,17 @@
 from django.db import models
 
 
-class CompoundReferenceMixin:
-    """Helpers to resolve compound refids to Compound objects."""
-
-    def get_actor_compound(self):
-        if not self.actor_compound_refid:
-            return None
-        from codebase.models import Compound
-        return Compound.objects.filter(refid=self.actor_compound_refid).first()
-
-    def get_subject_compound(self):
-        if not self.subject_compound_refid:
-            return None
-        from codebase.models import Compound
-        return Compound.objects.filter(refid=self.subject_compound_refid).first()
-
-
-class HighLevelRequirement(CompoundReferenceMixin, models.Model):
+class HighLevelRequirement(models.Model):
     actor = models.CharField(max_length=200, default="", help_text="Who performs the action (e.g., 'a developer')")
-    actor_compound_refid = models.CharField(
-        max_length=200, blank=True, default="",
-        help_text="Refid of a codebase compound acting as actor",
-    )
     action = models.CharField(max_length=200, default="", help_text="What they do (e.g., 'compiles')")
     subject = models.CharField(max_length=200, default="", help_text="What they act on (e.g., 'the codebase')")
-    subject_compound_refid = models.CharField(
-        max_length=200, blank=True, default="",
-        help_text="Refid of a codebase compound acting as subject",
-    )
     description = models.TextField(blank=True)
+    triples = models.ManyToManyField(
+        "codebase.OntologyTriple",
+        related_name="high_level_requirements",
+        blank=True,
+        help_text="Ontology triples that express this requirement",
+    )
 
     class Meta:
         db_table = "high_level_requirements"
@@ -44,7 +26,7 @@ class HighLevelRequirement(CompoundReferenceMixin, models.Model):
         return f"{self.actor} {self.action} {self.subject}"
 
 
-class LowLevelRequirement(CompoundReferenceMixin, models.Model):
+class LowLevelRequirement(models.Model):
     high_level_requirement = models.ForeignKey(
         HighLevelRequirement,
         on_delete=models.SET_NULL,
@@ -53,22 +35,20 @@ class LowLevelRequirement(CompoundReferenceMixin, models.Model):
         related_name="low_level_requirements",
     )
     actor = models.CharField(max_length=200, default="", help_text="Who performs the action (e.g., 'the end user')")
-    actor_compound_refid = models.CharField(
-        max_length=200, blank=True, default="",
-        help_text="Refid of a codebase compound acting as actor",
-    )
     action = models.CharField(max_length=200, default="", help_text="What they do (e.g., 'presses the + button')")
     subject = models.CharField(max_length=200, default="", help_text="What they act on (e.g., 'in the GUI')")
-    subject_compound_refid = models.CharField(
-        max_length=200, blank=True, default="",
-        help_text="Refid of a codebase compound acting as subject",
-    )
     description = models.TextField(blank=True)
     components = models.ManyToManyField(
         "components.Component",
         related_name="low_level_requirements",
         blank=True,
         help_text="Components that implement this requirement",
+    )
+    triples = models.ManyToManyField(
+        "codebase.OntologyTriple",
+        related_name="low_level_requirements",
+        blank=True,
+        help_text="Ontology triples that express this requirement",
     )
 
     class Meta:

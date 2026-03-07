@@ -20,7 +20,7 @@ def _is_external(model):
 class CodebaseDatabaseRouter:
     """Route external codebase models to the 'codebase' DB.
 
-    Django-managed ontology models (OntologyNode, OntologyEdge) stay in
+    Django-managed ontology models (OntologyNode, OntologyTriple) stay in
     the default database.
     """
 

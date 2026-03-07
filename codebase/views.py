@@ -1,11 +1,10 @@
-from django.db.models import Q
 from django.http import JsonResponse
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView
 from django.urls import reverse_lazy
 
 from requirements.models import HighLevelRequirement, LowLevelRequirement
-from .models import OntologyNode, OntologyEdge
-from .forms import OntologyNodeForm, OntologyEdgeForm
+from .models import OntologyNode, OntologyTriple
+from .forms import OntologyNodeForm, OntologyTripleForm
 
 
 class OntologyGraphView(TemplateView):
@@ -43,30 +42,32 @@ class OntologyNodeUpdateView(UpdateView):
         return context
 
 
-class OntologyEdgeCreateView(CreateView):
-    model = OntologyEdge
-    form_class = OntologyEdgeForm
+class OntologyTripleCreateView(CreateView):
+    model = OntologyTriple
+    form_class = OntologyTripleForm
     template_name = "codebase/edge_form.html"
     success_url = reverse_lazy("ontology_node_list")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["title"] = "Create Relationship"
+        context["title"] = "Create Triple"
         return context
 
 
 def ontology_graph_data(request):
-    """Return the ontology graph as JSON for D3 visualization.
+    """Return the full ontology graph as JSON for Cytoscape visualization.
 
-    Includes ontology nodes, ontology edges, and requirement nodes
-    (HLRs/LLRs) linked via compound_refid as actor/subject.
+    All edges are triples (subject --predicate--> object). Requirement nodes
+    appear connected to ontology nodes via their associated triples.
     """
-    # Build a refid -> ontology node id lookup for linking requirements
-    refid_to_node_id = {}
     nodes = []
+    node_ids = set()
+
     for node in OntologyNode.objects.all():
+        node_id = f"node-{node.pk}"
+        node_ids.add(node_id)
         nodes.append({
-            "id": f"node-{node.pk}",
+            "id": node_id,
             "name": node.name,
             "qualified_name": node.qualified_name,
             "kind": node.kind,
@@ -74,70 +75,45 @@ def ontology_graph_data(request):
             "compound_refid": node.compound_refid,
             "description": node.description,
         })
-        if node.compound_refid:
-            refid_to_node_id[node.compound_refid] = f"node-{node.pk}"
 
     edges = []
-    for edge in OntologyEdge.objects.select_related("source", "target").all():
+    # All triples become edges
+    for triple in OntologyTriple.objects.select_related("subject", "object").all():
         edges.append({
-            "source": f"node-{edge.source_id}",
-            "target": f"node-{edge.target_id}",
-            "relationship": edge.relationship,
-            "label": edge.label or edge.get_relationship_display(),
+            "source": f"node-{triple.subject_id}",
+            "target": f"node-{triple.object_id}",
+            "predicate": triple.predicate,
         })
 
-    # Add HLRs that reference compounds as actor or subject
-    has_compound = Q(actor_compound_refid__gt="") | Q(subject_compound_refid__gt="")
+    # Add requirement nodes connected via their triples
+    def add_requirement_nodes(requirements, req_type):
+        for req in requirements.prefetch_related("triples__subject", "triples__object"):
+            req_triples = list(req.triples.all())
+            if not req_triples:
+                continue
+            req_id = f"{req_type}-{req.pk}"
+            nodes.append({
+                "id": req_id,
+                "name": f"{req_type.upper()} {req.pk}",
+                "qualified_name": str(req),
+                "kind": req_type,
+                "group": "requirement",
+                "description": req.description,
+            })
+            for triple in req_triples:
+                edges.append({
+                    "source": req_id,
+                    "target": f"node-{triple.subject_id}",
+                    "predicate": triple.predicate,
+                })
+                if triple.subject_id != triple.object_id:
+                    edges.append({
+                        "source": req_id,
+                        "target": f"node-{triple.object_id}",
+                        "predicate": triple.predicate,
+                    })
 
-    for hlr in HighLevelRequirement.objects.filter(has_compound):
-        hlr_id = f"hlr-{hlr.pk}"
-        nodes.append({
-            "id": hlr_id,
-            "name": f"HLR {hlr.pk}",
-            "qualified_name": str(hlr),
-            "kind": "hlr",
-            "group": "requirement",
-            "description": hlr.description,
-        })
-        if hlr.actor_compound_refid and hlr.actor_compound_refid in refid_to_node_id:
-            edges.append({
-                "source": hlr_id,
-                "target": refid_to_node_id[hlr.actor_compound_refid],
-                "relationship": "actor",
-                "label": f"actor: {hlr.actor}",
-            })
-        if hlr.subject_compound_refid and hlr.subject_compound_refid in refid_to_node_id:
-            edges.append({
-                "source": hlr_id,
-                "target": refid_to_node_id[hlr.subject_compound_refid],
-                "relationship": "subject",
-                "label": f"subject: {hlr.subject}",
-            })
-
-    # Add LLRs that reference compounds as actor or subject
-    for llr in LowLevelRequirement.objects.filter(has_compound):
-        llr_id = f"llr-{llr.pk}"
-        nodes.append({
-            "id": llr_id,
-            "name": f"LLR {llr.pk}",
-            "qualified_name": str(llr),
-            "kind": "llr",
-            "group": "requirement",
-            "description": llr.description,
-        })
-        if llr.actor_compound_refid and llr.actor_compound_refid in refid_to_node_id:
-            edges.append({
-                "source": llr_id,
-                "target": refid_to_node_id[llr.actor_compound_refid],
-                "relationship": "actor",
-                "label": f"actor: {llr.actor}",
-            })
-        if llr.subject_compound_refid and llr.subject_compound_refid in refid_to_node_id:
-            edges.append({
-                "source": llr_id,
-                "target": refid_to_node_id[llr.subject_compound_refid],
-                "relationship": "subject",
-                "label": f"subject: {llr.subject}",
-            })
+    add_requirement_nodes(HighLevelRequirement.objects, "hlr")
+    add_requirement_nodes(LowLevelRequirement.objects, "llr")
 
     return JsonResponse({"nodes": nodes, "edges": edges})

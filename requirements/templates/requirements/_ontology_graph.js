@@ -3,19 +3,15 @@ const KIND_COLORS = {
     "union": "#f28e2b", "namespace": "#76b7b2", "interface": "#b07aa1",
     "concept": "#edc948", "hlr": "#ff7f0e", "llr": "#9467bd",
 };
-const EDGE_COLORS = {
-    "inherits": "#e15759", "composes": "#4e79a7", "aggregates": "#59a14f",
-    "depends_on": "#999", "calls": "#f28e2b", "implements": "#b07aa1",
-    "uses": "#76b7b2", "actor": "#ff7f0e", "subject": "#9467bd",
-};
+const DEFAULT_EDGE_COLOR = "#888";
 
 function loadRequirementGraph(url) {
     fetch(url)
         .then(r => r.json())
         .then(data => {
-            if (data.nodes.length <= 1) {
+            if (data.nodes.length === 0) {
                 document.getElementById("cy").innerHTML =
-                    '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">No ontology connections for this requirement.</div>';
+                    '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">No ontology triples for this requirement.</div>';
                 return;
             }
 
@@ -33,16 +29,14 @@ function loadRequirementGraph(url) {
                     },
                 });
             });
-            data.edges.forEach(e => {
+            data.edges.forEach((e, i) => {
                 elements.push({
                     group: "edges",
                     data: {
-                        id: e.source + "-" + e.relationship + "-" + e.target,
+                        id: e.source + "-" + e.predicate + "-" + e.target + "-" + i,
                         source: e.source, target: e.target,
-                        relationship: e.relationship,
-                        label: e.label || e.relationship,
-                        color: EDGE_COLORS[e.relationship] || "#999",
-                        dashed: (e.relationship === "actor" || e.relationship === "subject"),
+                        label: e.predicate,
+                        color: DEFAULT_EDGE_COLOR,
                     },
                 });
             });
@@ -72,10 +66,6 @@ function loadRequirementGraph(url) {
                             "color": "#666", "text-rotation": "autorotate",
                             "text-margin-y": -10,
                         },
-                    },
-                    {
-                        selector: "edge[?dashed]",
-                        style: { "line-style": "dashed", "line-dash-pattern": [6, 3] },
                     },
                 ],
                 layout: {

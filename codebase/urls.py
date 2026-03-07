@@ -6,6 +6,6 @@ urlpatterns = [
     path("nodes/", views.OntologyNodeListView.as_view(), name="ontology_node_list"),
     path("nodes/create/", views.OntologyNodeCreateView.as_view(), name="ontology_node_create"),
     path("nodes/<int:pk>/update/", views.OntologyNodeUpdateView.as_view(), name="ontology_node_update"),
-    path("edges/create/", views.OntologyEdgeCreateView.as_view(), name="ontology_edge_create"),
+    path("triples/create/", views.OntologyTripleCreateView.as_view(), name="ontology_triple_create"),
     path("api/graph/", views.ontology_graph_data, name="ontology_graph_data"),
 ]

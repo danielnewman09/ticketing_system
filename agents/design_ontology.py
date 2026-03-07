@@ -4,8 +4,8 @@ a set of decomposed requirements.
 
 Takes the existing HLRs and LLRs and produces:
 - Ontology nodes (classes, structs, enums, etc.) with fully qualified names
-- Edges (inherits, composes, uses, etc.) between nodes
-- Links mapping each requirement's actor/subject to an ontology node
+- Triples (subject --predicate--> object) between nodes
+- Links mapping each requirement to its associated triples
 
 Can be used standalone (CLI) or imported by Django views/management commands.
 """
@@ -29,26 +29,26 @@ Produce:
    - qualified_name: fully qualified name (e.g., "calc::Calculator")
    - description: what this entity is responsible for
 
-2. **Edges** — directed relationships between nodes, using their qualified_names.
+2. **Triples** — semantic triples (subject --predicate--> object) between nodes,
+   using their qualified_names. The predicate is a verb describing the
+   relationship (e.g., "inherits", "composes", "displays", "validates").
    Each must have:
-   - source_qualified_name / target_qualified_name
-   - relationship: one of "inherits", "composes", "aggregates", "depends_on",
-     "calls", "implements", "uses"
-   - label: optional human-readable label
+   - subject_qualified_name: the node performing the action
+   - predicate: the verb/action (e.g., "inherits", "composes", "compiles")
+   - object_qualified_name: the node being acted upon
 
-3. **Requirement links** — map each requirement's actor and subject to a node.
+3. **Requirement links** — map each requirement to the triples that express it.
    Each must have:
    - requirement_type: "hlr" or "llr"
    - requirement_id: the ID of the requirement
-   - role: "actor" or "subject"
-   - node_qualified_name: the qualified_name of the ontology node
+   - triple_index: the 0-based index of the triple in your triples array
 
 Guidelines:
 - Design should follow SOLID principles and separation of concerns
 - Use namespaces to organize related classes (e.g., "calc::gui::", "calc::core::")
-- Every HLR actor and subject should map to at least one ontology node
-- LLR actors/subjects should map where they clearly correspond to a design entity
-  (skip mappings for vague actors like "the system" unless a node fits)
+- Every HLR should be linked to at least one triple
+- LLRs should be linked where they clearly correspond to a design relationship
+  (skip mappings for vague requirements unless a triple fits)
 - Prefer composition over inheritance
 - Keep the design minimal — only include entities needed by the requirements
 

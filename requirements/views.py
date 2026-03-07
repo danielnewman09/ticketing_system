@@ -119,7 +119,21 @@ class HLRDetailView(DetailView):
         return super().get_queryset().prefetch_related(
             "low_level_requirements__components",
             "low_level_requirements__verifications",
+            "low_level_requirements__triples__subject",
+            "low_level_requirements__triples__object",
+            "triples__subject",
+            "triples__object",
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        hlr = self.object
+        # Combine HLR's own triples with all child LLR triples
+        all_triples = set(hlr.triples.all())
+        for llr in hlr.low_level_requirements.all():
+            all_triples.update(llr.triples.all())
+        context["all_triples"] = sorted(all_triples, key=lambda t: t.pk)
+        return context
 
 
 class LLRDetailView(DetailView):
@@ -130,93 +144,66 @@ class LLRDetailView(DetailView):
     def get_queryset(self):
         return super().get_queryset().select_related(
             "high_level_requirement",
-        ).prefetch_related("components", "verifications")
+        ).prefetch_related(
+            "components",
+            "verifications",
+            "triples__subject",
+            "triples__object",
+        )
 
 
-def _build_requirement_graph(req, req_type):
-    """Build graph data for a single requirement's ontology connections.
-
-    Returns nodes and edges for the requirement itself plus any ontology
-    nodes it references via actor/subject compound_refid.
-    """
-    from codebase.models import OntologyNode, OntologyEdge
-
-    # Map compound refids to ontology nodes
-    refid_to_node = {}
-    for node in OntologyNode.objects.all():
-        if node.compound_refid:
-            refid_to_node[node.compound_refid] = node
-
+def _build_requirement_graph(req):
+    """Build graph data for a single requirement's ontology triples."""
     nodes = []
     edges = []
+    seen_node_ids = set()
 
-    req_id = f"{req_type}-{req.pk}"
-    nodes.append({
-        "id": req_id,
-        "name": f"{req_type.upper()} {req.pk}",
-        "qualified_name": str(req),
-        "kind": req_type,
-        "group": "requirement",
-        "description": req.description,
-    })
-
-    # Collect ontology node PKs connected to this requirement
-    connected_node_pks = set()
-
-    if req.actor_compound_refid and req.actor_compound_refid in refid_to_node:
-        ont_node = refid_to_node[req.actor_compound_refid]
-        connected_node_pks.add(ont_node.pk)
+    for triple in req.triples.select_related("subject", "object").all():
+        for ont_node in (triple.subject, triple.object):
+            node_id = f"node-{ont_node.pk}"
+            if node_id not in seen_node_ids:
+                seen_node_ids.add(node_id)
+                nodes.append({
+                    "id": node_id,
+                    "name": ont_node.name,
+                    "qualified_name": ont_node.qualified_name,
+                    "kind": ont_node.kind,
+                    "group": "ontology",
+                    "compound_refid": ont_node.compound_refid,
+                    "description": ont_node.description,
+                })
         edges.append({
-            "source": req_id,
-            "target": f"node-{ont_node.pk}",
-            "relationship": "actor",
-            "label": f"actor: {req.actor}",
+            "source": f"node-{triple.subject_id}",
+            "target": f"node-{triple.object_id}",
+            "predicate": triple.predicate,
         })
-
-    if req.subject_compound_refid and req.subject_compound_refid in refid_to_node:
-        ont_node = refid_to_node[req.subject_compound_refid]
-        connected_node_pks.add(ont_node.pk)
-        edges.append({
-            "source": req_id,
-            "target": f"node-{ont_node.pk}",
-            "relationship": "subject",
-            "label": f"subject: {req.subject}",
-        })
-
-    # Add the connected ontology nodes and their inter-relationships
-    ont_nodes = OntologyNode.objects.filter(pk__in=connected_node_pks)
-    for node in ont_nodes:
-        nodes.append({
-            "id": f"node-{node.pk}",
-            "name": node.name,
-            "qualified_name": node.qualified_name,
-            "kind": node.kind,
-            "group": "ontology",
-            "compound_refid": node.compound_refid,
-            "description": node.description,
-        })
-
-    # Include edges between the connected ontology nodes
-    if connected_node_pks:
-        for edge in OntologyEdge.objects.filter(
-            source_id__in=connected_node_pks,
-            target_id__in=connected_node_pks,
-        ).select_related("source", "target"):
-            edges.append({
-                "source": f"node-{edge.source_id}",
-                "target": f"node-{edge.target_id}",
-                "relationship": edge.relationship,
-                "label": edge.label or edge.get_relationship_display(),
-            })
 
     return {"nodes": nodes, "edges": edges}
 
 
 def hlr_graph_data(request, pk):
-    hlr = HighLevelRequirement.objects.get(pk=pk)
-    return JsonResponse(_build_requirement_graph(hlr, "hlr"))
+    hlr = HighLevelRequirement.objects.prefetch_related(
+        "low_level_requirements__triples__subject",
+        "low_level_requirements__triples__object",
+    ).get(pk=pk)
+    graph = _build_requirement_graph(hlr)
+    # Include triples from child LLRs
+    for llr in hlr.low_level_requirements.all():
+        llr_graph = _build_requirement_graph(llr)
+        existing_ids = {n["id"] for n in graph["nodes"]}
+        for node in llr_graph["nodes"]:
+            if node["id"] not in existing_ids:
+                graph["nodes"].append(node)
+                existing_ids.add(node["id"])
+        existing_edges = {(e["source"], e["predicate"], e["target"]) for e in graph["edges"]}
+        for edge in llr_graph["edges"]:
+            key = (edge["source"], edge["predicate"], edge["target"])
+            if key not in existing_edges:
+                graph["edges"].append(edge)
+                existing_edges.add(key)
+    return JsonResponse(graph)
 
 
 def llr_graph_data(request, pk):
     llr = LowLevelRequirement.objects.get(pk=pk)
-    return JsonResponse(_build_requirement_graph(llr, "llr"))
+    return JsonResponse(_build_requirement_graph(llr))
