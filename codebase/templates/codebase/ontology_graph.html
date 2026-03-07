@@ -4,38 +4,86 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Ontology Graph</h1>
     <div>
-        <a href="{% url 'ontology_node_list' %}" class="btn btn-outline-secondary">Node List</a>
-        <a href="{% url 'ontology_node_create' %}" class="btn btn-success">+ Node</a>
-        <a href="{% url 'ontology_edge_create' %}" class="btn btn-primary">+ Relationship</a>
+        <a href="{% url 'ontology_node_list' %}" class="btn btn-outline-secondary btn-sm">Node List</a>
+        <a href="{% url 'ontology_node_create' %}" class="btn btn-success btn-sm">+ Node</a>
+        <a href="{% url 'ontology_edge_create' %}" class="btn btn-primary btn-sm">+ Relationship</a>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body p-0">
-        <div id="graph-container" style="width:100%; height:600px; overflow:hidden;"></div>
-    </div>
-</div>
-
-<div class="row mt-3">
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Legend</div>
-            <div class="card-body">
-                <div id="legend"></div>
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <div>
+                <label class="form-label mb-0 small fw-bold">Search</label>
+                <input type="text" id="search-input" class="form-control form-control-sm" placeholder="Node name..." style="width:160px">
+            </div>
+            <div>
+                <label class="form-label mb-0 small fw-bold">Node Kind</label>
+                <select id="filter-kind" class="form-select form-select-sm" style="width:140px">
+                    <option value="all">All kinds</option>
+                    <option value="class">Class</option>
+                    <option value="struct">Struct</option>
+                    <option value="enum">Enum</option>
+                    <option value="union">Union</option>
+                    <option value="namespace">Namespace</option>
+                    <option value="interface">Interface</option>
+                    <option value="concept">Concept</option>
+                    <option value="hlr">HLR</option>
+                    <option value="llr">LLR</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label mb-0 small fw-bold">Group</label>
+                <select id="filter-group" class="form-select form-select-sm" style="width:140px">
+                    <option value="all">All groups</option>
+                    <option value="ontology">Ontology</option>
+                    <option value="requirement">Requirements</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label mb-0 small fw-bold">Layout</label>
+                <select id="layout-select" class="form-select form-select-sm" style="width:140px">
+                    <option value="cose">Force-directed</option>
+                    <option value="breadthfirst">Hierarchical</option>
+                    <option value="circle">Circle</option>
+                    <option value="grid">Grid</option>
+                    <option value="concentric">Concentric</option>
+                </select>
+            </div>
+            <div class="ms-auto">
+                <label class="form-label mb-0 small fw-bold">&nbsp;</label>
+                <div>
+                    <button id="btn-fit" class="btn btn-outline-secondary btn-sm">Fit</button>
+                    <button id="btn-reset" class="btn btn-outline-secondary btn-sm">Reset</button>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-8">
+</div>
+
+<div class="row">
+    <div class="col-md-9">
         <div class="card">
-            <div class="card-header">Node Details</div>
-            <div class="card-body">
-                <div id="node-details"><span class="text-muted">Click a node to see details.</span></div>
+            <div class="card-body p-0">
+                <div id="cy" style="width:100%; height:600px;"></div>
             </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Node Details</div>
+            <div class="card-body" id="node-details">
+                <span class="text-muted small">Click a node to see details.</span>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header py-2 small fw-bold">Legend</div>
+            <div class="card-body py-2" id="legend"></div>
         </div>
     </div>
 </div>
 
-<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
 <script>
 const KIND_COLORS = {
     "class": "#4e79a7",
@@ -62,198 +110,284 @@ const EDGE_COLORS = {
 };
 
 // Build legend
-const legend = d3.select("#legend");
-const kindLegend = legend.append("div").attr("class", "mb-2");
-kindLegend.append("strong").text("Ontology nodes");
-["class","struct","enum","union","namespace","interface","concept"].forEach(kind => {
-    const row = kindLegend.append("div").attr("class", "d-flex align-items-center gap-2 ms-2");
-    row.append("span").style("display", "inline-block").style("width", "12px").style("height", "12px")
-        .style("border-radius", "50%").style("background", KIND_COLORS[kind]);
-    row.append("span").text(kind);
+const legend = document.getElementById("legend");
+function addLegendSection(title, items, shape) {
+    const heading = document.createElement("div");
+    heading.className = "fw-bold small mb-1" + (title !== "Ontology Nodes" ? " mt-2" : "");
+    heading.textContent = title;
+    legend.appendChild(heading);
+    items.forEach(([key, label, color]) => {
+        const row = document.createElement("div");
+        row.className = "d-flex align-items-center gap-2 ms-2 small";
+        const swatch = document.createElement("span");
+        swatch.style.display = "inline-block";
+        swatch.style.width = shape === "line" ? "16px" : "12px";
+        swatch.style.height = shape === "line" ? "3px" : (shape === "rect" ? "10px" : "12px");
+        swatch.style.borderRadius = shape === "circle" ? "50%" : (shape === "rect" ? "2px" : "0");
+        swatch.style.background = color;
+        row.appendChild(swatch);
+        const text = document.createElement("span");
+        text.textContent = label;
+        row.appendChild(text);
+        legend.appendChild(row);
+    });
+}
+addLegendSection("Ontology Nodes", [
+    ["class", "Class", KIND_COLORS.class],
+    ["struct", "Struct", KIND_COLORS.struct],
+    ["enum", "Enum", KIND_COLORS.enum],
+    ["union", "Union", KIND_COLORS.union],
+    ["namespace", "Namespace", KIND_COLORS.namespace],
+    ["interface", "Interface", KIND_COLORS.interface],
+    ["concept", "Concept", KIND_COLORS.concept],
+], "circle");
+addLegendSection("Requirements", [
+    ["hlr", "High-Level Req", KIND_COLORS.hlr],
+    ["llr", "Low-Level Req", KIND_COLORS.llr],
+], "rect");
+addLegendSection("Relationships", Object.entries(EDGE_COLORS).map(
+    ([k, v]) => [k, k.replace("_", " "), v]
+), "line");
+
+// Initialize Cytoscape
+let cy = null;
+let allElements = [];
+
+function initGraph(data) {
+    const elements = [];
+
+    data.nodes.forEach(n => {
+        elements.push({
+            group: "nodes",
+            data: {
+                id: n.id,
+                name: n.name,
+                qualified_name: n.qualified_name || n.name,
+                kind: n.kind,
+                nodeGroup: n.group,
+                compound_refid: n.compound_refid || "",
+                description: n.description || "",
+                color: KIND_COLORS[n.kind] || "#999",
+                shape: n.group === "requirement" ? "round-rectangle" : "ellipse",
+            },
+        });
+    });
+
+    data.edges.forEach(e => {
+        elements.push({
+            group: "edges",
+            data: {
+                id: `${e.source}-${e.relationship}-${e.target}`,
+                source: e.source,
+                target: e.target,
+                relationship: e.relationship,
+                label: e.label || e.relationship,
+                color: EDGE_COLORS[e.relationship] || "#999",
+                dashed: (e.relationship === "actor" || e.relationship === "subject"),
+            },
+        });
+    });
+
+    allElements = elements;
+
+    cy = cytoscape({
+        container: document.getElementById("cy"),
+        elements: elements,
+        style: [
+            {
+                selector: "node",
+                style: {
+                    "label": "data(name)",
+                    "background-color": "data(color)",
+                    "shape": "data(shape)",
+                    "color": "#333",
+                    "font-size": "11px",
+                    "text-valign": "bottom",
+                    "text-margin-y": 6,
+                    "border-width": 2,
+                    "border-color": "#fff",
+                    "width": 28,
+                    "height": 28,
+                    "text-max-width": "100px",
+                    "text-wrap": "ellipsis",
+                },
+            },
+            {
+                selector: "node:selected",
+                style: {
+                    "border-width": 3,
+                    "border-color": "#333",
+                    "font-weight": "bold",
+                },
+            },
+            {
+                selector: "node.highlighted",
+                style: {
+                    "border-width": 3,
+                    "border-color": "#ffc107",
+                    "font-weight": "bold",
+                    "z-index": 10,
+                },
+            },
+            {
+                selector: "node.faded",
+                style: {
+                    "opacity": 0.15,
+                },
+            },
+            {
+                selector: "edge",
+                style: {
+                    "width": 2,
+                    "line-color": "data(color)",
+                    "target-arrow-color": "data(color)",
+                    "target-arrow-shape": "triangle",
+                    "curve-style": "bezier",
+                    "label": "data(label)",
+                    "font-size": "9px",
+                    "color": "#666",
+                    "text-rotation": "autorotate",
+                    "text-margin-y": -10,
+                },
+            },
+            {
+                selector: "edge[?dashed]",
+                style: {
+                    "line-style": "dashed",
+                    "line-dash-pattern": [6, 3],
+                },
+            },
+            {
+                selector: "edge.faded",
+                style: {
+                    "opacity": 0.1,
+                },
+            },
+        ],
+        layout: { name: "cose", animate: true, animationDuration: 500, nodeRepulsion: () => 8000, idealEdgeLength: () => 120 },
+        minZoom: 0.2,
+        maxZoom: 5,
+    });
+
+    // Click handler for node details
+    cy.on("tap", "node", function(evt) {
+        const d = evt.target.data();
+        const details = document.getElementById("node-details");
+        const groupBadge = d.nodeGroup === "requirement"
+            ? `<span class="badge bg-warning text-dark">${d.kind.toUpperCase()}</span>`
+            : `<span class="badge bg-secondary">${d.kind}</span>`;
+        let html = `<strong>${d.qualified_name}</strong> ${groupBadge}`;
+        if (d.description) html += `<p class="mt-2 mb-1 small">${d.description}</p>`;
+        if (d.compound_refid) html += `<p class="text-muted small mb-0">refid: <code>${d.compound_refid}</code></p>`;
+
+        const node = evt.target;
+        const incoming = node.incomers("edge");
+        const outgoing = node.outgoers("edge");
+
+        function edgeList(title, edges, getNode, nodeEnd) {
+            if (edges.length === 0) return "";
+            let s = `<p class="mt-2 mb-0 small"><strong>${title}:</strong></p><ul class="mb-0 small">`;
+            edges.forEach(e => {
+                const other = e[nodeEnd]();
+                s += `<li>${e.data("label")} ${nodeEnd === "target" ? "&rarr;" : "&larr;"} ${other.data("name")}</li>`;
+            });
+            return s + "</ul>";
+        }
+
+        html += edgeList("Outgoing", outgoing, null, "target");
+        html += edgeList("Incoming", incoming, null, "source");
+        details.innerHTML = html;
+    });
+
+    // Click on background clears details
+    cy.on("tap", function(evt) {
+        if (evt.target === cy) {
+            document.getElementById("node-details").innerHTML =
+                '<span class="text-muted small">Click a node to see details.</span>';
+        }
+    });
+}
+
+// Filtering
+function applyFilters() {
+    const kindVal = document.getElementById("filter-kind").value;
+    const groupVal = document.getElementById("filter-group").value;
+    const searchVal = document.getElementById("search-input").value.toLowerCase().trim();
+
+    cy.batch(() => {
+        cy.elements().removeClass("faded highlighted");
+
+        let matchedNodes = cy.nodes();
+
+        if (kindVal !== "all") {
+            matchedNodes = matchedNodes.filter(n => n.data("kind") === kindVal);
+        }
+        if (groupVal !== "all") {
+            matchedNodes = matchedNodes.filter(n => n.data("nodeGroup") === groupVal);
+        }
+        if (searchVal) {
+            matchedNodes = matchedNodes.filter(n =>
+                n.data("name").toLowerCase().includes(searchVal) ||
+                n.data("qualified_name").toLowerCase().includes(searchVal)
+            );
+        }
+
+        const hasFilter = kindVal !== "all" || groupVal !== "all" || searchVal;
+        if (hasFilter) {
+            // Fade everything, then un-fade matched nodes and their connected edges/neighbors
+            cy.elements().addClass("faded");
+            const neighborhood = matchedNodes.union(matchedNodes.connectedEdges()).union(
+                matchedNodes.connectedEdges().connectedNodes()
+            );
+            neighborhood.removeClass("faded");
+            matchedNodes.addClass("highlighted");
+        }
+    });
+}
+
+document.getElementById("filter-kind").addEventListener("change", applyFilters);
+document.getElementById("filter-group").addEventListener("change", applyFilters);
+document.getElementById("search-input").addEventListener("input", applyFilters);
+
+// Layout switching
+document.getElementById("layout-select").addEventListener("change", function() {
+    const layoutName = this.value;
+    const opts = { name: layoutName, animate: true, animationDuration: 500 };
+    if (layoutName === "cose") {
+        opts.nodeRepulsion = () => 8000;
+        opts.idealEdgeLength = () => 120;
+    }
+    if (layoutName === "breadthfirst") {
+        opts.spacingFactor = 1.5;
+    }
+    if (layoutName === "concentric") {
+        opts.concentric = n => n.connectedEdges().length;
+        opts.levelWidth = () => 2;
+    }
+    cy.layout(opts).run();
 });
 
-const reqLegend = legend.append("div").attr("class", "mb-2 mt-2");
-reqLegend.append("strong").text("Requirements");
-[["hlr", "High-Level Req"], ["llr", "Low-Level Req"]].forEach(([kind, label]) => {
-    const row = reqLegend.append("div").attr("class", "d-flex align-items-center gap-2 ms-2");
-    row.append("span").style("display", "inline-block").style("width", "14px").style("height", "10px")
-        .style("border-radius", "2px").style("background", KIND_COLORS[kind]);
-    row.append("span").text(label);
+// Fit / Reset buttons
+document.getElementById("btn-fit").addEventListener("click", () => cy.fit(null, 30));
+document.getElementById("btn-reset").addEventListener("click", () => {
+    document.getElementById("filter-kind").value = "all";
+    document.getElementById("filter-group").value = "all";
+    document.getElementById("search-input").value = "";
+    cy.elements().removeClass("faded highlighted");
+    document.getElementById("layout-select").value = "cose";
+    cy.layout({ name: "cose", animate: true, animationDuration: 500, nodeRepulsion: () => 8000, idealEdgeLength: () => 120 }).run();
 });
 
-const edgeLegend = legend.append("div").attr("class", "mt-2");
-edgeLegend.append("strong").text("Relationships");
-Object.entries(EDGE_COLORS).forEach(([rel, color]) => {
-    const row = edgeLegend.append("div").attr("class", "d-flex align-items-center gap-2 ms-2");
-    row.append("span").style("display", "inline-block").style("width", "16px").style("height", "3px")
-        .style("background", color);
-    row.append("span").text(rel.replace("_", " "));
-});
-
-const container = document.getElementById("graph-container");
-const width = container.clientWidth;
-const height = 600;
-
-const svg = d3.select("#graph-container").append("svg")
-    .attr("width", width).attr("height", height);
-
-const g = svg.append("g");
-
-// Zoom
-svg.call(d3.zoom().scaleExtent([0.2, 5]).on("zoom", (event) => {
-    g.attr("transform", event.transform);
-}));
-
-// Arrow markers
-const defs = svg.append("defs");
-defs.selectAll("marker")
-    .data(Object.keys(EDGE_COLORS))
-    .join("marker")
-    .attr("id", d => `arrow-${d}`)
-    .attr("viewBox", "0 -5 10 10")
-    .attr("refX", 20).attr("refY", 0)
-    .attr("markerWidth", 6).attr("markerHeight", 6)
-    .attr("orient", "auto")
-    .append("path")
-    .attr("d", "M0,-5L10,0L0,5")
-    .attr("fill", d => EDGE_COLORS[d] || "#999");
-
+// Load data
 fetch("{% url 'ontology_graph_data' %}")
     .then(r => r.json())
     .then(data => {
         if (data.nodes.length === 0) {
-            d3.select("#graph-container svg").append("text")
-                .attr("x", width / 2).attr("y", height / 2)
-                .attr("text-anchor", "middle")
-                .attr("fill", "#999")
-                .text("No nodes yet. Add ontology nodes to see the graph.");
+            document.getElementById("cy").innerHTML =
+                '<div class="d-flex align-items-center justify-content-center h-100 text-muted">No nodes yet. Add ontology nodes to see the graph.</div>';
             return;
         }
-
-        const simulation = d3.forceSimulation(data.nodes)
-            .force("link", d3.forceLink(data.edges).id(d => d.id).distance(120))
-            .force("charge", d3.forceManyBody().strength(-300))
-            .force("center", d3.forceCenter(width / 2, height / 2));
-
-        const link = g.append("g").selectAll("line")
-            .data(data.edges).join("line")
-            .attr("stroke", d => EDGE_COLORS[d.relationship] || "#999")
-            .attr("stroke-width", 2)
-            .attr("stroke-dasharray", d => (d.relationship === "actor" || d.relationship === "subject") ? "6,3" : null)
-            .attr("marker-end", d => `url(#arrow-${d.relationship})`);
-
-        const linkLabel = g.append("g").selectAll("text")
-            .data(data.edges).join("text")
-            .attr("font-size", 10).attr("fill", "#666")
-            .attr("text-anchor", "middle")
-            .text(d => d.label);
-
-        const node = g.append("g").selectAll("g")
-            .data(data.nodes).join("g")
-            .call(d3.drag()
-                .on("start", (event, d) => {
-                    if (!event.active) simulation.alphaTarget(0.3).restart();
-                    d.fx = d.x; d.fy = d.y;
-                })
-                .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
-                .on("end", (event, d) => {
-                    if (!event.active) simulation.alphaTarget(0);
-                    d.fx = null; d.fy = null;
-                })
-            );
-
-        // Ontology nodes get circles, requirement nodes get rounded rectangles
-        node.each(function(d) {
-            const el = d3.select(this);
-            if (d.group === "requirement") {
-                el.append("rect")
-                    .attr("x", -14).attr("y", -9)
-                    .attr("width", 28).attr("height", 18)
-                    .attr("rx", 4).attr("ry", 4)
-                    .attr("fill", KIND_COLORS[d.kind] || "#999")
-                    .attr("stroke", "#fff").attr("stroke-width", 2);
-            } else {
-                el.append("circle")
-                    .attr("r", 10)
-                    .attr("fill", KIND_COLORS[d.kind] || "#999")
-                    .attr("stroke", "#fff").attr("stroke-width", 2);
-            }
-        });
-
-        node.append("text")
-            .attr("dx", 16).attr("dy", 4)
-            .attr("font-size", 12).attr("fill", "#333")
-            .text(d => d.name);
-
-        node.on("click", (event, d) => {
-            const details = document.getElementById("node-details");
-            const groupBadge = d.group === "requirement"
-                ? `<span class="badge bg-warning text-dark">${d.kind.toUpperCase()}</span>`
-                : `<span class="badge bg-secondary">${d.kind}</span>`;
-            let html = `<strong>${d.qualified_name || d.name}</strong> ${groupBadge}`;
-            if (d.description) html += `<p class="mt-2 mb-1">${d.description}</p>`;
-            if (d.compound_refid) html += `<p class="text-muted small mb-0">compound refid: <code>${d.compound_refid}</code></p>`;
-
-            const incoming = data.edges.filter(e => (e.target.id || e.target) === d.id);
-            const outgoing = data.edges.filter(e => (e.source.id || e.source) === d.id);
-
-            // Show actor/subject links for ontology nodes (incoming from requirements)
-            const actorLinks = incoming.filter(e => e.relationship === "actor");
-            const subjectLinks = incoming.filter(e => e.relationship === "subject");
-            if (actorLinks.length) {
-                html += `<p class="mt-2 mb-0"><strong>Actor in:</strong></p><ul class="mb-0">`;
-                actorLinks.forEach(e => {
-                    const s = data.nodes.find(n => n.id === (e.source.id || e.source));
-                    html += `<li>${s ? s.name : '?'} <span class="text-muted">(${e.label})</span></li>`;
-                });
-                html += `</ul>`;
-            }
-            if (subjectLinks.length) {
-                html += `<p class="mt-2 mb-0"><strong>Subject in:</strong></p><ul class="mb-0">`;
-                subjectLinks.forEach(e => {
-                    const s = data.nodes.find(n => n.id === (e.source.id || e.source));
-                    html += `<li>${s ? s.name : '?'} <span class="text-muted">(${e.label})</span></li>`;
-                });
-                html += `</ul>`;
-            }
-
-            const otherOut = outgoing.filter(e => e.relationship !== "actor" && e.relationship !== "subject");
-            const otherIn = incoming.filter(e => e.relationship !== "actor" && e.relationship !== "subject");
-
-            if (outgoing.filter(e => e.relationship === "actor" || e.relationship === "subject").length) {
-                html += `<p class="mt-2 mb-0"><strong>References:</strong></p><ul class="mb-0">`;
-                outgoing.filter(e => e.relationship === "actor" || e.relationship === "subject").forEach(e => {
-                    const t = data.nodes.find(n => n.id === (e.target.id || e.target));
-                    html += `<li>${e.relationship}: ${t ? t.name : '?'}</li>`;
-                });
-                html += `</ul>`;
-            }
-            if (otherOut.length) {
-                html += `<p class="mt-2 mb-0"><strong>Outgoing:</strong></p><ul class="mb-0">`;
-                otherOut.forEach(e => {
-                    const t = data.nodes.find(n => n.id === (e.target.id || e.target));
-                    html += `<li>${e.label} → ${t ? t.name : '?'}</li>`;
-                });
-                html += `</ul>`;
-            }
-            if (otherIn.length) {
-                html += `<p class="mt-2 mb-0"><strong>Incoming:</strong></p><ul class="mb-0">`;
-                otherIn.forEach(e => {
-                    const s = data.nodes.find(n => n.id === (e.source.id || e.source));
-                    html += `<li>${s ? s.name : '?'} → ${e.label}</li>`;
-                });
-                html += `</ul>`;
-            }
-            details.innerHTML = html;
-        });
-
-        simulation.on("tick", () => {
-            link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-            linkLabel.attr("x", d => (d.source.x + d.target.x) / 2)
-                .attr("y", d => (d.source.y + d.target.y) / 2);
-            node.attr("transform", d => `translate(${d.x},${d.y})`);
-        });
+        initGraph(data);
     });
 </script>
 {% endblock %}

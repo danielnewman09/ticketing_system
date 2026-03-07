@@ -11,27 +11,25 @@
 {% for hlr in hlrs %}
 <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span><strong>HLR {{ hlr.id }}:</strong> {{ hlr.description }}</span>
-        <div>
-            <a href="{% url 'llr_create' %}?hlr={{ hlr.id }}" class="btn btn-sm btn-outline-primary">+ LLR</a>
-            <a href="{% url 'hlr_update' hlr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
-        </div>
+        <a href="{% url 'hlr_detail' hlr.pk %}" class="text-decoration-none">
+            <strong>HLR {{ hlr.id }}:</strong> {{ hlr.description }}
+        </a>
+        <a href="{% url 'llr_create' %}?hlr={{ hlr.id }}" class="btn btn-sm btn-outline-primary">+ LLR</a>
     </div>
     <div class="card-body">
         {% if hlr.low_level_requirements.all %}
         <table class="table table-sm mb-0">
-            <thead><tr><th>ID</th><th>Description</th><th>Verification</th><th></th></tr></thead>
+            <thead><tr><th>ID</th><th>Description</th><th>Verification</th></tr></thead>
             <tbody>
                 {% for llr in hlr.low_level_requirements.all %}
                 <tr>
-                    <td>{{ llr.id }}</td>
-                    <td>{{ llr.description }}</td>
+                    <td><a href="{% url 'llr_detail' llr.pk %}">{{ llr.id }}</a></td>
+                    <td><a href="{% url 'llr_detail' llr.pk %}" class="text-decoration-none">{{ llr.description }}</a></td>
                     <td>
                         {% for v in llr.verifications.all %}
                         <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>
                         {% empty %}<span class="text-muted">-</span>{% endfor %}
                     </td>
-                    <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -52,18 +50,17 @@
     </div>
     <div class="card-body">
         <table class="table table-sm mb-0">
-            <thead><tr><th>ID</th><th>Description</th><th>Verification</th><th></th></tr></thead>
+            <thead><tr><th>ID</th><th>Description</th><th>Verification</th></tr></thead>
             <tbody>
                 {% for llr in unlinked_llrs %}
                 <tr>
-                    <td>{{ llr.id }}</td>
-                    <td>{{ llr.description }}</td>
+                    <td><a href="{% url 'llr_detail' llr.pk %}">{{ llr.id }}</a></td>
+                    <td><a href="{% url 'llr_detail' llr.pk %}" class="text-decoration-none">{{ llr.description }}</a></td>
                     <td>
                         {% for v in llr.verifications.all %}
                         <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>
                         {% empty %}<span class="text-muted">-</span>{% endfor %}
                     </td>
-                    <td><a href="{% url 'requirement_update' llr.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
                 </tr>
                 {% endfor %}
             </tbody>

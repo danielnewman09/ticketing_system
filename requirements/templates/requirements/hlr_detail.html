@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}HLR {{ hlr.pk }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>HLR {{ hlr.pk }}</h1>
+    <div>
+        <a href="{% url 'requirement_list' %}" class="btn btn-outline-secondary btn-sm">Back to List</a>
+        <a href="{% url 'hlr_update' hlr.pk %}" class="btn btn-primary btn-sm">Edit</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Requirement Statement</div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr><th style="width:120px">Actor</th><td>{{ hlr.actor|default:"-" }}{% if hlr.actor_compound_refid %} <code class="ms-2 small">{{ hlr.actor_compound_refid }}</code>{% endif %}</td></tr>
+                    <tr><th>Action</th><td>{{ hlr.action|default:"-" }}</td></tr>
+                    <tr><th>Subject</th><td>{{ hlr.subject|default:"-" }}{% if hlr.subject_compound_refid %} <code class="ms-2 small">{{ hlr.subject_compound_refid }}</code>{% endif %}</td></tr>
+                </table>
+                {% if hlr.description %}
+                <p class="mt-2 mb-0 small text-muted">{{ hlr.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <span class="small fw-bold">Low-Level Requirements</span>
+                <a href="{% url 'llr_create' %}?hlr={{ hlr.pk }}" class="btn btn-outline-primary btn-sm">+ LLR</a>
+            </div>
+            <div class="card-body p-0">
+                {% if hlr.low_level_requirements.all %}
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>ID</th><th>Statement</th><th>Verification</th></tr></thead>
+                    <tbody>
+                        {% for llr in hlr.low_level_requirements.all %}
+                        <tr>
+                            <td><a href="{% url 'llr_detail' llr.pk %}">{{ llr.pk }}</a></td>
+                            <td><a href="{% url 'llr_detail' llr.pk %}" class="text-decoration-none">{{ llr.statement }}</a></td>
+                            <td>
+                                {% for v in llr.verifications.all %}
+                                <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>
+                                {% empty %}<span class="text-muted">-</span>{% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0 p-3">No low-level requirements yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Ontology Graph</div>
+            <div class="card-body p-0">
+                <div id="cy" style="width:100%; height:400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
+<script>
+{% include "requirements/_ontology_graph.js" %}
+loadRequirementGraph("{% url 'hlr_graph_data' hlr.pk %}");
+</script>
+{% endblock %}

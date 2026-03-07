@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}LLR {{ llr.pk }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>LLR {{ llr.pk }}</h1>
+    <div>
+        <a href="{% url 'requirement_list' %}" class="btn btn-outline-secondary btn-sm">Back to List</a>
+        <a href="{% url 'llr_update' llr.pk %}" class="btn btn-primary btn-sm">Edit</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Requirement Statement</div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr><th style="width:120px">Actor</th><td>{{ llr.actor|default:"-" }}{% if llr.actor_compound_refid %} <code class="ms-2 small">{{ llr.actor_compound_refid }}</code>{% endif %}</td></tr>
+                    <tr><th>Action</th><td>{{ llr.action|default:"-" }}</td></tr>
+                    <tr><th>Subject</th><td>{{ llr.subject|default:"-" }}{% if llr.subject_compound_refid %} <code class="ms-2 small">{{ llr.subject_compound_refid }}</code>{% endif %}</td></tr>
+                </table>
+                {% if llr.description %}
+                <p class="mt-2 mb-0 small text-muted">{{ llr.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if llr.high_level_requirement %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Parent HLR</div>
+            <div class="card-body py-2">
+                <a href="{% url 'hlr_detail' llr.high_level_requirement.pk %}">
+                    HLR {{ llr.high_level_requirement.pk }}:
+                </a>
+                {{ llr.high_level_requirement.statement }}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if llr.verifications.all %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Verifications</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Method</th><th>Confirmation</th><th>Test</th></tr></thead>
+                    <tbody>
+                        {% for v in llr.verifications.all %}
+                        <tr>
+                            <td><span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span></td>
+                            <td>{{ v.confirmation|default:"-" }}</td>
+                            <td>{% if v.test_name %}<code>{{ v.test_name }}</code>{% else %}-{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if llr.components.all %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Components</div>
+            <div class="card-body py-2">
+                {% for c in llr.components.all %}
+                <span class="badge bg-secondary me-1">{{ c.name }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Ontology Graph</div>
+            <div class="card-body p-0">
+                <div id="cy" style="width:100%; height:400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
+<script>
+{% include "requirements/_ontology_graph.js" %}
+loadRequirementGraph("{% url 'llr_graph_data' llr.pk %}");
+</script>
+{% endblock %}
