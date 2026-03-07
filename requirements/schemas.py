@@ -33,14 +33,18 @@ class VerificationSchema(BaseModel):
 
 class LowLevelRequirementSchema(BaseModel):
     actor: str
+    actor_compound_refid: str = ""
     action: str
     subject: str
+    subject_compound_refid: str = ""
     description: str
     verifications: list[VerificationSchema]
 
 
 class DecomposedRequirementSchema(BaseModel):
     actor: str
+    actor_compound_refid: str = ""
     action: str
     subject: str
+    subject_compound_refid: str = ""
     low_level_requirements: list[LowLevelRequirementSchema]

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Ontology Nodes{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Ontology Nodes</h1>
+    <div>
+        <a href="{% url 'ontology_graph' %}" class="btn btn-outline-secondary">Graph View</a>
+        <a href="{% url 'ontology_node_create' %}" class="btn btn-success">+ Node</a>
+        <a href="{% url 'ontology_edge_create' %}" class="btn btn-primary">+ Relationship</a>
+    </div>
+</div>
+<table class="table">
+    <thead>
+        <tr><th>Name</th><th>Kind</th><th>Qualified Name</th><th>Compound</th><th>Edges</th><th></th></tr>
+    </thead>
+    <tbody>
+        {% for node in nodes %}
+        <tr>
+            <td>{{ node.name }}</td>
+            <td><span class="badge bg-secondary">{{ node.get_kind_display }}</span></td>
+            <td><code>{{ node.qualified_name }}</code></td>
+            <td>{% if node.compound_refid %}<code>{{ node.compound_refid }}</code>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+            <td>{{ node.outgoing_edges.count }} out / {{ node.incoming_edges.count }} in</td>
+            <td><a href="{% url 'ontology_node_update' node.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-muted">No ontology nodes yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

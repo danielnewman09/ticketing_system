@@ -6,4 +6,5 @@ urlpatterns = [
     path('', include('tickets.urls')),
     path('components/', include('components.urls')),
     path('requirements/', include('requirements.urls')),
+    path('ontology/', include('codebase.urls')),
 ]

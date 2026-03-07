@@ -6,11 +6,13 @@ from .models import HighLevelRequirement, LowLevelRequirement, LLRVerification
 class HighLevelRequirementForm(forms.ModelForm):
     class Meta:
         model = HighLevelRequirement
-        fields = ["actor", "action", "subject", "description"]
+        fields = ["actor", "actor_compound_refid", "action", "subject", "subject_compound_refid", "description"]
         widgets = {
             "actor": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., A developer"}),
+            "actor_compound_refid": forms.TextInput(attrs={"class": "form-control", "placeholder": "Compound refid (optional)"}),
             "action": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., compiles"}),
             "subject": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., the codebase"}),
+            "subject_compound_refid": forms.TextInput(attrs={"class": "form-control", "placeholder": "Compound refid (optional)"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Optional additional detail"}),
         }
 
@@ -20,15 +22,19 @@ class LowLevelRequirementForm(forms.ModelForm):
         model = LowLevelRequirement
         fields = [
             "high_level_requirement",
-            "actor", "action", "subject",
+            "actor", "actor_compound_refid",
+            "action",
+            "subject", "subject_compound_refid",
             "components",
             "description",
         ]
         widgets = {
             "high_level_requirement": forms.Select(attrs={"class": "form-select"}),
             "actor": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., The end user"}),
+            "actor_compound_refid": forms.TextInput(attrs={"class": "form-control", "placeholder": "Compound refid (optional)"}),
             "action": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., presses the + button"}),
             "subject": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., in the GUI"}),
+            "subject_compound_refid": forms.TextInput(attrs={"class": "form-control", "placeholder": "Compound refid (optional)"}),
             "components": forms.CheckboxSelectMultiple(),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Optional additional detail"}),
         }
