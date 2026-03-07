@@ -11,6 +11,8 @@ dependencies = [
     "django>=5.0",
     "sqlite-vec>=0.1.6",
     "sentence-transformers>=3.0",
+    "anthropic>=0.84",
+    "mcp[cli]>=1.0",
 ]
 
 [project.optional-dependencies]

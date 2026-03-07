@@ -52,11 +52,12 @@ class LowLevelRequirement(models.Model):
         return f"{self.actor} {self.action} {self.subject}"
 
 
+VERIFICATION_METHODS = ["automated", "review", "inspection"]
+
+
 class LLRVerification(models.Model):
     VERIFICATION_CHOICES = [
-        ("automated", "Automated"),
-        ("review", "Review"),
-        ("inspection", "Inspection"),
+        (m, m.capitalize()) for m in VERIFICATION_METHODS
     ]
 
     low_level_requirement = models.ForeignKey(
