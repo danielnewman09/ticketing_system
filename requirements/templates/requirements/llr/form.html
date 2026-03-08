@@ -32,14 +32,14 @@
             </div>
         </div>
     </div>
-    <div class="card mb-3">
+    <div class="card mb-3" x-data="verificationFormset({{ verification_formset.total_form_count }})">
         <div class="card-header">Verification Methods</div>
         <div class="card-body">
             {{ verification_formset.management_form }}
             {% if verification_formset.non_form_errors %}
             <div class="alert alert-danger">{{ verification_formset.non_form_errors }}</div>
             {% endif %}
-            <table class="table table-sm" id="verification-table">
+            <table class="table table-sm" x-ref="table">
                 <thead>
                     <tr>
                         <th>Method</th>
@@ -73,7 +73,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <button type="button" class="btn btn-sm btn-outline-primary" id="add-verification">+ Add Verification</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" @click="addRow()">+ Add Verification</button>
         </div>
     </div>
     <div class="mb-3">
@@ -91,27 +91,32 @@
     <a href="{% url 'requirement_list' %}" class="btn btn-secondary">Cancel</a>
 </form>
 <script>
-document.getElementById('add-verification').addEventListener('click', function() {
-    const tbody = document.querySelector('#verification-table tbody');
-    const totalForms = document.getElementById('id_verifications-TOTAL_FORMS');
-    const idx = Number.parseInt(totalForms.value);
-    const lastRow = tbody.querySelector('tr:last-child');
-    const newRow = lastRow.cloneNode(true);
-    newRow.innerHTML = newRow.innerHTML.replaceAll(
-        'verifications-' + (idx - 1) + '-',
-        'verifications-' + idx + '-'
-    );
-    newRow.querySelectorAll('input, select').forEach(function(el) {
-        if (el.type === 'hidden' && el.name.endsWith('-id')) {
-            el.value = '';
-        } else if (el.type !== 'hidden') {
-            el.value = '';
-        }
-    });
-    const deleteCell = newRow.querySelector('td:last-child');
-    deleteCell.innerHTML = '';
-    tbody.appendChild(newRow);
-    totalForms.value = idx + 1;
-});
+function verificationFormset(initialCount) {
+    return {
+        formCount: initialCount,
+        addRow() {
+            const tbody = this.$refs.table.querySelector('tbody');
+            const totalForms = document.getElementById('id_verifications-TOTAL_FORMS');
+            const idx = this.formCount;
+            const lastRow = tbody.querySelector('tr:last-child');
+            const newRow = lastRow.cloneNode(true);
+            newRow.innerHTML = newRow.innerHTML.replaceAll(
+                'verifications-' + (idx - 1) + '-',
+                'verifications-' + idx + '-'
+            );
+            newRow.querySelectorAll('input, select').forEach(el => {
+                if (el.type === 'hidden' && el.name.endsWith('-id')) {
+                    el.value = '';
+                } else if (el.type !== 'hidden') {
+                    el.value = '';
+                }
+            });
+            newRow.querySelector('td:last-child').innerHTML = '';
+            tbody.appendChild(newRow);
+            this.formCount++;
+            totalForms.value = this.formCount;
+        },
+    };
+}
 </script>
 {% endblock %}

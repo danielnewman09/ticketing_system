@@ -1,5 +1,11 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Ontology Graph{% endblock %}
+{% block head %}
+<script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
+<script src="{% static 'js/cytoscape-config.js' %}"></script>
+<script src="{% static 'js/ontology-graph.js' %}"></script>
+{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Ontology Graph</h1>
@@ -10,366 +16,116 @@
     </div>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <div class="d-flex flex-wrap align-items-center gap-3">
-            <div>
-                <label class="form-label mb-0 small fw-bold">Search</label>
-                <input type="text" id="search-input" class="form-control form-control-sm" placeholder="Node name..." style="width:160px">
-            </div>
-            <div>
-                <label class="form-label mb-0 small fw-bold">Node Kind</label>
-                <select id="filter-kind" class="form-select form-select-sm" style="width:140px">
-                    <option value="all">All kinds</option>
-                    <option value="class">Class</option>
-                    <option value="struct">Struct</option>
-                    <option value="enum">Enum</option>
-                    <option value="union">Union</option>
-                    <option value="namespace">Namespace</option>
-                    <option value="interface">Interface</option>
-                    <option value="concept">Concept</option>
-                    <option value="hlr">HLR</option>
-                    <option value="llr">LLR</option>
-                </select>
-            </div>
-            <div>
-                <label class="form-label mb-0 small fw-bold">Group</label>
-                <select id="filter-group" class="form-select form-select-sm" style="width:140px">
-                    <option value="all">All groups</option>
-                    <option value="ontology">Ontology</option>
-                    <option value="requirement">Requirements</option>
-                </select>
-            </div>
-            <div>
-                <label class="form-label mb-0 small fw-bold">Layout</label>
-                <select id="layout-select" class="form-select form-select-sm" style="width:140px">
-                    <option value="cose">Force-directed</option>
-                    <option value="breadthfirst">Hierarchical</option>
-                    <option value="circle">Circle</option>
-                    <option value="grid">Grid</option>
-                    <option value="concentric">Concentric</option>
-                </select>
-            </div>
-            <div class="ms-auto">
-                <label class="form-label mb-0 small fw-bold">&nbsp;</label>
+<div x-data="ontologyGraph('{% url 'ontology_graph_data' %}')">
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="d-flex flex-wrap align-items-center gap-3">
                 <div>
-                    <button id="btn-fit" class="btn btn-outline-secondary btn-sm">Fit</button>
-                    <button id="btn-reset" class="btn btn-outline-secondary btn-sm">Reset</button>
+                    <label class="form-label mb-0 small fw-bold">Search</label>
+                    <input type="text" class="form-control form-control-sm" placeholder="Node name..."
+                           style="width:160px" x-model="search" @input.debounce.200ms="applyFilters()">
+                </div>
+                <div>
+                    <label class="form-label mb-0 small fw-bold">Node Kind</label>
+                    <select class="form-select form-select-sm" style="width:140px"
+                            x-model="filterKind" @change="applyFilters()">
+                        <option value="all">All kinds</option>
+                        <option value="class">Class</option>
+                        <option value="struct">Struct</option>
+                        <option value="enum">Enum</option>
+                        <option value="union">Union</option>
+                        <option value="namespace">Namespace</option>
+                        <option value="interface">Interface</option>
+                        <option value="concept">Concept</option>
+                        <option value="hlr">HLR</option>
+                        <option value="llr">LLR</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small fw-bold">Group</label>
+                    <select class="form-select form-select-sm" style="width:140px"
+                            x-model="filterGroup" @change="applyFilters()">
+                        <option value="all">All groups</option>
+                        <option value="ontology">Ontology</option>
+                        <option value="requirement">Requirements</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small fw-bold">Layout</label>
+                    <select class="form-select form-select-sm" style="width:140px"
+                            x-model="layout" @change="changeLayout()">
+                        <option value="cose">Force-directed</option>
+                        <option value="breadthfirst">Hierarchical</option>
+                        <option value="circle">Circle</option>
+                        <option value="grid">Grid</option>
+                        <option value="concentric">Concentric</option>
+                    </select>
+                </div>
+                <div class="ms-auto">
+                    <label class="form-label mb-0 small fw-bold">&nbsp;</label>
+                    <div>
+                        <button class="btn btn-outline-secondary btn-sm" @click="fit()">Fit</button>
+                        <button class="btn btn-outline-secondary btn-sm" @click="reset()">Reset</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-9">
-        <div class="card">
-            <div class="card-body p-0">
-                <div id="cy" style="width:100%; height:600px;"></div>
+    <div class="row">
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div x-ref="cy" style="width:100%; height:600px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card mb-3">
+                <div class="card-header py-2 small fw-bold">Node Details</div>
+                <div class="card-body">
+                    <template x-if="!selectedNode">
+                        <span class="text-muted small">Click a node to see details.</span>
+                    </template>
+                    <template x-if="selectedNode">
+                        <div>
+                            <strong x-text="selectedNode.qualified_name"></strong>
+                            <span class="badge ms-1"
+                                  :class="selectedNode.nodeGroup === 'requirement' ? 'bg-warning text-dark' : 'bg-secondary'"
+                                  x-text="selectedNode.kind"></span>
+                            <p class="mt-2 mb-1 small" x-show="selectedNode.description" x-text="selectedNode.description"></p>
+                            <p class="text-muted small mb-0" x-show="selectedNode.compound_refid">
+                                refid: <code x-text="selectedNode.compound_refid"></code>
+                            </p>
+                            <template x-if="selectedNode.outgoing.length > 0">
+                                <div>
+                                    <p class="mt-2 mb-0 small"><strong>Outgoing:</strong></p>
+                                    <ul class="mb-0 small">
+                                        <template x-for="e in selectedNode.outgoing" :key="e.label + e.target">
+                                            <li><span x-text="e.label"></span> &rarr; <span x-text="e.target"></span></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                            <template x-if="selectedNode.incoming.length > 0">
+                                <div>
+                                    <p class="mt-2 mb-0 small"><strong>Incoming:</strong></p>
+                                    <ul class="mb-0 small">
+                                        <template x-for="e in selectedNode.incoming" :key="e.label + e.source">
+                                            <li><span x-text="e.label"></span> &larr; <span x-text="e.source"></span></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header py-2 small fw-bold">Legend</div>
+                <div class="card-body py-2" x-ref="legend"></div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card mb-3">
-            <div class="card-header py-2 small fw-bold">Node Details</div>
-            <div class="card-body" id="node-details">
-                <span class="text-muted small">Click a node to see details.</span>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header py-2 small fw-bold">Legend</div>
-            <div class="card-body py-2" id="legend"></div>
-        </div>
-    </div>
 </div>
-
-<script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
-<script>
-const KIND_COLORS = {
-    "class": "#4e79a7",
-    "struct": "#59a14f",
-    "enum": "#e15759",
-    "union": "#f28e2b",
-    "namespace": "#76b7b2",
-    "interface": "#b07aa1",
-    "concept": "#edc948",
-    "hlr": "#ff7f0e",
-    "llr": "#9467bd",
-};
-
-// Default edge color; all edges are now triples with free-text predicates
-const DEFAULT_EDGE_COLOR = "#888";
-
-// Build legend
-const legend = document.getElementById("legend");
-function addLegendSection(title, items, shape) {
-    const heading = document.createElement("div");
-    heading.className = "fw-bold small mb-1" + (title !== "Ontology Nodes" ? " mt-2" : "");
-    heading.textContent = title;
-    legend.appendChild(heading);
-    items.forEach(([key, label, color]) => {
-        const row = document.createElement("div");
-        row.className = "d-flex align-items-center gap-2 ms-2 small";
-        const swatch = document.createElement("span");
-        swatch.style.display = "inline-block";
-        swatch.style.width = shape === "line" ? "16px" : "12px";
-        swatch.style.height = shape === "line" ? "3px" : (shape === "rect" ? "10px" : "12px");
-        swatch.style.borderRadius = shape === "circle" ? "50%" : (shape === "rect" ? "2px" : "0");
-        swatch.style.background = color;
-        row.appendChild(swatch);
-        const text = document.createElement("span");
-        text.textContent = label;
-        row.appendChild(text);
-        legend.appendChild(row);
-    });
-}
-addLegendSection("Ontology Nodes", [
-    ["class", "Class", KIND_COLORS.class],
-    ["struct", "Struct", KIND_COLORS.struct],
-    ["enum", "Enum", KIND_COLORS.enum],
-    ["union", "Union", KIND_COLORS.union],
-    ["namespace", "Namespace", KIND_COLORS.namespace],
-    ["interface", "Interface", KIND_COLORS.interface],
-    ["concept", "Concept", KIND_COLORS.concept],
-], "circle");
-addLegendSection("Requirements", [
-    ["hlr", "High-Level Req", KIND_COLORS.hlr],
-    ["llr", "Low-Level Req", KIND_COLORS.llr],
-], "rect");
-addLegendSection("Edges", [
-    ["triple", "Predicate (triple)", DEFAULT_EDGE_COLOR],
-], "line");
-
-// Initialize Cytoscape
-let cy = null;
-let allElements = [];
-
-function initGraph(data) {
-    const elements = [];
-
-    data.nodes.forEach(n => {
-        elements.push({
-            group: "nodes",
-            data: {
-                id: n.id,
-                name: n.name,
-                qualified_name: n.qualified_name || n.name,
-                kind: n.kind,
-                nodeGroup: n.group,
-                compound_refid: n.compound_refid || "",
-                description: n.description || "",
-                color: KIND_COLORS[n.kind] || "#999",
-                shape: n.group === "requirement" ? "round-rectangle" : "ellipse",
-            },
-        });
-    });
-
-    data.edges.forEach((e, i) => {
-        elements.push({
-            group: "edges",
-            data: {
-                id: `${e.source}-${e.predicate}-${e.target}-${i}`,
-                source: e.source,
-                target: e.target,
-                label: e.predicate,
-                color: DEFAULT_EDGE_COLOR,
-            },
-        });
-    });
-
-    allElements = elements;
-
-    cy = cytoscape({
-        container: document.getElementById("cy"),
-        elements: elements,
-        style: [
-            {
-                selector: "node",
-                style: {
-                    "label": "data(name)",
-                    "background-color": "data(color)",
-                    "shape": "data(shape)",
-                    "color": "#333",
-                    "font-size": "11px",
-                    "text-valign": "bottom",
-                    "text-margin-y": 6,
-                    "border-width": 2,
-                    "border-color": "#fff",
-                    "width": 28,
-                    "height": 28,
-                    "text-max-width": "100px",
-                    "text-wrap": "ellipsis",
-                },
-            },
-            {
-                selector: "node:selected",
-                style: {
-                    "border-width": 3,
-                    "border-color": "#333",
-                    "font-weight": "bold",
-                },
-            },
-            {
-                selector: "node.highlighted",
-                style: {
-                    "border-width": 3,
-                    "border-color": "#ffc107",
-                    "font-weight": "bold",
-                    "z-index": 10,
-                },
-            },
-            {
-                selector: "node.faded",
-                style: {
-                    "opacity": 0.15,
-                },
-            },
-            {
-                selector: "edge",
-                style: {
-                    "width": 2,
-                    "line-color": "data(color)",
-                    "target-arrow-color": "data(color)",
-                    "target-arrow-shape": "triangle",
-                    "curve-style": "bezier",
-                    "label": "data(label)",
-                    "font-size": "9px",
-                    "color": "#666",
-                    "text-rotation": "autorotate",
-                    "text-margin-y": -10,
-                },
-            },
-            {
-                selector: "edge.faded",
-                style: {
-                    "opacity": 0.1,
-                },
-            },
-        ],
-        layout: { name: "cose", animate: true, animationDuration: 500, nodeRepulsion: () => 8000, idealEdgeLength: () => 120 },
-        minZoom: 0.2,
-        maxZoom: 5,
-    });
-
-    // Click handler for node details
-    cy.on("tap", "node", function(evt) {
-        const d = evt.target.data();
-        const details = document.getElementById("node-details");
-        const groupBadge = d.nodeGroup === "requirement"
-            ? `<span class="badge bg-warning text-dark">${d.kind.toUpperCase()}</span>`
-            : `<span class="badge bg-secondary">${d.kind}</span>`;
-        let html = `<strong>${d.qualified_name}</strong> ${groupBadge}`;
-        if (d.description) html += `<p class="mt-2 mb-1 small">${d.description}</p>`;
-        if (d.compound_refid) html += `<p class="text-muted small mb-0">refid: <code>${d.compound_refid}</code></p>`;
-
-        const node = evt.target;
-        const incoming = node.incomers("edge");
-        const outgoing = node.outgoers("edge");
-
-        function edgeList(title, edges, getNode, nodeEnd) {
-            if (edges.length === 0) return "";
-            let s = `<p class="mt-2 mb-0 small"><strong>${title}:</strong></p><ul class="mb-0 small">`;
-            edges.forEach(e => {
-                const other = e[nodeEnd]();
-                s += `<li>${e.data("label")} ${nodeEnd === "target" ? "&rarr;" : "&larr;"} ${other.data("name")}</li>`;
-            });
-            return s + "</ul>";
-        }
-
-        html += edgeList("Outgoing", outgoing, null, "target");
-        html += edgeList("Incoming", incoming, null, "source");
-        details.innerHTML = html;
-    });
-
-    // Click on background clears details
-    cy.on("tap", function(evt) {
-        if (evt.target === cy) {
-            document.getElementById("node-details").innerHTML =
-                '<span class="text-muted small">Click a node to see details.</span>';
-        }
-    });
-}
-
-// Filtering
-function applyFilters() {
-    const kindVal = document.getElementById("filter-kind").value;
-    const groupVal = document.getElementById("filter-group").value;
-    const searchVal = document.getElementById("search-input").value.toLowerCase().trim();
-
-    cy.batch(() => {
-        cy.elements().removeClass("faded highlighted");
-
-        let matchedNodes = cy.nodes();
-
-        if (kindVal !== "all") {
-            matchedNodes = matchedNodes.filter(n => n.data("kind") === kindVal);
-        }
-        if (groupVal !== "all") {
-            matchedNodes = matchedNodes.filter(n => n.data("nodeGroup") === groupVal);
-        }
-        if (searchVal) {
-            matchedNodes = matchedNodes.filter(n =>
-                n.data("name").toLowerCase().includes(searchVal) ||
-                n.data("qualified_name").toLowerCase().includes(searchVal)
-            );
-        }
-
-        const hasFilter = kindVal !== "all" || groupVal !== "all" || searchVal;
-        if (hasFilter) {
-            // Fade everything, then un-fade matched nodes and their connected edges/neighbors
-            cy.elements().addClass("faded");
-            const neighborhood = matchedNodes.union(matchedNodes.connectedEdges()).union(
-                matchedNodes.connectedEdges().connectedNodes()
-            );
-            neighborhood.removeClass("faded");
-            matchedNodes.addClass("highlighted");
-        }
-    });
-}
-
-document.getElementById("filter-kind").addEventListener("change", applyFilters);
-document.getElementById("filter-group").addEventListener("change", applyFilters);
-document.getElementById("search-input").addEventListener("input", applyFilters);
-
-// Layout switching
-document.getElementById("layout-select").addEventListener("change", function() {
-    const layoutName = this.value;
-    const opts = { name: layoutName, animate: true, animationDuration: 500 };
-    if (layoutName === "cose") {
-        opts.nodeRepulsion = () => 8000;
-        opts.idealEdgeLength = () => 120;
-    }
-    if (layoutName === "breadthfirst") {
-        opts.spacingFactor = 1.5;
-    }
-    if (layoutName === "concentric") {
-        opts.concentric = n => n.connectedEdges().length;
-        opts.levelWidth = () => 2;
-    }
-    cy.layout(opts).run();
-});
-
-// Fit / Reset buttons
-document.getElementById("btn-fit").addEventListener("click", () => cy.fit(null, 30));
-document.getElementById("btn-reset").addEventListener("click", () => {
-    document.getElementById("filter-kind").value = "all";
-    document.getElementById("filter-group").value = "all";
-    document.getElementById("search-input").value = "";
-    cy.elements().removeClass("faded highlighted");
-    document.getElementById("layout-select").value = "cose";
-    cy.layout({ name: "cose", animate: true, animationDuration: 500, nodeRepulsion: () => 8000, idealEdgeLength: () => 120 }).run();
-});
-
-// Load data
-fetch("{% url 'ontology_graph_data' %}")
-    .then(r => r.json())
-    .then(data => {
-        if (data.nodes.length === 0) {
-            document.getElementById("cy").innerHTML =
-                '<div class="d-flex align-items-center justify-content-center h-100 text-muted">No nodes yet. Add ontology nodes to see the graph.</div>';
-            return;
-        }
-        initGraph(data);
-    });
-</script>
 {% endblock %}
