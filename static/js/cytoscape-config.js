@@ -58,6 +58,23 @@ const CYTOSCAPE_STYLES = [
         },
     },
     {
+        selector: ":parent",
+        style: {
+            "shape": "round-rectangle",
+            "background-color": "data(color)",
+            "background-opacity": 0.12,
+            "border-width": 2,
+            "border-color": "data(color)",
+            "border-opacity": 0.5,
+            "text-valign": "top",
+            "text-halign": "center",
+            "text-margin-y": -4,
+            "font-size": "13px",
+            "font-weight": "bold",
+            "padding": "20px",
+        },
+    },
+    {
         selector: "node.faded",
         style: { "opacity": 0.15 },
     },
@@ -96,21 +113,20 @@ const COSE_DEFAULTS = {
 function buildElements(data) {
     const elements = [];
     data.nodes.forEach(n => {
-        elements.push({
-            group: "nodes",
-            data: {
-                id: n.id,
-                name: n.name,
-                qualified_name: n.qualified_name || n.name,
-                kind: n.kind,
-                nodeGroup: n.group,
-                compound_refid: n.compound_refid || "",
-                description: n.description || "",
-                url: n.url || "",
-                color: KIND_COLORS[n.kind] || "#999",
-                shape: "ellipse",
-            },
-        });
+        const nodeData = {
+            id: n.id,
+            name: n.name,
+            qualified_name: n.qualified_name || n.name,
+            kind: n.kind,
+            nodeGroup: n.group,
+            compound_refid: n.compound_refid || "",
+            description: n.description || "",
+            url: n.url || "",
+            color: KIND_COLORS[n.kind] || "#999",
+            shape: "ellipse",
+        };
+        if (n.parent) nodeData.parent = n.parent;
+        elements.push({ group: "nodes", data: nodeData });
     });
     data.edges.forEach((e, i) => {
         elements.push({

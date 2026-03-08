@@ -127,9 +127,23 @@ def _ontology_node_to_dict(node):
 
 def ontology_graph_data(request):
     """Return the full ontology graph as JSON for Cytoscape visualization."""
+    all_nodes = list(OntologyNode.objects.all())
+
+    # Build lookup: qualified_name -> graph id for namespaces
+    ns_by_qname = {
+        n.qualified_name: f"node-{n.pk}"
+        for n in all_nodes
+        if n.kind == "namespace"
+    }
+
     nodes = []
-    for node in OntologyNode.objects.all():
-        nodes.append(_ontology_node_to_dict(node))
+    for node in all_nodes:
+        d = _ontology_node_to_dict(node)
+        # Derive parent namespace from qualified_name (e.g. "calc::gui::Foo" -> "calc::gui")
+        parts = node.qualified_name.rsplit("::", 1)
+        if len(parts) == 2 and parts[0] in ns_by_qname:
+            d["parent"] = ns_by_qname[parts[0]]
+        nodes.append(d)
 
     edges = []
     for triple in OntologyTriple.objects.select_related("subject", "object").all():
