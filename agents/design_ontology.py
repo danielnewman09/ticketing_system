@@ -66,21 +66,15 @@ def format_requirements_for_prompt(hlrs, llrs):
     """Format HLR/LLR data into a text block for the agent prompt."""
     lines = []
     for hlr in hlrs:
-        lines.append(f"HLR {hlr['id']}: {hlr['actor']} {hlr['action']} {hlr['subject']}")
-        if hlr.get("description"):
-            lines.append(f"  Description: {hlr['description']}")
+        lines.append(f"HLR {hlr['id']}: {hlr['description']}")
         for llr in [l for l in llrs if l["hlr_id"] == hlr["id"]]:
-            lines.append(f"  LLR {llr['id']}: {llr['actor']} {llr['action']} {llr['subject']}")
-            if llr.get("description"):
-                lines.append(f"    Description: {llr['description']}")
+            lines.append(f"  LLR {llr['id']}: {llr['description']}")
     # Unlinked LLRs
     unlinked = [l for l in llrs if l["hlr_id"] is None]
     if unlinked:
         lines.append("\nUnlinked LLRs:")
         for llr in unlinked:
-            lines.append(f"  LLR {llr['id']}: {llr['actor']} {llr['action']} {llr['subject']}")
-            if llr.get("description"):
-                lines.append(f"    Description: {llr['description']}")
+            lines.append(f"  LLR {llr['id']}: {llr['description']}")
     return "\n".join(lines)
 
 
@@ -88,8 +82,8 @@ def design(hlrs: list[dict], llrs: list[dict], model: str = "claude-sonnet-4-202
     """
     Takes lists of HLR/LLR dicts and returns an ontology design.
 
-    Each HLR dict: {id, actor, action, subject, description}
-    Each LLR dict: {id, hlr_id, actor, action, subject, description}
+    Each HLR dict: {id, description}
+    Each LLR dict: {id, hlr_id, description}
     """
     client = anthropic.Anthropic()
 
@@ -130,9 +124,9 @@ if __name__ == "__main__":
     from django.db.models import F
     from requirements.models import HighLevelRequirement, LowLevelRequirement
 
-    hlrs = list(HighLevelRequirement.objects.values("id", "actor", "action", "subject", "description"))
+    hlrs = list(HighLevelRequirement.objects.values("id", "description"))
     llrs = list(LowLevelRequirement.objects.values(
-        "id", "actor", "action", "subject", "description",
+        "id", "description",
     ).annotate(hlr_id=F("high_level_requirement_id")))
 
     if not hlrs:

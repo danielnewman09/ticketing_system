@@ -9,19 +9,13 @@ class LowLevelRequirementForm(forms.ModelForm):
         model = LowLevelRequirement
         fields = [
             "high_level_requirement",
-            "actor",
-            "action",
-            "subject",
             "components",
             "description",
         ]
         widgets = {
             "high_level_requirement": forms.Select(attrs={"class": "form-select"}),
-            "actor": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., The end user"}),
-            "action": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., presses the + button"}),
-            "subject": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., in the GUI"}),
             "components": forms.CheckboxSelectMultiple(),
-            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Optional additional detail"}),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Describe the low-level requirement"}),
         }
         labels = {
             "high_level_requirement": "Parent HLR",

@@ -18,16 +18,9 @@
 <div class="row">
     <div class="col-md-6">
         <div class="card mb-3">
-            <div class="card-header py-2 small fw-bold">Requirement Statement</div>
+            <div class="card-header py-2 small fw-bold">Description</div>
             <div class="card-body">
-                <table class="table table-sm mb-0">
-                    <tr><th style="width:120px">Actor</th><td>{{ hlr.actor|default:"-" }}</td></tr>
-                    <tr><th>Action</th><td>{{ hlr.action|default:"-" }}</td></tr>
-                    <tr><th>Subject</th><td>{{ hlr.subject|default:"-" }}</td></tr>
-                </table>
-                {% if hlr.description %}
-                <p class="mt-2 mb-0 small text-muted">{{ hlr.description }}</p>
-                {% endif %}
+                <p class="mb-0">{{ hlr.description }}</p>
             </div>
         </div>
 
@@ -39,12 +32,12 @@
             <div class="card-body p-0">
                 {% if hlr.low_level_requirements.all %}
                 <table class="table table-sm mb-0">
-                    <thead><tr><th>ID</th><th>Statement</th><th>Verification</th></tr></thead>
+                    <thead><tr><th>ID</th><th>Description</th><th>Verification</th></tr></thead>
                     <tbody>
                         {% for llr in hlr.low_level_requirements.all %}
                         <tr>
                             <td><a href="{% url 'llr_detail' llr.pk %}">{{ llr.pk }}</a></td>
-                            <td><a href="{% url 'llr_detail' llr.pk %}" class="text-decoration-none">{{ llr.statement }}</a></td>
+                            <td><a href="{% url 'llr_detail' llr.pk %}" class="text-decoration-none">{{ llr.description|truncatewords:15 }}</a></td>
                             <td>
                                 {% for v in llr.verifications.all %}
                                 <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>

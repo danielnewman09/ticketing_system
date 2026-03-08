@@ -12,9 +12,7 @@
     <thead>
         <tr>
             <th>LLR ID</th>
-            <th>Actor</th>
-            <th>Action</th>
-            <th>Subject</th>
+            <th>Description</th>
             <th>Parent HLR</th>
             <th>Verification</th>
         </tr>
@@ -22,16 +20,18 @@
     <tbody>
         {% for llr in requirements %}
         <tr>
-            <td>{{ llr.id }}</td>
-            <td><span class="badge bg-secondary">{{ llr.actor }}</span></td>
-            <td><span class="text-primary fw-bold">{{ llr.action }}</span></td>
-            <td><span class="badge bg-info text-dark">{{ llr.subject }}</span></td>
+            <td><a href="{% url 'llr_detail' llr.pk %}">{{ llr.id }}</a></td>
+            <td>{{ llr.description|truncatewords:20 }}</td>
             <td>
                 {% if llr.high_level_requirement %}
-                HLR {{ llr.high_level_requirement.id }}: {{ llr.high_level_requirement.statement }}
+                <a href="{% url 'hlr_detail' llr.high_level_requirement.pk %}">HLR {{ llr.high_level_requirement.id }}</a>: {{ llr.high_level_requirement.description|truncatewords:10 }}
                 {% else %}-{% endif %}
             </td>
-            <td><span class="badge bg-{% if llr.verification == 'automated' %}success{% elif llr.verification == 'review' %}warning{% else %}info{% endif %}">{{ llr.verification }}</span></td>
+            <td>
+                {% for v in llr.verifications.all %}
+                <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>
+                {% empty %}<span class="text-muted">-</span>{% endfor %}
+            </td>
         </tr>
         {% endfor %}
     </tbody>

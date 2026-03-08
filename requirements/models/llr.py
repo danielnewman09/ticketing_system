@@ -14,10 +14,7 @@ class LowLevelRequirement(models.Model):
         blank=True,
         related_name="low_level_requirements",
     )
-    actor = models.CharField(max_length=200, default="", help_text="Who performs the action (e.g., 'the end user')")
-    action = models.CharField(max_length=200, default="", help_text="What they do (e.g., 'presses the + button')")
-    subject = models.CharField(max_length=200, default="", help_text="What they act on (e.g., 'in the GUI')")
-    description = models.TextField(blank=True)
+    description = models.TextField()
     components = models.ManyToManyField(
         "components.Component",
         related_name="low_level_requirements",
@@ -36,13 +33,7 @@ class LowLevelRequirement(models.Model):
         db_table = "low_level_requirements"
 
     def __str__(self):
-        if self.actor or self.action or self.subject:
-            return f"{self.actor} {self.action} {self.subject}"
         return self.description[:80] if self.description else f"LLR {self.pk}"
-
-    @property
-    def statement(self):
-        return f"{self.actor} {self.action} {self.subject}"
 
 
 class LLRVerification(models.Model):

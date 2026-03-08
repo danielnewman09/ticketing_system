@@ -1,7 +1,6 @@
 """
-Agent that decomposes a high-level requirement description into structured
-Actor/Action/Subject for the HLR itself, plus low-level requirements with
-verification methods.
+Agent that decomposes a high-level requirement description into
+low-level requirements with verification methods.
 
 Can be used standalone (CLI) or imported by Django views/management commands.
 """
@@ -14,15 +13,12 @@ from requirements.schemas import DecomposedRequirementSchema as DecomposedRequir
 
 SYSTEM_PROMPT = """\
 You are a requirements engineering agent. Your job is to decompose a high-level
-requirement description into a structured breakdown.
+requirement description into low-level requirements.
 
-For the high-level requirement itself, identify:
-- actor: who performs the action (e.g., "A developer", "The end user")
-- action: what they do (e.g., "compiles", "interacts with")
-- subject: what they act on (e.g., "the codebase", "the GUI")
+For the high-level requirement itself, provide a clear prose description that
+captures the intent.
 
 Then decompose it into low-level requirements. Each LLR should:
-- Have its own actor/action/subject at a more granular level
 - Include a prose description of the specific behavior
 - Have one or more verification methods, each with:
   - method: one of "automated", "review", or "inspection"

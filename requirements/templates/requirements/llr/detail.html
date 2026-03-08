@@ -18,16 +18,9 @@
 <div class="row">
     <div class="col-md-6">
         <div class="card mb-3">
-            <div class="card-header py-2 small fw-bold">Requirement Statement</div>
+            <div class="card-header py-2 small fw-bold">Description</div>
             <div class="card-body">
-                <table class="table table-sm mb-0">
-                    <tr><th style="width:120px">Actor</th><td>{{ llr.actor|default:"-" }}</td></tr>
-                    <tr><th>Action</th><td>{{ llr.action|default:"-" }}</td></tr>
-                    <tr><th>Subject</th><td>{{ llr.subject|default:"-" }}</td></tr>
-                </table>
-                {% if llr.description %}
-                <p class="mt-2 mb-0 small text-muted">{{ llr.description }}</p>
-                {% endif %}
+                <p class="mb-0">{{ llr.description }}</p>
             </div>
         </div>
 
@@ -38,7 +31,7 @@
                 <a href="{% url 'hlr_detail' llr.high_level_requirement.pk %}">
                     HLR {{ llr.high_level_requirement.pk }}:
                 </a>
-                {{ llr.high_level_requirement.statement }}
+                {{ llr.high_level_requirement.description|truncatewords:20 }}
             </div>
         </div>
         {% endif %}

@@ -32,15 +32,10 @@ class VerificationSchema(BaseModel):
 
 
 class LowLevelRequirementSchema(BaseModel):
-    actor: str
-    action: str
-    subject: str
     description: str
     verifications: list[VerificationSchema]
 
 
 class DecomposedRequirementSchema(BaseModel):
-    actor: str
-    action: str
-    subject: str
+    description: str
     low_level_requirements: list[LowLevelRequirementSchema]

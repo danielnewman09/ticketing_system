@@ -10,28 +10,6 @@
         {% if form.high_level_requirement.errors %}<div class="invalid-feedback d-block">{{ form.high_level_requirement.errors }}</div>{% endif %}
         <div class="form-text">Select which high-level requirement this decomposes. Leave blank if unlinked.</div>
     </div>
-    <div class="card mb-3">
-        <div class="card-header">Actor / Action / Subject</div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="{{ form.actor.id_for_label }}" class="form-label">Actor</label>
-                    {{ form.actor }}
-                    {% if form.actor.errors %}<div class="invalid-feedback d-block">{{ form.actor.errors }}</div>{% endif %}
-                </div>
-                <div class="col-md-4 mb-3">
-                    <label for="{{ form.action.id_for_label }}" class="form-label">Action</label>
-                    {{ form.action }}
-                    {% if form.action.errors %}<div class="invalid-feedback d-block">{{ form.action.errors }}</div>{% endif %}
-                </div>
-                <div class="col-md-4 mb-3">
-                    <label for="{{ form.subject.id_for_label }}" class="form-label">Subject</label>
-                    {{ form.subject }}
-                    {% if form.subject.errors %}<div class="invalid-feedback d-block">{{ form.subject.errors }}</div>{% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
     <div class="card mb-3" x-data="verificationFormset({{ verification_formset.total_form_count }})">
         <div class="card-header">Verification Methods</div>
         <div class="card-body">

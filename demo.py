@@ -71,17 +71,11 @@ def step_decompose():
 
         with transaction.atomic():
             hlr = HighLevelRequirement.objects.create(
-                actor=result.actor,
-                action=result.action,
-                subject=result.subject,
                 description=desc,
             )
             for llr_data in result.low_level_requirements:
                 llr = LowLevelRequirement.objects.create(
                     high_level_requirement=hlr,
-                    actor=llr_data.actor,
-                    action=llr_data.action,
-                    subject=llr_data.subject,
                     description=llr_data.description,
                 )
                 for v in llr_data.verifications:
@@ -93,7 +87,7 @@ def step_decompose():
                     )
 
         llr_count = hlr.low_level_requirements.count()
-        print(f"    -> HLR {hlr.pk}: {hlr.actor} | {hlr.action} | {hlr.subject}")
+        print(f"    -> HLR {hlr.pk}: {desc[:60]}")
         print(f"       {llr_count} LLRs generated\n")
 
     total_hlrs = HighLevelRequirement.objects.count()
@@ -107,11 +101,9 @@ def step_design():
     print("=" * 60)
     print("  Feeding all requirements to the design agent...\n")
 
-    hlrs = list(HighLevelRequirement.objects.values(
-        "id", "actor", "action", "subject", "description",
-    ))
+    hlrs = list(HighLevelRequirement.objects.values("id", "description"))
     llrs = list(LowLevelRequirement.objects.values(
-        "id", "actor", "action", "subject", "description",
+        "id", "description",
     ).annotate(hlr_id=F("high_level_requirement_id")))
 
     result = design(hlrs, llrs)
@@ -190,7 +182,7 @@ def step_summary():
 
     # Show which HLRs got linked
     for hlr in HighLevelRequirement.objects.prefetch_related("triples__subject", "triples__object").all():
-        print(f"\n  HLR {hlr.pk}: {hlr.actor} | {hlr.action} | {hlr.subject}")
+        print(f"\n  HLR {hlr.pk}: {hlr.description[:60]}")
         for triple in hlr.triples.all():
             print(f"    -> {triple.subject.name} --{triple.predicate}--> {triple.object.name}")
         if not hlr.triples.exists():

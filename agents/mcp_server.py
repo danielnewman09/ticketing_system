@@ -29,8 +29,8 @@ def decompose_requirement(
     model: str = "claude-sonnet-4-20250514",
     dry_run: bool = False,
 ) -> str:
-    """Decompose a high-level requirement into structured actor/action/subject
-    with low-level requirements and verification methods.
+    """Decompose a high-level requirement into low-level requirements
+    with verification methods.
 
     Args:
         description: Human-written high-level requirement description.
@@ -42,17 +42,11 @@ def decompose_requirement(
     if not dry_run:
         with transaction.atomic():
             hlr = HighLevelRequirement.objects.create(
-                actor=result.actor,
-                action=result.action,
-                subject=result.subject,
                 description=description,
             )
             for llr_data in result.low_level_requirements:
                 llr = LowLevelRequirement.objects.create(
                     high_level_requirement=hlr,
-                    actor=llr_data.actor,
-                    action=llr_data.action,
-                    subject=llr_data.subject,
                     description=llr_data.description,
                 )
                 for v_data in llr_data.verifications:
