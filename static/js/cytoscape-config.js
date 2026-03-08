@@ -37,6 +37,12 @@ const CYTOSCAPE_STYLES = [
         },
     },
     {
+        selector: "node[url]",
+        style: {
+            "cursor": "pointer",
+        },
+    },
+    {
         selector: "node:selected",
         style: {
             "border-width": 3,
@@ -102,6 +108,7 @@ function buildElements(data) {
                 nodeGroup: n.group,
                 compound_refid: n.compound_refid || "",
                 description: n.description || "",
+                url: n.url || "",
                 color: KIND_COLORS[n.kind] || "#999",
                 shape: n.group === "requirement" ? "round-rectangle" : "ellipse",
             },

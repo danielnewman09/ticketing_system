@@ -1,4 +1,4 @@
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView
 
 from requirements.models import HighLevelRequirement, LowLevelRequirement
@@ -42,6 +42,7 @@ def _build_requirement_graph(req):
                     "group": "ontology",
                     "compound_refid": ont_node.compound_refid,
                     "description": ont_node.description,
+                    "url": reverse("ontology_node_detail", kwargs={"pk": ont_node.pk}),
                 })
         edges.append({
             "source": f"node-{triple.subject_id}",

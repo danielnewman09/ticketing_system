@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ node.name }}{% endblock %}
+{% block head %}
+<script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
+<script src="{% static 'js/cytoscape-config.js' %}"></script>
+<script src="{% static 'js/requirement-graph.js' %}"></script>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>
+        <span class="badge bg-secondary me-2" style="font-size:0.5em; vertical-align:middle;">{{ node.get_kind_display }}</span>
+        {{ node.name }}
+    </h1>
+    <div>
+        <a href="{% url 'ontology_graph' %}" class="btn btn-outline-secondary btn-sm">Graph</a>
+        <a href="{% url 'ontology_node_list' %}" class="btn btn-outline-secondary btn-sm">Node List</a>
+        <a href="{% url 'ontology_node_update' node.pk %}" class="btn btn-primary btn-sm">Edit</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Details</div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr><th style="width:140px">Qualified Name</th><td><code>{{ node.qualified_name|default:"-" }}</code></td></tr>
+                    <tr><th>Kind</th><td>{{ node.get_kind_display }}</td></tr>
+                    {% if node.compound_refid %}
+                    <tr><th>Compound Refid</th><td><code>{{ node.compound_refid }}</code></td></tr>
+                    {% endif %}
+                </table>
+                {% if node.description %}
+                <p class="mt-2 mb-0 small text-muted">{{ node.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if compound %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Compound (from codebase)</div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr><th style="width:140px">Name</th><td><code>{{ compound.qualified_name }}</code></td></tr>
+                    <tr><th>Kind</th><td>{{ compound.kind }}</td></tr>
+                    {% if compound.file %}
+                    <tr><th>File</th><td><code>{{ compound.file.path|default:compound.file.name }}</code>{% if compound.line_number %}<span class="text-muted">:{{ compound.line_number }}</span>{% endif %}</td></tr>
+                    {% endif %}
+                    {% if compound.base_classes %}
+                    <tr><th>Base Classes</th><td><code>{{ compound.base_classes }}</code></td></tr>
+                    {% endif %}
+                    {% if compound.brief_description %}
+                    <tr><th>Brief</th><td>{{ compound.brief_description }}</td></tr>
+                    {% endif %}
+                </table>
+                {% if compound.detailed_description %}
+                <p class="mt-2 mb-0 small text-muted">{{ compound.detailed_description }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if members %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Members</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Kind</th><th>Name</th><th>Type / Signature</th><th>Visibility</th></tr></thead>
+                    <tbody>
+                        {% for m in members %}
+                        <tr>
+                            <td><span class="badge bg-secondary">{{ m.kind }}</span></td>
+                            <td><code>{{ m.name }}</code></td>
+                            <td class="small">
+                                {% if m.type %}<code>{{ m.type }}</code>{% endif %}
+                                {% if m.argsstring %}<code>{{ m.argsstring }}</code>{% endif %}
+                            </td>
+                            <td>
+                                {% if m.protection %}
+                                <span class="badge bg-{% if m.protection == 'public' %}success{% elif m.protection == 'protected' %}warning{% else %}danger{% endif %}">{{ m.protection }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Ontology Triples</div>
+            <div class="card-body p-0">
+                {% if node.triples_as_subject.all or node.triples_as_object.all %}
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead>
+                    <tbody>
+                        {% for t in node.triples_as_subject.all %}
+                        <tr>
+                            <td><strong>{{ t.subject.name }}</strong></td>
+                            <td><code>{{ t.predicate }}</code></td>
+                            <td><a href="{% url 'ontology_node_detail' t.object.pk %}">{{ t.object.name }}</a></td>
+                        </tr>
+                        {% endfor %}
+                        {% for t in node.triples_as_object.all %}
+                        <tr>
+                            <td><a href="{% url 'ontology_node_detail' t.subject.pk %}">{{ t.subject.name }}</a></td>
+                            <td><code>{{ t.predicate }}</code></td>
+                            <td><strong>{{ t.object.name }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0 p-3 small">No triples.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-3" x-data="requirementGraph('{% url 'ontology_node_graph_data' node.pk %}')">
+            <div class="card-header py-2 small fw-bold">Neighborhood Graph</div>
+            <div class="card-body p-0">
+                <div x-ref="cy" style="width:100%; height:400px;"></div>
+            </div>
+        </div>
+
+        {% if linked_hlrs %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Linked HLRs</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        {% for hlr in linked_hlrs %}
+                        <tr>
+                            <td><a href="{% url 'hlr_detail' hlr.pk %}">HLR {{ hlr.pk }}</a></td>
+                            <td>{{ hlr.statement }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if linked_llrs %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Linked LLRs</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        {% for llr in linked_llrs %}
+                        <tr>
+                            <td><a href="{% url 'llr_detail' llr.pk %}">LLR {{ llr.pk }}</a></td>
+                            <td>{{ llr.statement }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

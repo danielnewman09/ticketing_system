@@ -97,6 +97,7 @@
                             <p class="text-muted small mb-0" x-show="selectedNode.compound_refid">
                                 refid: <code x-text="selectedNode.compound_refid"></code>
                             </p>
+                            <a class="btn btn-sm btn-outline-primary mt-2" x-show="selectedNode.url" :href="selectedNode.url">View Details</a>
                             <template x-if="selectedNode.outgoing.length > 0">
                                 <div>
                                     <p class="mt-2 mb-0 small"><strong>Outgoing:</strong></p>

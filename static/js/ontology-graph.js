@@ -41,6 +41,11 @@ function ontologyGraph(dataUrl) {
                 this.selectNode(evt.target);
             });
 
+            this.cy.on("dbltap", "node", evt => {
+                const url = evt.target.data("url");
+                if (url) window.location.href = url;
+            });
+
             this.cy.on("tap", evt => {
                 if (evt.target === this.cy) {
                     this.selectedNode = null;
@@ -59,6 +64,7 @@ function ontologyGraph(dataUrl) {
                 nodeGroup: d.nodeGroup,
                 description: d.description,
                 compound_refid: d.compound_refid,
+                url: d.url,
                 outgoing: outgoing.map(e => ({
                     label: e.data("label"),
                     target: e.target().data("name"),
