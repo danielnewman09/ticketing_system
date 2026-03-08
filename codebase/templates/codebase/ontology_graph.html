@@ -37,17 +37,6 @@
                         <option value="namespace">Namespace</option>
                         <option value="interface">Interface</option>
                         <option value="concept">Concept</option>
-                        <option value="hlr">HLR</option>
-                        <option value="llr">LLR</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label mb-0 small fw-bold">Group</label>
-                    <select class="form-select form-select-sm" style="width:140px"
-                            x-model="filterGroup" @change="applyFilters()">
-                        <option value="all">All groups</option>
-                        <option value="ontology">Ontology</option>
-                        <option value="requirement">Requirements</option>
                     </select>
                 </div>
                 <div>
@@ -90,8 +79,7 @@
                     <template x-if="selectedNode">
                         <div>
                             <strong x-text="selectedNode.qualified_name"></strong>
-                            <span class="badge ms-1"
-                                  :class="selectedNode.nodeGroup === 'requirement' ? 'bg-warning text-dark' : 'bg-secondary'"
+                            <span class="badge bg-secondary ms-1"
                                   x-text="selectedNode.kind"></span>
                             <p class="mt-2 mb-1 small" x-show="selectedNode.description" x-text="selectedNode.description"></p>
                             <p class="text-muted small mb-0" x-show="selectedNode.compound_refid">

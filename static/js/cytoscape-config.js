@@ -11,8 +11,6 @@ const KIND_COLORS = {
     "namespace": "#76b7b2",
     "interface": "#b07aa1",
     "concept": "#edc948",
-    "hlr": "#ff7f0e",
-    "llr": "#9467bd",
 };
 
 const DEFAULT_EDGE_COLOR = "#888";
@@ -110,7 +108,7 @@ function buildElements(data) {
                 description: n.description || "",
                 url: n.url || "",
                 color: KIND_COLORS[n.kind] || "#999",
-                shape: n.group === "requirement" ? "round-rectangle" : "ellipse",
+                shape: "ellipse",
             },
         });
     });

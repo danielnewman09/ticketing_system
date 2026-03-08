@@ -6,7 +6,6 @@ function ontologyGraph(dataUrl) {
     return {
         cy: null,
         filterKind: "all",
-        filterGroup: "all",
         search: "",
         layout: "cose",
         selectedNode: null,
@@ -79,7 +78,6 @@ function ontologyGraph(dataUrl) {
         applyFilters() {
             if (!this.cy) return;
             const kind = this.filterKind;
-            const group = this.filterGroup;
             const search = this.search.toLowerCase().trim();
 
             this.cy.batch(() => {
@@ -89,9 +87,6 @@ function ontologyGraph(dataUrl) {
                 if (kind !== "all") {
                     matched = matched.filter(n => n.data("kind") === kind);
                 }
-                if (group !== "all") {
-                    matched = matched.filter(n => n.data("nodeGroup") === group);
-                }
                 if (search) {
                     matched = matched.filter(n =>
                         n.data("name").toLowerCase().includes(search) ||
@@ -99,7 +94,7 @@ function ontologyGraph(dataUrl) {
                     );
                 }
 
-                if (kind !== "all" || group !== "all" || search) {
+                if (kind !== "all" || search) {
                     this.cy.elements().addClass("faded");
                     const neighborhood = matched
                         .union(matched.connectedEdges())
@@ -131,7 +126,6 @@ function ontologyGraph(dataUrl) {
 
         reset() {
             this.filterKind = "all";
-            this.filterGroup = "all";
             this.search = "";
             this.selectedNode = null;
             if (this.cy) {
@@ -173,10 +167,6 @@ function ontologyGraph(dataUrl) {
                 ["interface", "Interface", KIND_COLORS.interface],
                 ["concept", "Concept", KIND_COLORS.concept],
             ], "circle");
-            section("Requirements", [
-                ["hlr", "High-Level Req", KIND_COLORS.hlr],
-                ["llr", "Low-Level Req", KIND_COLORS.llr],
-            ], "rect");
             section("Edges", [
                 ["triple", "Predicate (triple)", DEFAULT_EDGE_COLOR],
             ], "line");

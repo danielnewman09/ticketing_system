@@ -127,8 +127,6 @@ def _ontology_node_to_dict(node):
 
 def ontology_graph_data(request):
     """Return the full ontology graph as JSON for Cytoscape visualization."""
-    from django.urls import reverse
-
     nodes = []
     for node in OntologyNode.objects.all():
         nodes.append(_ontology_node_to_dict(node))
@@ -140,39 +138,6 @@ def ontology_graph_data(request):
             "target": f"node-{triple.object_id}",
             "predicate": triple.predicate,
         })
-
-    # Add requirement nodes connected via their triples
-    def add_requirement_nodes(requirements, req_type):
-        detail_name = "hlr_detail" if req_type == "hlr" else "llr_detail"
-        for req in requirements.prefetch_related("triples__subject", "triples__object"):
-            req_triples = list(req.triples.all())
-            if not req_triples:
-                continue
-            req_id = f"{req_type}-{req.pk}"
-            nodes.append({
-                "id": req_id,
-                "name": f"{req_type.upper()} {req.pk}",
-                "qualified_name": str(req),
-                "kind": req_type,
-                "group": "requirement",
-                "description": req.description,
-                "url": reverse(detail_name, kwargs={"pk": req.pk}),
-            })
-            for triple in req_triples:
-                edges.append({
-                    "source": req_id,
-                    "target": f"node-{triple.subject_id}",
-                    "predicate": triple.predicate,
-                })
-                if triple.subject_id != triple.object_id:
-                    edges.append({
-                        "source": req_id,
-                        "target": f"node-{triple.object_id}",
-                        "predicate": triple.predicate,
-                    })
-
-    add_requirement_nodes(HighLevelRequirement.objects, "hlr")
-    add_requirement_nodes(LowLevelRequirement.objects, "llr")
 
     return JsonResponse({"nodes": nodes, "edges": edges})
 
