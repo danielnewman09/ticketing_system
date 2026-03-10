@@ -1,6 +1,7 @@
 from .common import RequirementListView
 from .hlr import HLRCreateView, HLRUpdateView, HLRDetailView, hlr_graph_data
 from .llr import LLRCreateView, LLRUpdateView, LLRDetailView, llr_graph_data
+from .verification import VerificationDetailView, VerificationEditView
 
 __all__ = [
     "RequirementListView",
@@ -12,4 +13,6 @@ __all__ = [
     "LLRUpdateView",
     "LLRDetailView",
     "llr_graph_data",
+    "VerificationDetailView",
+    "VerificationEditView",
 ]

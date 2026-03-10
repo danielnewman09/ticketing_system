@@ -12,4 +12,6 @@ urlpatterns = [
     path("llr/<int:pk>/update/", views.LLRUpdateView.as_view(), name="llr_update"),
     path("<int:pk>/update/", views.LLRUpdateView.as_view(), name="requirement_update"),
     path("llr/<int:pk>/graph/", views.llr_graph_data, name="llr_graph_data"),
+    path("verification/<int:pk>/", views.VerificationDetailView.as_view(), name="verification_detail"),
+    path("verification/<int:pk>/edit/", views.VerificationEditView.as_view(), name="verification_edit"),
 ]

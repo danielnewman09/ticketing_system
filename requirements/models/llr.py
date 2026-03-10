@@ -3,9 +3,6 @@ from django.db import models
 from .hlr import HighLevelRequirement
 
 
-VERIFICATION_METHODS = ["automated", "review", "inspection"]
-
-
 class LowLevelRequirement(models.Model):
     high_level_requirement = models.ForeignKey(
         HighLevelRequirement,
@@ -37,6 +34,9 @@ class LowLevelRequirement(models.Model):
 
 
 class LLRVerification(models.Model):
+    """Deprecated: replaced by VerificationMethod. Kept for data migration."""
+
+    VERIFICATION_METHODS = ["automated", "review", "inspection"]
     VERIFICATION_CHOICES = [
         (m, m.capitalize()) for m in VERIFICATION_METHODS
     ]
@@ -44,30 +44,18 @@ class LLRVerification(models.Model):
     low_level_requirement = models.ForeignKey(
         LowLevelRequirement,
         on_delete=models.CASCADE,
-        related_name="verifications",
+        related_name="legacy_verifications",
     )
     method = models.CharField(max_length=20, choices=VERIFICATION_CHOICES)
-    confirmation = models.TextField(
-        blank=True,
-        help_text="How the behavior is confirmed (e.g., 'the operator field is populated with the ADDITION enum value')",
-    )
-    test_name = models.CharField(
-        max_length=300,
-        blank=True,
-        help_text="Test that verifies this (e.g., 'user_presses_addition_key')",
-    )
+    confirmation = models.TextField(blank=True)
+    test_name = models.CharField(max_length=300, blank=True)
 
     class Meta:
         app_label = "requirements"
         db_table = "llr_verifications"
 
     def __str__(self):
-        parts = [self.get_method_display()]
-        if self.confirmation:
-            parts.append(self.confirmation[:60])
-        if self.test_name:
-            parts.append(f"[{self.test_name}]")
-        return " - ".join(parts)
+        return f"{self.get_method_display()} - {self.test_name or self.confirmation[:60]}"
 
 
 class TicketRequirement(models.Model):

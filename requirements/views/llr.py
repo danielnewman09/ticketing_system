@@ -3,7 +3,10 @@ from django.urls import reverse_lazy
 from django.views.generic import DetailView, CreateView, UpdateView
 
 from requirements.models import LowLevelRequirement
-from requirements.forms import LowLevelRequirementForm, LLRVerificationFormSet
+from requirements.forms import (
+    LowLevelRequirementForm,
+    VerificationMethodFormSet,
+)
 
 from .common import _build_requirement_graph
 
@@ -18,9 +21,9 @@ class LLRCreateView(CreateView):
         context = super().get_context_data(**kwargs)
         context["title"] = "Create Low-Level Requirement"
         if self.request.POST:
-            context["verification_formset"] = LLRVerificationFormSet(self.request.POST)
+            context["verification_formset"] = VerificationMethodFormSet(self.request.POST)
         else:
-            context["verification_formset"] = LLRVerificationFormSet()
+            context["verification_formset"] = VerificationMethodFormSet()
         return context
 
     def get_initial(self):
@@ -53,9 +56,9 @@ class LLRUpdateView(UpdateView):
         context = super().get_context_data(**kwargs)
         context["title"] = f"Edit Requirement #{self.object.pk}"
         if self.request.POST:
-            context["verification_formset"] = LLRVerificationFormSet(self.request.POST, instance=self.object)
+            context["verification_formset"] = VerificationMethodFormSet(self.request.POST, instance=self.object)
         else:
-            context["verification_formset"] = LLRVerificationFormSet(instance=self.object)
+            context["verification_formset"] = VerificationMethodFormSet(instance=self.object)
         return context
 
     def form_valid(self, form):
@@ -78,7 +81,8 @@ class LLRDetailView(DetailView):
             "high_level_requirement",
         ).prefetch_related(
             "components",
-            "verifications",
+            "verifications__conditions",
+            "verifications__actions",
             "triples__subject",
             "triples__object",
         )

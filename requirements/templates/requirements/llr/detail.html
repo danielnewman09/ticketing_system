@@ -36,25 +36,78 @@
         </div>
         {% endif %}
 
-        {% if llr.verifications.all %}
+        {% for v in llr.verifications.all %}
         <div class="card mb-3">
-            <div class="card-header py-2 small fw-bold">Verifications</div>
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <span class="small fw-bold">
+                    <a href="{% url 'verification_detail' v.pk %}" class="text-decoration-none">Verification {{ v.pk }}</a>:
+                    <span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span>
+                </span>
+                {% if v.test_name %}
+                <code class="small">{{ v.test_name }}</code>
+                {% endif %}
+            </div>
             <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead><tr><th>Method</th><th>Confirmation</th><th>Test</th></tr></thead>
-                    <tbody>
-                        {% for v in llr.verifications.all %}
-                        <tr>
-                            <td><span class="badge bg-{% if v.method == 'automated' %}success{% elif v.method == 'review' %}warning{% else %}info{% endif %}">{{ v.get_method_display }}</span></td>
-                            <td>{{ v.confirmation|default:"-" }}</td>
-                            <td>{% if v.test_name %}<code>{{ v.test_name }}</code>{% else %}-{% endif %}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                {% if v.description %}
+                <div class="px-3 py-2 border-bottom small text-muted">{{ v.description }}</div>
+                {% endif %}
+
+                {% with preconditions=v.preconditions %}
+                {% if preconditions %}
+                <div class="px-3 py-2 border-bottom">
+                    <div class="small fw-bold text-secondary mb-1">Pre-conditions</div>
+                    {% for c in preconditions %}
+                    <div class="small font-monospace">
+                        <code>{{ c.member_qualified_name }}</code>
+                        <span class="text-muted">{{ c.operator }}</span>
+                        <code>{{ c.expected_value }}</code>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {% with actions=v.actions.all %}
+                {% if actions %}
+                <div class="px-3 py-2 border-bottom">
+                    <div class="small fw-bold text-secondary mb-1">Actions</div>
+                    {% for a in actions %}
+                    <div class="small">
+                        <span class="badge bg-light text-dark me-1">{{ forloop.counter }}</span>
+                        {{ a.description }}
+                        {% if a.member_qualified_name %}
+                        <code class="ms-1">{{ a.member_qualified_name }}</code>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {% with postconditions=v.postconditions %}
+                {% if postconditions %}
+                <div class="px-3 py-2">
+                    <div class="small fw-bold text-secondary mb-1">Post-conditions</div>
+                    {% for c in postconditions %}
+                    <div class="small font-monospace">
+                        <code>{{ c.member_qualified_name }}</code>
+                        <span class="text-muted">{{ c.operator }}</span>
+                        <code>{{ c.expected_value }}</code>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
             </div>
         </div>
-        {% endif %}
+        {% empty %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Verifications</div>
+            <div class="card-body">
+                <span class="text-muted small">No verifications defined.</span>
+            </div>
+        </div>
+        {% endfor %}
 
         {% if llr.components.all %}
         <div class="card mb-3">

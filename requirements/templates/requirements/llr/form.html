@@ -21,8 +21,8 @@
                 <thead>
                     <tr>
                         <th>Method</th>
-                        <th>Confirmation</th>
                         <th>Test Name</th>
+                        <th>Description</th>
                         <th>Delete</th>
                     </tr>
                 </thead>
@@ -35,12 +35,12 @@
                             {% if vform.method.errors %}<div class="invalid-feedback d-block">{{ vform.method.errors }}</div>{% endif %}
                         </td>
                         <td>
-                            {{ vform.confirmation }}
-                            {% if vform.confirmation.errors %}<div class="invalid-feedback d-block">{{ vform.confirmation.errors }}</div>{% endif %}
-                        </td>
-                        <td>
                             {{ vform.test_name }}
                             {% if vform.test_name.errors %}<div class="invalid-feedback d-block">{{ vform.test_name.errors }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {{ vform.description }}
+                            {% if vform.description.errors %}<div class="invalid-feedback d-block">{{ vform.description.errors }}</div>{% endif %}
                         </td>
                         <td class="text-center">
                             {% if vform.instance.pk %}
@@ -52,6 +52,9 @@
                 </tbody>
             </table>
             <button type="button" class="btn btn-sm btn-outline-primary" @click="addRow()">+ Add Verification</button>
+        </div>
+        <div class="card-footer small text-muted">
+            Pre/post conditions and actions can be added after saving the verification method.
         </div>
     </div>
     <div class="mb-3">
@@ -82,7 +85,7 @@ function verificationFormset(initialCount) {
                 'verifications-' + (idx - 1) + '-',
                 'verifications-' + idx + '-'
             );
-            newRow.querySelectorAll('input, select').forEach(el => {
+            newRow.querySelectorAll('input, select, textarea').forEach(el => {
                 if (el.type === 'hidden' && el.name.endsWith('-id')) {
                     el.value = '';
                 } else if (el.type !== 'hidden') {

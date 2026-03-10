@@ -18,7 +18,7 @@ from django.db import transaction
 from mcp.server.fastmcp import FastMCP
 
 from agents.decompose_hlr import decompose
-from requirements.models import HighLevelRequirement, LowLevelRequirement, LLRVerification
+from requirements.models import HighLevelRequirement, LowLevelRequirement, VerificationMethod
 
 mcp = FastMCP("ticketing-system")
 
@@ -50,11 +50,11 @@ def decompose_requirement(
                     description=llr_data.description,
                 )
                 for v_data in llr_data.verifications:
-                    LLRVerification.objects.create(
+                    VerificationMethod.objects.create(
                         low_level_requirement=llr,
                         method=v_data.method,
-                        confirmation=v_data.confirmation,
                         test_name=v_data.test_name,
+                        description=v_data.description,
                     )
 
     output = result.model_dump()

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Verification {{ verification.pk }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>
+        Verification {{ verification.pk }}
+        <span class="badge bg-{% if verification.method == 'automated' %}success{% elif verification.method == 'review' %}warning{% else %}info{% endif %} fs-6">
+            {{ verification.get_method_display }}
+        </span>
+    </h1>
+    <div>
+        <a href="{% url 'llr_detail' verification.low_level_requirement.pk %}" class="btn btn-outline-secondary btn-sm">Back to LLR</a>
+        <a href="{% url 'verification_edit' verification.pk %}" class="btn btn-primary btn-sm">Edit</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        {% if verification.description %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Description</div>
+            <div class="card-body">
+                <p class="mb-0">{{ verification.description }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if verification.test_name %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Test Name</div>
+            <div class="card-body py-2">
+                <code>{{ verification.test_name }}</code>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Pre-conditions</div>
+            <div class="card-body p-0">
+                {% for c in verification.preconditions %}
+                <div class="px-3 py-2 {% if not forloop.last %}border-bottom{% endif %} font-monospace small">
+                    <code>{{ c.member_qualified_name }}</code>
+                    <span class="text-muted">{{ c.operator }}</span>
+                    <code>{{ c.expected_value }}</code>
+                    {% if c.ontology_node %}
+                    <a href="{% url 'ontology_node_detail' c.ontology_node.pk %}" class="badge bg-light text-dark ms-2 text-decoration-none">{{ c.ontology_node.name }}</a>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <p class="text-muted mb-0 p-3 small">No pre-conditions defined.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Actions</div>
+            <div class="card-body p-0">
+                {% for a in verification.actions.all %}
+                <div class="px-3 py-2 {% if not forloop.last %}border-bottom{% endif %} small">
+                    <span class="badge bg-light text-dark me-1">{{ forloop.counter }}</span>
+                    {{ a.description }}
+                    {% if a.ontology_node %}
+                    <a href="{% url 'ontology_node_detail' a.ontology_node.pk %}" class="badge bg-light text-dark ms-2 text-decoration-none">{{ a.ontology_node.name }}</a>
+                    {% endif %}
+                    {% if a.member_qualified_name %}
+                    <code class="ms-1">{{ a.member_qualified_name }}</code>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <p class="text-muted mb-0 p-3 small">No actions defined.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Post-conditions</div>
+            <div class="card-body p-0">
+                {% for c in verification.postconditions %}
+                <div class="px-3 py-2 {% if not forloop.last %}border-bottom{% endif %} font-monospace small">
+                    <code>{{ c.member_qualified_name }}</code>
+                    <span class="text-muted">{{ c.operator }}</span>
+                    <code>{{ c.expected_value }}</code>
+                    {% if c.ontology_node %}
+                    <a href="{% url 'ontology_node_detail' c.ontology_node.pk %}" class="badge bg-light text-dark ms-2 text-decoration-none">{{ c.ontology_node.name }}</a>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <p class="text-muted mb-0 p-3 small">No post-conditions defined.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Linked LLR</div>
+            <div class="card-body py-2">
+                <a href="{% url 'llr_detail' verification.low_level_requirement.pk %}">
+                    LLR {{ verification.low_level_requirement.pk }}
+                </a>:
+                {{ verification.low_level_requirement.description|truncatewords:20 }}
+            </div>
+        </div>
+        {% if verification.low_level_requirement.high_level_requirement %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Parent HLR</div>
+            <div class="card-body py-2">
+                <a href="{% url 'hlr_detail' verification.low_level_requirement.high_level_requirement.pk %}">
+                    HLR {{ verification.low_level_requirement.high_level_requirement.pk }}
+                </a>:
+                {{ verification.low_level_requirement.high_level_requirement.description|truncatewords:20 }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

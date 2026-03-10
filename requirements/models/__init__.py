@@ -1,9 +1,14 @@
 from .hlr import HighLevelRequirement
 from .llr import (
-    VERIFICATION_METHODS,
     LowLevelRequirement,
     LLRVerification,
     TicketRequirement,
+)
+from .verification import (
+    VERIFICATION_METHODS,
+    VerificationMethod,
+    VerificationCondition,
+    VerificationAction,
 )
 
 __all__ = [
@@ -12,4 +17,7 @@ __all__ = [
     "LLRVerification",
     "TicketRequirement",
     "VERIFICATION_METHODS",
+    "VerificationMethod",
+    "VerificationCondition",
+    "VerificationAction",
 ]

@@ -34,7 +34,7 @@ from codebase.models import OntologyNode, OntologyTriple
 from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
-    LLRVerification,
+    VerificationMethod,
 )
 
 # ---------------------------------------------------------------------------
@@ -79,11 +79,11 @@ def step_decompose():
                     description=llr_data.description,
                 )
                 for v in llr_data.verifications:
-                    LLRVerification.objects.create(
+                    VerificationMethod.objects.create(
                         low_level_requirement=llr,
                         method=v.method,
-                        confirmation=v.confirmation,
                         test_name=v.test_name,
+                        description=v.description,
                     )
 
         llr_count = hlr.low_level_requirements.count()
@@ -176,7 +176,7 @@ def step_summary():
     print("=" * 60)
     print(f"  HLRs:             {HighLevelRequirement.objects.count()}")
     print(f"  LLRs:             {LowLevelRequirement.objects.count()}")
-    print(f"  Verifications:    {LLRVerification.objects.count()}")
+    print(f"  Verifications:    {VerificationMethod.objects.count()}")
     print(f"  Ontology nodes:   {OntologyNode.objects.count()}")
     print(f"  Ontology triples: {OntologyTriple.objects.count()}")
 
