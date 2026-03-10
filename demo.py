@@ -30,10 +30,13 @@ from django.db.models import F
 
 from agents.decompose_hlr import decompose
 from agents.design_ontology import design
+from agents.verify_llr import verify
 from codebase.models import OntologyNode, OntologyTriple, Predicate
 from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
+    VerificationAction,
+    VerificationCondition,
     VerificationMethod,
 )
 
@@ -175,6 +178,101 @@ def step_design():
     print(f"    {linked} requirement-to-triple links applied, {skipped} skipped\n")
 
 
+def step_verify():
+    print("=" * 60)
+    print("STEP 4: Verify — flesh out LLR verification procedures")
+    print("=" * 60)
+
+    ontology_nodes = list(
+        OntologyNode.objects.values("qualified_name", "kind", "description")
+    )
+    llrs = LowLevelRequirement.objects.prefetch_related("verifications").all()
+
+    print(f"  Processing {llrs.count()} LLRs against {len(ontology_nodes)} ontology nodes...\n")
+
+    total_conditions = 0
+    total_actions = 0
+
+    for llr in llrs:
+        llr_dict = {"id": llr.pk, "description": llr.description}
+        existing = list(llr.verifications.values("method", "test_name", "description"))
+
+        if not existing:
+            print(f"  LLR {llr.pk}: no verifications to flesh out, skipping")
+            continue
+
+        print(f"  LLR {llr.pk}: {llr.description[:60]}...")
+        result = verify(llr_dict, existing, ontology_nodes)
+
+        with transaction.atomic():
+            # Replace existing verification stubs with fleshed-out versions
+            llr.verifications.all().delete()
+
+            for v in result.verifications:
+                vm = VerificationMethod.objects.create(
+                    low_level_requirement=llr,
+                    method=v.method,
+                    test_name=v.test_name,
+                    description=v.description,
+                )
+
+                # Resolve ontology node references by qualified name prefix
+                def resolve_node(member_qname):
+                    if not member_qname:
+                        return None
+                    # Match the longest ontology node qualified_name that is a
+                    # prefix of the member qualified name
+                    for node in sorted(
+                        ontology_nodes, key=lambda n: len(n["qualified_name"]), reverse=True
+                    ):
+                        if member_qname.startswith(node["qualified_name"]):
+                            return OntologyNode.objects.filter(
+                                qualified_name=node["qualified_name"]
+                            ).first()
+                    return None
+
+                for i, cond in enumerate(v.preconditions):
+                    VerificationCondition.objects.create(
+                        verification=vm,
+                        phase="pre",
+                        order=i,
+                        ontology_node=resolve_node(cond.member_qualified_name),
+                        member_qualified_name=cond.member_qualified_name,
+                        operator=cond.operator,
+                        expected_value=cond.expected_value,
+                    )
+                    total_conditions += 1
+
+                for i, action in enumerate(v.actions):
+                    VerificationAction.objects.create(
+                        verification=vm,
+                        order=i,
+                        description=action.description,
+                        ontology_node=resolve_node(action.member_qualified_name),
+                        member_qualified_name=action.member_qualified_name,
+                    )
+                    total_actions += 1
+
+                for i, cond in enumerate(v.postconditions):
+                    VerificationCondition.objects.create(
+                        verification=vm,
+                        phase="post",
+                        order=i,
+                        ontology_node=resolve_node(cond.member_qualified_name),
+                        member_qualified_name=cond.member_qualified_name,
+                        operator=cond.operator,
+                        expected_value=cond.expected_value,
+                    )
+                    total_conditions += 1
+
+                print(f"    [{vm.method}] {vm.test_name}: "
+                      f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
+                      f"{len(v.postconditions)} post")
+
+    print(f"\n  Verification phase complete:")
+    print(f"    {total_conditions} conditions, {total_actions} actions created\n")
+
+
 def step_summary():
     print("=" * 60)
     print("SUMMARY")
@@ -182,6 +280,8 @@ def step_summary():
     print(f"  HLRs:             {HighLevelRequirement.objects.count()}")
     print(f"  LLRs:             {LowLevelRequirement.objects.count()}")
     print(f"  Verifications:    {VerificationMethod.objects.count()}")
+    print(f"  Conditions:       {VerificationCondition.objects.count()}")
+    print(f"  Actions:          {VerificationAction.objects.count()}")
     print(f"  Ontology nodes:   {OntologyNode.objects.count()}")
     print(f"  Ontology triples: {OntologyTriple.objects.count()}")
 
@@ -207,4 +307,5 @@ if __name__ == "__main__":
     step_flush()
     step_decompose()
     step_design()
+    step_verify()
     step_summary()
