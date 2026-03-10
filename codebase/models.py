@@ -222,6 +222,63 @@ class OntologyNode(models.Model):
         ).first()
 
 
+class NamespaceNodeManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(kind="namespace")
+
+
+class NamespaceNode(OntologyNode):
+    """Proxy model for namespace nodes with hierarchy-aware methods."""
+
+    objects = NamespaceNodeManager()
+
+    class Meta:
+        proxy = True
+
+    def save(self, *args, **kwargs):
+        self.kind = "namespace"
+        super().save(*args, **kwargs)
+
+    def get_children(self):
+        """Return direct children (one level deep) based on qualified_name."""
+        prefix = self.qualified_name + "::"
+        return OntologyNode.objects.filter(
+            qualified_name__startswith=prefix,
+        ).exclude(
+            qualified_name__regex=rf"^{self.qualified_name}::[^:]+::.+",
+        )
+
+    def get_descendants(self):
+        """Return all nested nodes at any depth."""
+        prefix = self.qualified_name + "::"
+        return OntologyNode.objects.filter(qualified_name__startswith=prefix)
+
+    def get_child_triples(self):
+        """Return all triples where at least one endpoint is a direct child."""
+        child_pks = set(self.get_children().values_list("pk", flat=True))
+        return OntologyTriple.objects.select_related(
+            "subject", "object",
+        ).filter(
+            models.Q(subject_id__in=child_pks) | models.Q(object_id__in=child_pks)
+        )
+
+    @staticmethod
+    def parent_lookup():
+        """Return a dict mapping qualified_name -> graph node ID for all namespaces."""
+        return {
+            n.qualified_name: f"node-{n.pk}"
+            for n in NamespaceNode.objects.all()
+        }
+
+    @staticmethod
+    def resolve_parent(qualified_name, ns_lookup):
+        """Given a qualified_name and namespace lookup, return the parent graph ID or None."""
+        parts = qualified_name.rsplit("::", 1)
+        if len(parts) == 2 and parts[0] in ns_lookup:
+            return ns_lookup[parts[0]]
+        return None
+
+
 PREDICATE_SUGGESTIONS = [
     "inherits",
     "composes",

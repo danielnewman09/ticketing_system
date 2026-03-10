@@ -3,7 +3,7 @@ from django.views.generic import TemplateView, ListView, DetailView, CreateView,
 from django.urls import reverse_lazy
 
 from requirements.models import HighLevelRequirement, LowLevelRequirement
-from .models import OntologyNode, OntologyTriple, Compound, Member
+from .models import OntologyNode, OntologyTriple, Compound, Member, NamespaceNode
 from .forms import OntologyNodeForm, OntologyTripleForm
 
 
@@ -127,22 +127,14 @@ def _ontology_node_to_dict(node):
 
 def ontology_graph_data(request):
     """Return the full ontology graph as JSON for Cytoscape visualization."""
-    all_nodes = list(OntologyNode.objects.all())
-
-    # Build lookup: qualified_name -> graph id for namespaces
-    ns_by_qname = {
-        n.qualified_name: f"node-{n.pk}"
-        for n in all_nodes
-        if n.kind == "namespace"
-    }
+    ns_lookup = NamespaceNode.parent_lookup()
 
     nodes = []
-    for node in all_nodes:
+    for node in OntologyNode.objects.all():
         d = _ontology_node_to_dict(node)
-        # Derive parent namespace from qualified_name (e.g. "calc::gui::Foo" -> "calc::gui")
-        parts = node.qualified_name.rsplit("::", 1)
-        if len(parts) == 2 and parts[0] in ns_by_qname:
-            d["parent"] = ns_by_qname[parts[0]]
+        parent = NamespaceNode.resolve_parent(node.qualified_name, ns_lookup)
+        if parent:
+            d["parent"] = parent
         nodes.append(d)
 
     edges = []
@@ -156,18 +148,11 @@ def ontology_graph_data(request):
     return JsonResponse({"nodes": nodes, "edges": edges})
 
 
-def ontology_node_graph_data(request, pk):
-    """Return the neighborhood graph for a single ontology node."""
-    from django.urls import reverse
-
-    node = OntologyNode.objects.get(pk=pk)
-    nodes_dict = {}
+def _build_neighborhood_graph(node):
+    """Build graph data for a non-namespace node's direct neighbors."""
+    nodes_dict = {node.pk: _ontology_node_to_dict(node)}
     edges = []
 
-    # Add the focal node
-    nodes_dict[node.pk] = _ontology_node_to_dict(node)
-
-    # Add all neighbors via triples
     for triple in node.triples_as_subject.select_related("object").all():
         neighbor = triple.object
         if neighbor.pk not in nodes_dict:
@@ -187,6 +172,47 @@ def ontology_node_graph_data(request, pk):
             "target": f"node-{node.pk}",
             "predicate": triple.predicate,
         })
+
+    return nodes_dict, edges
+
+
+def _build_namespace_graph(ns):
+    """Build graph data for a namespace node showing its children and their triples."""
+    nodes_dict = {ns.pk: _ontology_node_to_dict(ns)}
+    edges = []
+
+    for child in ns.get_children():
+        d = _ontology_node_to_dict(child)
+        d["parent"] = f"node-{ns.pk}"
+        nodes_dict[child.pk] = d
+
+    for triple in ns.get_child_triples():
+        for endpoint in (triple.subject, triple.object):
+            if endpoint.pk not in nodes_dict:
+                nodes_dict[endpoint.pk] = _ontology_node_to_dict(endpoint)
+        edges.append({
+            "source": f"node-{triple.subject_id}",
+            "target": f"node-{triple.object_id}",
+            "predicate": triple.predicate,
+        })
+
+    return nodes_dict, edges
+
+
+def ontology_node_graph_data(request, pk):
+    """Return the neighborhood graph for a single ontology node.
+
+    For namespace nodes, returns all direct children with the namespace as
+    their compound parent, plus all triples where at least one endpoint is
+    a child of this namespace.
+    """
+    node = OntologyNode.objects.get(pk=pk)
+
+    if node.kind == "namespace":
+        ns = NamespaceNode.objects.get(pk=pk)
+        nodes_dict, edges = _build_namespace_graph(ns)
+    else:
+        nodes_dict, edges = _build_neighborhood_graph(node)
 
     return JsonResponse({
         "nodes": list(nodes_dict.values()),

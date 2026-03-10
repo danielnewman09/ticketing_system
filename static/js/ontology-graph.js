@@ -57,6 +57,12 @@ function ontologyGraph(dataUrl) {
             const incoming = node.incomers("edge");
             const outgoing = node.outgoers("edge");
 
+            const children = node.children().map(c => ({
+                name: c.data("name"),
+                kind: c.data("kind"),
+                url: c.data("url"),
+            }));
+
             this.selectedNode = {
                 qualified_name: d.qualified_name,
                 kind: d.kind,
@@ -64,6 +70,7 @@ function ontologyGraph(dataUrl) {
                 description: d.description,
                 compound_refid: d.compound_refid,
                 url: d.url,
+                children,
                 outgoing: outgoing.map(e => ({
                     label: e.data("label"),
                     target: e.target().data("name"),

@@ -86,6 +86,20 @@
                                 refid: <code x-text="selectedNode.compound_refid"></code>
                             </p>
                             <a class="btn btn-sm btn-outline-primary mt-2" x-show="selectedNode.url" :href="selectedNode.url">View Details</a>
+                            <template x-if="selectedNode.children.length > 0">
+                                <div>
+                                    <p class="mt-2 mb-0 small"><strong>Children:</strong></p>
+                                    <ul class="mb-0 small">
+                                        <template x-for="c in selectedNode.children" :key="c.name">
+                                            <li>
+                                                <a x-show="c.url" :href="c.url" x-text="c.name"></a>
+                                                <span x-show="!c.url" x-text="c.name"></span>
+                                                <span class="badge bg-light text-dark ms-1" x-text="c.kind"></span>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
                             <template x-if="selectedNode.outgoing.length > 0">
                                 <div>
                                     <p class="mt-2 mb-0 small"><strong>Outgoing:</strong></p>
