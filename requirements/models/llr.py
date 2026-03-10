@@ -33,31 +33,6 @@ class LowLevelRequirement(models.Model):
         return self.description[:80] if self.description else f"LLR {self.pk}"
 
 
-class LLRVerification(models.Model):
-    """Deprecated: replaced by VerificationMethod. Kept for data migration."""
-
-    VERIFICATION_METHODS = ["automated", "review", "inspection"]
-    VERIFICATION_CHOICES = [
-        (m, m.capitalize()) for m in VERIFICATION_METHODS
-    ]
-
-    low_level_requirement = models.ForeignKey(
-        LowLevelRequirement,
-        on_delete=models.CASCADE,
-        related_name="legacy_verifications",
-    )
-    method = models.CharField(max_length=20, choices=VERIFICATION_CHOICES)
-    confirmation = models.TextField(blank=True)
-    test_name = models.CharField(max_length=300, blank=True)
-
-    class Meta:
-        app_label = "requirements"
-        db_table = "llr_verifications"
-
-    def __str__(self):
-        return f"{self.get_method_display()} - {self.test_name or self.confirmation[:60]}"
-
-
 class TicketRequirement(models.Model):
     ticket = models.ForeignKey(
         "tickets.Ticket", on_delete=models.CASCADE
