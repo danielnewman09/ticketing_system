@@ -21,6 +21,6 @@ class OntologyTripleForm(forms.ModelForm):
         fields = ["subject", "predicate", "object"]
         widgets = {
             "subject": forms.Select(attrs={"class": "form-select"}),
-            "predicate": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., inherits, composes, compiles"}),
+            "predicate": forms.Select(attrs={"class": "form-select"}),
             "object": forms.Select(attrs={"class": "form-select"}),
         }

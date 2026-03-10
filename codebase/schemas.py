@@ -21,7 +21,7 @@ class OntologyNodeSchema(BaseModel):
 
 class OntologyTripleSchema(BaseModel):
     subject_qualified_name: str
-    predicate: str
+    predicate: str  # Must match a Predicate.name in the database
     object_qualified_name: str
 
 

@@ -13,6 +13,7 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 import json
 import anthropic
 
+from codebase.models import Predicate
 from codebase.schemas import DesignSchema
 
 
@@ -30,12 +31,13 @@ Produce:
    - description: what this entity is responsible for
 
 2. **Triples** — semantic triples (subject --predicate--> object) between nodes,
-   using their qualified_names. The predicate is a verb describing the
-   relationship (e.g., "inherits", "composes", "displays", "validates").
-   Each must have:
+   using their qualified_names. The predicate MUST be one of the allowed
+   predicates listed below. Each must have:
    - subject_qualified_name: the node performing the action
-   - predicate: the verb/action (e.g., "inherits", "composes", "compiles")
+   - predicate: one of the allowed predicate names (see below)
    - object_qualified_name: the node being acted upon
+
+   **Allowed predicates:** {predicates}
 
 3. **Requirement links** — map each requirement to the triples that express it.
    Each must have:
@@ -89,10 +91,17 @@ def design(hlrs: list[dict], llrs: list[dict], model: str = "claude-sonnet-4-202
 
     requirements_text = format_requirements_for_prompt(hlrs, llrs)
 
+    # Build system prompt with allowed predicates from DB
+    predicate_names = list(Predicate.objects.values_list("name", flat=True))
+    if not predicate_names:
+        Predicate.ensure_defaults()
+        predicate_names = list(Predicate.objects.values_list("name", flat=True))
+    system_prompt = SYSTEM_PROMPT.format(predicates=", ".join(predicate_names))
+
     response = client.messages.create(
         model=model,
         max_tokens=4096,
-        system=SYSTEM_PROMPT,
+        system=system_prompt,
         messages=[
             {
                 "role": "user",

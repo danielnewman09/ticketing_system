@@ -29,7 +29,7 @@ def _build_requirement_graph(req):
     edges = []
     seen_node_ids = set()
 
-    for triple in req.triples.select_related("subject", "object").all():
+    for triple in req.triples.select_related("subject", "object", "predicate").all():
         for ont_node in (triple.subject, triple.object):
             node_id = f"node-{ont_node.pk}"
             if node_id not in seen_node_ids:
@@ -47,7 +47,7 @@ def _build_requirement_graph(req):
         edges.append({
             "source": f"node-{triple.subject_id}",
             "target": f"node-{triple.object_id}",
-            "predicate": triple.predicate,
+            "predicate": triple.predicate.name,
         })
 
     return {"nodes": nodes, "edges": edges}

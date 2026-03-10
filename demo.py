@@ -30,7 +30,7 @@ from django.db.models import F
 
 from agents.decompose_hlr import decompose
 from agents.design_ontology import design
-from codebase.models import OntologyNode, OntologyTriple
+from codebase.models import OntologyNode, OntologyTriple, Predicate
 from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
@@ -54,6 +54,7 @@ def step_flush():
     print("STEP 1: Flush database")
     print("=" * 60)
     call_command("flush", "--no-input", verbosity=0)
+    Predicate.ensure_defaults()
     print("  Database cleared.\n")
 
 
@@ -127,18 +128,22 @@ def step_design():
         for triple_data in result.triples:
             subj = qname_to_node.get(triple_data.subject_qualified_name)
             obj = qname_to_node.get(triple_data.object_qualified_name)
-            if subj and obj:
+            pred = Predicate.objects.filter(name=triple_data.predicate).first()
+            if subj and obj and pred:
                 triple, _ = OntologyTriple.objects.get_or_create(
                     subject=subj,
-                    predicate=triple_data.predicate,
+                    predicate=pred,
                     object=obj,
                 )
                 saved_triples.append(triple)
-                print(f"  Triple [{len(saved_triples)-1}]: {subj.name} --{triple_data.predicate}--> {obj.name}")
+                print(f"  Triple [{len(saved_triples)-1}]: {subj.name} --{pred.name}--> {obj.name}")
             else:
                 saved_triples.append(None)
-                missing = triple_data.subject_qualified_name if not subj else triple_data.object_qualified_name
-                print(f"  Triple [{len(saved_triples)-1}] skipped (missing node: {missing})")
+                if not pred:
+                    print(f"  Triple [{len(saved_triples)-1}] skipped (unknown predicate: {triple_data.predicate})")
+                else:
+                    missing = triple_data.subject_qualified_name if not subj else triple_data.object_qualified_name
+                    print(f"  Triple [{len(saved_triples)-1}] skipped (missing node: {missing})")
 
         # Apply requirement links
         linked = 0

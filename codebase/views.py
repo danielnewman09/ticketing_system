@@ -138,11 +138,11 @@ def ontology_graph_data(request):
         nodes.append(d)
 
     edges = []
-    for triple in OntologyTriple.objects.select_related("subject", "object").all():
+    for triple in OntologyTriple.objects.select_related("subject", "object", "predicate").all():
         edges.append({
             "source": f"node-{triple.subject_id}",
             "target": f"node-{triple.object_id}",
-            "predicate": triple.predicate,
+            "predicate": triple.predicate.name,
         })
 
     return JsonResponse({"nodes": nodes, "edges": edges})
@@ -153,24 +153,24 @@ def _build_neighborhood_graph(node):
     nodes_dict = {node.pk: _ontology_node_to_dict(node)}
     edges = []
 
-    for triple in node.triples_as_subject.select_related("object").all():
+    for triple in node.triples_as_subject.select_related("object", "predicate").all():
         neighbor = triple.object
         if neighbor.pk not in nodes_dict:
             nodes_dict[neighbor.pk] = _ontology_node_to_dict(neighbor)
         edges.append({
             "source": f"node-{node.pk}",
             "target": f"node-{neighbor.pk}",
-            "predicate": triple.predicate,
+            "predicate": triple.predicate.name,
         })
 
-    for triple in node.triples_as_object.select_related("subject").all():
+    for triple in node.triples_as_object.select_related("subject", "predicate").all():
         neighbor = triple.subject
         if neighbor.pk not in nodes_dict:
             nodes_dict[neighbor.pk] = _ontology_node_to_dict(neighbor)
         edges.append({
             "source": f"node-{neighbor.pk}",
             "target": f"node-{node.pk}",
-            "predicate": triple.predicate,
+            "predicate": triple.predicate.name,
         })
 
     return nodes_dict, edges
@@ -193,7 +193,7 @@ def _build_namespace_graph(ns):
         edges.append({
             "source": f"node-{triple.subject_id}",
             "target": f"node-{triple.object_id}",
-            "predicate": triple.predicate,
+            "predicate": triple.predicate.name,
         })
 
     return nodes_dict, edges
