@@ -6,8 +6,8 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 """
 
 import json
-import anthropic
 
+from agents.llm_client import call_tool
 from requirements.schemas import DecomposedRequirementSchema as DecomposedRequirement
 
 
@@ -18,7 +18,8 @@ requirement description into low-level requirements.
 For the high-level requirement itself, provide a clear prose description that
 captures the intent.
 
-Then decompose it into low-level requirements. Each LLR should:
+Then, decompose it into low-level requirements. 
+Each LLR shall:
 - Include a prose description of the specific behavior
 - Have one or more verification methods, each with:
   - method: one of "automated", "review", or "inspection"
@@ -28,8 +29,8 @@ Then decompose it into low-level requirements. Each LLR should:
     (e.g., "user_presses_addition_key")
 
 Guidelines:
-- LLRs should be atomic and testable
-- Each LLR should map to a single observable behavior
+- LLRs shall be atomic and testable
+- Each LLR shall map to a single observable behavior
 - Prefer "automated" verification where the behavior is programmatically testable
 - Use "review" for design/UX concerns and "inspection" for documentation/process
 - test_name should be descriptive and follow snake_case convention
@@ -45,15 +46,11 @@ TOOL_DEFINITION = {
 }
 
 
-def decompose(description: str, model: str = "claude-sonnet-4-20250514") -> DecomposedRequirement:
+def decompose(description: str, model: str = "", prompt_log_file: str = "") -> DecomposedRequirement:
     """
     Takes a human-written HLR description and returns a structured decomposition.
     """
-    client = anthropic.Anthropic()
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
+    result = call_tool(
         system=SYSTEM_PROMPT,
         messages=[
             {
@@ -62,14 +59,14 @@ def decompose(description: str, model: str = "claude-sonnet-4-20250514") -> Deco
             }
         ],
         tools=[TOOL_DEFINITION],
-        tool_choice={"type": "tool", "name": "decompose_requirement"},
+        tool_name="decompose_requirement",
+        model=model,
+        prompt_log_file=prompt_log_file,
     )
 
-    for block in response.content:
-        if block.type == "tool_use":
-            return DecomposedRequirement.model_validate(block.input)
+    
 
-    raise RuntimeError("Agent did not return a tool call")
+    return DecomposedRequirement.model_validate(result)
 
 
 if __name__ == "__main__":

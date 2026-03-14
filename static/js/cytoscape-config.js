@@ -7,10 +7,14 @@ const KIND_COLORS = {
     "class": "#4e79a7",
     "struct": "#59a14f",
     "enum": "#e15759",
+    "enum_value": "#ff9d9a",
     "union": "#f28e2b",
     "namespace": "#76b7b2",
     "interface": "#b07aa1",
-    "concept": "#edc948",
+    "typedef": "#9c755f",
+    "function": "#bab0ac",
+    "variable": "#d37295",
+    "primitive": "#a0cbe8",
 };
 
 const DEFAULT_EDGE_COLOR = "#888";

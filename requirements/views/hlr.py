@@ -1,8 +1,15 @@
+from django.db import transaction
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.views.decorators.http import require_POST
 from django.views.generic import DetailView, CreateView, UpdateView
 
-from requirements.models import HighLevelRequirement
+from requirements.models import (
+    HighLevelRequirement,
+    LowLevelRequirement,
+    VerificationMethod,
+)
 from requirements.forms import HighLevelRequirementForm
 
 from .common import _build_requirement_graph
@@ -58,6 +65,40 @@ class HLRDetailView(DetailView):
             all_triples.update(llr.triples.all())
         context["all_triples"] = sorted(all_triples, key=lambda t: t.pk)
         return context
+
+
+def decompose_hlr(hlr, model="", prompt_log_file=""):
+    """Run the LLM decomposition agent on an existing HLR, adding LLRs to it.
+
+    Returns the number of LLRs created.
+    """
+    from agents.decompose.decompose_hlr import decompose
+
+    result = decompose(hlr.description, model=model, prompt_log_file=prompt_log_file)
+
+    with transaction.atomic():
+        for llr_data in result.low_level_requirements:
+            llr = LowLevelRequirement.objects.create(
+                high_level_requirement=hlr,
+                description=llr_data.description,
+            )
+            for v in llr_data.verifications:
+                VerificationMethod.objects.create(
+                    low_level_requirement=llr,
+                    method=v.method,
+                    test_name=v.test_name,
+                    description=v.description,
+                )
+
+    return len(result.low_level_requirements)
+
+
+@require_POST
+def hlr_decompose(request, pk):
+    """View wrapper for decompose_hlr."""
+    hlr = get_object_or_404(HighLevelRequirement, pk=pk)
+    decompose_hlr(hlr)
+    return redirect("hlr_detail", pk=hlr.pk)
 
 
 def hlr_graph_data(request, pk):

@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 tests/test_dbs/
 db.sqlite3
+*.log
+logs/*
+.DS_Store
+codebase.sqlite3

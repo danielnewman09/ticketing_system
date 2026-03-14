@@ -12,8 +12,8 @@ Runs after design_ontology so it can reference concrete ontology members.
 """
 
 import json
-import anthropic
 
+from agents.llm_client import call_tool
 from requirements.schemas import VerificationSchema
 
 
@@ -90,7 +90,8 @@ def verify(
     llr: dict,
     existing_verifications: list[dict],
     ontology_nodes: list[dict],
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "",
+    prompt_log_file: str = "",
 ) -> VerifyResult:
     """
     Takes an LLR dict, its existing verifications, and ontology context.
@@ -100,8 +101,6 @@ def verify(
     existing_verifications: [{method, test_name, description}, ...]
     ontology_nodes: [{qualified_name, kind, description}, ...]
     """
-    client = anthropic.Anthropic()
-
     nodes_text = _format_ontology_nodes(ontology_nodes)
     system_prompt = SYSTEM_PROMPT.format(nodes=nodes_text)
 
@@ -116,25 +115,20 @@ def verify(
         f"Existing verification stubs:\n{verifications_text}"
     )
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
+    result = call_tool(
         system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
         tools=[TOOL_DEFINITION],
-        tool_choice={"type": "tool", "name": "produce_verifications"},
+        tool_name="produce_verifications",
+        model=model,
+        prompt_log_file=prompt_log_file,
     )
 
-    for block in response.content:
-        if block.type == "tool_use":
-            raw = block.input
-            verifications = [
-                VerificationSchema.model_validate(v)
-                for v in raw["verifications"]
-            ]
-            return VerifyResult(verifications=verifications)
-
-    raise RuntimeError("Agent did not return a tool call")
+    verifications = [
+        VerificationSchema.model_validate(v)
+        for v in result["verifications"]
+    ]
+    return VerifyResult(verifications=verifications)
 
 
 if __name__ == "__main__":
