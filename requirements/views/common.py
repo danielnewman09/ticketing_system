@@ -10,7 +10,9 @@ class RequirementListView(ListView):
     context_object_name = "hlrs"
 
     def get_queryset(self):
-        return super().get_queryset().prefetch_related(
+        return super().get_queryset().select_related(
+            "component",
+        ).prefetch_related(
             "low_level_requirements__components",
             "low_level_requirements__verifications",
         )

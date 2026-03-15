@@ -11,6 +11,7 @@ from requirements.models import (
     VerificationMethod,
 )
 from requirements.forms import HighLevelRequirementForm
+from components.models import Component
 
 from .common import _build_requirement_graph
 
@@ -116,6 +117,46 @@ def hlr_decompose(request, pk):
     hlr = get_object_or_404(HighLevelRequirement, pk=pk)
     decompose_hlr(hlr)
     return redirect("hlr_detail", pk=hlr.pk)
+
+
+def assign_hlr_components(model="", prompt_log_file=""):
+    """Run the assign_components agent on all HLRs.
+
+    Returns the list of assignment dicts from the agent.
+    """
+    from agents.design.assign_components import assign_components
+
+    hlrs = HighLevelRequirement.objects.all()
+    if not hlrs.exists():
+        return []
+
+    hlr_dicts = list(hlrs.values("id", "description"))
+    existing = list(Component.objects.values_list("name", flat=True))
+
+    assignments = assign_components(
+        hlr_dicts,
+        existing_components=existing or None,
+        model=model,
+        prompt_log_file=prompt_log_file,
+    )
+
+    with transaction.atomic():
+        for assignment in assignments:
+            component, _ = Component.objects.get_or_create(
+                name=assignment["component_name"],
+            )
+            HighLevelRequirement.objects.filter(pk=assignment["hlr_id"]).update(
+                component=component,
+            )
+
+    return assignments
+
+
+@require_POST
+def hlr_assign_components(request):
+    """View wrapper for assign_hlr_components."""
+    assign_hlr_components()
+    return redirect("requirement_list")
 
 
 def hlr_graph_data(request, pk):

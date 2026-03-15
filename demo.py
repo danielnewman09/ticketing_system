@@ -4,9 +4,11 @@ Demo: end-to-end workflow from requirements to ontology design.
 
 Workflow:
   1. Flush all data (clean slate, no re-migration)
-  2. Decompose HLR descriptions into structured Actor/Action/Subject + LLRs
-  3. Run the design agent to derive ontology nodes, triples, and requirement links
-  4. Print summary and launch instructions
+  2. Create HLRs, assign components, and assess dependencies
+  3. Decompose HLR descriptions into structured Actor/Action/Subject + LLRs
+  4. Run the design agent to derive ontology nodes, triples, and requirement links
+  5. Verify — flesh out LLR verification procedures
+  6. Print summary and launch instructions
 
 Usage:
     source .venv/bin/activate
@@ -28,9 +30,9 @@ from django.core.management import call_command
 from django.db import transaction
 from django.db.models import F
 
-from agents.decompose.decompose_hlr import decompose
 from agents.design.design_ontology import design
 from agents.verify.verify_llr import verify
+from requirements.views.hlr import assign_hlr_components, decompose_hlr
 from codebase.models import OntologyNode, OntologyTriple, Predicate
 from requirements.models import (
     HighLevelRequirement,
@@ -46,9 +48,7 @@ from requirements.models import (
 
 HLR_DESCRIPTIONS = [
     "The application displays a GUI window suitable for a calculator interface",
-    "The calculator performs basic arithmetic with correct input handling and error recovery",
-    "The calculator logic is fully unit-tested with 100% code coverage",
-    "A CI pipeline builds, tests, and enforces quality gates automatically",
+    "The calculator performs basic arithmetic with correct input handling and error recovery"
 ]
 
 
@@ -61,37 +61,37 @@ def step_flush():
     print("  Database cleared.\n")
 
 
+def step_assign_components():
+    print("=" * 60)
+    print("STEP 2: Create HLRs and assign components")
+    print("=" * 60)
+
+    for desc in HLR_DESCRIPTIONS:
+        hlr = HighLevelRequirement.objects.create(description=desc)
+        print(f"  Created HLR {hlr.pk}: {desc[:60]}")
+
+    print(f"\n  Assigning {HighLevelRequirement.objects.count()} HLRs to components via AI agent...")
+    assignments = assign_hlr_components()
+
+    for a in assignments:
+        print(f"  HLR {a['hlr_id']} -> {a['component_name']} ({a['rationale'][:60]})")
+
+    print()
+
+
 def step_decompose():
     print("=" * 60)
-    print("STEP 2: Decompose requirements")
+    print("STEP 3: Decompose requirements")
     print("=" * 60)
-    print(f"  Decomposing {len(HLR_DESCRIPTIONS)} HLR descriptions via AI agent...")
+
+    hlrs = HighLevelRequirement.objects.all()
+    print(f"  Decomposing {hlrs.count()} HLRs via AI agent...")
     print("  (each call hits the Anthropic API)\n")
 
-    for i, desc in enumerate(HLR_DESCRIPTIONS, 1):
-        print(f"  [{i}/{len(HLR_DESCRIPTIONS)}] {desc[:65]}...")
-
-        result = decompose(desc)
-
-        with transaction.atomic():
-            hlr = HighLevelRequirement.objects.create(
-                description=desc,
-            )
-            for llr_data in result.low_level_requirements:
-                llr = LowLevelRequirement.objects.create(
-                    high_level_requirement=hlr,
-                    description=llr_data.description,
-                )
-                for v in llr_data.verifications:
-                    VerificationMethod.objects.create(
-                        low_level_requirement=llr,
-                        method=v.method,
-                        test_name=v.test_name,
-                        description=v.description,
-                    )
-
-        llr_count = hlr.low_level_requirements.count()
-        print(f"    -> HLR {hlr.pk}: {desc[:60]}")
+    for i, hlr in enumerate(hlrs, 1):
+        print(f"  [{i}/{hlrs.count()}] {hlr.description[:65]}...")
+        llr_count = decompose_hlr(hlr)
+        print(f"    -> HLR {hlr.pk}: {hlr.description[:60]}")
         print(f"       {llr_count} LLRs generated\n")
 
     total_hlrs = HighLevelRequirement.objects.count()
@@ -101,7 +101,7 @@ def step_decompose():
 
 def step_design():
     print("=" * 60)
-    print("STEP 3: Design — derive ontology from requirements")
+    print("STEP 4: Design — derive ontology from requirements")
     print("=" * 60)
     print("  Feeding all requirements to the design agent...\n")
 
@@ -180,7 +180,7 @@ def step_design():
 
 def step_verify():
     print("=" * 60)
-    print("STEP 4: Verify — flesh out LLR verification procedures")
+    print("STEP 5: Verify — flesh out LLR verification procedures")
     print("=" * 60)
 
     ontology_nodes = list(
@@ -305,6 +305,7 @@ def step_summary():
 
 if __name__ == "__main__":
     step_flush()
+    step_assign_components()
     step_decompose()
     step_design()
     step_verify()

@@ -1,12 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Requirements{% endblock %}
 {% block content %}
-<div x-data="{ loading: false }">
+<div x-data="{ loading: false, loadingMsg: '' }">
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Requirements</h1>
     <div class="d-flex gap-2">
+        <form method="post" action="{% url 'hlr_assign_components' %}"
+              @submit="loading = true; loadingMsg = 'Assigning HLRs to architectural components...'">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-info" :disabled="loading">Assign Components</button>
+        </form>
         <form method="post" action="{% url 'hlr_review_start' %}"
-              @submit="loading = true">
+              @submit="loading = true; loadingMsg = 'Reviewing HLRs...'">
             {% csrf_token %}
             <button type="submit" class="btn btn-warning" :disabled="loading">Review HLRs</button>
         </form>
@@ -20,6 +25,9 @@
         <a href="{% url 'hlr_detail' hlr.pk %}" class="text-decoration-none">
             <strong>HLR {{ hlr.id }}:</strong> {{ hlr.description }}
         </a>
+        {% if hlr.component %}
+        <span class="badge bg-secondary ms-2">{{ hlr.component.name }}</span>
+        {% endif %}
         <a href="{% url 'llr_create' %}?hlr={{ hlr.id }}" class="btn btn-sm btn-outline-primary">+ LLR</a>
     </div>
     <div class="card-body">
@@ -80,8 +88,8 @@
          style="background: rgba(0,0,0,0.5); z-index: 1050;">
         <div class="bg-white rounded-3 p-4 text-center shadow" style="min-width: 300px;">
             <div class="spinner-border text-warning mb-3" role="status"></div>
-            <p class="mb-1 fw-bold">Reviewing HLRs</p>
-            <p class="text-muted small mb-0">The agent is analyzing your requirements...</p>
+            <p class="mb-1 fw-bold">Working</p>
+            <p class="text-muted small mb-0" x-text="loadingMsg"></p>
         </div>
     </div>
 </template>
