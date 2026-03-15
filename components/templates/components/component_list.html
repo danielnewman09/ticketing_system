@@ -13,6 +13,9 @@
             <div class="card-body">
                 <h5 class="card-title">
                     <a href="{% url 'component_detail' component.pk %}">{{ component.name }}</a>
+                    {% if component.child_count %}
+                    <span class="badge bg-secondary ms-1">{{ component.child_count }} sub</span>
+                    {% endif %}
                 </h5>
                 <p class="card-text text-muted">
                     {{ component.ticket_count }} ticket{{ component.ticket_count|pluralize }}

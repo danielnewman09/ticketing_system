@@ -10,28 +10,157 @@ from django.db import models
 from .codebase import Compound
 
 
+# ---------------------------------------------------------------------------
+# Node kinds — language-agnostic base kinds
+# ---------------------------------------------------------------------------
+
+NODE_KINDS = [
+    ("attribute", "Attribute"),
+    ("class", "Class"),
+    ("constant", "Constant"),
+    ("enum", "Enum"),
+    ("enum_value", "Enum Value"),
+    ("function", "Function"),
+    ("interface", "Interface"),
+    ("method", "Method"),
+    ("module", "Module"),
+    ("primitive", "Primitive Type"),
+    ("type_alias", "Type Alias"),
+]
+
+NODE_KIND_VALUES = {k for k, _ in NODE_KINDS}
+
+# ---------------------------------------------------------------------------
+# Visibility / access specifiers
+# ---------------------------------------------------------------------------
+
+VISIBILITY_CHOICES = [
+    ("public", "Public"),
+    ("private", "Private"),
+    ("protected", "Protected"),
+]
+
+# Semantic groupings used by validation and review agents.
+TYPE_KINDS = {"class", "interface", "enum", "type_alias"}
+VALUE_KINDS = {"enum_value", "function", "method", "attribute", "constant"}
+
+# ---------------------------------------------------------------------------
+# Language-specific specializations
+# ---------------------------------------------------------------------------
+# Each language maps base kinds to their concrete specializations.
+# A node's specialization must be valid for its kind + language.
+# If a kind is absent, no specializations are available (base kind only).
+
+LANGUAGE_SPECIALIZATIONS = {
+    "cpp": {
+        "class": [
+            "struct",
+            "template_class",
+            "abstract_class",
+        ],
+        "method": [
+            "virtual_method",
+            "pure_virtual_method",
+            "template_method",
+            "static_method",
+            "const_method",
+            "operator_overload",
+        ],
+        "function": [
+            "template_function",
+        ],
+        "constant": [
+            "constexpr",
+            "const",
+        ],
+        "enum": [
+            "enum_class",
+        ],
+        "type_alias": [
+            "using",
+            "typedef",
+        ],
+        "module": [
+            "namespace",
+        ],
+    },
+    "python": {
+        "class": [
+            "dataclass",
+            "namedtuple",
+        ],
+        "method": [
+            "classmethod",
+            "staticmethod",
+            "property",
+            "abstractmethod",
+            "async_method",
+        ],
+        "function": [
+            "async_function",
+            "generator",
+            "decorator",
+        ],
+        "interface": [
+            "protocol",
+            "abc",
+        ],
+        "constant": [
+            "final",
+        ],
+        "module": [
+            "package",
+        ],
+    },
+    "javascript": {
+        "class": [],
+        "method": [
+            "getter",
+            "setter",
+            "static_method",
+            "async_method",
+        ],
+        "function": [
+            "arrow_function",
+            "async_function",
+            "generator",
+        ],
+        "module": [
+            "es_module",
+            "commonjs_module",
+        ],
+    },
+}
+
+SUPPORTED_LANGUAGES = set(LANGUAGE_SPECIALIZATIONS.keys())
+
+
+def valid_specializations(language, kind):
+    """Return the set of valid specializations for a language + kind."""
+    lang_spec = LANGUAGE_SPECIALIZATIONS.get(language, {})
+    return set(lang_spec.get(kind, []))
+
+
 class OntologyNode(models.Model):
     """A node in the design ontology graph.
 
     Each node references a compound from the external codebase DB by refid,
-    or can be a free-standing design concept (when compound_refid is blank).
+    or can be free-standing (when compound_refid is blank).
     """
-
-    NODE_KINDS = [
-        ("class", "Class"),
-        ("struct", "Struct"),
-        ("enum", "Enum"),
-        ("union", "Union"),
-        ("namespace", "Namespace"),
-        ("interface", "Interface"),
-        ("concept", "Design Concept"),
-    ]
 
     compound_refid = models.CharField(
         max_length=200, blank=True, default="",
         help_text="Refid linking to a compound in the codebase DB",
     )
     kind = models.CharField(max_length=20, choices=NODE_KINDS)
+    specialization = models.CharField(
+        max_length=40, blank=True, default="",
+        help_text="Language-specific specialization (e.g., template_class, dataclass)",
+    )
+    visibility = models.CharField(
+        max_length=10, choices=VISIBILITY_CHOICES, blank=True, default="",
+        help_text="Access specifier (public/private/protected). Blank for nodes where N/A.",
+    )
     name = models.CharField(max_length=200)
     qualified_name = models.CharField(max_length=500, blank=True, default="")
     description = models.TextField(blank=True)

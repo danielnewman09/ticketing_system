@@ -4,20 +4,23 @@
  */
 
 const KIND_COLORS = {
+    "attribute": "#9c755f",
     "class": "#4e79a7",
-    "struct": "#59a14f",
+    "constant": "#edc948",
     "enum": "#e15759",
     "enum_value": "#ff9d9a",
-    "union": "#f28e2b",
-    "namespace": "#76b7b2",
-    "interface": "#b07aa1",
-    "typedef": "#9c755f",
     "function": "#bab0ac",
-    "variable": "#d37295",
+    "interface": "#b07aa1",
+    "method": "#59a14f",
+    "module": "#76b7b2",
     "primitive": "#a0cbe8",
+    "type_alias": "#d37295",
 };
 
 const DEFAULT_EDGE_COLOR = "#888";
+
+const CLASS_KINDS = new Set(["class", "interface"]);
+const MEMBER_KINDS = new Set(["method", "attribute", "function", "constant"]);
 
 const CYTOSCAPE_STYLES = [
     {
@@ -61,6 +64,7 @@ const CYTOSCAPE_STYLES = [
             "z-index": 10,
         },
     },
+    // --- Compound parent: generic (namespaces, modules) ---
     {
         selector: ":parent",
         style: {
@@ -76,6 +80,67 @@ const CYTOSCAPE_STYLES = [
             "font-size": "13px",
             "font-weight": "bold",
             "padding": "20px",
+        },
+    },
+    // --- Compound parent: class/interface nodes ---
+    {
+        selector: ":parent[kind='class'], :parent[kind='interface']",
+        style: {
+            "shape": "round-rectangle",
+            "background-color": "data(color)",
+            "background-opacity": 0.08,
+            "border-width": 3,
+            "border-color": "data(color)",
+            "border-opacity": 0.7,
+            "border-style": "solid",
+            "padding": "25px",
+            "text-valign": "top",
+            "text-halign": "center",
+            "text-margin-y": -6,
+            "font-size": "14px",
+            "font-weight": "bold",
+        },
+    },
+    // --- Private/protected members: muted with dashed border ---
+    {
+        selector: "node[visibility='private']",
+        style: {
+            "border-style": "dashed",
+            "border-color": "#999",
+            "opacity": 0.6,
+        },
+    },
+    {
+        selector: "node[visibility='protected']",
+        style: {
+            "border-style": "dashed",
+            "border-color": "#e8a838",
+            "opacity": 0.7,
+        },
+    },
+    // --- Public members: solid border accent ---
+    {
+        selector: "node[visibility='public']",
+        style: {
+            "border-color": "data(color)",
+            "border-width": 2,
+        },
+    },
+    // --- Collapsed class indicator (added by expand-collapse) ---
+    {
+        selector: "node.cy-expand-collapse-collapsed-node",
+        style: {
+            "shape": "round-rectangle",
+            "width": 50,
+            "height": 50,
+            "border-width": 3,
+            "border-color": "data(color)",
+            "background-color": "data(color)",
+            "background-opacity": 0.2,
+            "font-size": "12px",
+            "font-weight": "bold",
+            "text-valign": "center",
+            "text-halign": "center",
         },
     },
     {
@@ -103,6 +168,19 @@ const CYTOSCAPE_STYLES = [
     },
 ];
 
+const FCOSE_DEFAULTS = {
+    name: "fcose",
+    animate: true,
+    animationDuration: 500,
+    quality: "default",
+    randomize: true,
+    nodeRepulsion: () => 8000,
+    idealEdgeLength: () => 120,
+    nodeSeparation: 80,
+    packComponents: true,
+};
+
+// Keep cose defaults for pages that don't load fcose
 const COSE_DEFAULTS = {
     name: "cose",
     animate: true,
@@ -110,6 +188,23 @@ const COSE_DEFAULTS = {
     nodeRepulsion: () => 8000,
     idealEdgeLength: () => 120,
 };
+
+/**
+ * Return the best available compound-aware layout defaults.
+ * Prefers fcose if registered, otherwise falls back to cose.
+ */
+function getLayoutDefaults() {
+    if (typeof cytoscape !== "undefined") {
+        try {
+            // Check if fcose is registered
+            cytoscape("layout", "fcose");
+            return FCOSE_DEFAULTS;
+        } catch (e) {
+            // fcose not available
+        }
+    }
+    return COSE_DEFAULTS;
+}
 
 /**
  * Convert API graph data ({nodes, edges}) into Cytoscape elements array.
@@ -122,6 +217,7 @@ function buildElements(data) {
             name: n.name,
             qualified_name: n.qualified_name || n.name,
             kind: n.kind,
+            visibility: n.visibility || "",
             nodeGroup: n.group,
             compound_refid: n.compound_refid || "",
             description: n.description || "",

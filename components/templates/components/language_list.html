@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Languages{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Languages</h1>
+</div>
+
+<div class="row">
+    {% for language in languages %}
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <a href="{% url 'language_detail' language.pk %}">{{ language }}</a>
+                </h5>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <p>No languages found.</p>
+    {% endfor %}
+</div>
+{% endblock %}

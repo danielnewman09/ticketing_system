@@ -3,7 +3,7 @@ from django.views.generic import TemplateView, ListView, DetailView, CreateView,
 from django.urls import reverse_lazy
 
 from requirements.models import HighLevelRequirement, LowLevelRequirement
-from .models import OntologyNode, OntologyTriple, Compound, Member, NamespaceNode
+from .models import OntologyNode, OntologyTriple, Compound, Member, NamespaceNode, Predicate
 from .forms import OntologyNodeForm, OntologyTripleForm
 
 
@@ -50,6 +50,22 @@ class OntologyNodeDetailView(DetailView):
                 context["members"] = []
         else:
             context["members"] = []
+
+        # Composed members grouped by visibility (class interface)
+        composes_pred = Predicate.objects.filter(name="composes").first()
+        if composes_pred and node.kind in ("class", "interface"):
+            composed = (
+                OntologyNode.objects
+                .filter(triples_as_object__subject=node, triples_as_object__predicate=composes_pred)
+                .order_by("kind", "name")
+            )
+            context["public_members"] = composed.filter(visibility="public")
+            context["private_members"] = composed.filter(visibility="private")
+            context["protected_members"] = composed.filter(visibility="protected")
+        else:
+            context["public_members"] = []
+            context["private_members"] = []
+            context["protected_members"] = []
 
         # Gather requirements linked via this node's triples
         triple_ids = set()
@@ -118,6 +134,7 @@ def _ontology_node_to_dict(node):
         "name": node.name,
         "qualified_name": node.qualified_name,
         "kind": node.kind,
+        "visibility": node.visibility,
         "group": "ontology",
         "compound_refid": node.compound_refid,
         "description": node.description,
@@ -126,37 +143,84 @@ def _ontology_node_to_dict(node):
 
 
 def ontology_graph_data(request):
-    """Return the full ontology graph as JSON for Cytoscape visualization."""
+    """Return the full ontology graph as JSON for Cytoscape visualization.
+
+    Class/interface nodes become compound parents. Members linked via
+    "composes" triples become children of the class node, with visibility
+    metadata so the frontend can show/hide private members.
+    """
+    show_private = request.GET.get("show_private", "0") == "1"
     ns_lookup = NamespaceNode.parent_lookup()
+
+    # Build a lookup of class-member parent relationships via "composes" triples
+    composes_pred = Predicate.objects.filter(name="composes").first()
+    class_member_parent = {}  # member node pk -> class node pk
+    if composes_pred:
+        for triple in OntologyTriple.objects.filter(predicate=composes_pred).select_related("subject", "object"):
+            if triple.subject.kind in ("class", "interface"):
+                class_member_parent[triple.object_id] = triple.subject_id
 
     nodes = []
     for node in OntologyNode.objects.all():
+        # Skip private/protected members in the main graph unless requested
+        if node.pk in class_member_parent and not show_private and node.visibility in ("private", "protected"):
+            continue
+
         d = _ontology_node_to_dict(node)
-        parent = NamespaceNode.resolve_parent(node.qualified_name, ns_lookup)
-        if parent:
-            d["parent"] = parent
+
+        # Class-member parent takes precedence over namespace parent
+        if node.pk in class_member_parent:
+            d["parent"] = f"node-{class_member_parent[node.pk]}"
+        else:
+            parent = NamespaceNode.resolve_parent(node.qualified_name, ns_lookup)
+            if parent:
+                d["parent"] = parent
+
         nodes.append(d)
+
+    # Collect node IDs that made it into the graph for edge filtering
+    included_ids = {d["id"] for d in nodes}
 
     edges = []
     for triple in OntologyTriple.objects.select_related("subject", "object", "predicate").all():
-        edges.append({
-            "source": f"node-{triple.subject_id}",
-            "target": f"node-{triple.object_id}",
-            "predicate": triple.predicate.name,
-        })
+        source_id = f"node-{triple.subject_id}"
+        target_id = f"node-{triple.object_id}"
+        # Skip "composes" edges — they're represented by parent/child containment
+        if composes_pred and triple.predicate_id == composes_pred.pk:
+            continue
+        # Only include edges where both endpoints are in the graph
+        if source_id in included_ids and target_id in included_ids:
+            edges.append({
+                "source": source_id,
+                "target": target_id,
+                "predicate": triple.predicate.name,
+            })
 
     return JsonResponse({"nodes": nodes, "edges": edges})
 
 
 def _build_neighborhood_graph(node):
-    """Build graph data for a non-namespace node's direct neighbors."""
+    """Build graph data for a non-namespace node's direct neighbors.
+
+    For class/interface nodes, composed members are included as children
+    (both public and private) so the detail view shows the full class structure.
+    """
     nodes_dict = {node.pk: _ontology_node_to_dict(node)}
     edges = []
+    composes_pred = Predicate.objects.filter(name="composes").first()
 
     for triple in node.triples_as_subject.select_related("object", "predicate").all():
         neighbor = triple.object
         if neighbor.pk not in nodes_dict:
-            nodes_dict[neighbor.pk] = _ontology_node_to_dict(neighbor)
+            d = _ontology_node_to_dict(neighbor)
+            # Members composed by this class become children
+            if composes_pred and triple.predicate_id == composes_pred.pk and node.kind in ("class", "interface"):
+                d["parent"] = f"node-{node.pk}"
+            nodes_dict[neighbor.pk] = d
+
+        # Skip composes edges — represented by containment
+        if composes_pred and triple.predicate_id == composes_pred.pk:
+            continue
         edges.append({
             "source": f"node-{node.pk}",
             "target": f"node-{neighbor.pk}",
@@ -167,6 +231,9 @@ def _build_neighborhood_graph(node):
         neighbor = triple.subject
         if neighbor.pk not in nodes_dict:
             nodes_dict[neighbor.pk] = _ontology_node_to_dict(neighbor)
+        # Skip composes edges where this node is the member
+        if composes_pred and triple.predicate_id == composes_pred.pk:
+            continue
         edges.append({
             "source": f"node-{neighbor.pk}",
             "target": f"node-{node.pk}",

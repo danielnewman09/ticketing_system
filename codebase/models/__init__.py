@@ -9,11 +9,19 @@ from .codebase import (
     SymbolRef,
 )
 from .ontology import (
+    LANGUAGE_SPECIALIZATIONS,
+    NODE_KIND_VALUES,
+    NODE_KINDS,
+    SUPPORTED_LANGUAGES,
+    TYPE_KINDS,
+    VALUE_KINDS,
+    VISIBILITY_CHOICES,
     NamespaceNode,
     NamespaceNodeManager,
     OntologyNode,
     OntologyTriple,
     Predicate,
+    valid_specializations,
 )
 
 __all__ = [

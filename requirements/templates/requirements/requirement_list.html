@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Requirements{% endblock %}
 {% block content %}
+<div x-data="{ loading: false }">
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Requirements</h1>
-    <div>
+    <div class="d-flex gap-2">
+        <form method="post" action="{% url 'hlr_review_start' %}"
+              @submit="loading = true">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-warning" :disabled="loading">Review HLRs</button>
+        </form>
         <a href="{% url 'hlr_create' %}" class="btn btn-success">+ High-Level Requirement</a>
         <a href="{% url 'llr_create' %}" class="btn btn-primary">+ Low-Level Requirement</a>
     </div>
@@ -68,4 +74,16 @@
     </div>
 </div>
 {% endif %}
+<!-- Loading modal -->
+<template x-if="loading">
+    <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style="background: rgba(0,0,0,0.5); z-index: 1050;">
+        <div class="bg-white rounded-3 p-4 text-center shadow" style="min-width: 300px;">
+            <div class="spinner-border text-warning mb-3" role="status"></div>
+            <p class="mb-1 fw-bold">Reviewing HLRs</p>
+            <p class="text-muted small mb-0">The agent is analyzing your requirements...</p>
+        </div>
+    </div>
+</template>
+</div>
 {% endblock %}

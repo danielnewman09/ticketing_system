@@ -4,6 +4,8 @@ from . import views
 urlpatterns = [
     path("", views.RequirementListView.as_view(), name="requirement_list"),
     path("hlr/create/", views.HLRCreateView.as_view(), name="hlr_create"),
+    path("hlr/review/", views.hlr_review_start, name="hlr_review_start"),
+    path("hlr/review/apply/", views.hlr_review_apply, name="hlr_review_apply"),
     path("hlr/<int:pk>/", views.HLRDetailView.as_view(), name="hlr_detail"),
     path("hlr/<int:pk>/update/", views.HLRUpdateView.as_view(), name="hlr_update"),
     path("hlr/<int:pk>/graph/", views.hlr_graph_data, name="hlr_graph_data"),

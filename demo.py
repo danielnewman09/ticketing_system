@@ -28,9 +28,9 @@ from django.core.management import call_command
 from django.db import transaction
 from django.db.models import F
 
-from agents.decompose_hlr import decompose
-from agents.design_ontology import design
-from agents.verify_llr import verify
+from agents.decompose.decompose_hlr import decompose
+from agents.design.design_ontology import design
+from agents.verify.verify_llr import verify
 from codebase.models import OntologyNode, OntologyTriple, Predicate
 from requirements.models import (
     HighLevelRequirement,

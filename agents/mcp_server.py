@@ -25,6 +25,7 @@ from django.db.models import F
 from mcp.server.fastmcp import FastMCP
 
 from codebase.models import OntologyNode, OntologyTriple, Predicate
+from components.models import Component, Dependency
 from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
@@ -119,6 +120,69 @@ def get_graph_metrics() -> str:
 
 
 @mcp.tool()
+def list_component_dependencies(component_id: int) -> str:
+    """List all dependencies available for a component's language.
+
+    Follows the path: Component → Language → DependencyManager(s) → Dependency(ies).
+
+    Args:
+        component_id: The Component ID to look up.
+
+    Returns:
+        JSON with language info and flat list of dependencies.
+    """
+    component = Component.objects.select_related("language").filter(pk=component_id).first()
+    if not component:
+        return json.dumps({"error": f"Component {component_id} not found"})
+    if not component.language:
+        return json.dumps({"error": f"Component '{component.name}' has no language assigned"})
+
+    language = component.language
+    deps = Dependency.objects.filter(
+        manager__language=language,
+    ).select_related("manager").order_by("name")
+
+    return json.dumps({
+        "component_id": component.pk,
+        "component_name": component.name,
+        "language": str(language),
+        "language_id": language.pk,
+        "dependencies": [
+            {
+                "name": d.name,
+                "version": d.version,
+                "is_dev": d.is_dev,
+                "manager_name": d.manager.name,
+            }
+            for d in deps
+        ],
+    }, indent=2)
+
+
+@mcp.tool()
+def save_dependency_assessment(hlr_id: int, assessment: dict) -> str:
+    """Save a dependency assessment to an HLR's dependency_context field.
+
+    Args:
+        hlr_id: The HighLevelRequirement ID.
+        assessment: Dict with keys: recommendation ("use_existing", "add_new",
+            or "none"), dependency_name, relevant_structures, rationale.
+    """
+    hlr = HighLevelRequirement.objects.filter(pk=hlr_id).first()
+    if not hlr:
+        return json.dumps({"error": f"HLR {hlr_id} not found"})
+
+    hlr.dependency_context = assessment
+    hlr.save(update_fields=["dependency_context"])
+
+    return json.dumps({
+        "hlr_id": hlr_id,
+        "message": f"Saved dependency assessment for HLR {hlr_id}",
+        "recommendation": assessment.get("recommendation", ""),
+    })
+
+
+@mcp.tool()
 def list_predicates() -> str:
     """List all available predicates for ontology triples."""
     predicates = list(Predicate.objects.values("name", "description"))
@@ -177,8 +241,7 @@ def save_ontology_design(
 
     Args:
         nodes: List of ontology nodes, each with:
-            - kind: one of "class", "struct", "enum", "enum_value", "union",
-              "namespace", "interface", "typedef", "function", "variable", "primitive"
+            - kind: one of the NODE_KINDS defined in codebase.models.ontology
             - name: short name (e.g., "Calculator")
             - qualified_name: fully qualified (e.g., "calc::Calculator")
             - description: what this entity is responsible for
@@ -202,6 +265,8 @@ def save_ontology_design(
                 qualified_name=node_data["qualified_name"],
                 defaults={
                     "kind": node_data["kind"],
+                    "specialization": node_data.get("specialization", ""),
+                    "visibility": node_data.get("visibility", ""),
                     "name": node_data["name"],
                     "description": node_data.get("description", ""),
                     "compound_refid": node_data["qualified_name"],

@@ -247,13 +247,14 @@ their parent enum (e.g., `core::ErrorType::DivisionByZero` under
 restructuring them outside their parent enum. Do NOT flag enum nodes as
 granularity issues for having many enum_values — that is expected behavior.
 
-**Attributes** — Attribute nodes represent properties or data fields of a
+**Attributes and methods** — Attribute and method nodes are members of a
 class, connected via `composes` triples (e.g., `gui::Window --composes-->
 gui::Window::title`). Attributes must NEVER appear as the subject of any
-triple. If a node is modeled as a class but has no behavior or outgoing
-relationships, it should likely be an attribute instead — flag this as a
-granularity issue. Conversely, do NOT flag attribute nodes as orphans or
-granularity problems when they are correctly composed by their parent class.
+triple. Methods may appear as subjects of `invokes` triples. If a node is
+modeled as a class but has no behavior or outgoing relationships, it should
+likely be an attribute instead — flag this as a granularity issue. Do NOT
+flag attribute or method nodes as orphans when they are correctly composed
+by their parent class.
 
 ## Output
 

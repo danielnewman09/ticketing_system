@@ -3,6 +3,8 @@
 {% block title %}Ontology Graph{% endblock %}
 {% block head %}
 <script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/cytoscape-fcose@2/cytoscape-fcose.js"></script>
+<script src="https://unpkg.com/cytoscape-expand-collapse@4/cytoscape-expand-collapse.js"></script>
 <script src="{% static 'js/cytoscape-config.js' %}"></script>
 <script src="{% static 'js/ontology-graph.js' %}"></script>
 {% endblock %}
@@ -30,25 +32,39 @@
                     <select class="form-select form-select-sm" style="width:140px"
                             x-model="filterKind" @change="applyFilters()">
                         <option value="all">All kinds</option>
+                        <option value="attribute">Attribute</option>
                         <option value="class">Class</option>
-                        <option value="struct">Struct</option>
+                        <option value="constant">Constant</option>
                         <option value="enum">Enum</option>
-                        <option value="union">Union</option>
-                        <option value="namespace">Namespace</option>
+                        <option value="enum_value">Enum Value</option>
+                        <option value="function">Function</option>
                         <option value="interface">Interface</option>
-                        <option value="concept">Concept</option>
+                        <option value="method">Method</option>
+                        <option value="module">Module</option>
+                        <option value="primitive">Primitive</option>
+                        <option value="type_alias">Type Alias</option>
                     </select>
                 </div>
                 <div>
                     <label class="form-label mb-0 small fw-bold">Layout</label>
                     <select class="form-select form-select-sm" style="width:140px"
                             x-model="layout" @change="changeLayout()">
-                        <option value="cose">Force-directed</option>
+                        <option value="fcose">Force-directed</option>
+                        <option value="cose">Force-directed (classic)</option>
                         <option value="breadthfirst">Hierarchical</option>
                         <option value="circle">Circle</option>
                         <option value="grid">Grid</option>
                         <option value="concentric">Concentric</option>
                     </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small fw-bold">Classes</label>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-outline-secondary btn-sm" @click="expandAll()" title="Expand all classes">Expand</button>
+                        <button class="btn btn-outline-secondary btn-sm" @click="collapseAll()" title="Collapse all classes">Collapse</button>
+                        <button class="btn btn-sm" :class="showPrivate ? 'btn-warning' : 'btn-outline-secondary'"
+                                @click="togglePrivate()" title="Toggle private members">Private</button>
+                    </div>
                 </div>
                 <div class="ms-auto">
                     <label class="form-label mb-0 small fw-bold">&nbsp;</label>
@@ -81,6 +97,14 @@
                             <strong x-text="selectedNode.qualified_name"></strong>
                             <span class="badge bg-secondary ms-1"
                                   x-text="selectedNode.kind"></span>
+                            <template x-if="selectedNode.visibility">
+                                <span class="badge ms-1"
+                                      :class="{'bg-success': selectedNode.visibility === 'public', 'bg-danger': selectedNode.visibility === 'private', 'bg-warning text-dark': selectedNode.visibility === 'protected'}"
+                                      x-text="selectedNode.visibility"></span>
+                            </template>
+                            <template x-if="selectedNode.memberCount > 0">
+                                <span class="badge bg-info ms-1" x-text="selectedNode.memberCount + ' members'"></span>
+                            </template>
                             <p class="mt-2 mb-1 small" x-show="selectedNode.description" x-text="selectedNode.description"></p>
                             <p class="text-muted small mb-0" x-show="selectedNode.compound_refid">
                                 refid: <code x-text="selectedNode.compound_refid"></code>

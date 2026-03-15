@@ -74,7 +74,24 @@ def decompose_hlr(hlr, model="", prompt_log_file=""):
     """
     from agents.decompose.decompose_hlr import decompose
 
-    result = decompose(hlr.description, model=model, prompt_log_file=prompt_log_file)
+    # Provide sibling HLRs (with component) as context for separation of concerns
+    other_hlrs = list(
+        HighLevelRequirement.objects.exclude(pk=hlr.pk)
+        .select_related("component")
+        .values("id", "description", "component__name")
+    )
+
+    # Include this HLR's component assignment for scoping
+    component_name = hlr.component.name if hlr.component_id else ""
+
+    result = decompose(
+        hlr.description,
+        other_hlrs=other_hlrs,
+        component=component_name,
+        dependency_context=hlr.dependency_context,
+        model=model,
+        prompt_log_file=prompt_log_file,
+    )
 
     with transaction.atomic():
         for llr_data in result.low_level_requirements:

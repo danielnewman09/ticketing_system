@@ -7,13 +7,30 @@
 <script src="{% static 'js/requirement-graph.js' %}"></script>
 {% endblock %}
 {% block content %}
+<div x-data="{ loading: false, loadingMsg: '' }">
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>HLR {{ hlr.pk }}</h1>
-    <div>
+    <div class="d-flex gap-2">
         <a href="{% url 'requirement_list' %}" class="btn btn-outline-secondary btn-sm">Back to List</a>
         <a href="{% url 'hlr_update' hlr.pk %}" class="btn btn-primary btn-sm">Edit</a>
+        <form method="post" action="{% url 'hlr_decompose' hlr.pk %}"
+              @submit="loading = true; loadingMsg = 'Decomposing HLR into low-level requirements...'">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-warning btn-sm" :disabled="loading">Decompose into LLRs</button>
+        </form>
     </div>
 </div>
+<!-- Loading modal -->
+<template x-if="loading">
+    <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style="background: rgba(0,0,0,0.5); z-index: 1050;">
+        <div class="bg-white rounded-3 p-4 text-center shadow" style="min-width: 300px;">
+            <div class="spinner-border text-warning mb-3" role="status"></div>
+            <p class="mb-1 fw-bold">Working</p>
+            <p class="text-muted small mb-0" x-text="loadingMsg"></p>
+        </div>
+    </div>
+</template>
 
 <div class="row">
     <div class="col-md-6">
@@ -83,5 +100,6 @@
             </div>
         </div>
     </div>
+</div>
 </div>
 {% endblock %}
