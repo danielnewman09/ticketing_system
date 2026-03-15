@@ -375,36 +375,38 @@ if __name__ == "__main__":
     import os
     import sys
 
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-    import django
-    django.setup()
+    from db import init_db, get_session
+    from db.models import OntologyNode, OntologyTriple, HighLevelRequirement, LowLevelRequirement
 
-    from django.db.models import F
-    from codebase.models import OntologyNode, OntologyTriple
-    from requirements.models import HighLevelRequirement, LowLevelRequirement
+    init_db()
 
-    hlrs = list(HighLevelRequirement.objects.values("id", "description"))
-    llrs = list(LowLevelRequirement.objects.values(
-        "id", "description",
-    ).annotate(hlr_id=F("high_level_requirement_id")))
+    with get_session() as session:
+        hlrs = [{"id": h.id, "description": h.description} for h in session.query(HighLevelRequirement).all()]
+        llrs = [
+            {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
+            for l in session.query(LowLevelRequirement).all()
+        ]
 
-    nodes = list(OntologyNode.objects.values("id", "qualified_name", "kind", "description"))
-    triples = []
-    for t in OntologyTriple.objects.select_related("subject", "object", "predicate").all():
-        triples.append({
-            "id": t.id,
-            "subject_qualified_name": t.subject.qualified_name,
-            "predicate": t.predicate.name,
-            "object_qualified_name": t.object.qualified_name,
-        })
+        nodes = [
+            {"id": n.id, "qualified_name": n.qualified_name, "kind": n.kind, "description": n.description}
+            for n in session.query(OntologyNode).all()
+        ]
+        triples = []
+        for t in session.query(OntologyTriple).all():
+            triples.append({
+                "id": t.id,
+                "subject_qualified_name": t.subject.qualified_name,
+                "predicate": t.predicate.name,
+                "object_qualified_name": t.object.qualified_name,
+            })
 
-    hlr_triples = {}
-    for hlr in HighLevelRequirement.objects.prefetch_related("triples").all():
-        hlr_triples[hlr.id] = list(hlr.triples.values_list("id", flat=True))
+        hlr_triples = {}
+        for hlr in session.query(HighLevelRequirement).all():
+            hlr_triples[hlr.id] = [t.id for t in hlr.triples]
 
-    llr_triples = {}
-    for llr in LowLevelRequirement.objects.prefetch_related("triples").all():
-        llr_triples[llr.id] = list(llr.triples.values_list("id", flat=True))
+        llr_triples = {}
+        for llr in session.query(LowLevelRequirement).all():
+            llr_triples[llr.id] = [t.id for t in llr.triples]
 
     result = challenge(hlrs, llrs, nodes, triples, hlr_triples, llr_triples)
     print(json.dumps(result.model_dump(), indent=2))

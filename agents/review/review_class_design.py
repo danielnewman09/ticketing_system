@@ -10,8 +10,10 @@ This is NOT an LLM agent — it runs purely on the graph structure.
 
 from difflib import SequenceMatcher
 
-from codebase.models import OntologyNode, OntologyTriple
-from codebase.models.ontology import TYPE_KINDS, VALUE_KINDS
+from sqlalchemy.orm import Session
+
+from db.models import OntologyNode, OntologyTriple, HighLevelRequirement, LowLevelRequirement
+from db.models.ontology import TYPE_KINDS, VALUE_KINDS
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +188,6 @@ class NameCollisionViolation:
         self.name = name
         self.qualified_names = qualified_names
 
-        # Identify unnamespaced nodes (name == qualified_name)
         unnamespaced = [qn for qn in qualified_names if qn == name]
         namespaced = [qn for qn in qualified_names if qn != name]
 
@@ -246,36 +247,28 @@ class EnumHierarchyViolation:
         )
 
 
-def _check_enum_hierarchy():
-    """Find enum_value nodes not properly nested under an enum.
-
-    An enum_value's qualified_name should start with its parent enum's
-    qualified_name followed by '::'.  Any enum_value that doesn't follow
-    this pattern is a violation.
-    """
+def _check_enum_hierarchy(session: Session):
+    """Find enum_value nodes not properly nested under an enum."""
     enum_nodes = {
         n.qualified_name
-        for n in OntologyNode.objects.filter(kind="enum")
+        for n in session.query(OntologyNode).filter(OntologyNode.kind == "enum").all()
     }
-    enum_values = OntologyNode.objects.filter(kind="enum_value")
+    enum_values = session.query(OntologyNode).filter(OntologyNode.kind == "enum_value").all()
 
     violations = []
     for ev in enum_values:
-        # Check if this enum_value is nested under any known enum
         parent_qname = ev.qualified_name.rsplit("::", 1)[0] if "::" in ev.qualified_name else ""
         if parent_qname in enum_nodes:
-            continue  # correctly nested
+            continue
 
-        # Try to find which enum it should belong to (by looking at
-        # composes triples or by matching name patterns)
         possible_parent = None
         for enum_qname in enum_nodes:
-            # Check if there's a composes triple linking them
-            if OntologyTriple.objects.filter(
-                subject__qualified_name=enum_qname,
-                predicate__name="composes",
-                object=ev,
-            ).exists():
+            exists = session.query(OntologyTriple).filter(
+                OntologyTriple.subject.has(qualified_name=enum_qname),
+                OntologyTriple.predicate.has(name="composes"),
+                OntologyTriple.object_id == ev.id,
+            ).first() is not None
+            if exists:
                 possible_parent = enum_qname
                 break
 
@@ -308,21 +301,17 @@ class AttributeSubjectViolation:
         )
 
 
-def _check_attribute_usage():
-    """Find attribute nodes misused as triple subjects.
-
-    Attributes should only appear as the object of a 'composes' triple,
-    never as the subject of any triple.
-    """
-    attribute_nodes = OntologyNode.objects.filter(kind="attribute")
-    if not attribute_nodes.exists():
+def _check_attribute_usage(session: Session):
+    """Find attribute nodes misused as triple subjects."""
+    attribute_nodes = session.query(OntologyNode).filter(OntologyNode.kind == "attribute").all()
+    if not attribute_nodes:
         return []
 
     violations = []
     for attr in attribute_nodes:
-        subject_triples = OntologyTriple.objects.filter(
-            subject=attr,
-        ).select_related("subject", "object", "predicate")
+        subject_triples = session.query(OntologyTriple).filter(
+            OntologyTriple.subject_id == attr.id,
+        ).all()
         for t in subject_triples:
             triple_str = (
                 f"{t.subject.qualified_name} --{t.predicate.name}--> "
@@ -335,12 +324,11 @@ def _check_attribute_usage():
     return violations
 
 
-def _check_name_collisions():
+def _check_name_collisions(session: Session):
     """Find nodes that share the same short name across different namespaces."""
     from collections import defaultdict
 
-    # Only check type-level nodes — functions/variables are expected to repeat
-    nodes = OntologyNode.objects.filter(kind__in=TYPE_KINDS)
+    nodes = session.query(OntologyNode).filter(OntologyNode.kind.in_(TYPE_KINDS)).all()
     by_name = defaultdict(list)
     for node in nodes:
         by_name[node.name].append(node.qualified_name)
@@ -352,17 +340,11 @@ def _check_name_collisions():
     return violations
 
 
-def review_class_design():
-    """Check ontology for invalid OO relationships and naming issues.
-
-    Returns a list of ClassDesignViolation and NameCollisionViolation objects.
-    """
+def review_class_design(session: Session):
+    """Check ontology for invalid OO relationships and naming issues."""
     violations = []
 
-    # --- Triple relationship checks ---
-    triples = OntologyTriple.objects.select_related(
-        "subject", "object", "predicate",
-    ).all()
+    triples = session.query(OntologyTriple).all()
 
     for triple in triples:
         pred_name = triple.predicate.name
@@ -371,11 +353,9 @@ def review_class_design():
 
         valid_pairs = VALID_RELATIONSHIPS.get(pred_name)
         if valid_pairs is None:
-            # Unknown predicate — skip (could be user-defined)
             continue
 
         if (subj_kind, obj_kind) not in valid_pairs:
-            # A type invoking its own member function is valid
             if (
                 pred_name == "invokes"
                 and subj_kind in TYPE_KINDS
@@ -389,24 +369,15 @@ def review_class_design():
             suggestion = _suggest_fix(subj_kind, pred_name, obj_kind)
             violations.append(ClassDesignViolation(triple, suggestion))
 
-    # --- Enum hierarchy checks ---
-    violations.extend(_check_enum_hierarchy())
-
-    # --- Attribute usage checks ---
-    violations.extend(_check_attribute_usage())
-
-    # --- Name collision checks ---
-    violations.extend(_check_name_collisions())
+    violations.extend(_check_enum_hierarchy(session))
+    violations.extend(_check_attribute_usage(session))
+    violations.extend(_check_name_collisions(session))
 
     return violations
 
 
 def violations_to_challenges(violations):
-    """Convert violation objects to DesignChallenge objects.
-
-    This allows violations to flow into the existing challenge/remediate
-    pipeline.
-    """
+    """Convert violation objects to DesignChallenge objects."""
     from agents.review.challenge_design import DesignChallenge
 
     challenges = []
@@ -486,44 +457,42 @@ def _name_similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-def _build_conflict_context(proposed, existing_qname, existing_node):
+def _build_conflict_context(session: Session, proposed, existing_qname, existing_node):
     """Build the context dict for one conflict to send to the review agent."""
-    from requirements.models import HighLevelRequirement, LowLevelRequirement
-
-    # Existing triples involving this node
     existing_triples = []
-    for t in OntologyTriple.objects.filter(
-        subject__qualified_name=existing_qname,
-    ).select_related("subject", "object", "predicate"):
+    for t in session.query(OntologyTriple).filter(
+        OntologyTriple.subject.has(qualified_name=existing_qname),
+    ).all():
         existing_triples.append(
             f"{t.subject.qualified_name} --{t.predicate.name}--> {t.object.qualified_name}"
         )
-    for t in OntologyTriple.objects.filter(
-        object__qualified_name=existing_qname,
-    ).select_related("subject", "object", "predicate"):
+    for t in session.query(OntologyTriple).filter(
+        OntologyTriple.object.has(qualified_name=existing_qname),
+    ).all():
         existing_triples.append(
             f"{t.subject.qualified_name} --{t.predicate.name}--> {t.object.qualified_name}"
         )
 
-    # HLR/LLR context: requirements linked to triples involving this node
-    triple_ids = OntologyTriple.objects.filter(
-        subject__qualified_name=existing_qname,
-    ).union(
-        OntologyTriple.objects.filter(object__qualified_name=existing_qname)
-    ).values_list("id", flat=True)
+    # Get triple IDs involving this node
+    related_triples = (
+        session.query(OntologyTriple)
+        .filter(
+            (OntologyTriple.subject.has(qualified_name=existing_qname))
+            | (OntologyTriple.object.has(qualified_name=existing_qname))
+        )
+        .all()
+    )
+    triple_ids = {t.id for t in related_triples}
 
-    hlr_context = [
-        f"HLR {h.pk}: {h.description}"
-        for h in HighLevelRequirement.objects.filter(
-            triples__id__in=triple_ids,
-        ).distinct()
-    ]
-    llr_context = [
-        f"LLR {l.pk} (HLR {l.high_level_requirement_id}): {l.description}"
-        for l in LowLevelRequirement.objects.filter(
-            triples__id__in=triple_ids,
-        ).distinct()
-    ]
+    hlr_context = []
+    for h in session.query(HighLevelRequirement).all():
+        if any(t.id in triple_ids for t in h.triples):
+            hlr_context.append(f"HLR {h.id}: {h.description}")
+
+    llr_context = []
+    for l in session.query(LowLevelRequirement).all():
+        if any(t.id in triple_ids for t in l.triples):
+            llr_context.append(f"LLR {l.id} (HLR {l.high_level_requirement_id}): {l.description}")
 
     return {
         "proposed_qualified_name": proposed.qualified_name,
@@ -535,46 +504,27 @@ def _build_conflict_context(proposed, existing_qname, existing_node):
             existing_node.description if existing_node else ""
         ),
         "existing_triples": existing_triples,
-        "proposed_triples": [],  # filled in by caller
+        "proposed_triples": [],
         "hlr_context": hlr_context,
         "llr_context": llr_context,
     }
 
 
-def _is_nested_enum_value(existing_node):
+def _is_nested_enum_value(session: Session, existing_node):
     """Return True if the existing node is an enum_value properly nested under an enum."""
     if existing_node.kind != "enum_value":
         return False
     if "::" not in existing_node.qualified_name:
         return False
     parent_qname = existing_node.qualified_name.rsplit("::", 1)[0]
-    return OntologyNode.objects.filter(
-        qualified_name=parent_qname, kind="enum",
-    ).exists()
+    return session.query(OntologyNode).filter(
+        OntologyNode.qualified_name == parent_qname,
+        OntologyNode.kind == "enum",
+    ).first() is not None
 
 
-def sanitize_new_nodes(plan, prompt_log_file=""):
-    """Check proposed new_nodes against existing nodes for near-duplicates.
-
-    When a proposed node's name closely matches an existing node, the
-    conflict is sent to the review_node_conflict agent to decide whether
-    the proposed name (better OO hierarchy) or the existing name should
-    win. The plan is then mutated accordingly:
-
-    - keep_proposed: the existing node is renamed to the proposed
-      qualified_name, the proposed node is dropped from new_nodes (it's
-      already in the DB under the new name), and triples are left as-is.
-    - keep_existing: the proposed node is dropped and new_triples are
-      rewritten to reference the existing node.
-    - keep_both: no action — both nodes are kept.
-
-    Certain conflicts are resolved deterministically without consulting
-    the review agent:
-    - An existing enum_value properly nested under its parent enum is
-      never replaced by a proposed node of a different kind.
-
-    Returns a list of log messages describing what happened.
-    """
+def sanitize_new_nodes(session: Session, plan, prompt_log_file=""):
+    """Check proposed new_nodes against existing nodes for near-duplicates."""
     from agents.review.review_node_conflict import review_conflicts
 
     if not plan.new_nodes:
@@ -582,11 +532,10 @@ def sanitize_new_nodes(plan, prompt_log_file=""):
 
     existing_nodes = {
         (n.name, n.qualified_name): n
-        for n in OntologyNode.objects.all()
+        for n in session.query(OntologyNode).all()
     }
 
-    # Detect conflicts
-    conflicts = []  # (proposed, existing_qname, existing_node)
+    conflicts = []
     no_conflict = []
 
     for proposed in plan.new_nodes:
@@ -596,16 +545,14 @@ def sanitize_new_nodes(plan, prompt_log_file=""):
 
         for (existing_name, existing_qname), existing_node in existing_nodes.items():
             if proposed.qualified_name == existing_qname:
-                continue  # same node, not a conflict
+                continue
 
-            # Exact name match in different namespace
             if proposed.name == existing_name:
                 best_match = existing_qname
                 best_score = 1.0
                 best_node = existing_node
                 break
 
-            # Fuzzy name similarity
             score = _name_similarity(proposed.name, existing_name)
             if score >= _SIMILARITY_THRESHOLD and score > best_score:
                 best_match = existing_qname
@@ -620,21 +567,17 @@ def sanitize_new_nodes(plan, prompt_log_file=""):
     if not conflicts:
         return []
 
-    # Separate conflicts into deterministic (auto-resolved) and agent-reviewed
     messages = []
     keep = list(no_conflict)
     agent_conflicts = []
 
     for proposed, existing_qname, existing_node in conflicts:
-        # Guard: never rename a properly-nested enum_value to a different kind
         if (
             existing_node
             and existing_node.kind == "enum_value"
             and proposed.kind != "enum_value"
-            and _is_nested_enum_value(existing_node)
+            and _is_nested_enum_value(session, existing_node)
         ):
-            # The proposed node is a different kind (e.g., class) that
-            # happens to share a name with an enum_value — keep both
             keep.append(proposed)
             messages.append(
                 f"Kept proposed '{proposed.qualified_name}' ({proposed.kind}) "
@@ -643,13 +586,11 @@ def sanitize_new_nodes(plan, prompt_log_file=""):
             )
             continue
 
-        # Guard: never replace an enum with a non-enum of the same name
         if (
             existing_node
             and existing_node.kind == "enum"
             and proposed.kind != "enum"
         ):
-            # Drop the proposed node, rewrite triples to existing
             for triple in plan.new_triples:
                 if triple.subject_qualified_name == proposed.qualified_name:
                     triple.subject_qualified_name = existing_qname
@@ -664,13 +605,11 @@ def sanitize_new_nodes(plan, prompt_log_file=""):
 
         agent_conflicts.append((proposed, existing_qname, existing_node))
 
-    # Send remaining conflicts to the review agent
     if agent_conflicts:
         conflict_contexts = []
         for proposed, existing_qname, existing_node in agent_conflicts:
-            ctx = _build_conflict_context(proposed, existing_qname, existing_node)
+            ctx = _build_conflict_context(session, proposed, existing_qname, existing_node)
 
-            # Add proposed triples that reference this node
             for t in plan.new_triples:
                 if (t.subject_qualified_name == proposed.qualified_name
                         or t.object_qualified_name == proposed.qualified_name):
@@ -685,7 +624,6 @@ def sanitize_new_nodes(plan, prompt_log_file=""):
             conflict_contexts, prompt_log_file=prompt_log_file,
         )
 
-        # Build lookup from review results
         resolution_map = {
             r.proposed_qualified_name: r for r in review_result.resolutions
         }
@@ -702,9 +640,9 @@ def sanitize_new_nodes(plan, prompt_log_file=""):
                 continue
 
             if resolution.action == "keep_proposed":
-                OntologyNode.objects.filter(
-                    qualified_name=existing_qname,
-                ).update(qualified_name=proposed.qualified_name)
+                session.query(OntologyNode).filter(
+                    OntologyNode.qualified_name == existing_qname,
+                ).update({"qualified_name": proposed.qualified_name})
 
                 for t in plan.remove_triples:
                     if t.subject_qualified_name == existing_qname:

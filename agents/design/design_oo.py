@@ -12,9 +12,9 @@ import json
 import logging
 
 from agents.llm_client import call_tool
-from codebase.models.ontology import LANGUAGE_SPECIALIZATIONS, VISIBILITY_CHOICES
+from db.models.ontology import LANGUAGE_SPECIALIZATIONS, VISIBILITY_CHOICES
 from codebase.schemas import OODesignSchema
-from requirements.models import format_hlrs_for_prompt
+from db.models.requirements import format_hlrs_for_prompt
 
 
 # ---------------------------------------------------------------------------

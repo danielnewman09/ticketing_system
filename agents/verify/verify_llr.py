@@ -135,24 +135,29 @@ if __name__ == "__main__":
     import os
     import sys
 
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-    import django
-    django.setup()
+    from db import init_db, get_session
+    from db.models import OntologyNode, LowLevelRequirement
 
-    from codebase.models import OntologyNode
-    from requirements.models import LowLevelRequirement
+    init_db()
 
     llr_id = int(sys.argv[1]) if len(sys.argv) > 1 else None
     if not llr_id:
         print("Usage: python -m agents.verify_llr <llr_id>")
         sys.exit(1)
 
-    llr = LowLevelRequirement.objects.get(pk=llr_id)
-    llr_dict = {"id": llr.pk, "description": llr.description}
+    with get_session() as session:
+        llr = session.query(LowLevelRequirement).filter_by(id=llr_id).first()
+        llr_dict = {"id": llr.id, "description": llr.description}
 
-    existing = list(llr.verifications.values("method", "test_name", "description"))
+        existing = [
+            {"method": v.method, "test_name": v.test_name, "description": v.description}
+            for v in llr.verifications
+        ]
 
-    nodes = list(OntologyNode.objects.values("qualified_name", "kind", "description"))
+        nodes = [
+            {"qualified_name": n.qualified_name, "kind": n.kind, "description": n.description}
+            for n in session.query(OntologyNode).all()
+        ]
 
     result = verify(llr_dict, existing, nodes)
     print(json.dumps(

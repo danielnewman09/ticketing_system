@@ -1,0 +1,19 @@
+"""SQLAlchemy DeclarativeBase and naming conventions."""
+
+from sqlalchemy.orm import DeclarativeBase
+
+# Naming convention ensures Alembic generates consistent constraint names.
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+Base.metadata.naming_convention = convention

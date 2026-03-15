@@ -2,19 +2,18 @@
 Pydantic schemas for requirements models.
 
 These are the single source of truth for the structured data shapes used by
-both the Django ORM models and the AI agent. If you add or rename fields on
-the Django models, update these schemas to match.
+both the ORM models and the AI agent.
 """
 
 from typing import Literal
 
 from pydantic import BaseModel
 
-from requirements.models import VERIFICATION_METHODS
+from db.models.verification import VERIFICATION_METHODS
 
 VerificationMethodType = Literal["automated", "review", "inspection"]
 
-# Runtime check: if someone adds a method to the Django model but forgets
+# Runtime check: if someone adds a method to the model but forgets
 # to update the Literal above, this will fail at import time.
 _literal_methods = set(VerificationMethodType.__args__)
 _model_methods = set(VERIFICATION_METHODS)

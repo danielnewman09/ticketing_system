@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from codebase.models.ontology import NODE_KINDS, VISIBILITY_CHOICES
+from db.models.ontology import NODE_KINDS, VISIBILITY_CHOICES
 
 # Derived from the canonical NODE_KINDS list so there is one place to
 # add or remove kinds.

@@ -20,27 +20,20 @@ Requires ANTHROPIC_API_KEY in the environment.
 import os
 import sys
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-
-import django
-
-django.setup()
-
-from django.core.management import call_command
-from django.db.models import F
-
-from agents.design.design_per_hlr import design_all_hlrs
-from agents.verify.verify_llr import verify
-from requirements.views.hlr import assign_hlr_components, decompose_hlr
-from requirements.services.persistence import persist_design, persist_verification
-from codebase.models import OntologyNode, OntologyTriple, Predicate
-from requirements.models import (
+from db import init_db, get_session, get_or_create
+from db.base import Base
+from db.models import (
+    Component,
     HighLevelRequirement,
     LowLevelRequirement,
+    OntologyNode,
+    OntologyTriple,
+    Predicate,
     VerificationAction,
     VerificationCondition,
     VerificationMethod,
 )
+from db.vec import ensure_vec_table
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -58,8 +51,15 @@ def step_flush():
     print("=" * 60)
     print("STEP 1: Flush database")
     print("=" * 60)
-    call_command("flush", "--no-input", verbosity=0)
-    Predicate.ensure_defaults()
+
+    from db import get_main_engine
+    engine = get_main_engine()
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    ensure_vec_table()
+
+    with get_session() as session:
+        Predicate.ensure_defaults(session)
 
     # Clear and recreate logs directory
     import shutil
@@ -75,17 +75,35 @@ def step_assign_components():
     print("STEP 2: Create HLRs and assign components")
     print("=" * 60)
 
-    for desc in HLR_DESCRIPTIONS:
-        hlr = HighLevelRequirement.objects.create(description=desc)
-        print(f"  Created HLR {hlr.pk}: {desc[:60]}")
+    from agents.design.assign_components import assign_components
 
-    print(f"\n  Assigning {HighLevelRequirement.objects.count()} HLRs to components via AI agent...")
-    assignments = assign_hlr_components(
-        prompt_log_file=os.path.join(LOGS_DIR, "step2_assign_components.md"),
-    )
+    with get_session() as session:
+        for desc in HLR_DESCRIPTIONS:
+            hlr = HighLevelRequirement(description=desc)
+            session.add(hlr)
+        session.flush()
 
-    for a in assignments:
-        print(f"  HLR {a['hlr_id']} -> {a['component_name']} ({a['rationale'][:60]})")
+        hlr_count = session.query(HighLevelRequirement).count()
+        print(f"\n  Assigning {hlr_count} HLRs to components via AI agent...")
+
+        hlr_dicts = [
+            {"id": h.id, "description": h.description}
+            for h in session.query(HighLevelRequirement).all()
+        ]
+        existing = [name for (name,) in session.query(Component.name).all()]
+
+        assignments = assign_components(
+            hlr_dicts,
+            existing_components=existing or None,
+            prompt_log_file=os.path.join(LOGS_DIR, "step2_assign_components.md"),
+        )
+
+        for a in assignments:
+            component, _ = get_or_create(session, Component, name=a["component_name"])
+            session.query(HighLevelRequirement).filter_by(id=a["hlr_id"]).update(
+                {"component_id": component.id}
+            )
+            print(f"  HLR {a['hlr_id']} -> {a['component_name']} ({a['rationale'][:60]})")
 
     print()
 
@@ -95,22 +113,38 @@ def step_decompose():
     print("STEP 3: Decompose requirements")
     print("=" * 60)
 
-    hlrs = HighLevelRequirement.objects.all()
-    print(f"  Decomposing {hlrs.count()} HLRs via AI agent...")
-    print("  (each call hits the Anthropic API)\n")
+    from requirements.agents.decompose_hlr import decompose
+    from requirements.services.persistence import persist_decomposition
 
-    for i, hlr in enumerate(hlrs, 1):
-        print(f"  [{i}/{hlrs.count()}] {hlr.description[:65]}...")
-        llr_count = decompose_hlr(
-            hlr,
-            prompt_log_file=os.path.join(LOGS_DIR, f"step3_decompose_hlr{hlr.pk}.md"),
-        )
-        print(f"    -> HLR {hlr.pk}: {hlr.description[:60]}")
-        print(f"       {llr_count} LLRs generated\n")
+    with get_session() as session:
+        hlrs = session.query(HighLevelRequirement).all()
+        print(f"  Decomposing {len(hlrs)} HLRs via AI agent...")
+        print("  (each call hits the Anthropic API)\n")
 
-    total_hlrs = HighLevelRequirement.objects.count()
-    total_llrs = LowLevelRequirement.objects.count()
-    print(f"  Requirements phase complete: {total_hlrs} HLRs, {total_llrs} LLRs\n")
+        for i, hlr in enumerate(hlrs, 1):
+            print(f"  [{i}/{len(hlrs)}] {hlr.description[:65]}...")
+
+            other_hlrs = [
+                {"id": h.id, "description": h.description, "component__name": h.component.name if h.component else None}
+                for h in session.query(HighLevelRequirement).filter(HighLevelRequirement.id != hlr.id).all()
+            ]
+            component_name = hlr.component.name if hlr.component_id else ""
+
+            result = decompose(
+                hlr.description,
+                other_hlrs=other_hlrs,
+                component=component_name,
+                dependency_context=hlr.dependency_context,
+                prompt_log_file=os.path.join(LOGS_DIR, f"step3_decompose_hlr{hlr.id}.md"),
+            )
+
+            persisted = persist_decomposition(session, hlr, result.low_level_requirements)
+            print(f"    -> HLR {hlr.id}: {hlr.description[:60]}")
+            print(f"       {persisted.llrs_created} LLRs generated\n")
+
+        total_hlrs = session.query(HighLevelRequirement).count()
+        total_llrs = session.query(LowLevelRequirement).count()
+        print(f"  Requirements phase complete: {total_hlrs} HLRs, {total_llrs} LLRs\n")
 
 
 def step_design():
@@ -119,45 +153,53 @@ def step_design():
     print("=" * 60)
     print("  Designing each HLR individually in dependency order...\n")
 
-    hlrs = list(
-        HighLevelRequirement.objects.values(
-            "id", "description", "component_id", "dependency_context",
-        ).annotate(component_name=F("component__name"))
-    )
-    llrs = list(LowLevelRequirement.objects.values(
-        "id", "description",
-    ).annotate(hlr_id=F("high_level_requirement_id")))
+    from agents.design.design_per_hlr import design_all_hlrs
+    from requirements.services.persistence import persist_design
 
-    per_hlr_results = design_all_hlrs(
-        hlrs, llrs,
-        log_dir=LOGS_DIR,
-    )
+    with get_session() as session:
+        hlrs = [
+            {
+                "id": h.id,
+                "description": h.description,
+                "component_id": h.component_id,
+                "dependency_context": h.dependency_context,
+                "component_name": h.component.name if h.component else None,
+            }
+            for h in session.query(HighLevelRequirement).all()
+        ]
+        llrs = [
+            {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
+            for l in session.query(LowLevelRequirement).all()
+        ]
 
-    # Persist all results
-    total_nodes = 0
-    total_triples = 0
-    total_linked = 0
-    total_skipped = 0
-    qname_to_node = {}
+        per_hlr_results = design_all_hlrs(
+            hlrs, llrs,
+            log_dir=LOGS_DIR,
+        )
 
-    for hlr_dict, oo, result in per_hlr_results:
-        print(f"\n  --- HLR {hlr_dict['id']}: {hlr_dict['description'][:50]}... ---")
+        total_nodes = 0
+        total_triples = 0
+        total_linked = 0
+        total_skipped = 0
+        qname_to_node = {}
 
-        # Log intercomponent nodes
-        for node_data in result.nodes:
-            if node_data.qualified_name not in qname_to_node:
-                flag = " [intercomponent]" if node_data.is_intercomponent else ""
-                print(f"  Node: {node_data.qualified_name} ({node_data.kind}){flag}")
+        for hlr_dict, oo, result in per_hlr_results:
+            print(f"\n  --- HLR {hlr_dict['id']}: {hlr_dict['description'][:50]}... ---")
 
-        persisted = persist_design(result, qname_to_node=qname_to_node)
-        total_nodes += persisted.nodes_created
-        total_triples += persisted.triples_created
-        total_linked += persisted.links_applied
-        total_skipped += persisted.links_skipped
+            for node_data in result.nodes:
+                if node_data.qualified_name not in qname_to_node:
+                    flag = " [intercomponent]" if node_data.is_intercomponent else ""
+                    print(f"  Node: {node_data.qualified_name} ({node_data.kind}){flag}")
 
-    print(f"\n  Design phase complete:")
-    print(f"    {total_nodes} nodes, {total_triples} triples")
-    print(f"    {total_linked} requirement-to-triple links applied, {total_skipped} skipped\n")
+            persisted = persist_design(session, result, qname_to_node=qname_to_node)
+            total_nodes += persisted.nodes_created
+            total_triples += persisted.triples_created
+            total_linked += persisted.links_applied
+            total_skipped += persisted.links_skipped
+
+        print(f"\n  Design phase complete:")
+        print(f"    {total_nodes} nodes, {total_triples} triples")
+        print(f"    {total_linked} requirement-to-triple links applied, {total_skipped} skipped\n")
 
 
 def step_verify():
@@ -165,75 +207,83 @@ def step_verify():
     print("STEP 5: Verify — flesh out LLR verification procedures")
     print("=" * 60)
 
-    ontology_nodes = [
-        {"qualified_name": qn, "pk": pk}
-        for qn, pk in OntologyNode.objects.values_list("qualified_name", "pk")
-    ]
-    llrs = LowLevelRequirement.objects.prefetch_related("verifications").all()
+    from agents.verify.verify_llr import verify
+    from requirements.services.persistence import persist_verification
 
-    print(f"  Processing {llrs.count()} LLRs against {len(ontology_nodes)} ontology nodes...\n")
+    with get_session() as session:
+        ontology_nodes = [
+            {"qualified_name": n.qualified_name, "pk": n.id, "kind": n.kind, "description": n.description}
+            for n in session.query(OntologyNode).all()
+        ]
+        llrs = session.query(LowLevelRequirement).all()
 
-    total_conditions = 0
-    total_actions = 0
+        print(f"  Processing {len(llrs)} LLRs against {len(ontology_nodes)} ontology nodes...\n")
 
-    for llr in llrs:
-        llr_dict = {"id": llr.pk, "description": llr.description}
-        existing = list(llr.verifications.values("method", "test_name", "description"))
+        total_conditions = 0
+        total_actions = 0
 
-        if not existing:
-            print(f"  LLR {llr.pk}: no verifications to flesh out, skipping")
-            continue
+        for llr in llrs:
+            llr_dict = {"id": llr.id, "description": llr.description}
+            existing = [
+                {"method": v.method, "test_name": v.test_name, "description": v.description}
+                for v in llr.verifications
+            ]
 
-        print(f"  LLR {llr.pk}: {llr.description[:60]}...")
-        agent_result = verify(
-            llr_dict, existing, ontology_nodes,
-            prompt_log_file=os.path.join(LOGS_DIR, f"step5_verify_llr{llr.pk}.md"),
-        )
+            if not existing:
+                print(f"  LLR {llr.id}: no verifications to flesh out, skipping")
+                continue
 
-        persisted = persist_verification(llr, agent_result.verifications, ontology_nodes)
-        total_conditions += persisted.conditions_created
-        total_actions += persisted.actions_created
+            print(f"  LLR {llr.id}: {llr.description[:60]}...")
+            agent_result = verify(
+                llr_dict, existing, ontology_nodes,
+                prompt_log_file=os.path.join(LOGS_DIR, f"step5_verify_llr{llr.id}.md"),
+            )
 
-        for v in agent_result.verifications:
-            print(f"    [{v.method}] {v.test_name}: "
-                  f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
-                  f"{len(v.postconditions)} post")
+            persisted = persist_verification(session, llr, agent_result.verifications, ontology_nodes)
+            total_conditions += persisted.conditions_created
+            total_actions += persisted.actions_created
 
-    print(f"\n  Verification phase complete:")
-    print(f"    {total_conditions} conditions, {total_actions} actions created\n")
+            for v in agent_result.verifications:
+                print(f"    [{v.method}] {v.test_name}: "
+                      f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
+                      f"{len(v.postconditions)} post")
+
+        print(f"\n  Verification phase complete:")
+        print(f"    {total_conditions} conditions, {total_actions} actions created\n")
 
 
 def step_summary():
     print("=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    print(f"  HLRs:             {HighLevelRequirement.objects.count()}")
-    print(f"  LLRs:             {LowLevelRequirement.objects.count()}")
-    print(f"  Verifications:    {VerificationMethod.objects.count()}")
-    print(f"  Conditions:       {VerificationCondition.objects.count()}")
-    print(f"  Actions:          {VerificationAction.objects.count()}")
-    print(f"  Ontology nodes:   {OntologyNode.objects.count()}")
-    print(f"  Ontology triples: {OntologyTriple.objects.count()}")
 
-    # Show which HLRs got linked
-    for hlr in HighLevelRequirement.objects.prefetch_related("triples__subject", "triples__object").all():
-        print(f"\n  HLR {hlr.pk}: {hlr.description[:60]}")
-        for triple in hlr.triples.all():
-            print(f"    -> {triple.subject.name} --{triple.predicate}--> {triple.object.name}")
-        if not hlr.triples.exists():
-            print(f"    (no triples linked)")
+    with get_session() as session:
+        print(f"  HLRs:             {session.query(HighLevelRequirement).count()}")
+        print(f"  LLRs:             {session.query(LowLevelRequirement).count()}")
+        print(f"  Verifications:    {session.query(VerificationMethod).count()}")
+        print(f"  Conditions:       {session.query(VerificationCondition).count()}")
+        print(f"  Actions:          {session.query(VerificationAction).count()}")
+        print(f"  Ontology nodes:   {session.query(OntologyNode).count()}")
+        print(f"  Ontology triples: {session.query(OntologyTriple).count()}")
+
+        for hlr in session.query(HighLevelRequirement).all():
+            print(f"\n  HLR {hlr.id}: {hlr.description[:60]}")
+            for triple in hlr.triples:
+                print(f"    -> {triple.subject.name} --{triple.predicate}--> {triple.object.name}")
+            if not hlr.triples:
+                print(f"    (no triples linked)")
 
     print("\n" + "=" * 60)
-    print("Start the server to explore:")
-    print("  python manage.py runserver")
+    print("Start the NiceGUI server to explore:")
+    print("  python nicegui_app.py")
     print()
     print("Then visit:")
-    print("  http://127.0.0.1:8000/ontology/        — graph visualization")
-    print("  http://127.0.0.1:8000/requirements/     — requirements list")
+    print("  http://127.0.0.1:8081/")
     print("=" * 60)
 
 
 if __name__ == "__main__":
+    init_db()
     step_flush()
     step_assign_components()
     step_decompose()

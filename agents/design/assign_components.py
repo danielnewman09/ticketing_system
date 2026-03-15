@@ -9,7 +9,7 @@ which helps the decompose agent maintain separation of concerns.
 """
 
 from agents.llm_client import call_tool
-from requirements.models import format_hlrs_for_prompt
+from db.models.requirements import format_hlrs_for_prompt
 
 
 SYSTEM_PROMPT = """\

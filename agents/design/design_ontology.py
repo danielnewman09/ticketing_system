@@ -13,10 +13,10 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 import json
 
 from agents.llm_client import call_tool
-from codebase.models import Predicate
-from codebase.models.ontology import LANGUAGE_SPECIALIZATIONS, NODE_KIND_VALUES
+from db.models import Predicate
+from db.models.ontology import LANGUAGE_SPECIALIZATIONS, NODE_KIND_VALUES
 from codebase.schemas import DesignSchema
-from requirements.models import format_hlrs_for_prompt
+from db.models.requirements import format_hlrs_for_prompt
 
 
 SYSTEM_PROMPT = """\
@@ -180,17 +180,17 @@ if __name__ == "__main__":
     import os
     import sys
 
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-    import django
-    django.setup()
+    from db import init_db, get_session
+    from db.models import HighLevelRequirement, LowLevelRequirement
 
-    from django.db.models import F
-    from requirements.models import HighLevelRequirement, LowLevelRequirement
+    init_db()
 
-    hlrs = list(HighLevelRequirement.objects.values("id", "description"))
-    llrs = list(LowLevelRequirement.objects.values(
-        "id", "description",
-    ).annotate(hlr_id=F("high_level_requirement_id")))
+    with get_session() as session:
+        hlrs = [{"id": h.id, "description": h.description} for h in session.query(HighLevelRequirement).all()]
+        llrs = [
+            {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
+            for l in session.query(LowLevelRequirement).all()
+        ]
 
     if not hlrs:
         print("No requirements found. Run the demo or create some first.")

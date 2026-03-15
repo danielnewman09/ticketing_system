@@ -5,23 +5,26 @@ build-backend = "hatchling.build"
 [project]
 name = "ticketing-system"
 version = "0.1.0"
-description = "Django-based ticket management with requirements traceability and semantic search"
+description = "Ticket management with requirements traceability and semantic search"
 requires-python = ">=3.12"
 dependencies = [
-    "django>=5.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
     "sqlite-vec>=0.1.6",
     "sentence-transformers>=3.0",
     "anthropic>=0.84",
     "google-genai>=1.0",
     "mcp[cli]>=1.0",
+    "nicegui>=2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "pytest-django>=4.5",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["db", "agents", "requirements", "codebase", "components", "tickets", "search"]
+
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings"
-testpaths = ["tests", "tickets/tests"]
+testpaths = ["tests"]
