@@ -3,6 +3,9 @@
 {% block title %}LLR {{ llr.pk }}{% endblock %}
 {% block head %}
 <script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/layout-base@2/layout-base.js"></script>
+<script src="https://unpkg.com/cose-base@2/cose-base.js"></script>
+<script src="https://unpkg.com/cytoscape-fcose@2/cytoscape-fcose.js"></script>
 <script src="{% static 'js/cytoscape-config.js' %}"></script>
 <script src="{% static 'js/requirement-graph.js' %}"></script>
 {% endblock %}
