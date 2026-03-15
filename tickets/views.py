@@ -14,14 +14,8 @@ class TicketListView(AiAssistMixin, ListView):
     ordering = ["id"]
 
     def get_ai_context(self):
-        tickets = []
-        for t in self.get_queryset():
-            tickets.append({
-                "id": t.id, "title": t.title,
-                "priority": t.priority, "complexity": t.complexity,
-                "ticket_type": t.ticket_type, "summary": t.summary[:200],
-            })
-        return {"page": "ticket_list", "tickets": tickets}
+        lines = [t.to_prompt_text(brief=True) for t in self.get_queryset()]
+        return {"page": "ticket_list", "context": "\n".join(lines)}
 
     def get(self, request, *args, **kwargs):
         query = request.GET.get("q", "").strip()
@@ -50,18 +44,9 @@ class TicketDetailView(AiAssistMixin, DetailView):
         return context
 
     def get_ai_context(self):
-        t = self.object
         return {
             "page": "ticket_detail",
-            "ticket": {
-                "id": t.id, "title": t.title, "summary": t.summary,
-                "priority": t.priority, "complexity": t.complexity,
-                "ticket_type": t.ticket_type, "author": t.author,
-                "components": [c.name for c in t.components.all()],
-                "languages": [l.name for l in t.languages.all()],
-                "acceptance_criteria": [ac.description for ac in t.acceptance_criteria.all()],
-                "files": [{"path": f.file_path, "change_type": f.change_type, "description": f.description} for f in t.files.all()],
-            },
+            "context": self.object.to_prompt_text(),
         }
 
 

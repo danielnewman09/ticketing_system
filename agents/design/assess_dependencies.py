@@ -10,6 +10,7 @@ dependency-aware.
 """
 
 from agents.llm_client import call_tool
+from requirements.models import format_hlrs_for_prompt
 
 
 SYSTEM_PROMPT = """\
@@ -102,9 +103,7 @@ def assess_dependencies(
         List of assessment dicts with 'hlr_id', 'recommendation',
         'dependency_name', 'relevant_structures', and 'rationale'.
     """
-    hlr_text = "\n".join(
-        f"HLR {h['id']}: {h['description']}" for h in hlrs
-    )
+    hlr_text = format_hlrs_for_prompt(hlrs)
 
     if dependencies:
         dep_lines = []

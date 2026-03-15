@@ -50,6 +50,53 @@ class Ticket(models.Model):
     def __str__(self):
         return self.title
 
+    def to_prompt_text(self, brief=False):
+        """Format this ticket as text for LLM prompts.
+
+        Args:
+            brief: If True, return a single summary line.
+        """
+        if brief:
+            parts = [f"Ticket {self.id}: {self.title}"]
+            if self.priority:
+                parts.append(f"[{self.priority}]")
+            if self.complexity:
+                parts.append(f"[{self.complexity}]")
+            if self.ticket_type:
+                parts.append(f"({self.ticket_type})")
+            if self.summary:
+                parts.append(f"— {self.summary[:200]}")
+            return " ".join(parts)
+        lines = [f"Ticket {self.id}: {self.title}"]
+        if self.priority:
+            lines.append(f"  Priority: {self.priority}")
+        if self.complexity:
+            lines.append(f"  Complexity: {self.complexity}")
+        if self.ticket_type:
+            lines.append(f"  Type: {self.ticket_type}")
+        if self.author:
+            lines.append(f"  Author: {self.author}")
+        if self.summary:
+            lines.append(f"  Summary: {self.summary}")
+        comps = list(self.components.all())
+        if comps:
+            lines.append(f"  Components: {', '.join(c.name for c in comps)}")
+        langs = list(self.languages.all())
+        if langs:
+            lines.append(f"  Languages: {', '.join(l.name for l in langs)}")
+        criteria = list(self.acceptance_criteria.all())
+        if criteria:
+            lines.append("  Acceptance Criteria:")
+            for ac in criteria:
+                lines.append(f"    - {ac.description}")
+        files = list(self.files.all())
+        if files:
+            lines.append("  Files:")
+            for f in files:
+                desc = f" — {f.description}" if f.description else ""
+                lines.append(f"    - {f.change_type}: {f.file_path}{desc}")
+        return "\n".join(lines)
+
     def get_hlrs(self):
         """Derive high-level requirements transitively via linked LLRs."""
         return HighLevelRequirement.objects.filter(

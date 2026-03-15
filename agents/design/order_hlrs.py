@@ -10,6 +10,7 @@ depends on already exist in the ontology.
 """
 
 from agents.llm_client import call_tool
+from requirements.models import format_hlrs_for_prompt
 
 
 SYSTEM_PROMPT = """\
@@ -87,9 +88,7 @@ def order_hlrs(
     if len(hlrs) <= 1:
         return [{"id": hlrs[0]["id"], "rationale": "only requirement"} for h in hlrs]
 
-    hlr_text = "\n".join(
-        f"HLR {h['id']}: {h['description']}" for h in hlrs
-    )
+    hlr_text = format_hlrs_for_prompt(hlrs)
 
     result = call_tool(
         system=SYSTEM_PROMPT,

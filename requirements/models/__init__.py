@@ -1,7 +1,8 @@
-from .hlr import HighLevelRequirement
+from .hlr import HighLevelRequirement, format_hlr_dict, format_hlrs_for_prompt
 from .llr import (
     LowLevelRequirement,
     TicketRequirement,
+    format_llr_dict,
 )
 from .verification import (
     VERIFICATION_METHODS,
@@ -18,4 +19,7 @@ __all__ = [
     "VerificationMethod",
     "VerificationCondition",
     "VerificationAction",
+    "format_hlr_dict",
+    "format_hlrs_for_prompt",
+    "format_llr_dict",
 ]

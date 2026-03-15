@@ -8,6 +8,7 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 import json
 
 from agents.llm_client import call_tool
+from requirements.models import format_hlr_dict
 from requirements.schemas import DecomposedRequirementSchema as DecomposedRequirement
 
 
@@ -58,8 +59,7 @@ def _format_sibling_context(other_hlrs: list[dict]) -> str:
         "only use them to understand scope boundaries):\n"
     ]
     for hlr in other_hlrs:
-        component = hlr.get("component__name") or "unassigned"
-        lines.append(f"- HLR {hlr['id']} [{component}]: {hlr['description']}")
+        lines.append(f"- {format_hlr_dict(hlr, include_component=True)}")
     return "\n".join(lines)
 
 

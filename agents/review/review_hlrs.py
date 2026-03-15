@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from agents.llm_client import call_tool
+from requirements.models import format_hlrs_for_prompt
 
 
 class ProposedHLR(BaseModel):
@@ -73,10 +74,7 @@ def review_hlrs(
 
     Each HLR dict: {id, description}
     """
-    lines = []
-    for hlr in hlrs:
-        lines.append(f"HLR {hlr['id']}: {hlr['description']}")
-    requirements_text = "\n".join(lines)
+    requirements_text = format_hlrs_for_prompt(hlrs)
 
     result = call_tool(
         system=SYSTEM_PROMPT,

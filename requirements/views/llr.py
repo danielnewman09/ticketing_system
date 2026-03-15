@@ -90,22 +90,15 @@ class LLRDetailView(AiAssistMixin, DetailView):
 
     def get_ai_context(self):
         llr = self.object
-        verifications = []
-        for v in llr.verifications.all():
-            verifications.append({
-                "id": v.id, "method": v.method,
-                "test_name": v.test_name, "description": v.description,
-            })
+        lines = [llr.to_prompt_text(include_verifications=True)]
+        if llr.high_level_requirement:
+            lines.insert(0, f"Parent: {llr.high_level_requirement.to_prompt_text()}")
+        comps = list(llr.components.all())
+        if comps:
+            lines.append(f"Components: {', '.join(c.name for c in comps)}")
         return {
             "page": "llr_detail",
-            "low_level_requirement": {
-                "id": llr.id,
-                "description": llr.description,
-                "hlr_id": llr.high_level_requirement_id,
-                "hlr_description": llr.high_level_requirement.description if llr.high_level_requirement else None,
-                "components": [c.name for c in llr.components.all()],
-                "verifications": verifications,
-            },
+            "context": "\n".join(lines),
         }
 
 

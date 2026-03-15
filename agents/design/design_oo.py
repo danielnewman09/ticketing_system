@@ -14,6 +14,7 @@ import logging
 from agents.llm_client import call_tool
 from codebase.models.ontology import LANGUAGE_SPECIALIZATIONS, VISIBILITY_CHOICES
 from codebase.schemas import OODesignSchema
+from requirements.models import format_hlrs_for_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -132,23 +133,6 @@ def _build_specializations_section(language):
     return "\n".join(lines)
 
 
-def format_requirements_for_prompt(hlrs, llrs):
-    """Format HLR/LLR data into a text block for the agent prompt."""
-    lines = []
-    for hlr in hlrs:
-        component = hlr.get("component_name")
-        comp_tag = f" [Component: {component}]" if component else ""
-        lines.append(f"HLR hlr:{hlr['id']}{comp_tag}: {hlr['description']}")
-        for llr in [l for l in llrs if l["hlr_id"] == hlr["id"]]:
-            lines.append(f"  LLR llr:{llr['id']}: {llr['description']}")
-    unlinked = [l for l in llrs if l["hlr_id"] is None]
-    if unlinked:
-        lines.append("\nUnlinked LLRs:")
-        for llr in unlinked:
-            lines.append(f"  LLR llr:{llr['id']}: {llr['description']}")
-    return "\n".join(lines)
-
-
 def _build_existing_classes_section(existing_classes):
     """Build the prompt section describing classes already in the design.
 
@@ -259,7 +243,7 @@ def design_oo(
     existing_classes: Optional context about classes already designed for
         previous HLRs. See _build_existing_classes_section for format.
     """
-    requirements_text = format_requirements_for_prompt(hlrs, llrs)
+    requirements_text = format_hlrs_for_prompt(hlrs, llrs, include_component=True)
 
     system = SYSTEM_PROMPT.format(
         specializations_section=_build_specializations_section(language),

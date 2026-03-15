@@ -58,15 +58,15 @@ class ComponentDetailView(AiAssistMixin, DetailView):
 
     def get_ai_context(self):
         c = self.object
+        lines = [c.to_prompt_text()]
+        tickets = list(c.tickets.all()[:20])
+        if tickets:
+            lines.append("  Tickets:")
+            for t in tickets:
+                lines.append(f"    - {t.to_prompt_text(brief=True)}")
         return {
             "page": "component_detail",
-            "component": {
-                "id": c.id, "name": c.name,
-                "parent": c.parent.name if c.parent else None,
-                "language": c.language.name if c.language else None,
-                "children": [ch.name for ch in c.children.all()],
-                "tickets": [{"id": t.id, "title": t.title} for t in c.tickets.all()[:20]],
-            },
+            "context": "\n".join(lines),
         }
 
 

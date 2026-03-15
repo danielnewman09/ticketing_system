@@ -30,6 +30,18 @@ class Component(models.Model):
     def __str__(self):
         return self.name
 
+    def to_prompt_text(self):
+        """Format this component as text for LLM prompts."""
+        lines = [f"Component: {self.name}"]
+        if self.parent_id:
+            lines.append(f"  Parent: {self.parent.name}")
+        if self.language_id:
+            lines.append(f"  Language: {self.language.name}")
+        children = list(self.children.all())
+        if children:
+            lines.append(f"  Children: {', '.join(c.name for c in children)}")
+        return "\n".join(lines)
+
 
 class Language(models.Model):
     name = models.CharField(max_length=100, unique=True)

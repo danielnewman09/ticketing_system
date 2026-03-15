@@ -32,6 +32,24 @@ class LowLevelRequirement(models.Model):
     def __str__(self):
         return self.description[:80] if self.description else f"LLR {self.pk}"
 
+    def to_prompt_text(self, include_verifications=False):
+        """Format this LLR as text for LLM prompts."""
+        line = f"LLR {self.id}: {self.description}"
+        if not include_verifications:
+            return line
+        lines = [line]
+        for v in self.verifications.all():
+            lines.append(f"    {v.to_prompt_text()}")
+        return "\n".join(lines)
+
+
+def format_llr_dict(llr):
+    """Format a single LLR dict as a prompt line.
+
+    Works with dicts from .values() querysets.
+    """
+    return f"LLR {llr['id']}: {llr['description']}"
+
 
 class TicketRequirement(models.Model):
     ticket = models.ForeignKey(

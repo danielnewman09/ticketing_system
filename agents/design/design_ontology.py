@@ -16,6 +16,7 @@ from agents.llm_client import call_tool
 from codebase.models import Predicate
 from codebase.models.ontology import LANGUAGE_SPECIALIZATIONS, NODE_KIND_VALUES
 from codebase.schemas import DesignSchema
+from requirements.models import format_hlrs_for_prompt
 
 
 SYSTEM_PROMPT = """\
@@ -112,22 +113,6 @@ TOOL_DEFINITION = {
 }
 
 
-def format_requirements_for_prompt(hlrs, llrs):
-    """Format HLR/LLR data into a text block for the agent prompt."""
-    lines = []
-    for hlr in hlrs:
-        lines.append(f"HLR {hlr['id']}: {hlr['description']}")
-        for llr in [l for l in llrs if l["hlr_id"] == hlr["id"]]:
-            lines.append(f"  LLR {llr['id']}: {llr['description']}")
-    # Unlinked LLRs
-    unlinked = [l for l in llrs if l["hlr_id"] is None]
-    if unlinked:
-        lines.append("\nUnlinked LLRs:")
-        for llr in unlinked:
-            lines.append(f"  LLR {llr['id']}: {llr['description']}")
-    return "\n".join(lines)
-
-
 def _build_specializations_section(language):
     """Build the specializations prompt section for a target language."""
     specs = LANGUAGE_SPECIALIZATIONS.get(language)
@@ -158,7 +143,7 @@ def design(
     Each HLR dict: {id, description}
     Each LLR dict: {id, hlr_id, description}
     """
-    requirements_text = format_requirements_for_prompt(hlrs, llrs)
+    requirements_text = format_hlrs_for_prompt(hlrs, llrs)
 
     # Build system prompt with allowed predicates from DB
     predicate_names = list(Predicate.objects.values_list("name", flat=True))

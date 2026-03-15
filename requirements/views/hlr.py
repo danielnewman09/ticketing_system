@@ -70,26 +70,12 @@ class HLRDetailView(AiAssistMixin, DetailView):
 
     def get_ai_context(self):
         hlr = self.object
-        llrs = []
+        lines = [hlr.to_prompt_text(include_component=True)]
         for llr in hlr.low_level_requirements.all():
-            verifications = []
-            for v in llr.verifications.all():
-                verifications.append({
-                    "id": v.id, "method": v.method,
-                    "test_name": v.test_name, "description": v.description,
-                })
-            llrs.append({
-                "id": llr.id, "description": llr.description,
-                "verifications": verifications,
-            })
+            lines.append(f"  {llr.to_prompt_text(include_verifications=True)}")
         return {
             "page": "hlr_detail",
-            "high_level_requirement": {
-                "id": hlr.id,
-                "description": hlr.description,
-                "component": hlr.component.name if hlr.component else None,
-                "low_level_requirements": llrs,
-            },
+            "context": "\n".join(lines),
         }
 
 

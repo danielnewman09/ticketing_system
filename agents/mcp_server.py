@@ -44,23 +44,15 @@ mcp = FastMCP("ticketing-system")
 @mcp.tool()
 def list_requirements() -> str:
     """List all HLRs with their LLRs and verification methods."""
-    output = []
+    lines = []
     for hlr in HighLevelRequirement.objects.prefetch_related(
         "low_level_requirements__verifications",
     ).all():
-        hlr_data = {"id": hlr.pk, "description": hlr.description, "llrs": []}
+        hlr_lines = [hlr.to_prompt_text(include_component=True)]
         for llr in hlr.low_level_requirements.all():
-            llr_data = {
-                "id": llr.pk,
-                "description": llr.description,
-                "verifications": [
-                    {"method": v.method, "test_name": v.test_name, "description": v.description}
-                    for v in llr.verifications.all()
-                ],
-            }
-            hlr_data["llrs"].append(llr_data)
-        output.append(hlr_data)
-    return json.dumps(output, indent=2)
+            hlr_lines.append(f"  {llr.to_prompt_text(include_verifications=True)}")
+        lines.append("\n".join(hlr_lines))
+    return "\n\n".join(lines)
 
 
 @mcp.tool()

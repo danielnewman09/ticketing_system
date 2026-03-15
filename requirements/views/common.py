@@ -1,6 +1,4 @@
-import json
-
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse
 from django.views.generic import ListView
 
 from ai_assist.mixins import AiAssistMixin
@@ -28,22 +26,13 @@ class RequirementListView(AiAssistMixin, ListView):
         return context
 
     def get_ai_context(self):
-        hlrs = []
+        lines = []
         for hlr in self.get_queryset():
-            llrs = []
-            for llr in hlr.low_level_requirements.all():
-                llrs.append({
-                    "id": llr.id,
-                    "description": llr.description,
-                    "verifications": [v.method for v in llr.verifications.all()],
-                })
-            hlrs.append({
-                "id": hlr.id,
-                "description": hlr.description,
-                "component": hlr.component.name if hlr.component else None,
-                "low_level_requirements": llrs,
-            })
-        return {"page": "requirements_list", "high_level_requirements": hlrs}
+            lines.append(hlr.to_prompt_text(include_llrs=True, include_component=True))
+        return {
+            "page": "requirements_list",
+            "context": "\n".join(lines),
+        }
 
 
 def _build_requirement_graph(req):

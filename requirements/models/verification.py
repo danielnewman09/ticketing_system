@@ -41,6 +41,15 @@ class VerificationMethod(models.Model):
             parts.append(f"[{self.test_name}]")
         return " - ".join(parts)
 
+    def to_prompt_text(self):
+        """Format this verification as text for LLM prompts."""
+        parts = [self.method]
+        if self.test_name:
+            parts.append(self.test_name)
+        if self.description:
+            parts.append(self.description)
+        return " — ".join(parts)
+
     @property
     def preconditions(self):
         return self.conditions.filter(phase="pre").order_by("order")

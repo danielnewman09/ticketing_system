@@ -9,6 +9,7 @@ which helps the decompose agent maintain separation of concerns.
 """
 
 from agents.llm_client import call_tool
+from requirements.models import format_hlrs_for_prompt
 
 
 SYSTEM_PROMPT = """\
@@ -87,9 +88,7 @@ def assign_components(
     Returns:
         List of dicts with 'hlr_id', 'component_name', and 'rationale'.
     """
-    hlr_text = "\n".join(
-        f"HLR {h['id']}: {h['description']}" for h in hlrs
-    )
+    hlr_text = format_hlrs_for_prompt(hlrs)
 
     components_text = ""
     if existing_components:
