@@ -29,7 +29,10 @@
             <div class="card-body">
                 <table class="table table-sm mb-0">
                     <tr><th style="width:140px">Qualified Name</th><td><code>{{ node.qualified_name|default:"-" }}</code></td></tr>
-                    <tr><th>Kind</th><td>{{ node.get_kind_display }}</td></tr>
+                    <tr><th>Kind</th><td>{{ node.get_kind_display }}{% if node.specialization %} <span class="badge bg-info">{{ node.specialization }}</span>{% endif %}</td></tr>
+                    {% if node.visibility %}
+                    <tr><th>Visibility</th><td><span class="badge bg-{% if node.visibility == 'public' %}success{% elif node.visibility == 'protected' %}warning{% else %}danger{% endif %}">{{ node.visibility }}</span></td></tr>
+                    {% endif %}
                     {% if node.compound_refid %}
                     <tr><th>Compound Refid</th><td><code>{{ node.compound_refid }}</code></td></tr>
                     {% endif %}
@@ -39,6 +42,33 @@
                 {% endif %}
             </div>
         </div>
+
+        {% if outgoing_triples or incoming_triples %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold">Relationships</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Direction</th><th>Predicate</th><th>Node</th></tr></thead>
+                    <tbody>
+                        {% for t in outgoing_triples %}
+                        <tr>
+                            <td><span class="text-muted">&rarr;</span></td>
+                            <td><code>{{ t.predicate.name }}</code></td>
+                            <td><a href="{% url 'ontology_node_detail' t.object.pk %}">{{ t.object.name }}</a> <span class="badge bg-secondary">{{ t.object.get_kind_display }}</span></td>
+                        </tr>
+                        {% endfor %}
+                        {% for t in incoming_triples %}
+                        <tr>
+                            <td><span class="text-muted">&larr;</span></td>
+                            <td><code>{{ t.predicate.name }}</code></td>
+                            <td><a href="{% url 'ontology_node_detail' t.subject.pk %}">{{ t.subject.name }}</a> <span class="badge bg-secondary">{{ t.subject.get_kind_display }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
 
         {% if public_members or protected_members or private_members %}
         <div class="card mb-3">

@@ -59,13 +59,27 @@ class OntologyNodeDetailView(DetailView):
                 .filter(triples_as_object__subject=node, triples_as_object__predicate=composes_pred)
                 .order_by("kind", "name")
             )
-            context["public_members"] = composed.filter(visibility="public")
+            context["public_members"] = composed.filter(visibility__in=("public", ""))
             context["private_members"] = composed.filter(visibility="private")
             context["protected_members"] = composed.filter(visibility="protected")
         else:
             context["public_members"] = []
             context["private_members"] = []
             context["protected_members"] = []
+
+        # Non-composes outgoing triples (inheritance, dependencies, etc.)
+        context["outgoing_triples"] = (
+            node.triples_as_subject
+            .select_related("predicate", "object")
+            .exclude(predicate=composes_pred) if composes_pred else
+            node.triples_as_subject.select_related("predicate", "object").all()
+        )
+        context["incoming_triples"] = (
+            node.triples_as_object
+            .select_related("predicate", "subject")
+            .exclude(predicate=composes_pred) if composes_pred else
+            node.triples_as_object.select_related("predicate", "subject").all()
+        )
 
         # Gather requirements linked via this node's triples
         triple_ids = set()
