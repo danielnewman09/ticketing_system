@@ -43,8 +43,10 @@ from requirements.models import (
 )
 
 # ---------------------------------------------------------------------------
-# Configuration: the raw HLR descriptions a team would start with
+# Configuration
 # ---------------------------------------------------------------------------
+
+LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
 
 HLR_DESCRIPTIONS = [
     "The application displays a GUI window suitable for a calculator interface",
@@ -58,6 +60,13 @@ def step_flush():
     print("=" * 60)
     call_command("flush", "--no-input", verbosity=0)
     Predicate.ensure_defaults()
+
+    # Clear and recreate logs directory
+    import shutil
+    if os.path.exists(LOGS_DIR):
+        shutil.rmtree(LOGS_DIR)
+    os.makedirs(LOGS_DIR, exist_ok=True)
+
     print("  Database cleared.\n")
 
 
@@ -71,7 +80,9 @@ def step_assign_components():
         print(f"  Created HLR {hlr.pk}: {desc[:60]}")
 
     print(f"\n  Assigning {HighLevelRequirement.objects.count()} HLRs to components via AI agent...")
-    assignments = assign_hlr_components()
+    assignments = assign_hlr_components(
+        prompt_log_file=os.path.join(LOGS_DIR, "step2_assign_components.md"),
+    )
 
     for a in assignments:
         print(f"  HLR {a['hlr_id']} -> {a['component_name']} ({a['rationale'][:60]})")
@@ -90,7 +101,10 @@ def step_decompose():
 
     for i, hlr in enumerate(hlrs, 1):
         print(f"  [{i}/{hlrs.count()}] {hlr.description[:65]}...")
-        llr_count = decompose_hlr(hlr)
+        llr_count = decompose_hlr(
+            hlr,
+            prompt_log_file=os.path.join(LOGS_DIR, f"step3_decompose_hlr{hlr.pk}.md"),
+        )
         print(f"    -> HLR {hlr.pk}: {hlr.description[:60]}")
         print(f"       {llr_count} LLRs generated\n")
 
@@ -110,7 +124,10 @@ def step_design():
         "id", "description",
     ).annotate(hlr_id=F("high_level_requirement_id")))
 
-    result = design(hlrs, llrs)
+    result = design(
+        hlrs, llrs,
+        prompt_log_file=os.path.join(LOGS_DIR, "step4_design.md"),
+    )
 
     # Save ontology nodes
     qname_to_node = {}
@@ -202,7 +219,10 @@ def step_verify():
             continue
 
         print(f"  LLR {llr.pk}: {llr.description[:60]}...")
-        result = verify(llr_dict, existing, ontology_nodes)
+        result = verify(
+            llr_dict, existing, ontology_nodes,
+            prompt_log_file=os.path.join(LOGS_DIR, f"step5_verify_llr{llr.pk}.md"),
+        )
 
         with transaction.atomic():
             # Replace existing verification stubs with fleshed-out versions
