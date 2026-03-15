@@ -5,6 +5,7 @@ from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
 from django.views.generic import DetailView, CreateView, UpdateView
 
+from ai_assist.mixins import AiAssistMixin
 from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
@@ -42,7 +43,7 @@ class HLRUpdateView(UpdateView):
         return context
 
 
-class HLRDetailView(DetailView):
+class HLRDetailView(AiAssistMixin, DetailView):
     model = HighLevelRequirement
     template_name = "requirements/hlr/detail.html"
     context_object_name = "hlr"
@@ -66,6 +67,30 @@ class HLRDetailView(DetailView):
             all_triples.update(llr.triples.all())
         context["all_triples"] = sorted(all_triples, key=lambda t: t.pk)
         return context
+
+    def get_ai_context(self):
+        hlr = self.object
+        llrs = []
+        for llr in hlr.low_level_requirements.all():
+            verifications = []
+            for v in llr.verifications.all():
+                verifications.append({
+                    "id": v.id, "method": v.method,
+                    "test_name": v.test_name, "description": v.description,
+                })
+            llrs.append({
+                "id": llr.id, "description": llr.description,
+                "verifications": verifications,
+            })
+        return {
+            "page": "hlr_detail",
+            "high_level_requirement": {
+                "id": hlr.id,
+                "description": hlr.description,
+                "component": hlr.component.name if hlr.component else None,
+                "low_level_requirements": llrs,
+            },
+        }
 
 
 def decompose_hlr(hlr, model="", prompt_log_file=""):

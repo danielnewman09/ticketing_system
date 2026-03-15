@@ -1,10 +1,13 @@
+import json
+
 from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView
 
+from ai_assist.mixins import AiAssistMixin
 from requirements.models import HighLevelRequirement, LowLevelRequirement
 
 
-class RequirementListView(ListView):
+class RequirementListView(AiAssistMixin, ListView):
     model = HighLevelRequirement
     template_name = "requirements/requirement_list.html"
     context_object_name = "hlrs"
@@ -23,6 +26,24 @@ class RequirementListView(ListView):
             high_level_requirement__isnull=True
         ).prefetch_related("verifications")
         return context
+
+    def get_ai_context(self):
+        hlrs = []
+        for hlr in self.get_queryset():
+            llrs = []
+            for llr in hlr.low_level_requirements.all():
+                llrs.append({
+                    "id": llr.id,
+                    "description": llr.description,
+                    "verifications": [v.method for v in llr.verifications.all()],
+                })
+            hlrs.append({
+                "id": hlr.id,
+                "description": hlr.description,
+                "component": hlr.component.name if hlr.component else None,
+                "low_level_requirements": llrs,
+            })
+        return {"page": "requirements_list", "high_level_requirements": hlrs}
 
 
 def _build_requirement_graph(req):

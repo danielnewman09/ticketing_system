@@ -8,8 +8,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>[x-cloak] { display: none !important; }</style>
     <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>
+    <script src="{% static 'js/ai-assist.js' %}" defer></script>
     {% block head %}{% endblock %}
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
@@ -26,6 +27,107 @@
     </nav>
     <div class="container">
         {% block content %}{% endblock %}
+    </div>
+    <script>window.__aiContext = {{ ai_context_json|safe }};</script>
+    <!-- AI Assist -->
+    <div x-data="aiAssist()">
+        <template x-if="hasContext">
+            <button @click="open = true; $nextTick(() => $refs.queryInput && $refs.queryInput.focus())"
+                    class="btn btn-dark rounded-circle shadow position-fixed"
+                    style="bottom: 24px; right: 24px; width: 48px; height: 48px; z-index: 1040; font-size: 1.2rem;"
+                    title="AI Assist">
+                &#9733;
+            </button>
+        </template>
+        <template x-if="open">
+            <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                 style="background: rgba(0,0,0,0.5); z-index: 1050;" @keydown.escape.window="close()">
+                <div class="bg-white rounded-3 shadow" style="width: 640px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+                    <!-- Header -->
+                    <div class="px-4 pt-3 pb-2 border-bottom d-flex justify-content-between align-items-center">
+                        <strong>AI Assist</strong>
+                        <button class="btn-close" @click="close()"></button>
+                    </div>
+                    <!-- Body -->
+                    <div class="px-4 py-3 flex-grow-1" style="overflow-y: auto;">
+                        <!-- Input -->
+                        <div class="mb-3">
+                            <textarea x-ref="queryInput" x-model="query"
+                                      @keydown.ctrl.enter="ask()" @keydown.meta.enter="ask()"
+                                      class="form-control" rows="2"
+                                      placeholder="What would you like to change? (Ctrl+Enter to send)"
+                                      :disabled="loading"></textarea>
+                        </div>
+                        <div class="mb-3 text-end">
+                            <button @click="ask()" class="btn btn-dark btn-sm" :disabled="loading || !query.trim()">
+                                <template x-if="loading"><span class="spinner-border spinner-border-sm me-1"></span></template>
+                                Ask
+                            </button>
+                        </div>
+                        <!-- Error -->
+                        <template x-if="error">
+                            <div class="alert alert-danger small" x-text="error"></div>
+                        </template>
+                        <!-- Applied success -->
+                        <template x-if="applied">
+                            <div class="alert alert-success small">Changes applied. Close to reload the page.</div>
+                        </template>
+                        <!-- Summary -->
+                        <template x-if="summary && !applied">
+                            <div class="mb-3">
+                                <div class="fw-bold small mb-1">Summary</div>
+                                <p class="small mb-0" x-text="summary"></p>
+                            </div>
+                        </template>
+                        <!-- Proposed edits -->
+                        <template x-if="edits.length && !applied">
+                            <div>
+                                <div class="fw-bold small mb-2">Proposed changes</div>
+                                <template x-for="(edit, i) in edits" :key="i">
+                                    <div class="card mb-2" :class="{'opacity-50': !edit.accepted}">
+                                        <div class="card-body py-2 px-3">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <span class="badge me-1"
+                                                          :class="{
+                                                              'bg-success': edit.action === 'create',
+                                                              'bg-warning text-dark': edit.action === 'update',
+                                                              'bg-danger': edit.action === 'delete'
+                                                          }"
+                                                          x-text="edit.action"></span>
+                                                    <span class="small fw-bold" x-text="edit.model"></span>
+                                                    <span class="small text-muted" x-show="edit.id" x-text="'#' + edit.id"></span>
+                                                </div>
+                                                <div class="form-check form-switch mb-0">
+                                                    <input class="form-check-input" type="checkbox" x-model="edit.accepted">
+                                                </div>
+                                            </div>
+                                            <div class="small text-muted mt-1" x-show="edit.reason" x-text="edit.reason"></div>
+                                            <template x-if="edit.fields && Object.keys(edit.fields).length">
+                                                <div class="mt-1">
+                                                    <template x-for="[field, value] in Object.entries(edit.fields)" :key="field">
+                                                        <div class="small"><code x-text="field"></code>: <span x-text="typeof value === 'object' ? JSON.stringify(value) : value"></span></div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                    <!-- Footer -->
+                    <template x-if="edits.length && !applied">
+                        <div class="px-4 py-2 border-top text-end">
+                            <button @click="reset()" class="btn btn-outline-secondary btn-sm me-1">Clear</button>
+                            <button @click="applyEdits()" class="btn btn-success btn-sm" :disabled="loading || !edits.some(e => e.accepted)">
+                                Apply Selected
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
     </div>
 </body>
 </html>

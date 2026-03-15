@@ -17,14 +17,28 @@ def hlr_review_start(request):
 
     result = review_hlrs(hlrs)
 
-    # Build context: original HLRs keyed by ID, and proposals
+    # Build context: original HLRs keyed by ID, and proposals.
+    # The agent may omit original_id, so we match non-"add" proposals to
+    # originals by position as a fallback.
     originals = {h["id"]: h["description"] for h in hlrs}
+    unmatched_originals = list(hlrs)  # ordered queue for positional fallback
+
     proposals = []
     for p in result.proposals:
+        original_id = p.original_id
+
+        # If no original_id but action implies one, match by position
+        if original_id is None and p.action in ("keep", "modify", "delete"):
+            if unmatched_originals:
+                original_id = unmatched_originals.pop(0)["id"]
+        elif original_id is not None:
+            # Remove from unmatched queue so positional matching stays aligned
+            unmatched_originals = [h for h in unmatched_originals if h["id"] != original_id]
+
         proposals.append({
             "action": p.action,
-            "original_id": p.original_id,
-            "original_description": originals.get(p.original_id, "") if p.original_id else "",
+            "original_id": original_id,
+            "original_description": originals.get(original_id, "") if original_id else "",
             "description": p.description,
             "rationale": p.rationale,
         })

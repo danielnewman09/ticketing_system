@@ -49,8 +49,8 @@ from requirements.models import (
 LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
 
 HLR_DESCRIPTIONS = [
-    "The application displays a GUI window suitable for a calculator interface",
-    "The calculator performs basic arithmetic with correct input handling and error recovery"
+    "The application displays a GUI window with a numeric display area and buttons for digits 0-9, basic arithmetic operators (+, -, ×, ÷), a clear button, and an equals button",
+    "The calculator performs addition, subtraction, multiplication, and division operations with proper input validation, displays results immediately, and recovers from errors such as division by zero or invalid syntax",
 ]
 
 

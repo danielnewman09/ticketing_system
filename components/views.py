@@ -3,6 +3,8 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy, reverse
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView
+
+from ai_assist.mixins import AiAssistMixin
 from .models import Component, Language, DependencyManager
 from .forms import (
     ComponentForm,
@@ -31,7 +33,7 @@ class ComponentListView(ListView):
         )
 
 
-class ComponentDetailView(DetailView):
+class ComponentDetailView(AiAssistMixin, DetailView):
     model = Component
     template_name = "components/component_detail.html"
     context_object_name = "component"
@@ -53,6 +55,19 @@ class ComponentDetailView(DetailView):
                 "dependencies"
             )
         return context
+
+    def get_ai_context(self):
+        c = self.object
+        return {
+            "page": "component_detail",
+            "component": {
+                "id": c.id, "name": c.name,
+                "parent": c.parent.name if c.parent else None,
+                "language": c.language.name if c.language else None,
+                "children": [ch.name for ch in c.children.all()],
+                "tickets": [{"id": t.id, "title": t.title} for t in c.tickets.all()[:20]],
+            },
+        }
 
 
 class ComponentCreateView(CreateView):

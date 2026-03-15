@@ -7,4 +7,5 @@ urlpatterns = [
     path('components/', include('components.urls')),
     path('requirements/', include('requirements.urls')),
     path('ontology/', include('codebase.urls')),
+    path('ai-assist/', include('ai_assist.urls')),
 ]

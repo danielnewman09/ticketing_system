@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import DetailView, CreateView, UpdateView
 
+from ai_assist.mixins import AiAssistMixin
 from requirements.models import LowLevelRequirement
 from requirements.forms import (
     LowLevelRequirementForm,
@@ -71,7 +72,7 @@ class LLRUpdateView(UpdateView):
         return self.form_invalid(form)
 
 
-class LLRDetailView(DetailView):
+class LLRDetailView(AiAssistMixin, DetailView):
     model = LowLevelRequirement
     template_name = "requirements/llr/detail.html"
     context_object_name = "llr"
@@ -86,6 +87,26 @@ class LLRDetailView(DetailView):
             "triples__subject",
             "triples__object",
         )
+
+    def get_ai_context(self):
+        llr = self.object
+        verifications = []
+        for v in llr.verifications.all():
+            verifications.append({
+                "id": v.id, "method": v.method,
+                "test_name": v.test_name, "description": v.description,
+            })
+        return {
+            "page": "llr_detail",
+            "low_level_requirement": {
+                "id": llr.id,
+                "description": llr.description,
+                "hlr_id": llr.high_level_requirement_id,
+                "hlr_description": llr.high_level_requirement.description if llr.high_level_requirement else None,
+                "components": [c.name for c in llr.components.all()],
+                "verifications": verifications,
+            },
+        }
 
 
 def llr_graph_data(request, pk):

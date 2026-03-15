@@ -1,15 +1,27 @@
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
+
+from ai_assist.mixins import AiAssistMixin
 from requirements.models import TicketRequirement
 from .models import Ticket
 from .forms import TicketForm
 
 
-class TicketListView(ListView):
+class TicketListView(AiAssistMixin, ListView):
     model = Ticket
     template_name = "tickets/ticket_list.html"
     context_object_name = "tickets"
     ordering = ["id"]
+
+    def get_ai_context(self):
+        tickets = []
+        for t in self.get_queryset():
+            tickets.append({
+                "id": t.id, "title": t.title,
+                "priority": t.priority, "complexity": t.complexity,
+                "ticket_type": t.ticket_type, "summary": t.summary[:200],
+            })
+        return {"page": "ticket_list", "tickets": tickets}
 
     def get(self, request, *args, **kwargs):
         query = request.GET.get("q", "").strip()
@@ -25,7 +37,7 @@ class TicketListView(ListView):
         return super().get(request, *args, **kwargs)
 
 
-class TicketDetailView(DetailView):
+class TicketDetailView(AiAssistMixin, DetailView):
     model = Ticket
     template_name = "tickets/ticket_detail.html"
     context_object_name = "ticket"
@@ -36,6 +48,21 @@ class TicketDetailView(DetailView):
         context["llrs"] = ticket.low_level_requirements.select_related("high_level_requirement").all()
         context["hlrs"] = ticket.get_hlrs()
         return context
+
+    def get_ai_context(self):
+        t = self.object
+        return {
+            "page": "ticket_detail",
+            "ticket": {
+                "id": t.id, "title": t.title, "summary": t.summary,
+                "priority": t.priority, "complexity": t.complexity,
+                "ticket_type": t.ticket_type, "author": t.author,
+                "components": [c.name for c in t.components.all()],
+                "languages": [l.name for l in t.languages.all()],
+                "acceptance_criteria": [ac.description for ac in t.acceptance_criteria.all()],
+                "files": [{"path": f.file_path, "change_type": f.change_type, "description": f.description} for f in t.files.all()],
+            },
+        }
 
 
 class TicketCreateView(CreateView):

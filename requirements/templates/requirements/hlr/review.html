@@ -16,6 +16,10 @@
         to commit, or <strong>Discard All Changes</strong> to keep the originals.
     </div>
 
+    <div class="d-flex justify-content-end mb-3">
+        <button @click="addProposal()" class="btn btn-outline-success btn-sm">+ Add Requirement</button>
+    </div>
+
     <template x-for="(p, idx) in proposals" :key="idx">
         <div class="card mb-3" :class="{
             'border-success': p.action === 'add' && p.accepted,
@@ -43,6 +47,9 @@
                             <label class="form-check-label small" :for="'accept-' + idx"
                                    x-text="p.accepted ? 'Accepted' : 'Ignored'"></label>
                         </div>
+                    </template>
+                    <template x-if="p.action === 'add' && !p.original_id">
+                        <button @click="proposals.splice(idx, 1)" class="btn btn-outline-danger btn-sm">&times;</button>
                     </template>
                 </div>
             </div>
@@ -96,6 +103,16 @@ function hlrReview() {
             // For others, only include if accepted.
             const accepted = this.proposals.filter(p => p.action === 'keep' || p.accepted);
             return JSON.stringify(accepted);
+        },
+        addProposal() {
+            this.proposals.push({
+                action: 'add',
+                original_id: null,
+                original_description: '',
+                description: '',
+                rationale: 'Manually added',
+                accepted: true,
+            });
         },
         applyChanges() {
             this.$refs.applyForm.submit();
