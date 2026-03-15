@@ -34,12 +34,15 @@ def _parse_req_id(tagged: str) -> tuple[str, int] | None:
 def map_oo_to_ontology(
     oo: OODesignSchema,
     component_id: int | None = None,
+    prior_class_lookup: dict[str, str] | None = None,
 ) -> DesignSchema:
     """Map an OO design to ontology nodes, triples, and requirement links.
 
     Args:
         oo: The OO design output from Stage 1.
         component_id: Optional component FK to set on all output nodes.
+        prior_class_lookup: name -> qualified_name mapping from previously
+            designed HLRs, so cross-HLR references resolve correctly.
     """
     nodes: list[OntologyNodeSchema] = []
     triples: list[OntologyTripleSchema] = []
@@ -116,8 +119,9 @@ def map_oo_to_ontology(
             _add_triple(enum_qname, "composes", val_qname)
 
     # --- Classes ---
-    # Build a name -> qualified_name lookup for resolving references
-    class_lookup: dict[str, str] = {}
+    # Build a name -> qualified_name lookup for resolving references.
+    # Seed with prior designs so cross-HLR references resolve correctly.
+    class_lookup: dict[str, str] = dict(prior_class_lookup or {})
     for cls in oo.classes:
         class_lookup[cls.name] = _qualify(cls.module, cls.name)
     for iface in oo.interfaces:

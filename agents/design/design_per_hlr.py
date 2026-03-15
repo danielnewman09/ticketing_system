@@ -73,6 +73,25 @@ def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
     return results
 
 
+def _build_class_lookup(oo: OODesignSchema) -> dict[str, str]:
+    """Build a name -> qualified_name mapping from an OO design.
+
+    Used to seed map_oo_to_ontology's class_lookup so cross-HLR
+    references (inheritance, associations, etc.) resolve correctly.
+    """
+    lookup: dict[str, str] = {}
+    for cls in oo.classes:
+        qname = f"{cls.module}::{cls.name}" if cls.module else cls.name
+        lookup[cls.name] = qname
+    for iface in oo.interfaces:
+        qname = f"{iface.module}::{iface.name}" if iface.module else iface.name
+        lookup[iface.name] = qname
+    for enum in oo.enums:
+        qname = f"{enum.module}::{enum.name}" if enum.module else enum.name
+        lookup[enum.name] = qname
+    return lookup
+
+
 def _extract_intercomponent_context(
     oo: OODesignSchema,
     component_name: str,
@@ -168,6 +187,8 @@ def design_all_hlrs(
     # Accumulate results per HLR
     # Maps hlr_id -> (oo_design, component_id, component_name)
     designed: dict[int, tuple[OODesignSchema, int | None, str]] = {}
+    # Accumulated name -> qualified_name lookup across all prior designs
+    accumulated_class_lookup: dict[str, str] = {}
     results: list[tuple[dict, OODesignSchema, DesignSchema]] = []
 
     for i, hlr_id in enumerate(ordered_ids, 1):
@@ -232,10 +253,15 @@ def design_all_hlrs(
             prompt_log_file=prompt_log,
         )
 
-        # Map to ontology
-        ontology = map_oo_to_ontology(oo, component_id=component_id)
+        # Map to ontology — pass prior class lookup so cross-HLR
+        # references (inheritance, associations) resolve to correct qnames
+        ontology = map_oo_to_ontology(
+            oo, component_id=component_id,
+            prior_class_lookup=accumulated_class_lookup,
+        )
 
-        # Accumulate
+        # Accumulate — update class lookup with this design's classes
+        accumulated_class_lookup.update(_build_class_lookup(oo))
         designed[hlr_id] = (oo, component_id, component_name)
         results.append((hlr, oo, ontology))
 

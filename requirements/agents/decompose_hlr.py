@@ -133,7 +133,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python -m agents.decompose.decompose_hlr 'description of requirement'")
+        print("Usage: python -m requirements.agents.decompose_hlr 'description of requirement'")
         sys.exit(1)
 
     description = " ".join(sys.argv[1:])

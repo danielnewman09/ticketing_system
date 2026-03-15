@@ -50,7 +50,7 @@ LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
 
 HLR_DESCRIPTIONS = [
     "The application displays a GUI window with a numeric display area and buttons for digits 0-9, basic arithmetic operators (+, -, ×, ÷), a clear button, and an equals button",
-    "The calculator performs addition, subtraction, multiplication, and division operations with proper input validation, displays results immediately, and recovers from errors such as division by zero or invalid syntax",
+    "The calculator performs addition, subtraction, multiplication, and division operations with proper input validation, returns results immediately, and recovers from errors such as division by zero or invalid syntax",
 ]
 
 
@@ -149,6 +149,8 @@ def step_design():
                     continue
                 node = OntologyNode.objects.create(
                     kind=node_data.kind,
+                    specialization=node_data.specialization,
+                    visibility=node_data.visibility,
                     name=node_data.name,
                     qualified_name=node_data.qualified_name,
                     compound_refid=node_data.qualified_name,

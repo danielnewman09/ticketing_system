@@ -84,7 +84,7 @@ def decompose_hlr(hlr, model="", prompt_log_file=""):
 
     Returns the number of LLRs created.
     """
-    from agents.decompose.decompose_hlr import decompose
+    from requirements.agents.decompose_hlr import decompose
 
     # Provide sibling HLRs (with component) as context for separation of concerns
     other_hlrs = list(

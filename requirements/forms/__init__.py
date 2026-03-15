@@ -1,6 +1,6 @@
 from .hlr import HighLevelRequirementForm
-from .llr import (
-    LowLevelRequirementForm,
+from .llr import LowLevelRequirementForm
+from .verification import (
     VerificationMethodForm,
     VerificationMethodFormSet,
     VerificationConditionForm,
