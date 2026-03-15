@@ -1,0 +1,208 @@
+"""Data-fetching functions for UI pages. Run in threads via asyncio.to_thread."""
+
+from db import get_session
+from db.models import (
+    Component,
+    HighLevelRequirement,
+    LowLevelRequirement,
+    OntologyNode,
+    OntologyTriple,
+    Predicate,
+    VerificationMethod,
+)
+
+
+def fetch_requirements_data():
+    """Fetch all data needed for the requirements dashboard."""
+    with get_session() as session:
+        hlrs = []
+        for hlr in session.query(HighLevelRequirement).all():
+            llrs = []
+            for llr in hlr.low_level_requirements:
+                methods = [v.method for v in llr.verifications]
+                llrs.append({
+                    "id": llr.id,
+                    "description": llr.description,
+                    "methods": methods,
+                })
+            hlrs.append({
+                "id": hlr.id,
+                "description": hlr.description,
+                "component": hlr.component.name if hlr.component else None,
+                "llrs": llrs,
+            })
+
+        unlinked = []
+        for llr in session.query(LowLevelRequirement).filter(
+            LowLevelRequirement.high_level_requirement_id.is_(None),
+        ).all():
+            methods = [v.method for v in llr.verifications]
+            unlinked.append({
+                "id": llr.id,
+                "description": llr.description,
+                "methods": methods,
+            })
+
+        return {
+            "hlrs": hlrs,
+            "unlinked_llrs": unlinked,
+            "total_hlrs": session.query(HighLevelRequirement).count(),
+            "total_llrs": session.query(LowLevelRequirement).count(),
+            "total_verifications": session.query(VerificationMethod).count(),
+            "total_nodes": session.query(OntologyNode).count(),
+            "total_triples": session.query(OntologyTriple).count(),
+        }
+
+
+def fetch_hlr_detail(hlr_id):
+    """Fetch all data needed for HLR detail page."""
+    with get_session() as session:
+        hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
+        if not hlr:
+            return None
+
+        llrs = []
+        for llr in hlr.low_level_requirements:
+            methods = [v.method for v in llr.verifications]
+            llrs.append({
+                "id": llr.id,
+                "description": llr.description,
+                "methods": methods,
+            })
+
+        all_triples = set(hlr.triples)
+        for llr_obj in hlr.low_level_requirements:
+            all_triples.update(llr_obj.triples)
+        triples = [
+            {
+                "subject": t.subject.name,
+                "predicate": t.predicate.name,
+                "object": t.object.name,
+            }
+            for t in sorted(all_triples, key=lambda t: t.id)
+        ]
+
+        return {
+            "id": hlr.id,
+            "description": hlr.description,
+            "component": hlr.component.name if hlr.component else None,
+            "llrs": llrs,
+            "triples": triples,
+        }
+
+
+def fetch_llr_detail(llr_id):
+    """Fetch all data needed for LLR detail page."""
+    with get_session() as session:
+        llr = session.query(LowLevelRequirement).filter_by(id=llr_id).first()
+        if not llr:
+            return None
+
+        hlr = llr.high_level_requirement
+        hlr_data = None
+        if hlr:
+            hlr_data = {
+                "id": hlr.id,
+                "description": hlr.description,
+                "component": hlr.component.name if hlr.component else None,
+            }
+
+        verifications = []
+        for v in llr.verifications:
+            preconditions = [
+                {
+                    "member_qualified_name": c.member_qualified_name,
+                    "operator": c.operator,
+                    "expected_value": c.expected_value,
+                }
+                for c in sorted(
+                    [c for c in v.conditions if c.phase == "pre"],
+                    key=lambda c: c.order,
+                )
+            ]
+            postconditions = [
+                {
+                    "member_qualified_name": c.member_qualified_name,
+                    "operator": c.operator,
+                    "expected_value": c.expected_value,
+                }
+                for c in sorted(
+                    [c for c in v.conditions if c.phase == "post"],
+                    key=lambda c: c.order,
+                )
+            ]
+            actions = [
+                {
+                    "order": a.order,
+                    "description": a.description,
+                    "member_qualified_name": a.member_qualified_name,
+                }
+                for a in sorted(v.actions, key=lambda a: a.order)
+            ]
+            verifications.append({
+                "id": v.id,
+                "method": v.method,
+                "test_name": v.test_name,
+                "description": v.description,
+                "preconditions": preconditions,
+                "actions": actions,
+                "postconditions": postconditions,
+            })
+
+        components = [c.name for c in llr.components]
+
+        triples = [
+            {
+                "subject": t.subject.name,
+                "predicate": t.predicate.name,
+                "object": t.object.name,
+            }
+            for t in llr.triples
+        ]
+
+        return {
+            "id": llr.id,
+            "description": llr.description,
+            "hlr": hlr_data,
+            "verifications": verifications,
+            "components": components,
+            "triples": triples,
+        }
+
+
+def fetch_components_data():
+    """Fetch all data needed for components page."""
+    with get_session() as session:
+        result = []
+        for comp in session.query(Component).all():
+            result.append({
+                "name": comp.name,
+                "language": repr(comp.language) if comp.language else None,
+                "parent": comp.parent.name if comp.parent else None,
+                "hlr_count": len(comp.high_level_requirements),
+                "node_count": len(comp.ontology_nodes),
+            })
+        return result
+
+
+def fetch_ontology_data():
+    """Fetch all data needed for ontology page."""
+    with get_session() as session:
+        nodes = []
+        kind_counts = {}
+        for n in session.query(OntologyNode).all():
+            kind_counts[n.kind] = kind_counts.get(n.kind, 0) + 1
+            nodes.append({
+                "name": n.name,
+                "kind": n.kind,
+                "qualified_name": n.qualified_name,
+                "component": n.component.name if n.component else "-",
+            })
+
+        return {
+            "nodes": nodes[:200],
+            "kind_counts": kind_counts,
+            "total_nodes": len(nodes),
+            "total_triples": session.query(OntologyTriple).count(),
+            "total_predicates": session.query(Predicate).count(),
+        }
