@@ -27,12 +27,12 @@ import django
 django.setup()
 
 from django.core.management import call_command
-from django.db import transaction
 from django.db.models import F
 
 from agents.design.design_per_hlr import design_all_hlrs
 from agents.verify.verify_llr import verify
 from requirements.views.hlr import assign_hlr_components, decompose_hlr
+from requirements.services.persistence import persist_design, persist_verification
 from codebase.models import OntologyNode, OntologyTriple, Predicate
 from requirements.models import (
     HighLevelRequirement,
@@ -140,66 +140,20 @@ def step_design():
     total_skipped = 0
     qname_to_node = {}
 
-    with transaction.atomic():
-        for hlr_dict, oo, result in per_hlr_results:
-            print(f"\n  --- HLR {hlr_dict['id']}: {hlr_dict['description'][:50]}... ---")
+    for hlr_dict, oo, result in per_hlr_results:
+        print(f"\n  --- HLR {hlr_dict['id']}: {hlr_dict['description'][:50]}... ---")
 
-            for node_data in result.nodes:
-                if node_data.qualified_name in qname_to_node:
-                    continue
-                node = OntologyNode.objects.create(
-                    kind=node_data.kind,
-                    specialization=node_data.specialization,
-                    visibility=node_data.visibility,
-                    name=node_data.name,
-                    qualified_name=node_data.qualified_name,
-                    compound_refid=node_data.qualified_name,
-                    description=node_data.description,
-                    component_id=node_data.component_id,
-                    is_intercomponent=node_data.is_intercomponent,
-                )
-                qname_to_node[node_data.qualified_name] = node
-                total_nodes += 1
+        # Log intercomponent nodes
+        for node_data in result.nodes:
+            if node_data.qualified_name not in qname_to_node:
                 flag = " [intercomponent]" if node_data.is_intercomponent else ""
                 print(f"  Node: {node_data.qualified_name} ({node_data.kind}){flag}")
 
-            # Save ontology triples in order (index-based lookup for requirement links)
-            saved_triples = []
-            for triple_data in result.triples:
-                subj = qname_to_node.get(triple_data.subject_qualified_name)
-                obj = qname_to_node.get(triple_data.object_qualified_name)
-                pred = Predicate.objects.filter(name=triple_data.predicate).first()
-                if subj and obj and pred:
-                    triple, _ = OntologyTriple.objects.get_or_create(
-                        subject=subj,
-                        predicate=pred,
-                        object=obj,
-                    )
-                    saved_triples.append(triple)
-                    total_triples += 1
-                else:
-                    saved_triples.append(None)
-
-            # Apply requirement links
-            for link in result.requirement_links:
-                triple = None
-                if 0 <= link.triple_index < len(saved_triples):
-                    triple = saved_triples[link.triple_index]
-
-                if not triple:
-                    total_skipped += 1
-                    continue
-
-                if link.requirement_type == "hlr":
-                    req = HighLevelRequirement.objects.filter(pk=link.requirement_id).first()
-                else:
-                    req = LowLevelRequirement.objects.filter(pk=link.requirement_id).first()
-
-                if req:
-                    req.triples.add(triple)
-                    total_linked += 1
-                else:
-                    total_skipped += 1
+        persisted = persist_design(result, qname_to_node=qname_to_node)
+        total_nodes += persisted.nodes_created
+        total_triples += persisted.triples_created
+        total_linked += persisted.links_applied
+        total_skipped += persisted.links_skipped
 
     print(f"\n  Design phase complete:")
     print(f"    {total_nodes} nodes, {total_triples} triples")
@@ -211,9 +165,10 @@ def step_verify():
     print("STEP 5: Verify — flesh out LLR verification procedures")
     print("=" * 60)
 
-    ontology_nodes = list(
-        OntologyNode.objects.values("qualified_name", "kind", "description")
-    )
+    ontology_nodes = [
+        {"qualified_name": qn, "pk": pk}
+        for qn, pk in OntologyNode.objects.values_list("qualified_name", "pk")
+    ]
     llrs = LowLevelRequirement.objects.prefetch_related("verifications").all()
 
     print(f"  Processing {llrs.count()} LLRs against {len(ontology_nodes)} ontology nodes...\n")
@@ -230,75 +185,19 @@ def step_verify():
             continue
 
         print(f"  LLR {llr.pk}: {llr.description[:60]}...")
-        result = verify(
+        agent_result = verify(
             llr_dict, existing, ontology_nodes,
             prompt_log_file=os.path.join(LOGS_DIR, f"step5_verify_llr{llr.pk}.md"),
         )
 
-        with transaction.atomic():
-            # Replace existing verification stubs with fleshed-out versions
-            llr.verifications.all().delete()
+        persisted = persist_verification(llr, agent_result.verifications, ontology_nodes)
+        total_conditions += persisted.conditions_created
+        total_actions += persisted.actions_created
 
-            for v in result.verifications:
-                vm = VerificationMethod.objects.create(
-                    low_level_requirement=llr,
-                    method=v.method,
-                    test_name=v.test_name,
-                    description=v.description,
-                )
-
-                # Resolve ontology node references by qualified name prefix
-                def resolve_node(member_qname):
-                    if not member_qname:
-                        return None
-                    # Match the longest ontology node qualified_name that is a
-                    # prefix of the member qualified name
-                    for node in sorted(
-                        ontology_nodes, key=lambda n: len(n["qualified_name"]), reverse=True
-                    ):
-                        if member_qname.startswith(node["qualified_name"]):
-                            return OntologyNode.objects.filter(
-                                qualified_name=node["qualified_name"]
-                            ).first()
-                    return None
-
-                for i, cond in enumerate(v.preconditions):
-                    VerificationCondition.objects.create(
-                        verification=vm,
-                        phase="pre",
-                        order=i,
-                        ontology_node=resolve_node(cond.member_qualified_name),
-                        member_qualified_name=cond.member_qualified_name,
-                        operator=cond.operator,
-                        expected_value=cond.expected_value,
-                    )
-                    total_conditions += 1
-
-                for i, action in enumerate(v.actions):
-                    VerificationAction.objects.create(
-                        verification=vm,
-                        order=i,
-                        description=action.description,
-                        ontology_node=resolve_node(action.member_qualified_name),
-                        member_qualified_name=action.member_qualified_name,
-                    )
-                    total_actions += 1
-
-                for i, cond in enumerate(v.postconditions):
-                    VerificationCondition.objects.create(
-                        verification=vm,
-                        phase="post",
-                        order=i,
-                        ontology_node=resolve_node(cond.member_qualified_name),
-                        member_qualified_name=cond.member_qualified_name,
-                        operator=cond.operator,
-                        expected_value=cond.expected_value,
-                    )
-                    total_conditions += 1
-
-                print(f"    [{vm.method}] {vm.test_name}: "
-                      f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
-                      f"{len(v.postconditions)} post")
+        for v in agent_result.verifications:
+            print(f"    [{v.method}] {v.test_name}: "
+                  f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
+                  f"{len(v.postconditions)} post")
 
     print(f"\n  Verification phase complete:")
     print(f"    {total_conditions} conditions, {total_actions} actions created\n")

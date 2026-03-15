@@ -6,12 +6,9 @@ from django.views.decorators.http import require_POST
 from django.views.generic import DetailView, CreateView, UpdateView
 
 from ai_assist.mixins import AiAssistMixin
-from requirements.models import (
-    HighLevelRequirement,
-    LowLevelRequirement,
-    VerificationMethod,
-)
+from requirements.models import HighLevelRequirement
 from requirements.forms import HighLevelRequirementForm
+from requirements.services.persistence import persist_decomposition
 from components.models import Component
 
 from .common import _build_requirement_graph
@@ -105,21 +102,8 @@ def decompose_hlr(hlr, model="", prompt_log_file=""):
         prompt_log_file=prompt_log_file,
     )
 
-    with transaction.atomic():
-        for llr_data in result.low_level_requirements:
-            llr = LowLevelRequirement.objects.create(
-                high_level_requirement=hlr,
-                description=llr_data.description,
-            )
-            for v in llr_data.verifications:
-                VerificationMethod.objects.create(
-                    low_level_requirement=llr,
-                    method=v.method,
-                    test_name=v.test_name,
-                    description=v.description,
-                )
-
-    return len(result.low_level_requirements)
+    persisted = persist_decomposition(hlr, result.low_level_requirements)
+    return persisted.llrs_created
 
 
 @require_POST

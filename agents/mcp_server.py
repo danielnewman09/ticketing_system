@@ -25,13 +25,18 @@ from django.db.models import F
 from mcp.server.fastmcp import FastMCP
 
 from codebase.models import OntologyNode, OntologyTriple, Predicate
+from codebase.schemas import DesignSchema
 from components.models import Component, Dependency
 from requirements.models import (
     HighLevelRequirement,
     LowLevelRequirement,
-    VerificationAction,
-    VerificationCondition,
     VerificationMethod,
+)
+from requirements.schemas import LowLevelRequirementSchema, VerificationSchema
+from requirements.services.persistence import (
+    persist_decomposition,
+    persist_design,
+    persist_verification,
 )
 
 mcp = FastMCP("ticketing-system")
@@ -201,25 +206,13 @@ def save_decomposed_requirement(
     """
     with transaction.atomic():
         hlr = HighLevelRequirement.objects.create(description=hlr_description)
+        llrs = [LowLevelRequirementSchema.model_validate(d) for d in low_level_requirements]
+        result = persist_decomposition(hlr, llrs)
 
-        for llr_data in low_level_requirements:
-            llr = LowLevelRequirement.objects.create(
-                high_level_requirement=hlr,
-                description=llr_data["description"],
-            )
-            for v in llr_data.get("verifications", []):
-                VerificationMethod.objects.create(
-                    low_level_requirement=llr,
-                    method=v["method"],
-                    test_name=v.get("test_name", ""),
-                    description=v.get("description", ""),
-                )
-
-    llr_count = hlr.low_level_requirements.count()
     return json.dumps({
         "hlr_id": hlr.pk,
-        "llr_count": llr_count,
-        "message": f"Created HLR {hlr.pk} with {llr_count} LLRs",
+        "llr_count": result.llrs_created,
+        "message": f"Created HLR {hlr.pk} with {result.llrs_created} LLRs",
     })
 
 
@@ -246,57 +239,18 @@ def save_ontology_design(
             - requirement_id: int
             - triple_index: 0-based index into the triples array
     """
-    qname_to_node = {}
-    saved_triples = []
-    skipped_nodes = 0
-    skipped_triples = 0
-
-    with transaction.atomic():
-        for node_data in nodes:
-            node, _ = OntologyNode.objects.get_or_create(
-                qualified_name=node_data["qualified_name"],
-                defaults={
-                    "kind": node_data["kind"],
-                    "specialization": node_data.get("specialization", ""),
-                    "visibility": node_data.get("visibility", ""),
-                    "name": node_data["name"],
-                    "description": node_data.get("description", ""),
-                    "compound_refid": node_data["qualified_name"],
-                },
-            )
-            qname_to_node[node_data["qualified_name"]] = node
-
-        for triple_data in triples:
-            subj = qname_to_node.get(triple_data["subject_qualified_name"])
-            obj = qname_to_node.get(triple_data["object_qualified_name"])
-            pred = Predicate.objects.filter(name=triple_data["predicate"]).first()
-            if subj and obj and pred:
-                triple, _ = OntologyTriple.objects.get_or_create(
-                    subject=subj, predicate=pred, object=obj,
-                )
-                saved_triples.append(triple)
-            else:
-                saved_triples.append(None)
-                skipped_triples += 1
-
-        linked = 0
-        if requirement_links:
-            for link in requirement_links:
-                idx = link.get("triple_index", -1)
-                if 0 <= idx < len(saved_triples) and saved_triples[idx]:
-                    if link["requirement_type"] == "hlr":
-                        req = HighLevelRequirement.objects.filter(pk=link["requirement_id"]).first()
-                    else:
-                        req = LowLevelRequirement.objects.filter(pk=link["requirement_id"]).first()
-                    if req:
-                        req.triples.add(saved_triples[idx])
-                        linked += 1
+    design = DesignSchema.model_validate({
+        "nodes": nodes,
+        "triples": triples,
+        "requirement_links": requirement_links or [],
+    })
+    result = persist_design(design)
 
     return json.dumps({
-        "nodes_created": len(qname_to_node),
-        "triples_created": len([t for t in saved_triples if t]),
-        "triples_skipped": skipped_triples,
-        "requirement_links_applied": linked,
+        "nodes_created": result.nodes_created,
+        "triples_created": result.triples_created,
+        "triples_skipped": result.triples_skipped,
+        "requirement_links_applied": result.links_applied,
     })
 
 
@@ -318,73 +272,14 @@ def save_verification(
             - postconditions: list of {member_qualified_name, operator, expected_value}
     """
     llr = LowLevelRequirement.objects.get(pk=llr_id)
-
-    # Build a lookup of ontology nodes for resolving member references
-    all_nodes = list(OntologyNode.objects.values_list("qualified_name", "pk"))
-    # Sort longest first for prefix matching
-    all_nodes.sort(key=lambda x: len(x[0]), reverse=True)
-
-    def resolve_node(member_qname):
-        if not member_qname:
-            return None
-        for qname, pk in all_nodes:
-            if member_qname.startswith(qname):
-                return OntologyNode.objects.get(pk=pk)
-        return None
-
-    total_conditions = 0
-    total_actions = 0
-
-    with transaction.atomic():
-        llr.verifications.all().delete()
-
-        for v in verifications:
-            vm = VerificationMethod.objects.create(
-                low_level_requirement=llr,
-                method=v["method"],
-                test_name=v.get("test_name", ""),
-                description=v.get("description", ""),
-            )
-
-            for i, cond in enumerate(v.get("preconditions", [])):
-                VerificationCondition.objects.create(
-                    verification=vm,
-                    phase="pre",
-                    order=i,
-                    ontology_node=resolve_node(cond["member_qualified_name"]),
-                    member_qualified_name=cond["member_qualified_name"],
-                    operator=cond.get("operator", "=="),
-                    expected_value=cond["expected_value"],
-                )
-                total_conditions += 1
-
-            for i, action in enumerate(v.get("actions", [])):
-                VerificationAction.objects.create(
-                    verification=vm,
-                    order=i,
-                    description=action["description"],
-                    ontology_node=resolve_node(action.get("member_qualified_name", "")),
-                    member_qualified_name=action.get("member_qualified_name", ""),
-                )
-                total_actions += 1
-
-            for i, cond in enumerate(v.get("postconditions", [])):
-                VerificationCondition.objects.create(
-                    verification=vm,
-                    phase="post",
-                    order=i,
-                    ontology_node=resolve_node(cond["member_qualified_name"]),
-                    member_qualified_name=cond["member_qualified_name"],
-                    operator=cond.get("operator", "=="),
-                    expected_value=cond["expected_value"],
-                )
-                total_conditions += 1
+    schemas = [VerificationSchema.model_validate(v) for v in verifications]
+    result = persist_verification(llr, schemas)
 
     return json.dumps({
         "llr_id": llr_id,
-        "verifications_saved": len(verifications),
-        "conditions_created": total_conditions,
-        "actions_created": total_actions,
+        "verifications_saved": result.verifications_saved,
+        "conditions_created": result.conditions_created,
+        "actions_created": result.actions_created,
     })
 
 
