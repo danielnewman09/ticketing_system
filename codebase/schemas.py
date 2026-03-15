@@ -42,6 +42,7 @@ class ClassSchema(BaseModel):
     module: str = ""
     specialization: str = ""
     description: str = ""
+    is_intercomponent: bool = False
     attributes: list[AttributeSchema] = []
     methods: list[MethodSchema] = []
     inherits_from: list[str] = []
@@ -61,6 +62,7 @@ class InterfaceSchema(BaseModel):
     module: str = ""
     specialization: str = ""
     description: str = ""
+    is_intercomponent: bool = False
     methods: list[MethodSchema] = []
 
 
@@ -92,6 +94,8 @@ class OntologyNodeSchema(BaseModel):
     name: str
     qualified_name: str
     description: str = ""
+    component_id: int | None = None
+    is_intercomponent: bool = False
 
 
 class OntologyTripleSchema(BaseModel):

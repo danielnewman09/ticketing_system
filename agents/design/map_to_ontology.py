@@ -31,8 +31,16 @@ def _parse_req_id(tagged: str) -> tuple[str, int] | None:
     return None
 
 
-def map_oo_to_ontology(oo: OODesignSchema) -> DesignSchema:
-    """Map an OO design to ontology nodes, triples, and requirement links."""
+def map_oo_to_ontology(
+    oo: OODesignSchema,
+    component_id: int | None = None,
+) -> DesignSchema:
+    """Map an OO design to ontology nodes, triples, and requirement links.
+
+    Args:
+        oo: The OO design output from Stage 1.
+        component_id: Optional component FK to set on all output nodes.
+    """
     nodes: list[OntologyNodeSchema] = []
     triples: list[OntologyTripleSchema] = []
     links: list[RequirementTripleLinkSchema] = []
@@ -40,7 +48,7 @@ def map_oo_to_ontology(oo: OODesignSchema) -> DesignSchema:
     # Track qualified_name -> index in nodes list for dedup
     node_index: dict[str, int] = {}
 
-    def _add_node(kind, name, qualified_name, **kwargs):
+    def _add_node(kind, name, qualified_name, is_intercomponent=False, **kwargs):
         if qualified_name in node_index:
             return
         node_index[qualified_name] = len(nodes)
@@ -48,6 +56,8 @@ def map_oo_to_ontology(oo: OODesignSchema) -> DesignSchema:
             kind=kind,
             name=name,
             qualified_name=qualified_name,
+            component_id=component_id,
+            is_intercomponent=is_intercomponent,
             **kwargs,
         ))
 
@@ -83,6 +93,7 @@ def map_oo_to_ontology(oo: OODesignSchema) -> DesignSchema:
         iface_qname = _qualify(iface.module, iface.name)
         _add_node(
             "interface", iface.name, iface_qname,
+            is_intercomponent=iface.is_intercomponent,
             specialization=iface.specialization,
             description=iface.description,
         )
@@ -116,6 +127,7 @@ def map_oo_to_ontology(oo: OODesignSchema) -> DesignSchema:
         cls_qname = _qualify(cls.module, cls.name)
         _add_node(
             "class", cls.name, cls_qname,
+            is_intercomponent=cls.is_intercomponent,
             specialization=cls.specialization,
             description=cls.description,
         )

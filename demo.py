@@ -30,7 +30,7 @@ from django.core.management import call_command
 from django.db import transaction
 from django.db.models import F
 
-from agents.design.design_ontology import design
+from agents.design.design_per_hlr import design_all_hlrs
 from agents.verify.verify_llr import verify
 from requirements.views.hlr import assign_hlr_components, decompose_hlr
 from codebase.models import OntologyNode, OntologyTriple, Predicate
@@ -115,84 +115,93 @@ def step_decompose():
 
 def step_design():
     print("=" * 60)
-    print("STEP 4: Design — derive ontology from requirements")
+    print("STEP 4: Design — derive ontology per HLR")
     print("=" * 60)
-    print("  Feeding all requirements to the design agent...\n")
+    print("  Designing each HLR individually in dependency order...\n")
 
-    hlrs = list(HighLevelRequirement.objects.values("id", "description"))
+    hlrs = list(
+        HighLevelRequirement.objects.values(
+            "id", "description", "component_id", "dependency_context",
+        ).annotate(component_name=F("component__name"))
+    )
     llrs = list(LowLevelRequirement.objects.values(
         "id", "description",
     ).annotate(hlr_id=F("high_level_requirement_id")))
 
-    result = design(
+    per_hlr_results = design_all_hlrs(
         hlrs, llrs,
-        prompt_log_file=os.path.join(LOGS_DIR, "step4_design.md"),
+        log_dir=LOGS_DIR,
     )
 
-    # Save ontology nodes
+    # Persist all results
+    total_nodes = 0
+    total_triples = 0
+    total_linked = 0
+    total_skipped = 0
     qname_to_node = {}
+
     with transaction.atomic():
-        for node_data in result.nodes:
-            node = OntologyNode.objects.create(
-                kind=node_data.kind,
-                name=node_data.name,
-                qualified_name=node_data.qualified_name,
-                compound_refid=node_data.qualified_name,
-                description=node_data.description,
-            )
-            qname_to_node[node_data.qualified_name] = node
-            print(f"  Node: {node_data.qualified_name} ({node_data.kind})")
+        for hlr_dict, oo, result in per_hlr_results:
+            print(f"\n  --- HLR {hlr_dict['id']}: {hlr_dict['description'][:50]}... ---")
 
-        # Save ontology triples in order (index-based lookup for requirement links)
-        saved_triples = []
-        for triple_data in result.triples:
-            subj = qname_to_node.get(triple_data.subject_qualified_name)
-            obj = qname_to_node.get(triple_data.object_qualified_name)
-            pred = Predicate.objects.filter(name=triple_data.predicate).first()
-            if subj and obj and pred:
-                triple, _ = OntologyTriple.objects.get_or_create(
-                    subject=subj,
-                    predicate=pred,
-                    object=obj,
+            for node_data in result.nodes:
+                if node_data.qualified_name in qname_to_node:
+                    continue
+                node = OntologyNode.objects.create(
+                    kind=node_data.kind,
+                    name=node_data.name,
+                    qualified_name=node_data.qualified_name,
+                    compound_refid=node_data.qualified_name,
+                    description=node_data.description,
+                    component_id=node_data.component_id,
+                    is_intercomponent=node_data.is_intercomponent,
                 )
-                saved_triples.append(triple)
-                print(f"  Triple [{len(saved_triples)-1}]: {subj.name} --{pred.name}--> {obj.name}")
-            else:
-                saved_triples.append(None)
-                if not pred:
-                    print(f"  Triple [{len(saved_triples)-1}] skipped (unknown predicate: {triple_data.predicate})")
+                qname_to_node[node_data.qualified_name] = node
+                total_nodes += 1
+                flag = " [intercomponent]" if node_data.is_intercomponent else ""
+                print(f"  Node: {node_data.qualified_name} ({node_data.kind}){flag}")
+
+            # Save ontology triples in order (index-based lookup for requirement links)
+            saved_triples = []
+            for triple_data in result.triples:
+                subj = qname_to_node.get(triple_data.subject_qualified_name)
+                obj = qname_to_node.get(triple_data.object_qualified_name)
+                pred = Predicate.objects.filter(name=triple_data.predicate).first()
+                if subj and obj and pred:
+                    triple, _ = OntologyTriple.objects.get_or_create(
+                        subject=subj,
+                        predicate=pred,
+                        object=obj,
+                    )
+                    saved_triples.append(triple)
+                    total_triples += 1
                 else:
-                    missing = triple_data.subject_qualified_name if not subj else triple_data.object_qualified_name
-                    print(f"  Triple [{len(saved_triples)-1}] skipped (missing node: {missing})")
+                    saved_triples.append(None)
 
-        # Apply requirement links
-        linked = 0
-        skipped = 0
-        for link in result.requirement_links:
-            triple = None
-            if 0 <= link.triple_index < len(saved_triples):
-                triple = saved_triples[link.triple_index]
+            # Apply requirement links
+            for link in result.requirement_links:
+                triple = None
+                if 0 <= link.triple_index < len(saved_triples):
+                    triple = saved_triples[link.triple_index]
 
-            if not triple:
-                skipped += 1
-                print(f"    Link skipped (triple_index={link.triple_index}): {link.requirement_type} {link.requirement_id}")
-                continue
+                if not triple:
+                    total_skipped += 1
+                    continue
 
-            if link.requirement_type == "hlr":
-                req = HighLevelRequirement.objects.filter(pk=link.requirement_id).first()
-            else:
-                req = LowLevelRequirement.objects.filter(pk=link.requirement_id).first()
+                if link.requirement_type == "hlr":
+                    req = HighLevelRequirement.objects.filter(pk=link.requirement_id).first()
+                else:
+                    req = LowLevelRequirement.objects.filter(pk=link.requirement_id).first()
 
-            if req:
-                req.triples.add(triple)
-                linked += 1
-            else:
-                skipped += 1
-                print(f"    Link skipped (no matching {link.requirement_type} {link.requirement_id})")
+                if req:
+                    req.triples.add(triple)
+                    total_linked += 1
+                else:
+                    total_skipped += 1
 
     print(f"\n  Design phase complete:")
-    print(f"    {len(result.nodes)} nodes, {len(result.triples)} triples")
-    print(f"    {linked} requirement-to-triple links applied, {skipped} skipped\n")
+    print(f"    {total_nodes} nodes, {total_triples} triples")
+    print(f"    {total_linked} requirement-to-triple links applied, {total_skipped} skipped\n")
 
 
 def step_verify():

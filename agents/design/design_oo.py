@@ -87,6 +87,14 @@ inherits_from and realizes_interfaces on the class instead.
 
 {specializations_section}
 
+## Inter-component boundary flag
+
+Set `is_intercomponent: true` on any class or interface that forms a public
+API boundary meant to be used by OTHER components. These are the types that
+other components will reference — e.g., shared data models, service
+interfaces, or event contracts. Internal implementation classes should have
+`is_intercomponent: false` (the default).
+
 ## Guidelines
 
 - Use modules to organize related classes
@@ -98,6 +106,10 @@ inherits_from and realizes_interfaces on the class instead.
   have its own behavior or relationships?" If no, it is an attribute.
 
 {existing_classes_section}
+
+{intercomponent_section}
+
+{other_hlrs_section}
 """
 
 
@@ -200,6 +212,61 @@ def _build_existing_classes_section(existing_classes):
     return "\n".join(lines)
 
 
+def _build_intercomponent_section(intercomponent_classes):
+    """Build prompt section for cross-component public API classes.
+
+    These classes belong to OTHER components and should be referenced
+    but NOT redesigned.
+    """
+    if not intercomponent_classes:
+        return ""
+
+    lines = [
+        "## Cross-component interfaces (read-only context)\n",
+        "The following classes/interfaces belong to OTHER components and are ",
+        "marked as inter-component boundaries. You may reference, depend on, ",
+        "or associate with these but do NOT redesign or duplicate them. ",
+        "Do NOT include them in your output.\n",
+    ]
+
+    for cls in intercomponent_classes:
+        kind = cls.get("kind", "class")
+        qname = cls["qualified_name"]
+        desc = cls.get("description", "")
+        component = cls.get("component_name", "unknown")
+        lines.append(f"### {kind}: `{qname}` (component: {component})")
+        if desc:
+            lines.append(f"  {desc}")
+
+        methods = cls.get("methods", [])
+        if methods:
+            public_methods = [m["name"] for m in methods if m.get("visibility") == "public"]
+            if public_methods:
+                lines.append(f"  Public methods: {', '.join(public_methods)}")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_other_hlrs_section(other_hlr_summaries):
+    """Build prompt section listing other HLRs for awareness context."""
+    if not other_hlr_summaries:
+        return ""
+
+    lines = [
+        "## Other HLRs (context only)\n",
+        "These other HLRs exist in the system. You are NOT designing for them — ",
+        "they are provided for awareness only so you can anticipate integration points.\n",
+    ]
+
+    for hlr in other_hlr_summaries:
+        status = hlr.get("status", "pending")
+        lines.append(f"- HLR {hlr['id']} [{status}]: {hlr['description']}")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -227,40 +294,46 @@ def _build_dependency_section(dependency_contexts: dict[int, dict]) -> str:
 
 
 def design_oo(
-    hlrs: list[dict],
+    hlr: dict,
     llrs: list[dict],
     language: str = "",
     existing_classes: list[dict] | None = None,
+    intercomponent_classes: list[dict] | None = None,
+    other_hlr_summaries: list[dict] | None = None,
     dependency_contexts: dict[int, dict] | None = None,
     model: str = "",
     prompt_log_file: str = "",
 ) -> OODesignSchema:
     """
-    Stage 1: derive an OO class design from requirements.
+    Stage 1: derive an OO class design from a single HLR and its LLRs.
 
-    Each HLR dict: {id, description}
-    Each LLR dict: {id, hlr_id, description}
-    existing_classes: Optional context about classes already designed for
-        previous HLRs. See _build_existing_classes_section for format.
+    Args:
+        hlr: Single HLR dict with {id, description, component_name?}.
+        llrs: LLR dicts for this HLR only, each {id, hlr_id, description}.
+        existing_classes: Classes already designed in the same component.
+        intercomponent_classes: Public API classes from other components.
+        other_hlr_summaries: Other HLRs for awareness context.
+        dependency_contexts: Dependency assessment keyed by HLR ID.
     """
-    requirements_text = format_hlrs_for_prompt(hlrs, llrs, include_component=True)
+    requirements_text = format_hlrs_for_prompt([hlr], llrs, include_component=True)
 
     system = SYSTEM_PROMPT.format(
         specializations_section=_build_specializations_section(language),
         existing_classes_section=_build_existing_classes_section(existing_classes or []),
+        intercomponent_section=_build_intercomponent_section(intercomponent_classes or []),
+        other_hlrs_section=_build_other_hlrs_section(other_hlr_summaries or []),
     )
     dep_section = _build_dependency_section(dependency_contexts or {})
     if dep_section:
         system += dep_section
 
     # Build component context for the user prompt
-    components = {h.get("component_name") for h in hlrs if h.get("component_name")}
+    component_name = hlr.get("component_name")
     component_hint = ""
-    if components:
-        names = ", ".join(sorted(components))
+    if component_name:
         component_hint = (
-            f"\n\nThese requirements belong to the following architectural "
-            f"component(s): {names}. Your class design should be scoped to "
+            f"\n\nThis requirement belongs to the architectural "
+            f"component: {component_name}. Your class design should be scoped to "
             f"and appropriate for this component context.\n"
         )
 

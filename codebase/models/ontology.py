@@ -152,6 +152,14 @@ class OntologyNode(models.Model):
         max_length=200, blank=True, default="",
         help_text="Refid linking to a compound in the codebase DB",
     )
+    component = models.ForeignKey(
+        "components.Component", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="ontology_nodes",
+    )
+    is_intercomponent = models.BooleanField(
+        default=False,
+        help_text="Public interface boundary for cross-component use",
+    )
     kind = models.CharField(max_length=20, choices=NODE_KINDS)
     specialization = models.CharField(
         max_length=40, blank=True, default="",
