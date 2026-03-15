@@ -12,7 +12,7 @@ Then visit http://127.0.0.1:8081
 from nicegui import ui
 
 from db import init_db
-import ui.pages  # noqa: F401 — registers all @ui.page routes
+import frontend.pages  # noqa: F401 — registers all @ui.page routes
 
 if __name__ in {"__main__", "__mp_main__"}:
     init_db()

@@ -4,10 +4,10 @@ import asyncio
 
 from nicegui import ui
 
-from ui.theme import apply_theme
-from ui.layout import page_layout, stat_card
-from ui.widgets import render_hlr_card, render_llr_table
-from ui.data import fetch_requirements_data
+from frontend.theme import apply_theme
+from frontend.layout import page_layout, stat_card
+from frontend.widgets import render_hlr_card, render_llr_table
+from frontend.data import fetch_requirements_data
 
 
 @ui.page("/")

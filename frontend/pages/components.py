@@ -4,9 +4,9 @@ import asyncio
 
 from nicegui import ui
 
-from ui.theme import apply_theme
-from ui.layout import page_layout
-from ui.data import fetch_components_data
+from frontend.theme import apply_theme
+from frontend.layout import page_layout
+from frontend.data import fetch_components_data
 
 
 @ui.page("/components")

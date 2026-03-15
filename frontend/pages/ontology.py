@@ -4,9 +4,9 @@ import asyncio
 
 from nicegui import ui
 
-from ui.theme import KIND_COLORS, apply_theme
-from ui.layout import page_layout, stat_card
-from ui.data import fetch_ontology_data
+from frontend.theme import KIND_COLORS, apply_theme
+from frontend.layout import page_layout, stat_card
+from frontend.data import fetch_ontology_data
 
 
 @ui.page("/ontology")

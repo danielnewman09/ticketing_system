@@ -2,7 +2,7 @@
 
 from nicegui import ui
 
-from ui.theme import VERIFICATION_COLORS
+from frontend.theme import VERIFICATION_COLORS
 
 
 def render_hlr_card(hlr):
