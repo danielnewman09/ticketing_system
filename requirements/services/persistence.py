@@ -7,9 +7,12 @@ and NiceGUI views into a single place.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
+
+log = logging.getLogger(__name__)
 
 from db import get_or_create
 from db.models import (
@@ -118,6 +121,15 @@ def persist_decomposition(
             result.verifications_created += 1
 
     session.flush()
+
+    # -- Neo4j dual-write (best-effort) --
+    try:
+        from db.neo4j_sync import try_sync_requirement
+        for llr_obj in hlr.low_level_requirements:
+            try_sync_requirement(llr_obj, "LLR", hlr=hlr)
+    except Exception:
+        log.warning("Neo4j decomposition sync failed — will catch up via migration script", exc_info=True)
+
     return result
 
 
@@ -150,9 +162,20 @@ def persist_design(
                 "visibility": node_data.visibility,
                 "name": node_data.name,
                 "description": node_data.description,
-                "compound_refid": node_data.qualified_name,
+                "refid": node_data.qualified_name,
                 "component_id": node_data.component_id,
                 "is_intercomponent": node_data.is_intercomponent,
+                "source_type": node_data.source_type,
+                "type_signature": node_data.type_signature,
+                "argsstring": node_data.argsstring,
+                "definition": node_data.definition,
+                "file_path": node_data.file_path,
+                "line_number": node_data.line_number,
+                "is_static": node_data.is_static,
+                "is_const": node_data.is_const,
+                "is_virtual": node_data.is_virtual,
+                "is_abstract": node_data.is_abstract,
+                "is_final": node_data.is_final,
             },
             qualified_name=node_data.qualified_name,
         )
@@ -202,6 +225,20 @@ def persist_design(
             result.links_skipped += 1
 
     session.flush()
+
+    # -- Neo4j dual-write (best-effort) --
+    try:
+        from db.neo4j_sync import try_sync_design_nodes_and_triples
+        created_nodes = [
+            qname_to_node[nd.qualified_name]
+            for nd in design.nodes
+            if nd.qualified_name in qname_to_node
+        ]
+        created_triples = [t for t in saved_triples if t is not None]
+        try_sync_design_nodes_and_triples(created_nodes, created_triples)
+    except Exception:
+        log.warning("Neo4j design sync failed — will catch up via migration script", exc_info=True)
+
     return result
 
 

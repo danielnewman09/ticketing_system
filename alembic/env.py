@@ -29,7 +29,20 @@ EXCLUDE_TABLES = {
     "auth_user", "auth_user_groups", "auth_user_user_permissions",
     "django_admin_log", "django_content_type", "django_migrations",
     "django_session", "sqlite_sequence",
+    # sqlite-vec virtual tables (not introspectable without the extension)
+    "ticket_embeddings",
+    "ticket_embeddings_chunks",
+    "ticket_embeddings_info",
+    "ticket_embeddings_vector_chunks00",
+    "ticket_embeddings_rowids",
 }
+
+
+def include_name(name, type_, parent_names):
+    """Filter out codebase, Django, and virtual tables before reflection."""
+    if type_ == "table" and name in EXCLUDE_TABLES:
+        return False
+    return True
 
 
 def include_object(object, name, type_, reflected, compare_to):
@@ -47,6 +60,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_name=include_name,
         include_object=include_object,
     )
 
@@ -66,6 +80,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            include_name=include_name,
             include_object=include_object,
         )
 

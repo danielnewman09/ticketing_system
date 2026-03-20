@@ -10,12 +10,13 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from db.models.ontology import NODE_KINDS, VISIBILITY_CHOICES
+from db.models.ontology import NODE_KINDS, SOURCE_TYPES, VISIBILITY_CHOICES
 
 # Derived from the canonical NODE_KINDS list so there is one place to
 # add or remove kinds.
 NodeKind = Literal[tuple(k for k, _ in NODE_KINDS)]
 Visibility = Literal[tuple(v for v, _ in VISIBILITY_CHOICES)]
+SourceType = Literal[tuple(k for k, _ in SOURCE_TYPES)]
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +97,25 @@ class OntologyNodeSchema(BaseModel):
     description: str = ""
     component_id: int | None = None
     is_intercomponent: bool = False
+
+    # Codebase linkage
+    source_type: SourceType | str = ""
+
+    # Code-level detail
+    type_signature: str = ""
+    argsstring: str = ""
+    definition: str = ""
+
+    # Source location (empty at design time, populated after implementation)
+    file_path: str = ""
+    line_number: int | None = None
+
+    # Flags
+    is_static: bool = False
+    is_const: bool = False
+    is_virtual: bool = False
+    is_abstract: bool = False
+    is_final: bool = False
 
 
 class OntologyTripleSchema(BaseModel):

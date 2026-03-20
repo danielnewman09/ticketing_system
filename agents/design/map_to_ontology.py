@@ -84,14 +84,14 @@ def map_oo_to_ontology(
                     triple_index=triple_idx,
                 ))
 
-    # --- Modules ---
+    # --- Modules (source_type="namespace") ---
     for module in oo.modules:
         parts = module.split("::")
         for i in range(len(parts)):
             prefix = "::".join(parts[: i + 1])
-            _add_node("module", parts[i], prefix)
+            _add_node("module", parts[i], prefix, source_type="namespace")
 
-    # --- Interfaces ---
+    # --- Interfaces (source_type="compound") ---
     for iface in oo.interfaces:
         iface_qname = _qualify(iface.module, iface.name)
         _add_node(
@@ -99,23 +99,34 @@ def map_oo_to_ontology(
             is_intercomponent=iface.is_intercomponent,
             specialization=iface.specialization,
             description=iface.description,
+            source_type="compound",
+            is_abstract=True,
         )
         for method in iface.methods:
             method_qname = f"{iface_qname}::{method.name}"
+            argsstring = f"({', '.join(method.parameters)})" if method.parameters else ""
             _add_node(
                 "method", method.name, method_qname,
                 visibility=method.visibility,
                 description=method.description,
+                source_type="member",
+                type_signature=method.return_type,
+                argsstring=argsstring,
+                is_virtual=True,
             )
             _add_triple(iface_qname, "composes", method_qname)
 
-    # --- Enums ---
+    # --- Enums (source_type="compound") ---
     for enum in oo.enums:
         enum_qname = _qualify(enum.module, enum.name)
-        _add_node("enum", enum.name, enum_qname, description=enum.description)
+        _add_node(
+            "enum", enum.name, enum_qname,
+            description=enum.description,
+            source_type="compound",
+        )
         for value in enum.values:
             val_qname = f"{enum_qname}::{value}"
-            _add_node("enum_value", value, val_qname)
+            _add_node("enum_value", value, val_qname, source_type="member")
             _add_triple(enum_qname, "composes", val_qname)
 
     # --- Classes ---
@@ -134,26 +145,33 @@ def map_oo_to_ontology(
             is_intercomponent=cls.is_intercomponent,
             specialization=cls.specialization,
             description=cls.description,
+            source_type="compound",
         )
 
-        # Attributes -> composes triples
+        # Attributes -> composes triples (source_type="member")
         for attr in cls.attributes:
             attr_qname = f"{cls_qname}::{attr.name}"
             _add_node(
                 "attribute", attr.name, attr_qname,
                 visibility=attr.visibility,
                 description=attr.description,
+                source_type="member",
+                type_signature=attr.type_name,
             )
             triple_idx = _add_triple(cls_qname, "composes", attr_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-        # Methods -> composes triples
+        # Methods -> composes triples (source_type="member")
         for method in cls.methods:
             method_qname = f"{cls_qname}::{method.name}"
+            argsstring = f"({', '.join(method.parameters)})" if method.parameters else ""
             _add_node(
                 "method", method.name, method_qname,
                 visibility=method.visibility,
                 description=method.description,
+                source_type="member",
+                type_signature=method.return_type,
+                argsstring=argsstring,
             )
             triple_idx = _add_triple(cls_qname, "composes", method_qname)
             _link_reqs(cls.requirement_ids, triple_idx)

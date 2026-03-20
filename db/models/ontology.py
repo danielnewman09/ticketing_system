@@ -47,6 +47,18 @@ TYPE_KINDS = {"class", "interface", "enum", "type_alias"}
 VALUE_KINDS = {"enum_value", "function", "method", "attribute", "constant"}
 
 # ---------------------------------------------------------------------------
+# Codebase source types — which entity in the codebase DB a node maps to
+# ---------------------------------------------------------------------------
+
+SOURCE_TYPES = [
+    ("namespace", "Namespace"),
+    ("compound", "Compound"),
+    ("member", "Member"),
+]
+
+SOURCE_TYPE_VALUES = {k for k, _ in SOURCE_TYPES}
+
+# ---------------------------------------------------------------------------
 # Language-specific specializations
 # ---------------------------------------------------------------------------
 
@@ -144,9 +156,8 @@ class OntologyNode(Base):
     __tablename__ = "ontology_nodes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    compound_refid: Mapped[str] = mapped_column(String(200), default="", server_default="")
-    component_id: Mapped[Optional[int]] = mapped_column(ForeignKey("components.id", ondelete="SET NULL"), nullable=True)
-    is_intercomponent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    # --- Identity & classification ---
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     specialization: Mapped[str] = mapped_column(String(40), default="", server_default="")
     visibility: Mapped[str] = mapped_column(String(10), default="", server_default="")
@@ -154,6 +165,33 @@ class OntologyNode(Base):
     qualified_name: Mapped[str] = mapped_column(String(500), default="", server_default="")
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
 
+    # --- Codebase linkage ---
+    # refid is the unique Doxygen reference id (e.g. "classmsd__sim_1_1Foo").
+    # Replaces the old compound_refid; works for namespaces, compounds, and members.
+    refid: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    source_type: Mapped[str] = mapped_column(String(20), default="", server_default="")
+
+    # --- Code-level detail (mirrors compounds + members) ---
+    type_signature: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    argsstring: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    definition: Mapped[str] = mapped_column(Text, default="", server_default="")
+
+    # --- Source location ---
+    file_path: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    line_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # --- Flags (applicable across compounds & members) ---
+    is_static: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    is_const: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    is_virtual: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    is_abstract: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    is_final: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    # --- Project-level context ---
+    component_id: Mapped[Optional[int]] = mapped_column(ForeignKey("components.id", ondelete="SET NULL"), nullable=True)
+    is_intercomponent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    # --- Relationships ---
     component: Mapped[Optional[Component]] = relationship("Component", back_populates="ontology_nodes")
     triples_as_subject: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", foreign_keys="OntologyTriple.subject_id", back_populates="subject")
     triples_as_object: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", foreign_keys="OntologyTriple.object_id", back_populates="object")

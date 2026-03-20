@@ -18,6 +18,7 @@ async def ontology_page():
 
     with ui.row().classes("w-full items-center justify-between px-2 mt-4 mb-4"):
         ui.label("Ontology").classes("text-xl font-semibold")
+        ui.link("View Graph →", "/ontology/graph").classes("text-sm")
 
     with ui.row().classes("w-full gap-4 flex-wrap px-2 mb-4"):
         stat_card("Nodes", data["total_nodes"], "purple-5")

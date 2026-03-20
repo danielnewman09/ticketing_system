@@ -1,0 +1,352 @@
+"""Read-side Neo4j queries returning plain dicts for the frontend."""
+
+from __future__ import annotations
+
+import logging
+
+from db.neo4j import get_neo4j_session
+
+log = logging.getLogger(__name__)
+
+
+def fetch_design_graph(
+    kind_filter: str | None = None,
+    search: str | None = None,
+    component_id: int | None = None,
+) -> dict:
+    """Fetch design-layer graph in Cytoscape.js format.
+
+    Returns {"nodes": [...], "edges": [...]}.
+    """
+    conditions = ["n:Design"]
+    params: dict = {}
+
+    if kind_filter:
+        conditions.append("n.kind = $kind")
+        params["kind"] = kind_filter
+    if component_id is not None:
+        conditions.append("n.component_id = $comp_id")
+        params["comp_id"] = component_id
+    if search:
+        conditions.append("(n.name CONTAINS $search OR n.qualified_name CONTAINS $search)")
+        params["search"] = search
+
+    where = " AND ".join(conditions)
+
+    with get_neo4j_session() as session:
+        # Nodes
+        node_result = session.run(
+            f"MATCH (n) WHERE {where} RETURN n",
+            params,
+        )
+        nodes = []
+        node_ids = set()
+        for record in node_result:
+            n = record["n"]
+            node_ids.add(n.element_id)
+            nodes.append({
+                "data": {
+                    "id": n.element_id,
+                    "label": n.get("name", ""),
+                    "qualified_name": n.get("qualified_name", ""),
+                    "kind": n.get("kind", ""),
+                    "description": n.get("description", ""),
+                    "component_id": n.get("component_id"),
+                    "visibility": n.get("visibility", ""),
+                    "layer": "design",
+                },
+            })
+
+        # Edges between matched nodes
+        edge_result = session.run(
+            f"""
+            MATCH (s)-[r]->(t)
+            WHERE {where.replace('n:', 's:').replace('n.', 's.')}
+              AND t:Design
+              AND type(r) <> 'IMPLEMENTED_BY'
+            RETURN s, r, t
+            """,
+            params,
+        )
+        edges = []
+        for record in edge_result:
+            s = record["s"]
+            t = record["t"]
+            r = record["r"]
+            # Ensure target is in node set
+            if t.element_id not in node_ids:
+                node_ids.add(t.element_id)
+                nodes.append({
+                    "data": {
+                        "id": t.element_id,
+                        "label": t.get("name", ""),
+                        "qualified_name": t.get("qualified_name", ""),
+                        "kind": t.get("kind", ""),
+                        "description": t.get("description", ""),
+                        "component_id": t.get("component_id"),
+                        "visibility": t.get("visibility", ""),
+                        "layer": "design",
+                    },
+                })
+            edges.append({
+                "data": {
+                    "id": r.element_id,
+                    "source": s.element_id,
+                    "target": t.element_id,
+                    "label": r.type,
+                },
+            })
+
+        # Also fetch linked requirement nodes
+        if node_ids:
+            req_result = session.run("""
+            MATCH (req)-[:TRACES_TO]->(d:Design)
+            WHERE (req:HLR OR req:LLR)
+              AND d.qualified_name IS NOT NULL
+            RETURN DISTINCT req, d
+            """)
+            for record in req_result:
+                req = record["req"]
+                d = record["d"]
+                if d.element_id in node_ids:
+                    if req.element_id not in node_ids:
+                        node_ids.add(req.element_id)
+                        labels = list(req.labels)
+                        req_type = "HLR" if "HLR" in labels else "LLR"
+                        nodes.append({
+                            "data": {
+                                "id": req.element_id,
+                                "label": f"{req_type} {req.get('sqlite_id', '')}",
+                                "qualified_name": "",
+                                "kind": req_type,
+                                "description": req.get("title", ""),
+                                "layer": "requirement",
+                            },
+                        })
+                    edges.append({
+                        "data": {
+                            "id": f"traces_{req.element_id}_{d.element_id}",
+                            "source": req.element_id,
+                            "target": d.element_id,
+                            "label": "TRACES_TO",
+                        },
+                    })
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def fetch_combined_graph(design_qnames: list[str]) -> dict:
+    """Fetch design subgraph + linked as-built nodes via IMPLEMENTED_BY."""
+    if not design_qnames:
+        return {"nodes": [], "edges": []}
+
+    with get_neo4j_session() as session:
+        result = session.run("""
+        UNWIND $qnames AS qn
+        MATCH (d:Design {qualified_name: qn})
+        OPTIONAL MATCH (d)-[impl:IMPLEMENTED_BY]->(code)
+        OPTIONAL MATCH (d)-[r]->(d2:Design)
+        RETURN d, impl, code, r, d2
+        """, {"qnames": design_qnames})
+
+        nodes = []
+        edges = []
+        seen_ids = set()
+
+        for record in result:
+            d = record["d"]
+            if d.element_id not in seen_ids:
+                seen_ids.add(d.element_id)
+                nodes.append({
+                    "data": {
+                        "id": d.element_id,
+                        "label": d.get("name", ""),
+                        "qualified_name": d.get("qualified_name", ""),
+                        "kind": d.get("kind", ""),
+                        "layer": "design",
+                    },
+                })
+
+            if record["code"] is not None:
+                code = record["code"]
+                if code.element_id not in seen_ids:
+                    seen_ids.add(code.element_id)
+                    labels = list(code.labels)
+                    nodes.append({
+                        "data": {
+                            "id": code.element_id,
+                            "label": code.get("name", code.get("qualified_name", "")),
+                            "qualified_name": code.get("qualified_name", ""),
+                            "kind": labels[0] if labels else "Unknown",
+                            "layer": "as-built",
+                        },
+                    })
+                impl = record["impl"]
+                if impl is not None:
+                    edges.append({
+                        "data": {
+                            "id": impl.element_id,
+                            "source": d.element_id,
+                            "target": code.element_id,
+                            "label": "IMPLEMENTED_BY",
+                        },
+                    })
+
+            if record["d2"] is not None:
+                d2 = record["d2"]
+                if d2.element_id not in seen_ids:
+                    seen_ids.add(d2.element_id)
+                    nodes.append({
+                        "data": {
+                            "id": d2.element_id,
+                            "label": d2.get("name", ""),
+                            "qualified_name": d2.get("qualified_name", ""),
+                            "kind": d2.get("kind", ""),
+                            "layer": "design",
+                        },
+                    })
+                r = record["r"]
+                if r is not None:
+                    edges.append({
+                        "data": {
+                            "id": r.element_id,
+                            "source": d.element_id,
+                            "target": d2.element_id,
+                            "label": r.type,
+                        },
+                    })
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def fetch_node_detail(qualified_name: str) -> dict | None:
+    """Fetch full node properties + relationships + traced requirements."""
+    with get_neo4j_session() as session:
+        result = session.run("""
+        MATCH (n:Design {qualified_name: $qn})
+        OPTIONAL MATCH (n)-[r_out]->(target)
+        OPTIONAL MATCH (source)-[r_in]->(n)
+        RETURN n,
+               collect(DISTINCT {rel: type(r_out), target_qn: target.qualified_name, target_name: target.name, target_labels: labels(target)}) AS outgoing,
+               collect(DISTINCT {rel: type(r_in), source_qn: source.qualified_name, source_name: source.name, source_labels: labels(source)}) AS incoming
+        """, {"qn": qualified_name})
+
+        record = result.single()
+        if not record:
+            return None
+
+        n = record["n"]
+        props = dict(n)
+
+        # Filter out null entries from collect
+        outgoing = [
+            r for r in record["outgoing"]
+            if r["rel"] is not None
+        ]
+        incoming = [
+            r for r in record["incoming"]
+            if r["rel"] is not None
+        ]
+
+        # Extract traced requirements from incoming
+        requirements = []
+        relationships_in = []
+        for r in incoming:
+            labels = r.get("source_labels", [])
+            if "HLR" in labels or "LLR" in labels:
+                req_type = "HLR" if "HLR" in labels else "LLR"
+                requirements.append({
+                    "type": req_type,
+                    "name": r.get("source_name", ""),
+                    "relationship": r["rel"],
+                })
+            else:
+                relationships_in.append(r)
+
+        # Extract IMPLEMENTED_BY from outgoing
+        implemented_by = []
+        relationships_out = []
+        for r in outgoing:
+            if r["rel"] == "IMPLEMENTED_BY":
+                implemented_by.append({
+                    "qualified_name": r.get("target_qn", ""),
+                    "name": r.get("target_name", ""),
+                    "labels": r.get("target_labels", []),
+                })
+            else:
+                relationships_out.append(r)
+
+        return {
+            "properties": props,
+            "outgoing": relationships_out,
+            "incoming": relationships_in,
+            "requirements": requirements,
+            "implemented_by": implemented_by,
+        }
+
+
+def fetch_design_stats() -> dict:
+    """Counts for dashboard."""
+    with get_neo4j_session() as session:
+        result = session.run("""
+        MATCH (d:Design)
+        RETURN count(d) AS design_nodes,
+               count(DISTINCT d.kind) AS kinds
+        """)
+        record = result.single()
+        design_nodes = record["design_nodes"] if record else 0
+        kinds = record["kinds"] if record else 0
+
+        result2 = session.run("""
+        MATCH (:Design)-[r]->(:Design)
+        WHERE type(r) <> 'IMPLEMENTED_BY'
+        RETURN count(r) AS design_rels
+        """)
+        record2 = result2.single()
+        design_rels = record2["design_rels"] if record2 else 0
+
+        result3 = session.run("""
+        MATCH (:Design)-[:IMPLEMENTED_BY]->()
+        RETURN count(*) AS implemented
+        """)
+        record3 = result3.single()
+        implemented = record3["implemented"] if record3 else 0
+
+        return {
+            "design_nodes": design_nodes,
+            "design_kinds": kinds,
+            "design_relationships": design_rels,
+            "implemented_links": implemented,
+        }
+
+
+def fetch_traceability(hlr_id: int) -> dict:
+    """Full chain: HLR → LLRs → design nodes → as-built code."""
+    with get_neo4j_session() as session:
+        result = session.run("""
+        MATCH (h:HLR {sqlite_id: $hid})
+        OPTIONAL MATCH (l:LLR)-[:DECOMPOSES]->(h)
+        OPTIONAL MATCH (h)-[:TRACES_TO]->(d:Design)
+        OPTIONAL MATCH (l)-[:TRACES_TO]->(d2:Design)
+        OPTIONAL MATCH (d)-[:IMPLEMENTED_BY]->(c1)
+        OPTIONAL MATCH (d2)-[:IMPLEMENTED_BY]->(c2)
+        RETURN h,
+               collect(DISTINCT {id: l.sqlite_id, title: l.title}) AS llrs,
+               collect(DISTINCT {qn: d.qualified_name, name: d.name, kind: d.kind}) AS hlr_design,
+               collect(DISTINCT {qn: d2.qualified_name, name: d2.name, kind: d2.kind}) AS llr_design,
+               collect(DISTINCT {qn: c1.qualified_name, name: c1.name}) AS hlr_code,
+               collect(DISTINCT {qn: c2.qualified_name, name: c2.name}) AS llr_code
+        """, {"hid": hlr_id})
+
+        record = result.single()
+        if not record:
+            return {}
+
+        return {
+            "hlr": {"sqlite_id": record["h"].get("sqlite_id"), "title": record["h"].get("title", "")},
+            "llrs": [l for l in record["llrs"] if l["id"] is not None],
+            "hlr_design_nodes": [d for d in record["hlr_design"] if d["qn"] is not None],
+            "llr_design_nodes": [d for d in record["llr_design"] if d["qn"] is not None],
+            "hlr_code_nodes": [c for c in record["hlr_code"] if c["qn"] is not None],
+            "llr_code_nodes": [c for c in record["llr_code"] if c["qn"] is not None],
+        }

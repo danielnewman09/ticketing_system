@@ -9,13 +9,28 @@ Run with:
 Then visit http://127.0.0.1:8081
 """
 
+import atexit
+import logging
+
 from nicegui import ui
 
 from db import init_db
 import frontend.pages  # noqa: F401 — registers all @ui.page routes
 
+log = logging.getLogger(__name__)
+
 if __name__ in {"__main__", "__mp_main__"}:
     init_db()
+
+    # Neo4j constraints (best-effort)
+    try:
+        from db.neo4j_constraints import ensure_neo4j_constraints
+        from db.neo4j import close_driver
+        ensure_neo4j_constraints()
+        atexit.register(close_driver)
+    except Exception:
+        log.warning("Neo4j not available at startup — graph features disabled", exc_info=True)
+
     ui.run(
         title="Ticketing System",
         port=8081,

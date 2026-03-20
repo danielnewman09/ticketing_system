@@ -33,6 +33,13 @@ KIND_COLORS = {
 }
 
 
+LAYER_STYLES = {
+    "design": {"border_style": "dashed", "opacity": 1.0},
+    "as-built": {"border_style": "solid", "opacity": 0.7},
+    "requirement": {"border_style": "solid", "opacity": 1.0, "shape": "diamond"},
+}
+
+
 def apply_theme():
     """Apply consistent dark theme."""
     ui.colors(**COLORS)

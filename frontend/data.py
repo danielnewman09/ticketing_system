@@ -1,5 +1,7 @@
 """Data-fetching functions for UI pages. Run in threads via asyncio.to_thread."""
 
+import logging
+
 from db import get_session
 from db.models import (
     Component,
@@ -10,6 +12,8 @@ from db.models import (
     Predicate,
     VerificationMethod,
 )
+
+log = logging.getLogger(__name__)
 
 
 def fetch_requirements_data():
@@ -206,3 +210,31 @@ def fetch_ontology_data():
             "total_triples": session.query(OntologyTriple).count(),
             "total_predicates": session.query(Predicate).count(),
         }
+
+
+# ---------------------------------------------------------------------------
+# Neo4j-backed graph data
+# ---------------------------------------------------------------------------
+
+def fetch_ontology_graph_data(
+    kind_filter: str | None = None,
+    search: str | None = None,
+    component_id: int | None = None,
+) -> dict:
+    """Fetch design graph from Neo4j for Cytoscape.js rendering."""
+    try:
+        from db.neo4j_queries import fetch_design_graph
+        return fetch_design_graph(kind_filter, search, component_id)
+    except Exception:
+        log.warning("Neo4j query failed — returning empty graph", exc_info=True)
+        return {"nodes": [], "edges": []}
+
+
+def fetch_graph_node_detail(qualified_name: str) -> dict | None:
+    """Fetch node detail from Neo4j (properties + relationships + requirements)."""
+    try:
+        from db.neo4j_queries import fetch_node_detail
+        return fetch_node_detail(qualified_name)
+    except Exception:
+        log.warning("Neo4j node detail query failed", exc_info=True)
+        return None

@@ -6,6 +6,7 @@ _NAV_ITEMS = [
     ("Requirements", "/"),
     ("Components", "/components"),
     ("Ontology", "/ontology"),
+    ("Ontology Graph", "/ontology/graph"),
 ]
 
 _PIPELINE_ITEMS = [

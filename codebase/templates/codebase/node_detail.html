@@ -33,8 +33,8 @@
                     {% if node.visibility %}
                     <tr><th>Visibility</th><td><span class="badge bg-{% if node.visibility == 'public' %}success{% elif node.visibility == 'protected' %}warning{% else %}danger{% endif %}">{{ node.visibility }}</span></td></tr>
                     {% endif %}
-                    {% if node.compound_refid %}
-                    <tr><th>Compound Refid</th><td><code>{{ node.compound_refid }}</code></td></tr>
+                    {% if node.refid %}
+                    <tr><th>Codebase Refid</th><td><code>{{ node.refid }}</code></td></tr>
                     {% endif %}
                 </table>
                 {% if node.description %}

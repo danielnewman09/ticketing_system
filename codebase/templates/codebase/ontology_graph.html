@@ -108,8 +108,8 @@
                                 <span class="badge bg-info ms-1" x-text="selectedNode.memberCount + ' members'"></span>
                             </template>
                             <p class="mt-2 mb-1 small" x-show="selectedNode.description" x-text="selectedNode.description"></p>
-                            <p class="text-muted small mb-0" x-show="selectedNode.compound_refid">
-                                refid: <code x-text="selectedNode.compound_refid"></code>
+                            <p class="text-muted small mb-0" x-show="selectedNode.refid">
+                                refid: <code x-text="selectedNode.refid"></code>
                             </p>
                             <a class="btn btn-sm btn-outline-primary mt-2" x-show="selectedNode.url" :href="selectedNode.url">View Details</a>
                             <template x-if="selectedNode.children.length > 0">
