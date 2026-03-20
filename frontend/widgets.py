@@ -23,7 +23,7 @@ def render_hlr_card(hlr):
                 ui.label(hlr["description"]).classes("text-sm mt-1")
 
             hlr_id = hlr["id"]
-            with ui.button(icon="more_vert").props("flat round size=sm"):
+            with ui.button(icon="more_vert").props("flat round size=sm color=white"):
                 with ui.menu():
                     ui.menu_item("View Details", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
                     ui.menu_item("Add LLR", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}#add-llr"))
@@ -35,13 +35,18 @@ def render_hlr_card(hlr):
                 render_llr_table(hlr["llrs"])
 
 
-def render_llr_table(llrs):
-    """Render an LLR table from plain dicts."""
+def render_llr_table(llrs, on_delete=None):
+    """Render an LLR table from plain dicts.
+
+    If *on_delete* is provided, a delete button is shown per row.
+    """
     columns = [
         {"name": "id", "label": "ID", "field": "id", "align": "left", "sortable": True},
         {"name": "description", "label": "Description", "field": "description", "align": "left"},
         {"name": "verification", "label": "Verification", "field": "verification", "align": "left"},
     ]
+    if on_delete:
+        columns.append({"name": "actions", "label": "", "field": "id", "align": "right"})
 
     rows = []
     for llr in llrs:
@@ -71,6 +76,18 @@ def render_llr_table(llrs):
         </q-td>
         """,
     )
+
+    if on_delete:
+        table.add_slot(
+            "body-cell-actions",
+            """
+            <q-td :props="props">
+                <q-btn flat round dense size="xs" icon="delete" color="negative"
+                       @click.stop="$parent.$emit('delete', props.row.id)" />
+            </q-td>
+            """,
+        )
+        table.on("delete", lambda e: on_delete(e.args))
 
 
 def render_verification_card(v):

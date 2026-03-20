@@ -213,6 +213,77 @@ def fetch_ontology_data():
 
 
 # ---------------------------------------------------------------------------
+# Mutations — requirements
+# ---------------------------------------------------------------------------
+
+def fetch_components_options():
+    """Return list of {id, name} for component dropdowns."""
+    with get_session() as session:
+        return [
+            {"id": c.id, "name": c.name}
+            for c in session.query(Component).order_by(Component.name).all()
+        ]
+
+
+def create_hlr(description: str, component_id: int | None = None) -> int:
+    """Create a new HLR. Returns the new HLR id."""
+    with get_session() as session:
+        hlr = HighLevelRequirement(
+            description=description,
+            component_id=component_id or None,
+        )
+        session.add(hlr)
+        session.flush()
+        return hlr.id
+
+
+def update_hlr(hlr_id: int, description: str, component_id: int | None = None) -> bool:
+    """Update an HLR's description and component. Returns True on success."""
+    with get_session() as session:
+        hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
+        if not hlr:
+            return False
+        hlr.description = description
+        hlr.component_id = component_id or None
+        return True
+
+
+def delete_hlr(hlr_id: int) -> bool:
+    """Delete an HLR and its child LLRs. Returns True on success."""
+    with get_session() as session:
+        hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
+        if not hlr:
+            return False
+        # Delete child LLRs first (cascade handles verifications)
+        for llr in hlr.low_level_requirements:
+            session.delete(llr)
+        session.delete(hlr)
+        return True
+
+
+def create_llr(hlr_id: int, description: str) -> int:
+    """Create a new LLR under an HLR. Returns the new LLR id."""
+    with get_session() as session:
+        llr = LowLevelRequirement(
+            high_level_requirement_id=hlr_id,
+            description=description,
+        )
+        session.add(llr)
+        session.flush()
+        return llr.id
+
+
+def delete_llr(llr_id: int) -> bool:
+    """Delete an LLR. Returns True on success."""
+    with get_session() as session:
+        llr = session.query(LowLevelRequirement).filter_by(id=llr_id).first()
+        if not llr:
+            return False
+        session.delete(llr)
+        return True
+
+
+# ---------------------------------------------------------------------------
 # Neo4j-backed graph data
 # ---------------------------------------------------------------------------
 
