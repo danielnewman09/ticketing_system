@@ -273,6 +273,45 @@ def create_llr(hlr_id: int, description: str) -> int:
         return llr.id
 
 
+def decompose_hlr(hlr_id: int) -> dict:
+    """Run the decomposition agent on an HLR and persist results.
+
+    Returns dict with llrs_created and verifications_created.
+    """
+    from requirements.agents.decompose_hlr import decompose
+    from requirements.services.persistence import persist_decomposition
+
+    with get_session() as session:
+        hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
+        if not hlr:
+            raise ValueError(f"HLR {hlr_id} not found")
+
+        siblings = session.query(HighLevelRequirement).filter(
+            HighLevelRequirement.id != hlr_id,
+        ).all()
+        other_hlrs = [
+            {
+                "id": s.id,
+                "description": s.description,
+                "component__name": s.component.name if s.component else None,
+            }
+            for s in siblings
+        ]
+
+        decomposed = decompose(
+            description=hlr.description,
+            other_hlrs=other_hlrs,
+            component=hlr.component.name if hlr.component else "",
+            dependency_context=hlr.dependency_context,
+        )
+
+        result = persist_decomposition(session, hlr, decomposed.low_level_requirements)
+        return {
+            "llrs_created": result.llrs_created,
+            "verifications_created": result.verifications_created,
+        }
+
+
 def delete_llr(llr_id: int) -> bool:
     """Delete an LLR. Returns True on success."""
     with get_session() as session:

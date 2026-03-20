@@ -14,6 +14,7 @@ from frontend.data import (
     delete_hlr,
     create_llr,
     delete_llr,
+    decompose_hlr,
 )
 
 
@@ -70,10 +71,16 @@ async def hlr_detail_page(hlr_id: int):
                         ui.label("Low-Level Requirements").classes(
                             "text-xs uppercase tracking-wider text-gray-400"
                         )
-                        ui.button(
-                            icon="add",
-                            on_click=lambda: show_add_llr_dialog(),
-                        ).props("flat round size=xs color=positive")
+                        with ui.row().classes("gap-1"):
+                            ui.button(
+                                "Decompose",
+                                icon="auto_awesome",
+                                on_click=lambda: confirm_decompose(),
+                            ).props("flat size=xs color=primary")
+                            ui.button(
+                                icon="add",
+                                on_click=lambda: show_add_llr_dialog(),
+                            ).props("flat round size=xs color=positive")
                     if hlr["llrs"]:
                         render_llr_table(hlr["llrs"], on_delete=confirm_delete_llr)
                     else:
@@ -135,6 +142,39 @@ async def hlr_detail_page(hlr_id: int):
                     ui.navigate.to("/")
 
                 ui.button("Delete", on_click=do_delete).props("color=negative")
+
+        dialog.open()
+
+    # ---------------------------------------------------------------
+    # Decompose HLR
+    # ---------------------------------------------------------------
+
+    async def confirm_decompose():
+        with ui.dialog() as dialog, ui.card().classes("w-96"):
+            ui.label(f"Decompose HLR {hlr_id}?").classes("text-lg font-bold")
+            ui.label(
+                "This will run the decomposition agent to generate low-level "
+                "requirements and verification methods."
+            ).classes("text-sm text-gray-400 mt-1")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_decompose():
+                    dialog.close()
+                    ui.notify("Decomposing — this may take a moment…", type="info")
+                    try:
+                        result = await asyncio.to_thread(decompose_hlr, hlr_id)
+                        ui.notify(
+                            f"Created {result['llrs_created']} LLRs and "
+                            f"{result['verifications_created']} verifications",
+                            type="positive",
+                        )
+                        content.refresh()
+                    except Exception as e:
+                        ui.notify(f"Decomposition failed: {e}", type="negative")
+
+                ui.button("Decompose", on_click=do_decompose).props("color=primary")
 
         dialog.open()
 

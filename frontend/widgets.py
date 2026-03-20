@@ -28,7 +28,7 @@ def render_hlr_card(hlr):
                     ui.menu_item("View Details", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
                     ui.menu_item("Add LLR", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}#add-llr"))
                     ui.separator()
-                    ui.menu_item("Decompose", on_click=lambda h=hlr_id: ui.notify(f"Would decompose HLR {h}"))
+                    ui.menu_item("Decompose", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
 
         if hlr["llrs"]:
             with ui.expansion("Low-Level Requirements", icon="list").classes("w-full mt-2").props("dense"):

@@ -12,6 +12,7 @@ from frontend.data import (
     create_hlr,
     delete_hlr,
     create_llr,
+    decompose_hlr,
 )
 
 
@@ -105,6 +106,39 @@ async def requirements_page():
         dialog.open()
 
     # ---------------------------------------------------------------
+    # Decompose HLR
+    # ---------------------------------------------------------------
+
+    async def confirm_decompose_hlr(hlr_id: int):
+        with ui.dialog() as dialog, ui.card().classes("w-96"):
+            ui.label(f"Decompose HLR {hlr_id}?").classes("text-lg font-bold")
+            ui.label(
+                "This will run the decomposition agent to generate low-level "
+                "requirements and verification methods."
+            ).classes("text-sm text-gray-400 mt-1")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_decompose():
+                    dialog.close()
+                    ui.notify("Decomposing — this may take a moment…", type="info")
+                    try:
+                        result = await asyncio.to_thread(decompose_hlr, hlr_id)
+                        ui.notify(
+                            f"Created {result['llrs_created']} LLRs and "
+                            f"{result['verifications_created']} verifications",
+                            type="positive",
+                        )
+                        content.refresh()
+                    except Exception as e:
+                        ui.notify(f"Decomposition failed: {e}", type="negative")
+
+                ui.button("Decompose", on_click=do_decompose).props("color=primary")
+
+        dialog.open()
+
+    # ---------------------------------------------------------------
     # Add LLR dialog
     # ---------------------------------------------------------------
 
@@ -160,6 +194,10 @@ async def requirements_page():
                         ui.menu_item(
                             "Add LLR",
                             on_click=lambda h=hlr_id: show_add_llr_dialog(h),
+                        )
+                        ui.menu_item(
+                            "Decompose",
+                            on_click=lambda h=hlr_id: confirm_decompose_hlr(h),
                         )
                         ui.separator()
                         ui.menu_item(

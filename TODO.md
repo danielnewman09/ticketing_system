@@ -4,7 +4,7 @@
 - [x] Create HLR form (dialog with description + component selector)
 - [x] Delete HLR with confirmation dialog
 - [x] Add LLR to HLR (dialog from card menu)
-- [ ] Trigger decomposition agent from UI (currently placeholder notification)
+- [x] Trigger decomposition agent from UI (currently placeholder notification)
 
 ## HLR Detail Page (`/hlr/{id}`)
 - [x] Edit HLR description + component (dialog)
@@ -13,7 +13,7 @@
 - [x] Delete LLR with confirmation (per-row delete button)
 - [ ] Edit LLR descriptions inline
 - [ ] Link/unlink ontology triples to HLR
-- [ ] Run decomposition agent and display results
+- [x] Run decomposition agent and display results
 
 ## LLR Detail Page (`/llr/{id}`)
 - [ ] Edit LLR description inline
