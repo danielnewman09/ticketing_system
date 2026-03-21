@@ -11,12 +11,12 @@
 - [x] Create LLR form (dialog)
 - [x] Delete HLR with confirmation (redirects to `/`)
 - [x] Delete LLR with confirmation (per-row delete button)
-- [ ] Edit LLR descriptions inline
+- [x] Edit LLR descriptions inline
 - [ ] Link/unlink ontology triples to HLR
 - [x] Run decomposition agent and display results
 
 ## LLR Detail Page (`/llr/{id}`)
-- [ ] Edit LLR description inline
+- [x] Edit LLR description inline
 - [ ] Add/edit/remove verification methods
 - [ ] Add/edit/remove preconditions and postconditions
 - [ ] Add/edit/remove actions

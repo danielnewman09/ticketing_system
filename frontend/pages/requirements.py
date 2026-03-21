@@ -185,7 +185,7 @@ async def requirements_page():
                         ).classes("text-xs")
                     ui.label(hlr["description"]).classes("text-sm mt-1")
 
-                with ui.button(icon="more_vert").props("flat round size=sm color=white"):
+                with ui.button(icon="more_vert").props("flat round size=sm"):
                     with ui.menu():
                         ui.menu_item(
                             "View Details",

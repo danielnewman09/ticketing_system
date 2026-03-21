@@ -13,6 +13,7 @@ from frontend.data import (
     update_hlr,
     delete_hlr,
     create_llr,
+    update_llr,
     delete_llr,
     decompose_hlr,
 )
@@ -82,7 +83,7 @@ async def hlr_detail_page(hlr_id: int):
                                 on_click=lambda: show_add_llr_dialog(),
                             ).props("flat round size=xs color=positive")
                     if hlr["llrs"]:
-                        render_llr_table(hlr["llrs"], on_delete=confirm_delete_llr)
+                        render_llr_table(hlr["llrs"], on_delete=confirm_delete_llr, on_edit=show_edit_llr_dialog)
                     else:
                         ui.label("No low-level requirements yet.").classes("text-sm text-gray-500")
 
@@ -201,6 +202,32 @@ async def hlr_detail_page(hlr_id: int):
                     content.refresh()
 
                 ui.button("Create", on_click=do_create).props("color=positive")
+
+        dialog.open()
+
+    # ---------------------------------------------------------------
+    # Edit LLR description
+    # ---------------------------------------------------------------
+
+    async def show_edit_llr_dialog(llr_id: int, current_description: str):
+        with ui.dialog() as dialog, ui.card().classes("w-96"):
+            ui.label(f"Edit LLR {llr_id}").classes("text-lg font-bold mb-2")
+            desc_input = ui.textarea("Description", value=current_description or "").classes("w-full")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_update():
+                    desc = desc_input.value.strip()
+                    if not desc:
+                        ui.notify("Description is required", type="warning")
+                        return
+                    await asyncio.to_thread(update_llr, llr_id, desc)
+                    dialog.close()
+                    ui.notify("LLR updated", type="positive")
+                    content.refresh()
+
+                ui.button("Save", on_click=do_update).props("color=positive")
 
         dialog.open()
 

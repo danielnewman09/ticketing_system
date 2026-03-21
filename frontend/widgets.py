@@ -23,7 +23,7 @@ def render_hlr_card(hlr):
                 ui.label(hlr["description"]).classes("text-sm mt-1")
 
             hlr_id = hlr["id"]
-            with ui.button(icon="more_vert").props("flat round size=sm color=white"):
+            with ui.button(icon="more_vert").props("flat round size=sm"):
                 with ui.menu():
                     ui.menu_item("View Details", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
                     ui.menu_item("Add LLR", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}#add-llr"))
@@ -35,9 +35,10 @@ def render_hlr_card(hlr):
                 render_llr_table(hlr["llrs"])
 
 
-def render_llr_table(llrs, on_delete=None):
+def render_llr_table(llrs, on_delete=None, on_edit=None):
     """Render an LLR table from plain dicts.
 
+    If *on_edit* is provided, an edit button is shown per row.
     If *on_delete* is provided, a delete button is shown per row.
     """
     columns = [
@@ -45,12 +46,15 @@ def render_llr_table(llrs, on_delete=None):
         {"name": "description", "label": "Description", "field": "description", "align": "left"},
         {"name": "verification", "label": "Verification", "field": "verification", "align": "left"},
     ]
-    if on_delete:
+    if on_edit or on_delete:
         columns.append({"name": "actions", "label": "", "field": "id", "align": "right"})
 
+    # Keep full descriptions for edit callbacks, truncated for display.
+    full_descriptions = {}
     rows = []
     for llr in llrs:
         desc = llr["description"]
+        full_descriptions[llr["id"]] = desc
         rows.append({
             "id": llr["id"],
             "description": desc[:120] + ("..." if len(desc) > 120 else ""),
@@ -77,17 +81,27 @@ def render_llr_table(llrs, on_delete=None):
         """,
     )
 
-    if on_delete:
+    if on_edit or on_delete:
+        edit_btn = ""
+        if on_edit:
+            edit_btn = (
+                '<q-btn flat round dense size="xs" icon="edit" color="primary"'
+                '       @click.stop="$parent.$emit(\'edit\', props.row.id)" />'
+            )
+        delete_btn = ""
+        if on_delete:
+            delete_btn = (
+                '<q-btn flat round dense size="xs" icon="delete" color="negative"'
+                '       @click.stop="$parent.$emit(\'delete\', props.row.id)" />'
+            )
         table.add_slot(
             "body-cell-actions",
-            """
-            <q-td :props="props">
-                <q-btn flat round dense size="xs" icon="delete" color="negative"
-                       @click.stop="$parent.$emit('delete', props.row.id)" />
-            </q-td>
-            """,
+            f"<q-td :props=\"props\">{edit_btn}{delete_btn}</q-td>",
         )
-        table.on("delete", lambda e: on_delete(e.args))
+        if on_edit:
+            table.on("edit", lambda e: on_edit(e.args, full_descriptions.get(e.args)))
+        if on_delete:
+            table.on("delete", lambda e: on_delete(e.args))
 
 
 def render_verification_card(v):

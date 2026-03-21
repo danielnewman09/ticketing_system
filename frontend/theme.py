@@ -3,7 +3,7 @@
 from nicegui import ui
 
 COLORS = {
-    "primary": "#1a1a2e",
+    "primary": "#5c7cfa",
     "secondary": "#16213e",
     "accent": "#0f3460",
     "positive": "#10b981",

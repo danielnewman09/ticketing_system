@@ -312,6 +312,16 @@ def decompose_hlr(hlr_id: int) -> dict:
         }
 
 
+def update_llr(llr_id: int, description: str) -> bool:
+    """Update an LLR's description. Returns True on success."""
+    with get_session() as session:
+        llr = session.query(LowLevelRequirement).filter_by(id=llr_id).first()
+        if not llr:
+            return False
+        llr.description = description
+        return True
+
+
 def delete_llr(llr_id: int) -> bool:
     """Delete an LLR. Returns True on success."""
     with get_session() as session:
