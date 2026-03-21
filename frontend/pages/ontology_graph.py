@@ -211,11 +211,11 @@ async def ontology_graph_page():
 
     # Main content: graph + detail panel
     with ui.row().classes("w-full gap-0 px-2").style("height: calc(100vh - 240px); min-height: 400px"):
-        # Graph container — use ui.element for proper sizing
-        with ui.element("div").classes("flex-grow").style("height: 100%; position: relative;"):
-            ui.html(
-                '<div id="cy-container" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#1a1a2e;border-radius:8px;"></div>'
-            )
+        # Graph container — single div with id for Cytoscape to mount into
+        cy = ui.element("div").classes("flex-grow").style(
+            "height: 100%; background: #1a1a2e; border-radius: 8px;"
+        )
+        cy._props["id"] = "cy-container"
 
         # Detail panel
         @ui.refreshable
