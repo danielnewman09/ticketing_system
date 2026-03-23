@@ -1,14 +1,16 @@
 """HLR detail page."""
 
 import asyncio
+import json
 
 from nicegui import ui
 
-from frontend.theme import apply_theme
+from frontend.theme import KIND_COLORS, apply_theme
 from frontend.layout import page_layout
-from frontend.widgets import render_llr_table, render_triples_card
+from frontend.widgets import render_llr_table
 from frontend.data import (
     fetch_hlr_detail,
+    fetch_hlr_graph_data,
     fetch_components_options,
     update_hlr,
     delete_hlr,
@@ -23,6 +25,15 @@ from frontend.data import (
 async def hlr_detail_page(hlr_id: int):
     apply_theme()
     page_layout(f"HLR {hlr_id}")
+
+    # Cytoscape CDN
+    ui.add_head_html(
+        '<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>'
+        '<script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>'
+        '<script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>'
+        '<script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>'
+    )
+    kind_colors_js = json.dumps(KIND_COLORS)
 
     # ---------------------------------------------------------------
     # Refreshable content
@@ -88,7 +99,113 @@ async def hlr_detail_page(hlr_id: int):
                         ui.label("No low-level requirements yet.").classes("text-sm text-gray-500")
 
             with ui.column().classes("flex-1 gap-4"):
-                render_triples_card(hlr["triples"])
+                with ui.card().classes("w-full"):
+                    ui.label("Design Graph").classes(
+                        "text-xs uppercase tracking-wider text-gray-400 mb-2"
+                    )
+                    cy = ui.element("div").style(
+                        "height: 400px; background: #1a1a2e; border-radius: 8px;"
+                    ).classes("w-full")
+                    cy._props["id"] = "hlr-cy-container"
+
+                # Load graph data and render
+                graph = await asyncio.to_thread(
+                    fetch_hlr_graph_data, hlr_id, hlr["component_id"]
+                )
+                elements_json = json.dumps(graph["nodes"] + graph["edges"])
+                if graph["nodes"]:
+                    await ui.run_javascript(f"""
+                        if (window._hlrCy) window._hlrCy.destroy();
+                        const KIND_COLORS = {kind_colors_js};
+                        const container = document.getElementById('hlr-cy-container');
+                        if (!container) return;
+                        window._hlrCy = cytoscape({{
+                            container: container,
+                            elements: {elements_json},
+                            style: [
+                                {{
+                                    selector: 'node[layer="design"]',
+                                    style: {{
+                                        'label': 'data(label)',
+                                        'background-color': '#666',
+                                        'color': '#fff',
+                                        'text-valign': 'bottom',
+                                        'text-halign': 'center',
+                                        'font-size': '9px',
+                                        'width': 30,
+                                        'height': 30,
+                                        'border-width': 2,
+                                        'border-style': 'dashed',
+                                        'border-color': '#aaa',
+                                        'text-wrap': 'ellipsis',
+                                        'text-max-width': '70px',
+                                        'text-margin-y': 3,
+                                    }}
+                                }},
+                                ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
+                                    selector: 'node[kind="' + kind + '"][layer="design"]',
+                                    style: {{ 'background-color': color }}
+                                }})),
+                                {{
+                                    selector: 'node[layer="requirement"]',
+                                    style: {{
+                                        'label': 'data(label)',
+                                        'background-color': '#e67e22',
+                                        'color': '#fff',
+                                        'text-valign': 'bottom',
+                                        'text-halign': 'center',
+                                        'font-size': '9px',
+                                        'shape': 'diamond',
+                                        'width': 35,
+                                        'height': 35,
+                                        'border-width': 2,
+                                        'border-color': '#d35400',
+                                        'text-wrap': 'ellipsis',
+                                        'text-max-width': '70px',
+                                        'text-margin-y': 3,
+                                    }}
+                                }},
+                                {{
+                                    selector: 'edge',
+                                    style: {{
+                                        'label': 'data(label)',
+                                        'width': 1.5,
+                                        'line-color': '#555',
+                                        'target-arrow-color': '#555',
+                                        'target-arrow-shape': 'triangle',
+                                        'curve-style': 'bezier',
+                                        'font-size': '7px',
+                                        'color': '#999',
+                                        'text-rotation': 'autorotate',
+                                    }}
+                                }},
+                                {{
+                                    selector: 'edge[label="DECOMPOSES"]',
+                                    style: {{
+                                        'line-style': 'dashed',
+                                        'line-color': '#e67e22',
+                                        'target-arrow-color': '#e67e22',
+                                    }}
+                                }},
+                                {{
+                                    selector: 'edge[label="TRACES_TO"]',
+                                    style: {{
+                                        'line-style': 'dotted',
+                                        'line-color': '#3b82f6',
+                                        'target-arrow-color': '#3b82f6',
+                                    }}
+                                }},
+                                {{
+                                    selector: ':selected',
+                                    style: {{
+                                        'border-width': 4,
+                                        'border-color': '#f1c40f',
+                                    }}
+                                }},
+                            ],
+                            layout: {{ name: 'fcose', animate: false }},
+                        }});
+                    """)
 
     # ---------------------------------------------------------------
     # Edit HLR dialog

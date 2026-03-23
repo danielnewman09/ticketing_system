@@ -135,6 +135,121 @@ def fetch_design_graph(
     return {"nodes": nodes, "edges": edges}
 
 
+def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
+    """Fetch the requirement neighbourhood of an HLR in Cytoscape.js format.
+
+    Includes: the HLR node, its LLRs, any TRACES_TO design nodes, the
+    component's design nodes and their inter-relationships.
+    """
+    with get_neo4j_session() as session:
+        nodes = []
+        edges = []
+        node_ids: set[str] = set()
+
+        def _add_node(element_id, data):
+            if element_id not in node_ids:
+                node_ids.add(element_id)
+                nodes.append({"data": {**data, "id": element_id}})
+
+        # 1. HLR + LLRs + DECOMPOSES edges
+        req_result = session.run("""
+        MATCH (h:HLR {sqlite_id: $hid})
+        OPTIONAL MATCH (l:LLR)-[d:DECOMPOSES]->(h)
+        RETURN h, collect({llr: l, rel: d}) AS decomps
+        """, {"hid": hlr_id})
+        record = req_result.single()
+        if not record:
+            return {"nodes": [], "edges": []}
+
+        h = record["h"]
+        _add_node(h.element_id, {
+            "label": f"HLR {h.get('sqlite_id', '')}",
+            "kind": "HLR",
+            "layer": "requirement",
+        })
+
+        for item in record["decomps"]:
+            llr = item["llr"]
+            rel = item["rel"]
+            if llr is None:
+                continue
+            _add_node(llr.element_id, {
+                "label": f"LLR {llr.get('sqlite_id', '')}",
+                "kind": "LLR",
+                "layer": "requirement",
+            })
+            edges.append({"data": {
+                "id": rel.element_id,
+                "source": llr.element_id,
+                "target": h.element_id,
+                "label": "DECOMPOSES",
+            }})
+
+        # 2. TRACES_TO links from HLR/LLRs to Design nodes
+        trace_result = session.run("""
+        MATCH (h:HLR {sqlite_id: $hid})
+        OPTIONAL MATCH (h)-[t1:TRACES_TO]->(d1:Design)
+        OPTIONAL MATCH (l:LLR)-[:DECOMPOSES]->(h)
+        OPTIONAL MATCH (l)-[t2:TRACES_TO]->(d2:Design)
+        RETURN collect(DISTINCT {src: h, rel: t1, tgt: d1}) AS hlr_traces,
+               collect(DISTINCT {src: l, rel: t2, tgt: d2}) AS llr_traces
+        """, {"hid": hlr_id})
+        tr = trace_result.single()
+        for traces in [tr["hlr_traces"], tr["llr_traces"]]:
+            for item in traces:
+                if item["tgt"] is None:
+                    continue
+                d = item["tgt"]
+                _add_node(d.element_id, {
+                    "label": d.get("name", ""),
+                    "qualified_name": d.get("qualified_name", ""),
+                    "kind": d.get("kind", ""),
+                    "layer": "design",
+                })
+                edges.append({"data": {
+                    "id": item["rel"].element_id,
+                    "source": item["src"].element_id,
+                    "target": d.element_id,
+                    "label": "TRACES_TO",
+                }})
+
+        # 3. Component design nodes + their inter-relationships
+        if component_id is not None:
+            comp_result = session.run("""
+            MATCH (d:Design {component_id: $cid})
+            OPTIONAL MATCH (d)-[r]->(d2:Design {component_id: $cid})
+            WHERE type(r) <> 'IMPLEMENTED_BY'
+            RETURN d, collect({rel: r, target: d2}) AS rels
+            """, {"cid": component_id})
+            for record in comp_result:
+                d = record["d"]
+                _add_node(d.element_id, {
+                    "label": d.get("name", ""),
+                    "qualified_name": d.get("qualified_name", ""),
+                    "kind": d.get("kind", ""),
+                    "layer": "design",
+                })
+                for item in record["rels"]:
+                    r = item["rel"]
+                    t = item["target"]
+                    if r is None or t is None:
+                        continue
+                    _add_node(t.element_id, {
+                        "label": t.get("name", ""),
+                        "qualified_name": t.get("qualified_name", ""),
+                        "kind": t.get("kind", ""),
+                        "layer": "design",
+                    })
+                    edges.append({"data": {
+                        "id": r.element_id,
+                        "source": d.element_id,
+                        "target": t.element_id,
+                        "label": r.type,
+                    }})
+
+    return {"nodes": nodes, "edges": edges}
+
+
 def fetch_combined_graph(design_qnames: list[str]) -> dict:
     """Fetch design subgraph + linked as-built nodes via IMPLEMENTED_BY."""
     if not design_qnames:

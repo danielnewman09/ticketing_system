@@ -90,6 +90,7 @@ def fetch_hlr_detail(hlr_id):
             "id": hlr.id,
             "description": hlr.description,
             "component": hlr.component.name if hlr.component else None,
+            "component_id": hlr.component_id,
             "llrs": llrs,
             "triples": triples,
         }
@@ -350,6 +351,16 @@ def fetch_ontology_graph_data(
         return {"nodes": [], "edges": []}
 
 
+def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
+    """Fetch the ontology subgraph around an HLR for Cytoscape.js."""
+    try:
+        from db.neo4j_queries import fetch_hlr_subgraph
+        return fetch_hlr_subgraph(hlr_id, component_id)
+    except Exception:
+        log.warning("Neo4j HLR subgraph query failed — returning empty graph", exc_info=True)
+        return {"nodes": [], "edges": []}
+
+
 def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     """Fetch node detail from Neo4j (properties + relationships + requirements)."""
     try:
@@ -358,3 +369,51 @@ def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     except Exception:
         log.warning("Neo4j node detail query failed", exc_info=True)
         return None
+
+
+def fetch_node_detail_full(node_id: int) -> dict | None:
+    """Fetch ontology node by SQLite id with all properties + Neo4j relationships."""
+    with get_session() as session:
+        node = session.query(OntologyNode).filter_by(id=node_id).first()
+        if not node:
+            return None
+
+        node_data = {
+            "id": node.id,
+            "name": node.name,
+            "qualified_name": node.qualified_name,
+            "kind": node.kind,
+            "specialization": node.specialization or "",
+            "visibility": node.visibility or "",
+            "description": node.description or "",
+            "component": node.component.name if node.component else "",
+            "component_id": node.component_id,
+            "type_signature": node.type_signature or "",
+            "argsstring": node.argsstring or "",
+            "definition": node.definition or "",
+            "file_path": node.file_path or "",
+            "line_number": node.line_number,
+            "refid": node.refid or "",
+            "source_type": node.source_type or "",
+            "is_static": node.is_static,
+            "is_const": node.is_const,
+            "is_virtual": node.is_virtual,
+            "is_abstract": node.is_abstract,
+            "is_final": node.is_final,
+        }
+
+    # Fetch Neo4j relationships if available
+    neo4j_data = None
+    if node_data["qualified_name"]:
+        neo4j_data = fetch_graph_node_detail(node_data["qualified_name"])
+
+    return {"node": node_data, "neo4j": neo4j_data}
+
+
+def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
+    """Look up the SQLite id for an ontology node by qualified_name."""
+    with get_session() as session:
+        node = session.query(OntologyNode).filter_by(
+            qualified_name=qualified_name
+        ).first()
+        return node.id if node else None

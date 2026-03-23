@@ -7,7 +7,7 @@ from nicegui import ui
 
 from frontend.theme import KIND_COLORS, LAYER_STYLES, apply_theme
 from frontend.layout import page_layout
-from frontend.data import fetch_ontology_graph_data, fetch_graph_node_detail
+from frontend.data import fetch_ontology_graph_data, fetch_graph_node_detail, resolve_node_id_by_qualified_name
 
 
 @ui.page("/ontology/graph")
@@ -156,6 +156,12 @@ async def ontology_graph_page():
                     emitEvent('node_selected', data);
                 }}
             }});
+            window._cy.on('dbltap', 'node', function(evt) {{
+                const data = evt.target.data();
+                if (data.qualified_name) {{
+                    emitEvent('node_dblclick', data);
+                }}
+            }});
         """)
 
     async def on_kind_change(e):
@@ -180,6 +186,14 @@ async def ontology_graph_page():
         if detail:
             selected_node["data"] = detail
             detail_panel.refresh()
+
+    async def handle_node_dblclick(e):
+        qn = e.args.get("qualified_name", "")
+        if not qn:
+            return
+        node_id = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
+        if node_id:
+            ui.navigate.to(f"/node/{node_id}")
 
     # -- Layout --
     with ui.row().classes("w-full items-center justify-between px-2 mt-4 mb-2"):
@@ -279,6 +293,7 @@ async def ontology_graph_page():
 
     # Listen for node selection events from Cytoscape
     ui.on("node_selected", handle_node_selected)
+    ui.on("node_dblclick", handle_node_dblclick)
 
     # Initial load
     await load_graph()
