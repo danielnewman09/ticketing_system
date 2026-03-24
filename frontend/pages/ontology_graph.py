@@ -66,6 +66,26 @@ async def ontology_graph_page():
                             'text-margin-y': 4,
                         }}
                     }},
+                    // Class/object nodes with collapsed private attributes
+                    {{
+                        selector: 'node[has_members="true"]',
+                        style: {{
+                            'shape': 'roundrectangle',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'text-wrap': 'wrap',
+                            'text-max-width': '200px',
+                            'font-size': '9px',
+                            'font-family': 'monospace',
+                            'text-justification': 'left',
+                            'width': 'label',
+                            'height': 'label',
+                            'padding': '12px',
+                            'border-style': 'solid',
+                            'border-width': 2,
+                            'text-margin-y': 0,
+                        }}
+                    }},
                     // Per-kind color selectors
                     ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
                         selector: 'node[kind="' + kind + '"][layer="design"]',

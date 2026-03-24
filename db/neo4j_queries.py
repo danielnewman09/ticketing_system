@@ -9,6 +9,116 @@ from db.neo4j import get_neo4j_session
 log = logging.getLogger(__name__)
 
 
+def _make_node_data(n) -> dict:
+    """Build a Cytoscape node-data dict from a Neo4j node."""
+    return {
+        "id": n.element_id,
+        "label": n.get("name", ""),
+        "qualified_name": n.get("qualified_name", ""),
+        "kind": n.get("kind", ""),
+        "description": n.get("description", ""),
+        "component_id": n.get("component_id"),
+        "visibility": n.get("visibility", ""),
+        "type_signature": n.get("type_signature", ""),
+        "layer": "design",
+    }
+
+
+_VISIBILITY_PREFIX = {"private": "-", "protected": "#", "public": "+"}
+
+# Member kinds that get collapsed into their owning class node
+_COLLAPSIBLE_KINDS = {"attribute", "method"}
+
+# Owner kinds whose members should be collapsed
+_OWNER_KINDS = {"class", "interface", "enum"}
+
+
+def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Collapse attributes and methods into their owning class/interface nodes.
+
+    Members linked via COMPOSES are removed as separate graph nodes and folded
+    into the parent's label as a PlantUML-style compartment list using
+    visibility prefixes (+ public, - private, # protected).
+
+    Returns the pruned (nodes, edges) tuple.
+    """
+    node_by_id: dict[str, dict] = {n["data"]["id"]: n for n in nodes}
+
+    # Collect members to collapse, keyed by owner node id
+    collapsed: dict[str, dict[str, list[dict]]] = {}  # owner → {kind → [members]}
+    remove_node_ids: set[str] = set()
+    remove_edge_ids: set[str] = set()
+
+    for e in edges:
+        d = e["data"]
+        if d["label"] != "COMPOSES":
+            continue
+        target = node_by_id.get(d["target"])
+        if target is None:
+            continue
+        td = target["data"]
+        if td["kind"] not in _COLLAPSIBLE_KINDS:
+            continue
+        owner_id = d["source"]
+        owner = node_by_id.get(owner_id)
+        if owner is None or owner["data"]["kind"] not in _OWNER_KINDS:
+            continue
+        collapsed.setdefault(owner_id, {}).setdefault(td["kind"], []).append({
+            "name": td["label"],
+            "type_signature": td.get("type_signature", ""),
+            "visibility": td.get("visibility", ""),
+            "qualified_name": td.get("qualified_name", ""),
+        })
+        remove_node_ids.add(d["target"])
+        remove_edge_ids.add(d["id"])
+
+    if not collapsed:
+        return nodes, edges
+
+    # Also remove any other edges that reference a removed member node
+    for e in edges:
+        d = e["data"]
+        if d["source"] in remove_node_ids or d["target"] in remove_node_ids:
+            remove_edge_ids.add(d["id"])
+
+    # Build UML-style compound labels
+    for owner_id, by_kind in collapsed.items():
+        owner = node_by_id[owner_id]
+        od = owner["data"]
+        class_name = od["label"]
+        separator = "─" * max(len(class_name), 10)
+        lines = [class_name]
+
+        # Attributes compartment
+        attrs = by_kind.get("attribute", [])
+        if attrs:
+            lines.append(separator)
+            attrs.sort(key=lambda a: a["name"])
+            for a in attrs:
+                vis = _VISIBILITY_PREFIX.get(a["visibility"], " ")
+                sig = f": {a['type_signature']}" if a["type_signature"] else ""
+                lines.append(f"{vis} {a['name']}{sig}")
+
+        # Methods compartment
+        methods = by_kind.get("method", [])
+        if methods:
+            lines.append(separator)
+            methods.sort(key=lambda m: m["name"])
+            for m in methods:
+                vis = _VISIBILITY_PREFIX.get(m["visibility"], " ")
+                sig = f": {m['type_signature']}" if m["type_signature"] else ""
+                lines.append(f"{vis} {m['name']}(){sig}")
+
+        od["label"] = "\n".join(lines)
+        od["has_members"] = "true"
+        member_count = len(attrs) + len(methods)
+        od["member_count"] = member_count
+
+    out_nodes = [n for n in nodes if n["data"]["id"] not in remove_node_ids]
+    out_edges = [e for e in edges if e["data"]["id"] not in remove_edge_ids]
+    return out_nodes, out_edges
+
+
 def fetch_design_graph(
     kind_filter: str | None = None,
     search: str | None = None,
@@ -44,18 +154,7 @@ def fetch_design_graph(
         for record in node_result:
             n = record["n"]
             node_ids.add(n.element_id)
-            nodes.append({
-                "data": {
-                    "id": n.element_id,
-                    "label": n.get("name", ""),
-                    "qualified_name": n.get("qualified_name", ""),
-                    "kind": n.get("kind", ""),
-                    "description": n.get("description", ""),
-                    "component_id": n.get("component_id"),
-                    "visibility": n.get("visibility", ""),
-                    "layer": "design",
-                },
-            })
+            nodes.append({"data": _make_node_data(n)})
 
         # Edges between matched nodes
         edge_result = session.run(
@@ -76,18 +175,7 @@ def fetch_design_graph(
             # Ensure target is in node set
             if t.element_id not in node_ids:
                 node_ids.add(t.element_id)
-                nodes.append({
-                    "data": {
-                        "id": t.element_id,
-                        "label": t.get("name", ""),
-                        "qualified_name": t.get("qualified_name", ""),
-                        "kind": t.get("kind", ""),
-                        "description": t.get("description", ""),
-                        "component_id": t.get("component_id"),
-                        "visibility": t.get("visibility", ""),
-                        "layer": "design",
-                    },
-                })
+                nodes.append({"data": _make_node_data(t)})
             edges.append({
                 "data": {
                     "id": r.element_id,
@@ -131,6 +219,9 @@ def fetch_design_graph(
                             "label": "TRACES_TO",
                         },
                     })
+
+    # Collapse private attributes into their owning class nodes
+    nodes, edges = _collapse_members(nodes, edges)
 
     return {"nodes": nodes, "edges": edges}
 
