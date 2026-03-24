@@ -142,29 +142,48 @@ async def hlr_detail_page(hlr_id: int):
                                         'text-margin-y': 3,
                                     }}
                                 }},
+                                {{
+                                    selector: 'node[has_members="true"]',
+                                    style: {{
+                                        'shape': 'roundrectangle',
+                                        'text-valign': 'center',
+                                        'text-halign': 'center',
+                                        'text-wrap': 'wrap',
+                                        'text-max-width': '200px',
+                                        'font-size': '8px',
+                                        'font-family': 'monospace',
+                                        'text-justification': 'left',
+                                        'width': 'label',
+                                        'height': 'label',
+                                        'padding': '10px',
+                                        'border-style': 'solid',
+                                        'border-width': 2,
+                                        'text-margin-y': 0,
+                                    }}
+                                }},
+                                {{
+                                    selector: 'node[is_namespace="true"]',
+                                    style: {{
+                                        'shape': 'roundrectangle',
+                                        'background-color': '#1a1a2e',
+                                        'background-opacity': 0.6,
+                                        'border-width': 2,
+                                        'border-style': 'dashed',
+                                        'border-color': '#1abc9c',
+                                        'label': 'data(label)',
+                                        'color': '#1abc9c',
+                                        'text-valign': 'top',
+                                        'text-halign': 'center',
+                                        'font-size': '10px',
+                                        'font-weight': 'bold',
+                                        'padding': '16px',
+                                        'text-margin-y': -4,
+                                    }}
+                                }},
                                 ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
                                     selector: 'node[kind="' + kind + '"][layer="design"]',
                                     style: {{ 'background-color': color }}
                                 }})),
-                                {{
-                                    selector: 'node[layer="requirement"]',
-                                    style: {{
-                                        'label': 'data(label)',
-                                        'background-color': '#e67e22',
-                                        'color': '#fff',
-                                        'text-valign': 'bottom',
-                                        'text-halign': 'center',
-                                        'font-size': '9px',
-                                        'shape': 'diamond',
-                                        'width': 35,
-                                        'height': 35,
-                                        'border-width': 2,
-                                        'border-color': '#d35400',
-                                        'text-wrap': 'ellipsis',
-                                        'text-max-width': '70px',
-                                        'text-margin-y': 3,
-                                    }}
-                                }},
                                 {{
                                     selector: 'edge',
                                     style: {{
@@ -180,19 +199,12 @@ async def hlr_detail_page(hlr_id: int):
                                     }}
                                 }},
                                 {{
-                                    selector: 'edge[label="DECOMPOSES"]',
+                                    selector: 'edge[label="INHERITS_FROM"]',
                                     style: {{
-                                        'line-style': 'dashed',
-                                        'line-color': '#e67e22',
-                                        'target-arrow-color': '#e67e22',
-                                    }}
-                                }},
-                                {{
-                                    selector: 'edge[label="TRACES_TO"]',
-                                    style: {{
-                                        'line-style': 'dotted',
-                                        'line-color': '#3b82f6',
-                                        'target-arrow-color': '#3b82f6',
+                                        'line-style': 'solid',
+                                        'line-color': '#9b59b6',
+                                        'target-arrow-color': '#9b59b6',
+                                        'target-arrow-shape': 'triangle-tee',
                                     }}
                                 }},
                                 {{

@@ -463,67 +463,27 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
                 node_ids.add(element_id)
                 nodes.append({"data": {**data, "id": element_id}})
 
-        # 1. HLR + LLRs + DECOMPOSES edges
-        req_result = session.run("""
-        MATCH (h:HLR {sqlite_id: $hid})
-        OPTIONAL MATCH (l:LLR)-[d:DECOMPOSES]->(h)
-        RETURN h, collect({llr: l, rel: d}) AS decomps
-        """, {"hid": hlr_id})
-        record = req_result.single()
-        if not record:
+        # 1. Verify HLR exists
+        check = session.run(
+            "MATCH (h:HLR {sqlite_id: $hid}) RETURN h", {"hid": hlr_id},
+        ).single()
+        if not check:
             return {"nodes": [], "edges": []}
 
-        h = record["h"]
-        _add_node(h.element_id, {
-            "label": f"HLR {h.get('sqlite_id', '')}",
-            "kind": "HLR",
-            "layer": "requirement",
-        })
-
-        for item in record["decomps"]:
-            llr = item["llr"]
-            rel = item["rel"]
-            if llr is None:
-                continue
-            _add_node(llr.element_id, {
-                "label": f"LLR {llr.get('sqlite_id', '')}",
-                "kind": "LLR",
-                "layer": "requirement",
-            })
-            edges.append({"data": {
-                "id": rel.element_id,
-                "source": llr.element_id,
-                "target": h.element_id,
-                "label": "DECOMPOSES",
-            }})
-
-        # 2. TRACES_TO links from HLR/LLRs to Design nodes
+        # 2. Design nodes traced from HLR/LLRs (requirements themselves excluded)
         trace_result = session.run("""
         MATCH (h:HLR {sqlite_id: $hid})
-        OPTIONAL MATCH (h)-[t1:TRACES_TO]->(d1:Design)
+        OPTIONAL MATCH (h)-[:TRACES_TO]->(d1:Design)
         OPTIONAL MATCH (l:LLR)-[:DECOMPOSES]->(h)
-        OPTIONAL MATCH (l)-[t2:TRACES_TO]->(d2:Design)
-        RETURN collect(DISTINCT {src: h, rel: t1, tgt: d1}) AS hlr_traces,
-               collect(DISTINCT {src: l, rel: t2, tgt: d2}) AS llr_traces
+        OPTIONAL MATCH (l)-[:TRACES_TO]->(d2:Design)
+        WITH collect(DISTINCT d1) + collect(DISTINCT d2) AS designs
+        UNWIND designs AS d
+        WITH DISTINCT d WHERE d IS NOT NULL
+        RETURN d
         """, {"hid": hlr_id})
-        tr = trace_result.single()
-        for traces in [tr["hlr_traces"], tr["llr_traces"]]:
-            for item in traces:
-                if item["tgt"] is None:
-                    continue
-                d = item["tgt"]
-                _add_node(d.element_id, {
-                    "label": d.get("name", ""),
-                    "qualified_name": d.get("qualified_name", ""),
-                    "kind": d.get("kind", ""),
-                    "layer": "design",
-                })
-                edges.append({"data": {
-                    "id": item["rel"].element_id,
-                    "source": item["src"].element_id,
-                    "target": d.element_id,
-                    "label": "TRACES_TO",
-                }})
+        for record in trace_result:
+            d = record["d"]
+            _add_node(d.element_id, _make_node_data(d))
 
         # 3. Component design nodes + their inter-relationships
         if component_id is not None:
@@ -535,29 +495,23 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
             """, {"cid": component_id})
             for record in comp_result:
                 d = record["d"]
-                _add_node(d.element_id, {
-                    "label": d.get("name", ""),
-                    "qualified_name": d.get("qualified_name", ""),
-                    "kind": d.get("kind", ""),
-                    "layer": "design",
-                })
+                _add_node(d.element_id, _make_node_data(d))
                 for item in record["rels"]:
                     r = item["rel"]
                     t = item["target"]
                     if r is None or t is None:
                         continue
-                    _add_node(t.element_id, {
-                        "label": t.get("name", ""),
-                        "qualified_name": t.get("qualified_name", ""),
-                        "kind": t.get("kind", ""),
-                        "layer": "design",
-                    })
+                    _add_node(t.element_id, _make_node_data(t))
                     edges.append({"data": {
                         "id": r.element_id,
                         "source": d.element_id,
                         "target": t.element_id,
                         "label": r.type,
                     }})
+
+    # Collapse members into class nodes, then group by namespace
+    nodes, edges = _collapse_members(nodes, edges)
+    nodes, edges = _assign_namespace_parents(nodes, edges)
 
     return {"nodes": nodes, "edges": edges}
 
