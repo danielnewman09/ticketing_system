@@ -646,6 +646,85 @@ def fetch_combined_graph(design_qnames: list[str]) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
+def fetch_neighbourhood_graph(qualified_name: str) -> dict:
+    """Fetch the 1-hop neighbourhood of a Design node with collapsed members.
+
+    Returns Cytoscape-format {"nodes": [...], "edges": [...]}.
+    """
+    with get_neo4j_session() as session:
+        # Fetch center + all direct neighbours (both directions)
+        result = session.run("""
+        MATCH (center:Design {qualified_name: $qn})
+        OPTIONAL MATCH (center)-[r_out]->(target)
+        OPTIONAL MATCH (source)-[r_in]->(center)
+        RETURN center,
+               collect(DISTINCT {rel: r_out, target: target}) AS outs,
+               collect(DISTINCT {rel: r_in, source: source}) AS ins
+        """, {"qn": qualified_name})
+
+        record = result.single()
+        if not record:
+            return {"nodes": [], "edges": []}
+
+        nodes = []
+        edges = []
+        node_ids: set[str] = set()
+
+        def _add(n, extra_data=None):
+            if n is None or n.element_id in node_ids:
+                return
+            node_ids.add(n.element_id)
+            d = _make_node_data(n)
+            if extra_data:
+                d.update(extra_data)
+            nodes.append({"data": d})
+
+        center = record["center"]
+        _add(center, {"is_center": "true"})
+
+        for item in record["outs"]:
+            r = item["rel"]
+            t = item["target"]
+            if r is None or t is None:
+                continue
+            # Determine layer from labels
+            labels = list(t.labels)
+            layer = "design"
+            if "HLR" in labels or "LLR" in labels:
+                layer = "requirement"
+            elif not any(l in labels for l in ("Design",)):
+                layer = "as-built"
+            _add(t, {"layer": layer})
+            edges.append({"data": {
+                "id": r.element_id,
+                "source": center.element_id,
+                "target": t.element_id,
+                "label": r.type,
+            }})
+
+        for item in record["ins"]:
+            r = item["rel"]
+            s = item["source"]
+            if r is None or s is None:
+                continue
+            labels = list(s.labels)
+            layer = "design"
+            if "HLR" in labels or "LLR" in labels:
+                layer = "requirement"
+            elif not any(l in labels for l in ("Design",)):
+                layer = "as-built"
+            _add(s, {"layer": layer})
+            edges.append({"data": {
+                "id": r.element_id,
+                "source": s.element_id,
+                "target": center.element_id,
+                "label": r.type,
+            }})
+
+    nodes, edges = _collapse_members(nodes, edges)
+    return {"nodes": nodes, "edges": edges}
+
+
 def fetch_node_detail(qualified_name: str) -> dict | None:
     """Fetch full node properties + relationships + traced requirements + members."""
     with get_neo4j_session() as session:

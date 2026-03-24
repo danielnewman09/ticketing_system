@@ -7,7 +7,7 @@ from nicegui import ui
 
 from frontend.theme import KIND_COLORS, apply_theme
 from frontend.layout import page_layout
-from frontend.data import fetch_node_detail_full, update_member_type
+from frontend.data import fetch_node_detail_full, fetch_neighbourhood_graph_data, update_member_type
 
 
 @ui.page("/node/{node_id}")
@@ -149,124 +149,16 @@ async def node_detail_page(node_id: int):
                             "text-xs uppercase tracking-wider text-gray-400 mb-2"
                         )
                         cy = ui.element("div").style(
-                            "height: 350px; background: #1a1a2e; border-radius: 8px;"
+                            "height: calc(100vh - 280px); min-height: 400px; background: #1a1a2e; border-radius: 8px;"
                         ).classes("w-full")
                         cy._props["id"] = "node-cy-container"
 
-                    # Build neighbourhood graph from neo4j relationships
-                    graph_nodes = []
-                    graph_edges = []
-                    seen = set()
-
-                    # Center node
-                    qn = node["qualified_name"]
-                    center_id = f"center_{node_id}"
-                    graph_nodes.append({
-                        "data": {
-                            "id": center_id,
-                            "label": node["name"],
-                            "kind": kind,
-                            "layer": "design",
-                            "qualified_name": qn,
-                            "is_center": "true",
-                        }
-                    })
-                    seen.add(center_id)
-
-                    # Outgoing
-                    for r in neo4j.get("outgoing", []):
-                        tid = f"out_{r.get('target_qn', '')}"
-                        if tid not in seen:
-                            seen.add(tid)
-                            graph_nodes.append({
-                                "data": {
-                                    "id": tid,
-                                    "label": r.get("target_name") or r.get("target_qn", ""),
-                                    "kind": "",
-                                    "layer": "design",
-                                    "qualified_name": r.get("target_qn", ""),
-                                }
-                            })
-                        graph_edges.append({
-                            "data": {
-                                "id": f"e_out_{r['rel']}_{tid}",
-                                "source": center_id,
-                                "target": tid,
-                                "label": r["rel"],
-                            }
-                        })
-
-                    # Incoming
-                    for r in neo4j.get("incoming", []):
-                        sid = f"in_{r.get('source_qn', '')}"
-                        if sid not in seen:
-                            seen.add(sid)
-                            graph_nodes.append({
-                                "data": {
-                                    "id": sid,
-                                    "label": r.get("source_name") or r.get("source_qn", ""),
-                                    "kind": "",
-                                    "layer": "design",
-                                    "qualified_name": r.get("source_qn", ""),
-                                }
-                            })
-                        graph_edges.append({
-                            "data": {
-                                "id": f"e_in_{r['rel']}_{sid}",
-                                "source": sid,
-                                "target": center_id,
-                                "label": r["rel"],
-                            }
-                        })
-
-                    # Implemented-by
-                    for impl in neo4j.get("implemented_by", []):
-                        iid = f"impl_{impl.get('qualified_name', '')}"
-                        if iid not in seen:
-                            seen.add(iid)
-                            graph_nodes.append({
-                                "data": {
-                                    "id": iid,
-                                    "label": impl.get("name") or impl.get("qualified_name", ""),
-                                    "kind": "",
-                                    "layer": "as-built",
-                                    "qualified_name": impl.get("qualified_name", ""),
-                                }
-                            })
-                        graph_edges.append({
-                            "data": {
-                                "id": f"e_impl_{iid}",
-                                "source": center_id,
-                                "target": iid,
-                                "label": "IMPLEMENTED_BY",
-                            }
-                        })
-
-                    # Requirements
-                    for req in neo4j.get("requirements", []):
-                        rid = f"req_{req.get('name', '')}"
-                        if rid not in seen:
-                            seen.add(rid)
-                            graph_nodes.append({
-                                "data": {
-                                    "id": rid,
-                                    "label": req.get("name", ""),
-                                    "kind": req["type"],
-                                    "layer": "requirement",
-                                    "qualified_name": "",
-                                }
-                            })
-                        graph_edges.append({
-                            "data": {
-                                "id": f"e_req_{rid}",
-                                "source": rid,
-                                "target": center_id,
-                                "label": req.get("relationship", "TRACES_TO"),
-                            }
-                        })
-
-                    elements_json = json.dumps(graph_nodes + graph_edges)
-                    if graph_nodes:
+                    # Fetch neighbourhood with collapsed members
+                    graph = await asyncio.to_thread(
+                        fetch_neighbourhood_graph_data, node["qualified_name"],
+                    )
+                    elements_json = json.dumps(graph["nodes"] + graph["edges"])
+                    if graph["nodes"]:
                         await ui.run_javascript(f"""
                             if (window._nodeCy) window._nodeCy.destroy();
                             const KIND_COLORS = {kind_colors_js};
@@ -295,15 +187,34 @@ async def node_detail_page(node_id: int):
                                             'text-margin-y': 3,
                                         }}
                                     }},
-                                    ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
-                                        selector: 'node[kind="' + kind + '"][layer="design"]',
-                                        style: {{ 'background-color': color }}
-                                    }})),
+                                    {{
+                                        selector: 'node[has_members="true"]',
+                                        style: {{
+                                            'shape': 'roundrectangle',
+                                            'text-valign': 'center',
+                                            'text-halign': 'center',
+                                            'text-wrap': 'wrap',
+                                            'text-max-width': '200px',
+                                            'font-size': '8px',
+                                            'font-family': 'monospace',
+                                            'text-justification': 'left',
+                                            'width': 'label',
+                                            'height': 'label',
+                                            'padding': '10px',
+                                            'border-style': 'solid',
+                                            'border-width': 2,
+                                            'text-margin-y': 0,
+                                        }}
+                                    }},
+                                    ...Object.entries(KIND_COLORS).flatMap(([kind, color]) => [
+                                        {{
+                                            selector: 'node[kind="' + kind + '"][layer="design"]',
+                                            style: {{ 'background-color': color }}
+                                        }},
+                                    ]),
                                     {{
                                         selector: 'node[is_center="true"]',
                                         style: {{
-                                            'width': 45,
-                                            'height': 45,
                                             'border-width': 3,
                                             'border-color': '#f1c40f',
                                             'border-style': 'solid',
@@ -323,7 +234,6 @@ async def node_detail_page(node_id: int):
                                             'border-width': 2,
                                             'border-style': 'solid',
                                             'border-color': '#888',
-                                            'opacity': 0.7,
                                             'text-wrap': 'ellipsis',
                                             'text-max-width': '70px',
                                             'text-margin-y': 3,
@@ -378,38 +288,21 @@ async def node_detail_page(node_id: int):
                                             'target-arrow-color': '#e67e22',
                                         }}
                                     }},
+                                    {{
+                                        selector: 'edge[label="INHERITS_FROM"]',
+                                        style: {{
+                                            'line-style': 'solid',
+                                            'line-color': '#9b59b6',
+                                            'target-arrow-color': '#9b59b6',
+                                            'target-arrow-shape': 'triangle-tee',
+                                        }}
+                                    }},
                                 ],
                                 layout: {{ name: 'fcose', animate: false }},
                             }});
                         """)
 
-                # Relationships
                 if neo4j:
-                    # Relationships (non-COMPOSES)
-                    if neo4j.get("outgoing"):
-                        with ui.card().classes("w-full"):
-                            ui.label("Relationships").classes(
-                                "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                            )
-                            for r in neo4j["outgoing"]:
-                                with ui.row().classes("items-center gap-2 py-1"):
-                                    ui.badge(r["rel"], color="grey").classes("text-xs")
-                                    ui.label(
-                                        r.get("target_name") or r.get("target_qn", "")
-                                    ).classes("text-sm")
-
-                    if neo4j.get("incoming"):
-                        with ui.card().classes("w-full"):
-                            ui.label("Incoming").classes(
-                                "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                            )
-                            for r in neo4j["incoming"]:
-                                with ui.row().classes("items-center gap-2 py-1"):
-                                    ui.label(
-                                        r.get("source_name") or r.get("source_qn", "")
-                                    ).classes("text-sm")
-                                    ui.badge(r["rel"], color="grey").classes("text-xs")
-
                     if neo4j.get("implemented_by"):
                         with ui.card().classes("w-full"):
                             ui.label("Implemented By").classes(

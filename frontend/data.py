@@ -374,6 +374,16 @@ def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
         return {"nodes": [], "edges": []}
 
 
+def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
+    """Fetch the 1-hop neighbourhood graph with collapsed members."""
+    try:
+        from db.neo4j_queries import fetch_neighbourhood_graph
+        return fetch_neighbourhood_graph(qualified_name)
+    except Exception:
+        log.warning("Neo4j neighbourhood query failed", exc_info=True)
+        return {"nodes": [], "edges": []}
+
+
 def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     """Fetch node detail from Neo4j (properties + relationships + requirements)."""
     try:
