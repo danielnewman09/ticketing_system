@@ -105,8 +105,9 @@ async def node_detail_page(node_id: int):
                                 if not m["description"] and cb["description"]:
                                     m["description"] = cb["description"]
                     if all_members:
+                        available_types = neo4j.get("available_types", [])
                         _render_members_card(
-                            all_members, node["kind"], content,
+                            all_members, available_types, content,
                         )
 
                 # Code details
@@ -436,11 +437,16 @@ async def node_detail_page(node_id: int):
     await content()
 
 
-def _render_members_card(members: list[dict], owner_kind: str, content_refreshable):
+def _render_members_card(
+    members: list[dict],
+    available_types: list[str],
+    content_refreshable,
+):
     """Render a Doxygen-style members documentation card.
 
     Groups members by visibility (public, protected, private), then by kind
-    (attributes, methods). Each member shows an editable type field.
+    (attributes, methods). Each member shows an editable type field with
+    autocomplete from available_types.
     """
     _VIS_ORDER = {"public": 0, "protected": 1, "private": 2, "": 3}
     _VIS_LABELS = {"public": "Public", "protected": "Protected", "private": "Private", "": "Unspecified"}
@@ -475,7 +481,7 @@ def _render_members_card(members: list[dict], owner_kind: str, content_refreshab
                     "text-xs text-gray-500 uppercase tracking-wider mb-1 ml-2"
                 )
                 for a in sorted(attrs, key=lambda x: x["name"]):
-                    _render_member_row(a, "attribute", content_refreshable)
+                    _render_member_row(a, "attribute", available_types, content_refreshable)
 
             # Methods
             methods = by_kind.get("method", [])
@@ -484,11 +490,13 @@ def _render_members_card(members: list[dict], owner_kind: str, content_refreshab
                     "text-xs text-gray-500 uppercase tracking-wider mb-1 ml-2 mt-2"
                 )
                 for m in sorted(methods, key=lambda x: x["name"]):
-                    _render_member_row(m, "method", content_refreshable)
+                    _render_member_row(m, "method", available_types, content_refreshable)
 
 
-def _render_member_row(member: dict, kind: str, content_refreshable):
-    """Render a single member in Doxygen-style with editable type."""
+def _render_member_row(
+    member: dict, kind: str, available_types: list[str], content_refreshable,
+):
+    """Render a single member in Doxygen-style with editable type + autocomplete."""
     name = member["name"]
     type_sig = member.get("type_signature", "")
     args = member.get("argsstring", "")
@@ -498,11 +506,12 @@ def _render_member_row(member: dict, kind: str, content_refreshable):
     with ui.column().classes("ml-4 mb-3 w-full"):
         # Signature line
         with ui.row().classes("items-center gap-1 flex-wrap"):
-            # Editable type field
+            # Editable type field with autocomplete
             type_input = ui.input(
                 value=type_sig,
                 placeholder="type" if kind == "attribute" else "return type",
-            ).classes("w-36").props("dense borderless input-class=text-blue-300")
+                autocomplete=available_types,
+            ).classes("w-48").props("dense borderless input-class=text-blue-300")
             type_input.style(
                 "font-family: monospace; font-size: 13px;"
             )
@@ -515,12 +524,12 @@ def _render_member_row(member: dict, kind: str, content_refreshable):
             ui.label(sig_text).classes("text-sm font-mono font-semibold")
 
             # Save on blur
-            async def on_type_blur(e, _qn=qn, _input=type_input):
+            async def on_type_blur(e, _qn=qn, _input=type_input, _name=name):
                 new_val = _input.value.strip()
                 if new_val != (member.get("type_signature") or ""):
                     success = await asyncio.to_thread(update_member_type, _qn, new_val)
                     if success:
-                        ui.notify(f"Type updated for {name}", type="positive")
+                        ui.notify(f"Type updated for {_name}", type="positive")
                     else:
                         ui.notify("Could not update type (node not in SQLite)", type="warning")
 

@@ -712,6 +712,11 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
         # Also try codebase CONTAINS members if this is a Compound
         codebase_members = _fetch_codebase_members(session, qualified_name)
 
+        # Build available types from relationship targets + sibling types
+        available_types = _fetch_available_types(
+            session, qualified_name, relationships_out,
+        )
+
         return {
             "properties": props,
             "outgoing": relationships_out,
@@ -720,6 +725,7 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
             "implemented_by": implemented_by,
             "members": members,
             "codebase_members": codebase_members,
+            "available_types": available_types,
         }
 
 
@@ -766,6 +772,62 @@ def _fetch_codebase_members(session, qualified_name: str) -> list[dict]:
             "description": m.get("brief_description", "") or m.get("detailed_description", ""),
         })
     return sorted(members, key=lambda m: (m["kind"], m["name"]))
+
+
+def _fetch_available_types(
+    session, qualified_name: str, outgoing_rels: list[dict],
+) -> list[str]:
+    """Build a list of type names available to a class for autocomplete.
+
+    Sources (in order of priority):
+    1. Direct relationship targets (ASSOCIATES, DEPENDS_ON, AGGREGATES, etc.)
+       — these are types the class "knows about" (analogous to #include).
+    2. Sibling types in the same namespace.
+    3. Primitive/built-in types.
+    """
+    types: dict[str, str] = {}  # qualified_name → short_name
+
+    # 1. Relationship targets — types this class depends on / associates with
+    _DESIGN_RELS = {"ASSOCIATES", "DEPENDS_ON", "AGGREGATES", "GENERALIZES", "REALIZES"}
+    for r in outgoing_rels:
+        if r["rel"] in _DESIGN_RELS:
+            tqn = r.get("target_qn", "")
+            tname = r.get("target_name", "")
+            if tqn:
+                types[tqn] = tname
+
+    # 2. Sibling types in the same namespace
+    if "::" in qualified_name:
+        ns = qualified_name.rsplit("::", 1)[0]
+        result = session.run("""
+        MATCH (d:Design)
+        WHERE d.qualified_name STARTS WITH $prefix
+          AND d.kind IN ['class', 'interface', 'enum', 'struct', 'type_alias']
+          AND d.qualified_name <> $self
+        RETURN d.qualified_name AS qn, d.name AS name
+        """, {"prefix": ns + "::", "self": qualified_name})
+        for record in result:
+            qn = record["qn"]
+            if qn not in types:
+                types[qn] = record["name"]
+
+    # 3. Built-in / primitive types
+    builtins = [
+        "void", "bool", "int", "double", "float", "char",
+        "uint8_t", "uint16_t", "uint32_t", "uint64_t",
+        "int8_t", "int16_t", "int32_t", "int64_t",
+        "size_t", "std::string", "std::vector", "std::map",
+        "std::optional", "std::shared_ptr", "std::unique_ptr",
+    ]
+
+    # Build completion list: qualified names + short names + builtins
+    completions = set()
+    for qn, name in types.items():
+        completions.add(qn)
+        completions.add(name)
+    completions.update(builtins)
+
+    return sorted(completions)
 
 
 def fetch_design_stats() -> dict:
