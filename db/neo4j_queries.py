@@ -27,18 +27,23 @@ def _make_node_data(n) -> dict:
 _VISIBILITY_PREFIX = {"private": "-", "protected": "#", "public": "+"}
 
 # Member kinds that get collapsed into their owning class node
-_COLLAPSIBLE_KINDS = {"attribute", "method"}
+_COLLAPSIBLE_KINDS = {"attribute", "method", "variable", "function"}
+
+# Map codebase member kinds to design-intent kinds for collapsing
+_KIND_NORMALIZE = {"variable": "attribute", "function": "method"}
 
 # Owner kinds whose members should be collapsed
-_OWNER_KINDS = {"class", "interface", "enum"}
+_OWNER_KINDS = {"class", "interface", "enum", "struct"}
 
 
 def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
     """Collapse attributes and methods into their owning class/interface nodes.
 
-    Members linked via COMPOSES are removed as separate graph nodes and folded
-    into the parent's label as a PlantUML-style compartment list using
-    visibility prefixes (+ public, - private, # protected).
+    Members linked via COMPOSES or CONTAINS are removed as separate graph nodes
+    and folded into the parent's label as a PlantUML-style compartment list
+    using visibility prefixes (+ public, - private, # protected).
+
+    Handles both design-intent nodes (COMPOSES) and codebase nodes (CONTAINS).
 
     Returns the pruned (nodes, edges) tuple.
     """
@@ -49,21 +54,26 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
     remove_node_ids: set[str] = set()
     remove_edge_ids: set[str] = set()
 
+    containment_rels = {"COMPOSES", "CONTAINS"}
+
     for e in edges:
         d = e["data"]
-        if d["label"] != "COMPOSES":
+        if d["label"] not in containment_rels:
             continue
         target = node_by_id.get(d["target"])
         if target is None:
             continue
         td = target["data"]
-        if td["kind"] not in _COLLAPSIBLE_KINDS:
+        raw_kind = td["kind"]
+        if raw_kind not in _COLLAPSIBLE_KINDS:
             continue
         owner_id = d["source"]
         owner = node_by_id.get(owner_id)
         if owner is None or owner["data"]["kind"] not in _OWNER_KINDS:
             continue
-        collapsed.setdefault(owner_id, {}).setdefault(td["kind"], []).append({
+        # Normalize codebase kinds to design kinds for grouping
+        norm_kind = _KIND_NORMALIZE.get(raw_kind, raw_kind)
+        collapsed.setdefault(owner_id, {}).setdefault(norm_kind, []).append({
             "name": td["label"],
             "type_signature": td.get("type_signature", ""),
             "visibility": td.get("visibility", ""),
@@ -162,7 +172,7 @@ def _assign_namespace_parents(nodes: list[dict], edges: list[dict]) -> tuple[lis
         d = n["data"]
         if d["id"] in assigned or d.get("parent"):
             continue
-        if d.get("layer") != "design":
+        if d.get("layer") not in ("design", "as-built"):
             continue
         qn = d.get("qualified_name", "")
         if "::" not in qn:
@@ -328,6 +338,109 @@ def fetch_design_graph(
                     })
 
     # Collapse attributes/methods into class nodes, then group by namespace
+    nodes, edges = _collapse_members(nodes, edges)
+    nodes, edges = _assign_namespace_parents(nodes, edges)
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def _make_codebase_node(n, kind_override: str = "") -> dict:
+    """Build Cytoscape node-data dict from a codebase Neo4j node (Compound/Member)."""
+    kind = kind_override or n.get("kind", "")
+    return {
+        "id": n.element_id,
+        "label": n.get("name", ""),
+        "qualified_name": n.get("qualified_name", ""),
+        "kind": kind,
+        "description": n.get("brief_description", "") or n.get("detailed_description", ""),
+        "visibility": n.get("visibility", ""),
+        "type_signature": n.get("type", ""),
+        "argsstring": n.get("argsstring", ""),
+        "layer": "as-built",
+    }
+
+
+def fetch_codebase_graph(
+    search: str | None = None,
+    namespace_filter: str | None = None,
+) -> dict:
+    """Fetch the as-built codebase graph (Compound/Member/Namespace) for Cytoscape.js.
+
+    Returns {"nodes": [...], "edges": [...]}.
+    """
+    with get_neo4j_session() as session:
+        nodes = []
+        edges = []
+        node_ids: set[str] = set()
+
+        # Build optional filter
+        conditions = []
+        params: dict = {}
+        if namespace_filter:
+            conditions.append("c.qualified_name STARTS WITH $ns")
+            params["ns"] = namespace_filter
+        if search:
+            conditions.append(
+                "(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)"
+            )
+            params["search"] = search
+
+        where = " AND ".join(conditions)
+        where_clause = f"WHERE {where}" if where else ""
+
+        # Compounds + their Members (via CONTAINS)
+        result = session.run(f"""
+            MATCH (c:Compound) {where_clause}
+            OPTIONAL MATCH (c)-[r:CONTAINS]->(m:Member)
+            RETURN c, r, m
+        """, params)
+
+        for record in result:
+            c = record["c"]
+            if c.element_id not in node_ids:
+                node_ids.add(c.element_id)
+                nodes.append({"data": _make_codebase_node(c)})
+
+            m = record["m"]
+            r = record["r"]
+            if m is not None and m.element_id not in node_ids:
+                node_ids.add(m.element_id)
+                nodes.append({"data": _make_codebase_node(m)})
+            if r is not None and m is not None:
+                edges.append({
+                    "data": {
+                        "id": r.element_id,
+                        "source": c.element_id,
+                        "target": m.element_id,
+                        "label": "CONTAINS",
+                    }
+                })
+
+        # Inter-compound relationships (INHERITS_FROM, CALLS between compounds)
+        result2 = session.run(f"""
+            MATCH (c1:Compound)-[r:INHERITS_FROM]->(c2:Compound)
+            {where_clause.replace('c.', 'c1.')}
+            RETURN c1, r, c2
+        """, params)
+
+        for record in result2:
+            c1 = record["c1"]
+            c2 = record["c2"]
+            r = record["r"]
+            for c in [c1, c2]:
+                if c.element_id not in node_ids:
+                    node_ids.add(c.element_id)
+                    nodes.append({"data": _make_codebase_node(c)})
+            edges.append({
+                "data": {
+                    "id": r.element_id,
+                    "source": c1.element_id,
+                    "target": c2.element_id,
+                    "label": "INHERITS_FROM",
+                }
+            })
+
+    # Collapse members into compounds, then group by namespace
     nodes, edges = _collapse_members(nodes, edges)
     nodes, edges = _assign_namespace_parents(nodes, edges)
 
@@ -534,7 +647,7 @@ def fetch_combined_graph(design_qnames: list[str]) -> dict:
 
 
 def fetch_node_detail(qualified_name: str) -> dict | None:
-    """Fetch full node properties + relationships + traced requirements."""
+    """Fetch full node properties + relationships + traced requirements + members."""
     with get_neo4j_session() as session:
         result = session.run("""
         MATCH (n:Design {qualified_name: $qn})
@@ -577,9 +690,10 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
             else:
                 relationships_in.append(r)
 
-        # Extract IMPLEMENTED_BY from outgoing
+        # Extract IMPLEMENTED_BY and COMPOSES members from outgoing
         implemented_by = []
         relationships_out = []
+        member_qns = set()
         for r in outgoing:
             if r["rel"] == "IMPLEMENTED_BY":
                 implemented_by.append({
@@ -587,8 +701,16 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
                     "name": r.get("target_name", ""),
                     "labels": r.get("target_labels", []),
                 })
+            elif r["rel"] == "COMPOSES":
+                member_qns.add(r.get("target_qn", ""))
             else:
                 relationships_out.append(r)
+
+        # Fetch full member details for COMPOSES targets
+        members = _fetch_members(session, member_qns) if member_qns else []
+
+        # Also try codebase CONTAINS members if this is a Compound
+        codebase_members = _fetch_codebase_members(session, qualified_name)
 
         return {
             "properties": props,
@@ -596,7 +718,54 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
             "incoming": relationships_in,
             "requirements": requirements,
             "implemented_by": implemented_by,
+            "members": members,
+            "codebase_members": codebase_members,
         }
+
+
+def _fetch_members(session, qualified_names: set[str]) -> list[dict]:
+    """Fetch full properties for design-intent member nodes."""
+    if not qualified_names:
+        return []
+    result = session.run("""
+    UNWIND $qns AS qn
+    MATCH (m:Design {qualified_name: qn})
+    RETURN m
+    """, {"qns": list(qualified_names)})
+    members = []
+    for record in result:
+        m = record["m"]
+        members.append({
+            "name": m.get("name", ""),
+            "qualified_name": m.get("qualified_name", ""),
+            "kind": m.get("kind", ""),
+            "visibility": m.get("visibility", ""),
+            "type_signature": m.get("type_signature", ""),
+            "argsstring": m.get("argsstring", ""),
+            "description": m.get("description", ""),
+        })
+    return sorted(members, key=lambda m: (m["kind"], m["name"]))
+
+
+def _fetch_codebase_members(session, qualified_name: str) -> list[dict]:
+    """Fetch members from the codebase layer (Compound→CONTAINS→Member)."""
+    result = session.run("""
+    MATCH (c:Compound {qualified_name: $qn})-[:CONTAINS]->(m:Member)
+    RETURN m
+    """, {"qn": qualified_name})
+    members = []
+    for record in result:
+        m = record["m"]
+        members.append({
+            "name": m.get("name", ""),
+            "qualified_name": m.get("qualified_name", ""),
+            "kind": m.get("kind", ""),
+            "visibility": m.get("visibility", ""),
+            "type_signature": m.get("type", ""),
+            "argsstring": m.get("argsstring", ""),
+            "description": m.get("brief_description", "") or m.get("detailed_description", ""),
+        })
+    return sorted(members, key=lambda m: (m["kind"], m["name"]))
 
 
 def fetch_design_stats() -> dict:

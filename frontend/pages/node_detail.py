@@ -7,7 +7,7 @@ from nicegui import ui
 
 from frontend.theme import KIND_COLORS, apply_theme
 from frontend.layout import page_layout
-from frontend.data import fetch_node_detail_full
+from frontend.data import fetch_node_detail_full, update_member_type
 
 
 @ui.page("/node/{node_id}")
@@ -86,6 +86,28 @@ async def node_detail_page(node_id: int):
                             "text-xs uppercase tracking-wider text-gray-400 mb-2"
                         )
                         ui.label(node["description"]).classes("text-sm")
+
+                # Members documentation (Doxygen-style)
+                if neo4j:
+                    all_members = neo4j.get("members", [])
+                    cb_members = neo4j.get("codebase_members", [])
+                    if cb_members and not all_members:
+                        all_members = cb_members
+                    elif cb_members:
+                        cb_by_name = {m["name"]: m for m in cb_members}
+                        for m in all_members:
+                            cb = cb_by_name.get(m["name"])
+                            if cb:
+                                if not m["type_signature"] and cb["type_signature"]:
+                                    m["type_signature"] = cb["type_signature"]
+                                if not m["argsstring"] and cb["argsstring"]:
+                                    m["argsstring"] = cb["argsstring"]
+                                if not m["description"] and cb["description"]:
+                                    m["description"] = cb["description"]
+                    if all_members:
+                        _render_members_card(
+                            all_members, node["kind"], content,
+                        )
 
                 # Code details
                 code_fields = [
@@ -360,11 +382,12 @@ async def node_detail_page(node_id: int):
                             }});
                         """)
 
-                # Relationships cards
+                # Relationships
                 if neo4j:
+                    # Relationships (non-COMPOSES)
                     if neo4j.get("outgoing"):
                         with ui.card().classes("w-full"):
-                            ui.label("Outgoing Relationships").classes(
+                            ui.label("Relationships").classes(
                                 "text-xs uppercase tracking-wider text-gray-400 mb-2"
                             )
                             for r in neo4j["outgoing"]:
@@ -376,7 +399,7 @@ async def node_detail_page(node_id: int):
 
                     if neo4j.get("incoming"):
                         with ui.card().classes("w-full"):
-                            ui.label("Incoming Relationships").classes(
+                            ui.label("Incoming").classes(
                                 "text-xs uppercase tracking-wider text-gray-400 mb-2"
                             )
                             for r in neo4j["incoming"]:
@@ -411,6 +434,101 @@ async def node_detail_page(node_id: int):
                                     ui.label(req.get("name", "")).classes("text-sm")
 
     await content()
+
+
+def _render_members_card(members: list[dict], owner_kind: str, content_refreshable):
+    """Render a Doxygen-style members documentation card.
+
+    Groups members by visibility (public, protected, private), then by kind
+    (attributes, methods). Each member shows an editable type field.
+    """
+    _VIS_ORDER = {"public": 0, "protected": 1, "private": 2, "": 3}
+    _VIS_LABELS = {"public": "Public", "protected": "Protected", "private": "Private", "": "Unspecified"}
+    _KIND_MAP = {"variable": "attribute", "function": "method"}
+
+    # Group: visibility → kind → [members]
+    grouped: dict[str, dict[str, list]] = {}
+    for m in members:
+        vis = m.get("visibility") or ""
+        kind = _KIND_MAP.get(m["kind"], m["kind"])
+        grouped.setdefault(vis, {}).setdefault(kind, []).append(m)
+
+    with ui.card().classes("w-full"):
+        ui.label("Member Documentation").classes(
+            "text-xs uppercase tracking-wider text-gray-400 mb-3"
+        )
+
+        for vis in sorted(grouped.keys(), key=lambda v: _VIS_ORDER.get(v, 9)):
+            by_kind = grouped[vis]
+            vis_label = _VIS_LABELS.get(vis, vis.title())
+
+            # Visibility section header
+            ui.label(vis_label).classes(
+                "text-sm font-semibold mt-3 mb-1 text-gray-300"
+            )
+            ui.separator().classes("mb-2")
+
+            # Attributes
+            attrs = by_kind.get("attribute", [])
+            if attrs:
+                ui.label("Attributes").classes(
+                    "text-xs text-gray-500 uppercase tracking-wider mb-1 ml-2"
+                )
+                for a in sorted(attrs, key=lambda x: x["name"]):
+                    _render_member_row(a, "attribute", content_refreshable)
+
+            # Methods
+            methods = by_kind.get("method", [])
+            if methods:
+                ui.label("Methods").classes(
+                    "text-xs text-gray-500 uppercase tracking-wider mb-1 ml-2 mt-2"
+                )
+                for m in sorted(methods, key=lambda x: x["name"]):
+                    _render_member_row(m, "method", content_refreshable)
+
+
+def _render_member_row(member: dict, kind: str, content_refreshable):
+    """Render a single member in Doxygen-style with editable type."""
+    name = member["name"]
+    type_sig = member.get("type_signature", "")
+    args = member.get("argsstring", "")
+    desc = member.get("description", "")
+    qn = member.get("qualified_name", "")
+
+    with ui.column().classes("ml-4 mb-3 w-full"):
+        # Signature line
+        with ui.row().classes("items-center gap-1 flex-wrap"):
+            # Editable type field
+            type_input = ui.input(
+                value=type_sig,
+                placeholder="type" if kind == "attribute" else "return type",
+            ).classes("w-36").props("dense borderless input-class=text-blue-300")
+            type_input.style(
+                "font-family: monospace; font-size: 13px;"
+            )
+
+            # Name + args
+            if kind == "method":
+                sig_text = f"{name}{args or '()'}"
+            else:
+                sig_text = name
+            ui.label(sig_text).classes("text-sm font-mono font-semibold")
+
+            # Save on blur
+            async def on_type_blur(e, _qn=qn, _input=type_input):
+                new_val = _input.value.strip()
+                if new_val != (member.get("type_signature") or ""):
+                    success = await asyncio.to_thread(update_member_type, _qn, new_val)
+                    if success:
+                        ui.notify(f"Type updated for {name}", type="positive")
+                    else:
+                        ui.notify("Could not update type (node not in SQLite)", type="warning")
+
+            type_input.on("blur", on_type_blur)
+
+        # Description
+        if desc:
+            ui.label(desc).classes("text-xs text-gray-400 ml-1 mt-1")
 
 
 def _prop_row(label: str, value: str):

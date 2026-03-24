@@ -20,6 +20,7 @@ VERIFICATION_COLORS = {
 
 KIND_COLORS = {
     "class": "#4a90d9",
+    "struct": "#5b9bd5",
     "interface": "#9b59b6",
     "enum": "#e74c3c",
     "method": "#2ecc71",
@@ -30,6 +31,7 @@ KIND_COLORS = {
     "enum_value": "#c0392b",
     "primitive": "#95a5a6",
     "type_alias": "#e67e22",
+    "variable": "#8b6914",
 }
 
 

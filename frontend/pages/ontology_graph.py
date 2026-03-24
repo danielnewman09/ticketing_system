@@ -7,7 +7,12 @@ from nicegui import ui
 
 from frontend.theme import KIND_COLORS, LAYER_STYLES, apply_theme
 from frontend.layout import page_layout
-from frontend.data import fetch_ontology_graph_data, fetch_graph_node_detail, resolve_node_id_by_qualified_name
+from frontend.data import (
+    fetch_ontology_graph_data,
+    fetch_codebase_graph_data,
+    fetch_graph_node_detail,
+    resolve_node_id_by_qualified_name,
+)
 
 
 @ui.page("/ontology/graph")
@@ -19,6 +24,7 @@ async def ontology_graph_page():
     kind_filter = {"value": None}
     search_text = {"value": ""}
     selected_node = {"data": None}
+    graph_layer = {"value": "design"}  # "design" or "codebase"
 
     # -- Cytoscape CDN --
     ui.add_head_html(
@@ -32,11 +38,17 @@ async def ontology_graph_page():
     kind_colors_js = json.dumps(KIND_COLORS)
 
     async def load_graph():
-        data = await asyncio.to_thread(
-            fetch_ontology_graph_data,
-            kind_filter=kind_filter["value"],
-            search=search_text["value"] or None,
-        )
+        if graph_layer["value"] == "codebase":
+            data = await asyncio.to_thread(
+                fetch_codebase_graph_data,
+                search=search_text["value"] or None,
+            )
+        else:
+            data = await asyncio.to_thread(
+                fetch_ontology_graph_data,
+                kind_filter=kind_filter["value"],
+                search=search_text["value"] or None,
+            )
         elements_json = json.dumps(data["nodes"] + data["edges"])
         await ui.run_javascript(f"""
             if (window._cy) window._cy.destroy();
@@ -106,26 +118,31 @@ async def ontology_graph_page():
                             'text-margin-y': -4,
                         }}
                     }},
-                    // Per-kind color selectors
-                    ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
-                        selector: 'node[kind="' + kind + '"][layer="design"]',
-                        style: {{ 'background-color': color }}
-                    }})),
+                    // Per-kind color selectors (both layers)
+                    ...Object.entries(KIND_COLORS).flatMap(([kind, color]) => [
+                        {{
+                            selector: 'node[kind="' + kind + '"][layer="design"]',
+                            style: {{ 'background-color': color }}
+                        }},
+                        {{
+                            selector: 'node[kind="' + kind + '"][layer="as-built"]',
+                            style: {{ 'background-color': color }}
+                        }},
+                    ]),
                     {{
                         selector: 'node[layer="as-built"]',
                         style: {{
                             'label': 'data(label)',
                             'background-color': '#555',
-                            'color': '#ccc',
+                            'color': '#ddd',
                             'text-valign': 'bottom',
                             'text-halign': 'center',
                             'font-size': '10px',
-                            'width': 35,
-                            'height': 35,
+                            'width': 40,
+                            'height': 40,
                             'border-width': 2,
                             'border-style': 'solid',
                             'border-color': '#888',
-                            'opacity': 0.7,
                             'text-wrap': 'ellipsis',
                             'text-max-width': '80px',
                             'text-margin-y': 4,
@@ -181,6 +198,15 @@ async def ontology_graph_page():
                         }}
                     }},
                     {{
+                        selector: 'edge[label="INHERITS_FROM"]',
+                        style: {{
+                            'line-style': 'solid',
+                            'line-color': '#9b59b6',
+                            'target-arrow-color': '#9b59b6',
+                            'target-arrow-shape': 'triangle-tee',
+                        }}
+                    }},
+                    {{
                         selector: ':selected',
                         style: {{
                             'border-width': 4,
@@ -203,6 +229,10 @@ async def ontology_graph_page():
                 }}
             }});
         """)
+
+    async def on_layer_change(e):
+        graph_layer["value"] = e.value
+        await load_graph()
 
     async def on_kind_change(e):
         kind_filter["value"] = e.value if e.value != "all" else None
@@ -242,6 +272,12 @@ async def ontology_graph_page():
 
     # Controls
     with ui.row().classes("w-full gap-4 px-2 mb-2 items-end"):
+        ui.select(
+            {"design": "Design Intent", "codebase": "As-Built Codebase"},
+            value="design",
+            label="Layer",
+            on_change=on_layer_change,
+        ).classes("w-44")
         kind_options = ["all"] + sorted(KIND_COLORS.keys())
         ui.select(kind_options, value="all", label="Kind", on_change=on_kind_change).classes("w-36")
         ui.input("Search", on_change=on_search).classes("w-48")

@@ -351,6 +351,19 @@ def fetch_ontology_graph_data(
         return {"nodes": [], "edges": []}
 
 
+def fetch_codebase_graph_data(
+    search: str | None = None,
+    namespace_filter: str | None = None,
+) -> dict:
+    """Fetch the as-built codebase graph from Neo4j for Cytoscape.js rendering."""
+    try:
+        from db.neo4j_queries import fetch_codebase_graph
+        return fetch_codebase_graph(search, namespace_filter)
+    except Exception:
+        log.warning("Neo4j codebase query failed — returning empty graph", exc_info=True)
+        return {"nodes": [], "edges": []}
+
+
 def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
     """Fetch the ontology subgraph around an HLR for Cytoscape.js."""
     try:
@@ -417,3 +430,25 @@ def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
             qualified_name=qualified_name
         ).first()
         return node.id if node else None
+
+
+def update_member_type(qualified_name: str, type_signature: str) -> bool:
+    """Update type_signature on an ontology node (and sync to Neo4j)."""
+    with get_session() as session:
+        node = session.query(OntologyNode).filter_by(
+            qualified_name=qualified_name
+        ).first()
+        if not node:
+            return False
+        node.type_signature = type_signature
+    # Also update Neo4j
+    try:
+        from db.neo4j import get_neo4j_session
+        with get_neo4j_session() as ns:
+            ns.run(
+                "MATCH (n:Design {qualified_name: $qn}) SET n.type_signature = $ts",
+                {"qn": qualified_name, "ts": type_signature},
+            )
+    except Exception:
+        log.warning("Neo4j type_signature sync failed", exc_info=True)
+    return True
