@@ -119,6 +119,113 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
     return out_nodes, out_edges
 
 
+def _assign_namespace_parents(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Group design nodes into namespace containers using Cytoscape parents.
+
+    Works in two passes:
+    1. If explicit module COMPOSES edges exist, convert them to parent fields.
+    2. Otherwise, infer namespace grouping from qualified_name prefixes and
+       synthesise lightweight namespace container nodes.
+
+    Returns the updated (nodes, edges) tuple.
+    """
+    node_by_id: dict[str, dict] = {n["data"]["id"]: n for n in nodes}
+    _CONTAINABLE = {"class", "interface", "enum", "module"}
+
+    # --- Pass 1: explicit COMPOSES from module nodes ---
+    remove_edge_ids: set[str] = set()
+    assigned: set[str] = set()
+
+    for e in edges:
+        d = e["data"]
+        if d["label"] != "COMPOSES":
+            continue
+        source = node_by_id.get(d["source"])
+        target = node_by_id.get(d["target"])
+        if source is None or target is None:
+            continue
+        sd = source["data"]
+        td = target["data"]
+        if sd["kind"] != "module" or td["kind"] not in _CONTAINABLE:
+            continue
+        td["parent"] = d["source"]
+        sd["is_namespace"] = "true"
+        remove_edge_ids.add(d["id"])
+        assigned.add(d["target"])
+
+    out_edges = [e for e in edges if e["data"]["id"] not in remove_edge_ids]
+
+    # --- Pass 2: infer from qualified_name for nodes without a parent ---
+    # Collect all namespace prefixes from qualified names
+    ns_prefixes: dict[str, set[str]] = {}  # prefix → set of child node ids
+    for n in nodes:
+        d = n["data"]
+        if d["id"] in assigned or d.get("parent"):
+            continue
+        if d.get("layer") != "design":
+            continue
+        qn = d.get("qualified_name", "")
+        if "::" not in qn:
+            continue
+        # The namespace is everything before the last ::
+        ns = qn.rsplit("::", 1)[0]
+        ns_prefixes.setdefault(ns, set()).add(d["id"])
+
+    if not ns_prefixes:
+        return nodes, out_edges
+
+    # Build namespace hierarchy and create synthetic container nodes
+    synth_ns: dict[str, str] = {}  # ns qualified_name → synthetic node id
+
+    def _ensure_ns(ns_qn: str) -> str:
+        """Ensure a synthetic namespace node exists, creating parents as needed."""
+        if ns_qn in synth_ns:
+            return synth_ns[ns_qn]
+        # Check if an existing module node matches
+        for n in nodes:
+            d = n["data"]
+            if d.get("kind") == "module" and d.get("qualified_name") == ns_qn:
+                d["is_namespace"] = "true"
+                synth_ns[ns_qn] = d["id"]
+                # Recurse for parent namespace
+                if "::" in ns_qn:
+                    parent_ns = ns_qn.rsplit("::", 1)[0]
+                    d["parent"] = _ensure_ns(parent_ns)
+                return d["id"]
+
+        # Create a synthetic namespace node
+        node_id = f"ns_{ns_qn}"
+        short_name = ns_qn.rsplit("::", 1)[-1]
+        new_node = {
+            "data": {
+                "id": node_id,
+                "label": short_name,
+                "qualified_name": ns_qn,
+                "kind": "module",
+                "description": "",
+                "visibility": "",
+                "type_signature": "",
+                "layer": "design",
+                "is_namespace": "true",
+            }
+        }
+        # Recurse for parent namespace
+        if "::" in ns_qn:
+            parent_ns = ns_qn.rsplit("::", 1)[0]
+            new_node["data"]["parent"] = _ensure_ns(parent_ns)
+        nodes.append(new_node)
+        synth_ns[ns_qn] = node_id
+        return node_id
+
+    # Assign parents to all ungrouped nodes
+    for ns_qn, child_ids in ns_prefixes.items():
+        parent_id = _ensure_ns(ns_qn)
+        for cid in child_ids:
+            node_by_id[cid]["data"]["parent"] = parent_id
+
+    return nodes, out_edges
+
+
 def fetch_design_graph(
     kind_filter: str | None = None,
     search: str | None = None,
@@ -220,8 +327,9 @@ def fetch_design_graph(
                         },
                     })
 
-    # Collapse private attributes into their owning class nodes
+    # Collapse attributes/methods into class nodes, then group by namespace
     nodes, edges = _collapse_members(nodes, edges)
+    nodes, edges = _assign_namespace_parents(nodes, edges)
 
     return {"nodes": nodes, "edges": edges}
 

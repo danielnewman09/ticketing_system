@@ -90,6 +90,10 @@ def map_oo_to_ontology(
         for i in range(len(parts)):
             prefix = "::".join(parts[: i + 1])
             _add_node("module", parts[i], prefix, source_type="namespace")
+            # Nested namespace composes child namespace
+            if i > 0:
+                parent_prefix = "::".join(parts[:i])
+                _add_triple(parent_prefix, "composes", prefix)
 
     # --- Interfaces (source_type="compound") ---
     for iface in oo.interfaces:
@@ -102,6 +106,9 @@ def map_oo_to_ontology(
             source_type="compound",
             is_abstract=True,
         )
+        # Module composes interface
+        if iface.module:
+            _add_triple(iface.module, "composes", iface_qname)
         for method in iface.methods:
             method_qname = f"{iface_qname}::{method.name}"
             argsstring = f"({', '.join(method.parameters)})" if method.parameters else ""
@@ -124,6 +131,9 @@ def map_oo_to_ontology(
             description=enum.description,
             source_type="compound",
         )
+        # Module composes enum
+        if enum.module:
+            _add_triple(enum.module, "composes", enum_qname)
         for value in enum.values:
             val_qname = f"{enum_qname}::{value}"
             _add_node("enum_value", value, val_qname, source_type="member")
@@ -147,6 +157,9 @@ def map_oo_to_ontology(
             description=cls.description,
             source_type="compound",
         )
+        # Module composes class
+        if cls.module:
+            _add_triple(cls.module, "composes", cls_qname)
 
         # Attributes -> composes triples (source_type="member")
         for attr in cls.attributes:

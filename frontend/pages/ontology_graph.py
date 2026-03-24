@@ -86,6 +86,26 @@ async def ontology_graph_page():
                             'text-margin-y': 0,
                         }}
                     }},
+                    // Namespace compound nodes
+                    {{
+                        selector: 'node[is_namespace="true"]',
+                        style: {{
+                            'shape': 'roundrectangle',
+                            'background-color': '#1a1a2e',
+                            'background-opacity': 0.6,
+                            'border-width': 2,
+                            'border-style': 'dashed',
+                            'border-color': '#1abc9c',
+                            'label': 'data(label)',
+                            'color': '#1abc9c',
+                            'text-valign': 'top',
+                            'text-halign': 'center',
+                            'font-size': '11px',
+                            'font-weight': 'bold',
+                            'padding': '20px',
+                            'text-margin-y': -4,
+                        }}
+                    }},
                     // Per-kind color selectors
                     ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
                         selector: 'node[kind="' + kind + '"][layer="design"]',
