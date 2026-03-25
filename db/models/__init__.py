@@ -12,6 +12,7 @@ from db.models.components import (
     Component,
     Dependency,
     DependencyManager,
+    DependencyRecommendation,
     Language,
     TestFramework,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "Component",
     "Dependency",
     "DependencyManager",
+    "DependencyRecommendation",
     "Language",
     "TestFramework",
     # Ontology

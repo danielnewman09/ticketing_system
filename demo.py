@@ -146,6 +146,80 @@ def step_assign_components():
     print()
 
 
+def step_research_dependencies():
+    print("=" * 60)
+    print("STEP 2.5: Research dependencies for each component")
+    print("=" * 60)
+
+    from agents.design.research_dependencies import research_dependencies
+    from frontend.data import save_recommendations
+
+    with get_session() as session:
+        components = session.query(Component).all()
+        arch_components = [
+            c for c in components
+            if c.name != "Environment" and not (c.parent and c.parent.name == "Environment")
+        ]
+
+        for comp in arch_components:
+            hlrs = [
+                {"id": h.id, "description": h.description}
+                for h in comp.high_level_requirements
+            ]
+            if not hlrs:
+                print(f"  {comp.name}: no HLRs, skipping")
+                continue
+
+            language = repr(comp.language) if comp.language else "C++"
+            existing_deps = []
+            if comp.language:
+                for dm in comp.language.dependency_managers:
+                    for d in dm.dependencies:
+                        existing_deps.append(d.name)
+
+            print(f"  {comp.name}: researching dependencies for {len(hlrs)} HLRs...")
+
+            result = research_dependencies(
+                component_name=comp.name,
+                component_description=comp.description or "",
+                hlrs=hlrs,
+                language=language,
+                existing_deps=existing_deps,
+                prompt_log_file=os.path.join(LOGS_DIR, f"step2.5_research_{comp.name.replace(' ', '_')}.md"),
+            )
+
+            recs = result.get("recommendations", [])
+            save_recommendations(comp.id, result.get("summary", ""), recs)
+            print(f"    Found {len(recs)} recommendations")
+            for rec in recs:
+                stars = rec.get("stars", 0)
+                print(f"      - {rec['name']} ({stars} stars): {rec.get('description', '')[:60]}")
+
+    # Check for pending recommendations — block until resolved
+    from frontend.data import fetch_pending_recommendations_summary
+    pending = fetch_pending_recommendations_summary()
+    if pending:
+        total = sum(p["pending_count"] for p in pending)
+        print(f"\n  *** {total} dependency recommendations need review ***")
+        print(f"  Open the dashboard to accept or reject them before proceeding:")
+        print(f"    http://127.0.0.1:8081/")
+        for p in pending:
+            print(f"    - {p['component_name']}: {p['pending_count']} pending")
+            print(f"      http://127.0.0.1:8081/component/{p['component_id']}/dependencies/review")
+        print()
+        input("  Press Enter after reviewing all recommendations to continue...")
+
+        # Verify all resolved
+        still_pending = fetch_pending_recommendations_summary()
+        if still_pending:
+            remaining = sum(p["pending_count"] for p in still_pending)
+            print(f"  WARNING: {remaining} recommendations still pending — proceeding anyway")
+        else:
+            print("  All recommendations reviewed. Continuing...")
+
+    print()
+
+
 def step_decompose():
     print("=" * 60)
     print("STEP 3: Decompose requirements")
@@ -360,7 +434,8 @@ if __name__ == "__main__":
     init_db()
     step_flush()
     step_assign_components()
+    step_research_dependencies()  # optional: requires web access
     step_decompose()
     step_design()
-    # step_verify()
-    # step_summary()
+    step_verify()
+    step_summary()

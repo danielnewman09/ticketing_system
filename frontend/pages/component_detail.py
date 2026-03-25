@@ -60,10 +60,15 @@ async def component_detail_page(component_id: int):
             ui.label(data["name"]).classes("text-2xl font-bold")
             if data["namespace"]:
                 ui.label(data["namespace"]).classes("text-sm font-mono text-gray-400")
-        ui.button(
-            "All Components", icon="arrow_back",
-            on_click=lambda: ui.navigate.to("/components"),
-        ).props("flat size=sm")
+        with ui.row().classes("gap-2"):
+            ui.button(
+                "Research Dependencies", icon="science",
+                on_click=lambda: ui.navigate.to(f"/component/{component_id}/dependencies/review"),
+            ).props("outline size=sm color=primary")
+            ui.button(
+                "All Components", icon="arrow_back",
+                on_click=lambda: ui.navigate.to("/components"),
+            ).props("flat size=sm")
 
     # Description
     if data["description"]:

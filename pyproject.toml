@@ -17,6 +17,7 @@ dependencies = [
     "mcp[cli]>=1.0",
     "nicegui>=2.0",
     "neo4j>=5.0",
+    "ddgs>=7.0",
 ]
 
 [project.optional-dependencies]

@@ -8,6 +8,7 @@ from frontend.pages.ontology import ontology_page
 from frontend.pages.ontology_graph import ontology_graph_page
 from frontend.pages.node_detail import node_detail_page
 from frontend.pages.component_detail import component_detail_page
+from frontend.pages.dependency_review import dependency_review_page
 
 __all__ = [
     "requirements_page",
@@ -15,6 +16,7 @@ __all__ = [
     "llr_detail_page",
     "components_page",
     "component_detail_page",
+    "dependency_review_page",
     "ontology_page",
     "ontology_graph_page",
     "node_detail_page",

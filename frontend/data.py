@@ -7,6 +7,7 @@ from db.models import (
     Component,
     Dependency,
     DependencyManager,
+    DependencyRecommendation,
     HighLevelRequirement,
     Language,
     LowLevelRequirement,
@@ -612,3 +613,145 @@ def delete_dependency_manager(manager_id: int) -> bool:
             return False
         session.delete(dm)
         return True
+
+
+# ---------------------------------------------------------------------------
+# Dependency recommendations
+# ---------------------------------------------------------------------------
+
+def fetch_recommendations(component_id: int) -> list[dict]:
+    """Fetch all dependency recommendations for a component."""
+    with get_session() as session:
+        recs = session.query(DependencyRecommendation).filter_by(
+            component_id=component_id,
+        ).order_by(DependencyRecommendation.status, DependencyRecommendation.name).all()
+        return [
+            {
+                "id": r.id,
+                "name": r.name,
+                "github_url": r.github_url,
+                "description": r.description,
+                "version": r.version,
+                "stars": r.stars,
+                "license": r.license,
+                "last_updated": r.last_updated,
+                "pros": r.pros or [],
+                "cons": r.cons or [],
+                "relevant_hlrs": r.relevant_hlrs or [],
+                "relevant_structures": r.relevant_structures or [],
+                "summary": r.summary,
+                "status": r.status,
+            }
+            for r in recs
+        ]
+
+
+def save_recommendations(component_id: int, summary: str, recommendations: list[dict]):
+    """Save research results as pending recommendations, clearing previous pending ones."""
+    with get_session() as session:
+        # Remove old pending recommendations
+        session.query(DependencyRecommendation).filter_by(
+            component_id=component_id, status="pending",
+        ).delete()
+        session.flush()
+
+        for rec in recommendations:
+            session.add(DependencyRecommendation(
+                component_id=component_id,
+                name=rec.get("name", ""),
+                github_url=rec.get("github_url", ""),
+                description=rec.get("description", ""),
+                version=rec.get("version", ""),
+                stars=rec.get("stars", 0),
+                license=rec.get("license", ""),
+                last_updated=rec.get("last_updated", ""),
+                pros=rec.get("pros"),
+                cons=rec.get("cons"),
+                relevant_hlrs=rec.get("relevant_hlrs"),
+                relevant_structures=rec.get("relevant_structures"),
+                summary=summary,
+                status="pending",
+            ))
+
+
+def update_recommendation_status(rec_id: int, status: str) -> bool:
+    """Update a recommendation's status (accepted/rejected). Returns True on success."""
+    with get_session() as session:
+        rec = session.query(DependencyRecommendation).filter_by(id=rec_id).first()
+        if not rec:
+            return False
+        rec.status = status
+        return True
+
+
+def accept_recommendation(rec_id: int) -> bool:
+    """Accept a recommendation: mark as accepted and add to dependency manager.
+
+    If no dependency manager exists, creates one automatically.
+    """
+    from db import get_or_create
+
+    with get_session() as session:
+        rec = session.query(DependencyRecommendation).filter_by(id=rec_id).first()
+        if not rec:
+            return False
+        rec.status = "accepted"
+
+        # Find the component and ensure it has a dependency manager
+        comp = session.query(Component).filter_by(id=rec.component_id).first()
+        if not comp:
+            return True  # status updated, but can't add dep
+
+        # Ensure language exists
+        if not comp.language:
+            lang, _ = get_or_create(session, Language, name="C++")
+            comp.language_id = lang.id
+            session.flush()
+            session.refresh(comp)
+
+        lang = comp.language
+
+        # Ensure dependency manager exists
+        managers = lang.dependency_managers
+        if not managers:
+            dm = DependencyManager(
+                language_id=lang.id,
+                name="dependencies",
+                manifest_file="dependencies.txt",
+            )
+            session.add(dm)
+            session.flush()
+        else:
+            dm = managers[0]
+
+        # Add the dependency
+        existing = session.query(Dependency).filter_by(
+            manager_id=dm.id, name=rec.name,
+        ).first()
+        if not existing:
+            session.add(Dependency(
+                manager_id=dm.id,
+                name=rec.name,
+                version=rec.version,
+            ))
+        return True
+
+
+def fetch_pending_recommendations_summary() -> list[dict]:
+    """Fetch components that have pending dependency recommendations.
+
+    Returns list of {component_id, component_name, pending_count}.
+    """
+    with get_session() as session:
+        pending = session.query(DependencyRecommendation).filter_by(status="pending").all()
+        by_comp: dict[int, dict] = {}
+        for r in pending:
+            if r.component_id not in by_comp:
+                comp = session.query(Component).filter_by(id=r.component_id).first()
+                by_comp[r.component_id] = {
+                    "component_id": r.component_id,
+                    "component_name": comp.name if comp else "Unknown",
+                    "pending_count": 0,
+                }
+            by_comp[r.component_id]["pending_count"] += 1
+        return list(by_comp.values())

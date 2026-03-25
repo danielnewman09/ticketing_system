@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, Integer, String, Text, Boolean, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, Text, Boolean, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
@@ -143,3 +143,29 @@ class Dependency(Base):
         if self.version:
             return f"{self.name}=={self.version}"
         return self.name
+
+
+class DependencyRecommendation(Base):
+    """A researched dependency recommendation awaiting human review."""
+    __tablename__ = "dependency_recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    component_id: Mapped[int] = mapped_column(ForeignKey("components.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    github_url: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    version: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    stars: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    license: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    last_updated: Mapped[str] = mapped_column(String(50), default="", server_default="")
+    pros: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    cons: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    relevant_hlrs: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    relevant_structures: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    summary: Mapped[str] = mapped_column(Text, default="", server_default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending")
+
+    component: Mapped[Component] = relationship("Component")
+
+    def __repr__(self):
+        return f"{self.name} ({self.status})"
