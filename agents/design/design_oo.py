@@ -359,11 +359,19 @@ def design_oo(
     component_name = hlr.get("component_name")
     component_hint = ""
     if component_name:
+        component_desc = hlr.get("component_description", "")
         component_hint = (
             f"\n\nThis requirement belongs to the architectural "
-            f"component: {component_name}. Your class design should be scoped to "
-            f"and appropriate for this component context.\n"
+            f"component: **{component_name}**"
         )
+        if component_namespace:
+            component_hint += f" (namespace: `{component_namespace}`)"
+        component_hint += (
+            ". Your class design should be scoped to "
+            "and appropriate for this component context.\n"
+        )
+        if component_desc:
+            component_hint += f"\n### Component Description\n\n{component_desc}\n"
 
     result = call_tool(
         system=system,

@@ -8,20 +8,43 @@ from db.models.tickets import Ticket
 
 @event.listens_for(Language, "after_insert")
 def create_environment_component(mapper, connection, target):
-    """Create Environment component when a Language is created."""
-    from sqlalchemy.orm import Session
-    from db import get_or_create
+    """Create Environment component when a Language is created.
 
-    session = Session.object_session(target)
-    if session is None:
-        return
-    root, _ = get_or_create(session, Component, name="Environment", parent_id=None)
-    get_or_create(
-        session, Component,
-        defaults={"language_id": target.id},
-        name=f"Environment: {target.name}",
-        parent_id=root.id,
-    )
+    Uses raw connection.execute to avoid flush-inside-flush errors.
+    """
+    from sqlalchemy import text
+
+    # Ensure root Environment component exists
+    row = connection.execute(
+        text("SELECT id FROM components WHERE name = :n AND parent_id IS NULL"),
+        {"n": "Environment"},
+    ).first()
+    if row:
+        root_id = row[0]
+    else:
+        connection.execute(
+            text("INSERT INTO components (name, description, namespace) VALUES (:n, '', '')"),
+            {"n": "Environment"},
+        )
+        root_id = connection.execute(
+            text("SELECT id FROM components WHERE name = :n AND parent_id IS NULL"),
+            {"n": "Environment"},
+        ).first()[0]
+
+    # Create child component for this language
+    child_name = f"Environment: {target.name}"
+    exists = connection.execute(
+        text("SELECT id FROM components WHERE name = :n AND parent_id = :pid"),
+        {"n": child_name, "pid": root_id},
+    ).first()
+    if not exists:
+        connection.execute(
+            text(
+                "INSERT INTO components (name, description, namespace, parent_id, language_id) "
+                "VALUES (:n, '', '', :pid, :lid)"
+            ),
+            {"n": child_name, "pid": root_id, "lid": target.id},
+        )
 
 
 @event.listens_for(Ticket, "after_insert")

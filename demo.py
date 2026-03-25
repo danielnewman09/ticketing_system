@@ -203,6 +203,7 @@ def step_design():
                 "dependency_context": h.dependency_context,
                 "component_name": h.component.name if h.component else None,
                 "component_namespace": h.component.namespace if h.component else "",
+                "component_description": h.component.description if h.component else "",
             }
             for h in session.query(HighLevelRequirement).all()
         ]
