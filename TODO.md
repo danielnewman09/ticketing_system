@@ -39,3 +39,24 @@
 - [ ] Create new nodes from the graph view
 - [ ] Create/delete triples (relationships) between nodes
 - [ ] Sync edits back to both SQLite and Neo4j
+
+
+# Component TODOs
+- [ ] Components have a detail view
+- [ ] Components have a concept of "external dependencies"
+- [ ] At the design stage, an agent determines what external dependencies to bring into the component
+- [ ] Components should have a given relative path for both source and test (verification) 
+- [ ] Components should have a dependency management system (e.g. conan, python virtual environment)
+
+# Language Specific TODOs
+- [ ] Create language-specific instructions for agents to determine how to format specific results. e.g. C++ can contain references, const, inline, static, etc. Python cannot. 
+- [ ] Components should have a language metadata field indicating which language they use.
+- [ ] Pull from the existing templates in `components/templates/components/language_edit.html` to get an idea for what this should all entail
+
+# Ontology View TODOs
+- [ ] Integration points between components should be clearly marked
+
+# Integration TODOs
+- [ ] Integration points should have their own detail view (e.g. When the calculator GUI invokes the Calculator backend)
+- [ ] `INTEGRATES` should be a possible ontology relationship
+- [ ] Integration tests should be their own kind of verification. 
