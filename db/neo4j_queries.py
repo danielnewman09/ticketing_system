@@ -129,18 +129,40 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
     return out_nodes, out_edges
 
 
+def _fetch_component_namespaces() -> dict[str, str]:
+    """Fetch Component namespace → name mapping from the database.
+
+    Returns a dict of {namespace: component_name} for all components
+    that have a namespace defined.
+    """
+    try:
+        from db import get_session
+        from db.models.components import Component
+        with get_session() as session:
+            return {
+                c.namespace: c.name
+                for c in session.query(Component).all()
+                if c.namespace
+            }
+    except Exception:
+        return {}
+
+
 def _assign_namespace_parents(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
     """Group design nodes into namespace containers using Cytoscape parents.
 
-    Works in two passes:
+    Uses Component namespaces as the source of truth when available.
+    Falls back to qualified_name prefix inference for as-built codebase nodes.
+
+    Works in three passes:
     1. If explicit module COMPOSES edges exist, convert them to parent fields.
-    2. Otherwise, infer namespace grouping from qualified_name prefixes and
-       synthesise lightweight namespace container nodes.
+    2. Use Component namespaces to create containers for design-intent nodes.
+    3. For as-built nodes without a component, infer from qualified_name prefixes.
 
     Returns the updated (nodes, edges) tuple.
     """
     node_by_id: dict[str, dict] = {n["data"]["id"]: n for n in nodes}
-    _CONTAINABLE = {"class", "interface", "enum", "module"}
+    _CONTAINABLE = {"class", "interface", "enum", "module", "struct"}
 
     # --- Pass 1: explicit COMPOSES from module nodes ---
     remove_edge_ids: set[str] = set()
@@ -165,52 +187,41 @@ def _assign_namespace_parents(nodes: list[dict], edges: list[dict]) -> tuple[lis
 
     out_edges = [e for e in edges if e["data"]["id"] not in remove_edge_ids]
 
-    # --- Pass 2: infer from qualified_name for nodes without a parent ---
-    # Collect all namespace prefixes from qualified names
-    ns_prefixes: dict[str, set[str]] = {}  # prefix → set of child node ids
-    for n in nodes:
-        d = n["data"]
-        if d["id"] in assigned or d.get("parent"):
-            continue
-        if d.get("layer") not in ("design", "as-built"):
-            continue
-        qn = d.get("qualified_name", "")
-        if "::" not in qn:
-            continue
-        # The namespace is everything before the last ::
-        ns = qn.rsplit("::", 1)[0]
-        ns_prefixes.setdefault(ns, set()).add(d["id"])
+    # --- Pass 2: Component-based namespace containers ---
+    component_ns = _fetch_component_namespaces()
 
-    if not ns_prefixes:
-        return nodes, out_edges
+    # Build synthetic namespace nodes from Components
+    synth_ns: dict[str, str] = {}  # namespace → synthetic node id
 
-    # Build namespace hierarchy and create synthetic container nodes
-    synth_ns: dict[str, str] = {}  # ns qualified_name → synthetic node id
+    def _ensure_component_ns(ns: str) -> str | None:
+        """Create or reuse a namespace container from a Component."""
+        if ns in synth_ns:
+            return synth_ns[ns]
+        if ns not in component_ns:
+            return None
 
-    def _ensure_ns(ns_qn: str) -> str:
-        """Ensure a synthetic namespace node exists, creating parents as needed."""
-        if ns_qn in synth_ns:
-            return synth_ns[ns_qn]
-        # Check if an existing module node matches
+        # Check if an existing module node already has this qualified_name
         for n in nodes:
             d = n["data"]
-            if d.get("kind") == "module" and d.get("qualified_name") == ns_qn:
+            if d.get("kind") == "module" and d.get("qualified_name") == ns:
                 d["is_namespace"] = "true"
-                synth_ns[ns_qn] = d["id"]
-                # Recurse for parent namespace
-                if "::" in ns_qn:
-                    parent_ns = ns_qn.rsplit("::", 1)[0]
-                    d["parent"] = _ensure_ns(parent_ns)
+                d["label"] = component_ns[ns]  # Use component name as label
+                synth_ns[ns] = d["id"]
+                if "::" in ns:
+                    parent_ns = ns.rsplit("::", 1)[0]
+                    parent_id = _ensure_component_ns(parent_ns)
+                    if parent_id:
+                        d["parent"] = parent_id
                 return d["id"]
 
-        # Create a synthetic namespace node
-        node_id = f"ns_{ns_qn}"
-        short_name = ns_qn.rsplit("::", 1)[-1]
+        # No existing node — create a synthetic one
+        node_id = f"ns_{ns}"
+        short_name = component_ns[ns]
         new_node = {
             "data": {
                 "id": node_id,
                 "label": short_name,
-                "qualified_name": ns_qn,
+                "qualified_name": ns,
                 "kind": "module",
                 "description": "",
                 "visibility": "",
@@ -219,19 +230,88 @@ def _assign_namespace_parents(nodes: list[dict], edges: list[dict]) -> tuple[lis
                 "is_namespace": "true",
             }
         }
-        # Recurse for parent namespace
-        if "::" in ns_qn:
-            parent_ns = ns_qn.rsplit("::", 1)[0]
-            new_node["data"]["parent"] = _ensure_ns(parent_ns)
+        if "::" in ns:
+            parent_ns = ns.rsplit("::", 1)[0]
+            parent_id = _ensure_component_ns(parent_ns)
+            if parent_id:
+                new_node["data"]["parent"] = parent_id
         nodes.append(new_node)
-        synth_ns[ns_qn] = node_id
+        synth_ns[ns] = node_id
         return node_id
 
-    # Assign parents to all ungrouped nodes
-    for ns_qn, child_ids in ns_prefixes.items():
-        parent_id = _ensure_ns(ns_qn)
-        for cid in child_ids:
-            node_by_id[cid]["data"]["parent"] = parent_id
+    # Assign component namespace parents to design nodes
+    if component_ns:
+        # Sort namespaces longest-first for most-specific matching
+        sorted_ns = sorted(component_ns.keys(), key=len, reverse=True)
+        for n in nodes:
+            d = n["data"]
+            if d["id"] in assigned or d.get("parent"):
+                continue
+            if d.get("layer") != "design":
+                continue
+            qn = d.get("qualified_name", "")
+            for ns in sorted_ns:
+                if qn.startswith(ns + "::") or qn == ns:
+                    parent_id = _ensure_component_ns(ns)
+                    if parent_id and parent_id != d["id"]:
+                        d["parent"] = parent_id
+                        assigned.add(d["id"])
+                    break
+
+    # --- Pass 3: fallback inference for as-built nodes only ---
+    # Design-intent nodes MUST have a Component namespace; no fallback inference.
+    ns_prefixes: dict[str, set[str]] = {}
+    for n in nodes:
+        d = n["data"]
+        if d["id"] in assigned or d.get("parent"):
+            continue
+        if d.get("layer") != "as-built":
+            continue
+        qn = d.get("qualified_name", "")
+        if "::" not in qn:
+            continue
+        ns = qn.rsplit("::", 1)[0]
+        ns_prefixes.setdefault(ns, set()).add(d["id"])
+
+    if ns_prefixes:
+        def _ensure_ns(ns_qn: str) -> str:
+            if ns_qn in synth_ns:
+                return synth_ns[ns_qn]
+            for n in nodes:
+                d = n["data"]
+                if d.get("kind") == "module" and d.get("qualified_name") == ns_qn:
+                    d["is_namespace"] = "true"
+                    synth_ns[ns_qn] = d["id"]
+                    if "::" in ns_qn:
+                        parent_ns = ns_qn.rsplit("::", 1)[0]
+                        d["parent"] = _ensure_ns(parent_ns)
+                    return d["id"]
+            node_id = f"ns_{ns_qn}"
+            short_name = ns_qn.rsplit("::", 1)[-1]
+            new_node = {
+                "data": {
+                    "id": node_id,
+                    "label": short_name,
+                    "qualified_name": ns_qn,
+                    "kind": "module",
+                    "description": "",
+                    "visibility": "",
+                    "type_signature": "",
+                    "layer": "as-built",
+                    "is_namespace": "true",
+                }
+            }
+            if "::" in ns_qn:
+                parent_ns = ns_qn.rsplit("::", 1)[0]
+                new_node["data"]["parent"] = _ensure_ns(parent_ns)
+            nodes.append(new_node)
+            synth_ns[ns_qn] = node_id
+            return node_id
+
+        for ns_qn, child_ids in ns_prefixes.items():
+            parent_id = _ensure_ns(ns_qn)
+            for cid in child_ids:
+                node_by_id[cid]["data"]["parent"] = parent_id
 
     return nodes, out_edges
 

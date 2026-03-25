@@ -26,6 +26,25 @@ PREDICATE_TO_REL_TYPE = {
 
 
 # ---------------------------------------------------------------------------
+# Clear all design-intent nodes
+# ---------------------------------------------------------------------------
+
+def clear_design_graph():
+    """Delete all Design, HLR, and LLR nodes (and their relationships) from Neo4j."""
+    if not verify_connection():
+        log.warning("Neo4j unavailable — skipping clear")
+        return False
+    try:
+        with get_neo4j_session() as session:
+            session.run("MATCH (n) WHERE n:Design OR n:HLR OR n:LLR DETACH DELETE n")
+        log.info("Cleared design graph from Neo4j")
+        return True
+    except Exception:
+        log.warning("Neo4j clear failed", exc_info=True)
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Design nodes & triples
 # ---------------------------------------------------------------------------
 

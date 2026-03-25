@@ -4,8 +4,11 @@ Stage 2: deterministic mapping from OO design to ontology nodes + triples.
 No LLM call — all mappings are mechanical.
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
+
+log = logging.getLogger(__name__)
 
 from codebase.schemas import (
     DesignSchema,
@@ -35,6 +38,7 @@ def map_oo_to_ontology(
     oo: OODesignSchema,
     component_id: int | None = None,
     prior_class_lookup: dict[str, str] | None = None,
+    component_namespace: str = "",
 ) -> DesignSchema:
     """Map an OO design to ontology nodes, triples, and requirement links.
 
@@ -43,6 +47,8 @@ def map_oo_to_ontology(
         component_id: Optional component FK to set on all output nodes.
         prior_class_lookup: name -> qualified_name mapping from previously
             designed HLRs, so cross-HLR references resolve correctly.
+        component_namespace: Required namespace prefix. If set, modules that
+            don't match are corrected to use this namespace.
     """
     nodes: list[OntologyNodeSchema] = []
     triples: list[OntologyTripleSchema] = []
@@ -83,6 +89,57 @@ def map_oo_to_ontology(
                     requirement_id=req_id,
                     triple_index=triple_idx,
                 ))
+
+    # --- Correct modules to match component namespace ---
+    if component_namespace:
+        corrected_modules = set()
+        for cls in oo.classes:
+            if cls.module != component_namespace:
+                log.info(
+                    "Correcting class %s module %r -> %r",
+                    cls.name, cls.module, component_namespace,
+                )
+                cls.module = component_namespace
+            corrected_modules.add(cls.module)
+        for iface in oo.interfaces:
+            if iface.module != component_namespace:
+                log.info(
+                    "Correcting interface %s module %r -> %r",
+                    iface.name, iface.module, component_namespace,
+                )
+                iface.module = component_namespace
+            corrected_modules.add(iface.module)
+        for enum in oo.enums:
+            if enum.module != component_namespace:
+                log.info(
+                    "Correcting enum %s module %r -> %r",
+                    enum.name, enum.module, component_namespace,
+                )
+                enum.module = component_namespace
+            corrected_modules.add(enum.module)
+        oo.modules = sorted(corrected_modules)
+
+        # Correct cross-references that use wrong namespace prefixes.
+        # A reference is "correct" only if its namespace part exactly equals
+        # the component namespace (e.g., "calc_engine::Foo" is correct for
+        # namespace "calc_engine", but "calc_engine::core::Foo" is not).
+        def _strip_wrong_ns(val: str) -> str:
+            if "::" not in val:
+                return val
+            ns_part = val.rsplit("::", 1)[0]
+            if ns_part == component_namespace:
+                return val  # Already correct
+            # Strip to just the class name so class_lookup can resolve it
+            stripped = val.rsplit("::", 1)[-1]
+            log.info("Correcting ref %r -> %r", val, stripped)
+            return stripped
+
+        for assoc in oo.associations:
+            assoc.from_class = _strip_wrong_ns(assoc.from_class)
+            assoc.to_class = _strip_wrong_ns(assoc.to_class)
+        for cls in oo.classes:
+            cls.inherits_from = [_strip_wrong_ns(p) for p in cls.inherits_from]
+            cls.realizes_interfaces = [_strip_wrong_ns(i) for i in cls.realizes_interfaces]
 
     # --- Modules (source_type="namespace") ---
     for module in oo.modules:

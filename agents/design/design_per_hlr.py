@@ -241,6 +241,14 @@ def design_all_hlrs(
         prompt_log = (
             os.path.join(log_dir, f"design_oo_hlr{hlr_id}.md") if log_dir else ""
         )
+        # Gather component namespace and siblings
+        component_namespace = hlr.get("component_namespace", "")
+        sibling_namespaces = [
+            h.get("component_namespace", "")
+            for h in hlrs
+            if h["id"] != hlr_id and h.get("component_namespace")
+        ]
+
         oo = design_oo(
             hlr=hlr,
             llrs=hlr_llrs,
@@ -249,6 +257,8 @@ def design_all_hlrs(
             intercomponent_classes=intercomponent_classes or None,
             other_hlr_summaries=other_hlr_summaries or None,
             dependency_contexts=dependency_contexts,
+            component_namespace=component_namespace,
+            sibling_namespaces=sibling_namespaces or None,
             model=model,
             prompt_log_file=prompt_log,
         )
@@ -258,6 +268,7 @@ def design_all_hlrs(
         ontology = map_oo_to_ontology(
             oo, component_id=component_id,
             prior_class_lookup=accumulated_class_lookup,
+            component_namespace=component_namespace,
         )
 
         # Accumulate — update class lookup with this design's classes

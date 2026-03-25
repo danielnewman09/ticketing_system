@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, Integer, String, Boolean, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, Text, Boolean, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
@@ -23,6 +23,8 @@ class Component(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    namespace: Mapped[str] = mapped_column(String(200), default="", server_default="")
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("components.id", ondelete="CASCADE"), nullable=True)
     language_id: Mapped[Optional[int]] = mapped_column(ForeignKey("languages.id", ondelete="CASCADE"), nullable=True)
 
@@ -37,8 +39,19 @@ class Component(Base):
     def __repr__(self):
         return self.name
 
+    @property
+    def full_namespace(self) -> str:
+        """Return the namespace, falling back to parent-prefixed name."""
+        if self.namespace:
+            return self.namespace
+        return ""
+
     def to_prompt_text(self):
         lines = [f"Component: {self.name}"]
+        if self.namespace:
+            lines.append(f"  Namespace: {self.namespace}")
+        if self.description:
+            lines.append(f"  Description: {self.description}")
         if self.parent_id:
             lines.append(f"  Parent: {self.parent.name}")
         if self.language_id:

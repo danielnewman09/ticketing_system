@@ -37,6 +37,14 @@ failure mode.
 ### Modules
 Use "::" as the separator (e.g., "calc::gui", "calc::core").
 
+IMPORTANT: You MUST use ONLY the component namespace provided in the user
+message as the module for all classes. Do NOT invent sub-namespaces (e.g.,
+if the namespace is "calculation_engine", use "calculation_engine" — NOT
+"calculation_engine::core" or "calculation_engine::validation"). Sub-namespaces
+can only come from child components, which are defined separately.
+
+{namespace_section}
+
 ### Classes
 Each class needs: name, module, description, attributes, methods,
 inherits_from, realizes_interfaces, and requirement_ids.
@@ -293,6 +301,21 @@ def _build_dependency_section(dependency_contexts: dict[int, dict]) -> str:
     return "\n".join(lines)
 
 
+def _build_namespace_section(component_namespace: str, sibling_namespaces: list[str] | None = None) -> str:
+    """Build the namespace constraint section for the prompt."""
+    if not component_namespace:
+        return ""
+    lines = [
+        f"The required namespace for this component is: `{component_namespace}`",
+        f"All classes, interfaces, and enums MUST use module = \"{component_namespace}\".",
+    ]
+    if sibling_namespaces:
+        lines.append("\nOther component namespaces (for reference, do NOT use as module):")
+        for ns in sibling_namespaces:
+            lines.append(f"  - {ns}")
+    return "\n".join(lines)
+
+
 def design_oo(
     hlr: dict,
     llrs: list[dict],
@@ -301,6 +324,8 @@ def design_oo(
     intercomponent_classes: list[dict] | None = None,
     other_hlr_summaries: list[dict] | None = None,
     dependency_contexts: dict[int, dict] | None = None,
+    component_namespace: str = "",
+    sibling_namespaces: list[str] | None = None,
     model: str = "",
     prompt_log_file: str = "",
 ) -> OODesignSchema:
@@ -314,11 +339,14 @@ def design_oo(
         intercomponent_classes: Public API classes from other components.
         other_hlr_summaries: Other HLRs for awareness context.
         dependency_contexts: Dependency assessment keyed by HLR ID.
+        component_namespace: Required C++ namespace for this component.
+        sibling_namespaces: Other component namespaces (for context).
     """
     requirements_text = format_hlrs_for_prompt([hlr], llrs, include_component=True)
 
     system = SYSTEM_PROMPT.format(
         specializations_section=_build_specializations_section(language),
+        namespace_section=_build_namespace_section(component_namespace, sibling_namespaces),
         existing_classes_section=_build_existing_classes_section(existing_classes or []),
         intercomponent_section=_build_intercomponent_section(intercomponent_classes or []),
         other_hlrs_section=_build_other_hlrs_section(other_hlr_summaries or []),

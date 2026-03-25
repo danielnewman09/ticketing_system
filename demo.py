@@ -53,6 +53,8 @@ def step_flush():
     print("=" * 60)
 
     from db import get_main_engine
+    from db.neo4j_sync import clear_design_graph
+
     engine = get_main_engine()
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
@@ -61,13 +63,16 @@ def step_flush():
     with get_session() as session:
         Predicate.ensure_defaults(session)
 
+    # Clear Neo4j design graph
+    clear_design_graph()
+
     # Clear and recreate logs directory
     import shutil
     if os.path.exists(LOGS_DIR):
         shutil.rmtree(LOGS_DIR)
     os.makedirs(LOGS_DIR, exist_ok=True)
 
-    print("  Database cleared.\n")
+    print("  Database cleared (SQLite + Neo4j).\n")
 
 
 def step_assign_components():
@@ -98,12 +103,45 @@ def step_assign_components():
             prompt_log_file=os.path.join(LOGS_DIR, "step2_assign_components.md"),
         )
 
+        # First pass: create/update components with namespaces and parents
+        component_cache: dict[str, Component] = {}
         for a in assignments:
-            component, _ = get_or_create(session, Component, name=a["component_name"])
+            comp_name = a["component_name"]
+            if comp_name in component_cache:
+                continue
+            namespace = a.get("namespace", "")
+            desc = a.get("description", "")
+            component, _ = get_or_create(
+                session, Component,
+                defaults={"namespace": namespace, "description": desc},
+                name=comp_name,
+            )
+            if not component.namespace and namespace:
+                component.namespace = namespace
+            if not component.description and desc:
+                component.description = desc
+            component_cache[comp_name] = component
+
+        # Set parent relationships
+        session.flush()
+        for a in assignments:
+            parent_name = a.get("parent_component_name", "")
+            if parent_name and parent_name in component_cache:
+                child = component_cache[a["component_name"]]
+                parent = component_cache[parent_name]
+                if child.id != parent.id:
+                    child.parent_id = parent.id
+
+        session.flush()
+
+        # Second pass: assign HLRs
+        for a in assignments:
+            component = component_cache[a["component_name"]]
             session.query(HighLevelRequirement).filter_by(id=a["hlr_id"]).update(
                 {"component_id": component.id}
             )
-            print(f"  HLR {a['hlr_id']} -> {a['component_name']} ({a['rationale'][:60]})")
+            ns_info = f" ns={component.namespace}" if component.namespace else ""
+            print(f"  HLR {a['hlr_id']} -> {a['component_name']}{ns_info} ({a['rationale'][:50]})")
 
     print()
 
@@ -164,6 +202,7 @@ def step_design():
                 "component_id": h.component_id,
                 "dependency_context": h.dependency_context,
                 "component_name": h.component.name if h.component else None,
+                "component_namespace": h.component.namespace if h.component else "",
             }
             for h in session.query(HighLevelRequirement).all()
         ]
@@ -208,19 +247,26 @@ def step_verify():
     print("=" * 60)
 
     from agents.verify.verify_llr import verify
-    from requirements.services.persistence import persist_verification
+    from requirements.services.persistence import (
+        build_verification_context,
+        persist_verification,
+        augment_design_for_unresolved,
+    )
 
     with get_session() as session:
+        # Build structured design context
+        class_contexts = build_verification_context(session)
         ontology_nodes = [
             {"qualified_name": n.qualified_name, "pk": n.id, "kind": n.kind, "description": n.description}
             for n in session.query(OntologyNode).all()
         ]
         llrs = session.query(LowLevelRequirement).all()
 
-        print(f"  Processing {len(llrs)} LLRs against {len(ontology_nodes)} ontology nodes...\n")
+        print(f"  Processing {len(llrs)} LLRs with {len(class_contexts)} class contexts...\n")
 
         total_conditions = 0
         total_actions = 0
+        total_augmented = 0
 
         for llr in llrs:
             llr_dict = {"id": llr.id, "description": llr.description}
@@ -235,13 +281,36 @@ def step_verify():
 
             print(f"  LLR {llr.id}: {llr.description[:60]}...")
             agent_result = verify(
-                llr_dict, existing, ontology_nodes,
+                llr_dict, existing, class_contexts,
+                ontology_nodes=ontology_nodes,
                 prompt_log_file=os.path.join(LOGS_DIR, f"step5_verify_llr{llr.id}.md"),
             )
+
+            # Report validation
+            if agent_result.validation and not agent_result.validation.all_resolved:
+                print(f"    WARN: {len(agent_result.validation.unresolved)} unresolved references")
+                for qname, ctx in agent_result.validation.unresolved:
+                    print(f"      - {qname} ({ctx})")
 
             persisted = persist_verification(session, llr, agent_result.verifications, ontology_nodes)
             total_conditions += persisted.conditions_created
             total_actions += persisted.actions_created
+
+            # Closed loop: create missing design nodes
+            if agent_result.validation and not agent_result.validation.all_resolved:
+                augmented = augment_design_for_unresolved(
+                    session, agent_result.validation.unresolved,
+                )
+                if augmented.nodes_created:
+                    total_augmented += augmented.nodes_created
+                    print(f"    Created {augmented.nodes_created} missing design nodes, "
+                          f"{augmented.triples_created} triples")
+                    # Refresh ontology_nodes for subsequent LLRs
+                    ontology_nodes = [
+                        {"qualified_name": n.qualified_name, "pk": n.id, "kind": n.kind, "description": n.description}
+                        for n in session.query(OntologyNode).all()
+                    ]
+                    class_contexts = build_verification_context(session)
 
             for v in agent_result.verifications:
                 print(f"    [{v.method}] {v.test_name}: "
@@ -249,7 +318,11 @@ def step_verify():
                       f"{len(v.postconditions)} post")
 
         print(f"\n  Verification phase complete:")
-        print(f"    {total_conditions} conditions, {total_actions} actions created\n")
+        print(f"    {total_conditions} conditions, {total_actions} actions created")
+        if total_augmented:
+            print(f"    {total_augmented} design nodes created via closed loop\n")
+        else:
+            print()
 
 
 def step_summary():
@@ -288,5 +361,5 @@ if __name__ == "__main__":
     step_assign_components()
     step_decompose()
     step_design()
-    step_verify()
-    step_summary()
+    # step_verify()
+    # step_summary()
