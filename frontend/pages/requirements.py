@@ -8,6 +8,8 @@ from frontend.theme import apply_theme
 from frontend.layout import page_layout, stat_card
 from frontend.data import (
     fetch_requirements_data,
+    fetch_project_meta,
+    update_project_meta,
     fetch_components_options,
     fetch_pending_recommendations_summary,
     create_hlr,
@@ -25,6 +27,84 @@ async def requirements_page():
     # ---------------------------------------------------------------
     # Refreshable content
     # ---------------------------------------------------------------
+
+    # ---------------------------------------------------------------
+    # Project metadata section
+    # ---------------------------------------------------------------
+
+    @ui.refreshable
+    async def project_meta_section():
+        meta = await asyncio.to_thread(fetch_project_meta)
+
+        with ui.card().classes("w-full mx-2 mt-4").style(
+            "background: #1e293b; border-left: 4px solid #5c7cfa;"
+        ):
+            with ui.row().classes("w-full items-start justify-between"):
+                with ui.column().classes("flex-1 gap-1"):
+                    ui.label(meta["name"] or "Untitled Project").classes(
+                        "text-lg font-bold"
+                    )
+                    if meta["description"]:
+                        ui.label(meta["description"]).classes(
+                            "text-sm text-gray-400"
+                        )
+                    if meta["working_directory"]:
+                        with ui.row().classes("items-center gap-1"):
+                            ui.icon("folder", size="xs").classes("text-gray-500")
+                            ui.label(meta["working_directory"]).classes(
+                                "text-xs text-gray-500 font-mono"
+                            )
+                ui.button(icon="edit", on_click=lambda: show_edit_project_dialog(meta)).props(
+                    "flat round size=sm"
+                )
+
+    async def show_edit_project_dialog(meta: dict):
+        from frontend.widgets import directory_picker
+
+        with ui.dialog() as dialog, ui.card().classes("w-96"):
+            ui.label("Project Settings").classes("text-lg font-bold mb-2")
+            name_input = ui.input("Name", value=meta["name"]).classes("w-full")
+            desc_input = ui.textarea("Description", value=meta["description"]).classes("w-full")
+
+            with ui.row().classes("w-full items-end gap-2"):
+                dir_input = ui.input(
+                    "Working Directory", value=meta["working_directory"],
+                ).classes("flex-1 font-mono")
+                dir_input.props("readonly")
+
+                def open_picker():
+                    def on_select(path: str):
+                        dir_input.value = path
+
+                    picker = directory_picker(
+                        initial_path=dir_input.value,
+                        on_select=on_select,
+                    )
+                    picker.open()
+
+                ui.button(icon="folder_open", on_click=open_picker).props(
+                    "flat round size=sm"
+                ).tooltip("Browse…")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_save():
+                    await asyncio.to_thread(
+                        update_project_meta,
+                        name_input.value.strip(),
+                        desc_input.value.strip(),
+                        dir_input.value.strip(),
+                    )
+                    dialog.close()
+                    ui.notify("Project settings saved", type="positive")
+                    project_meta_section.refresh()
+
+                ui.button("Save", on_click=do_save).props("color=primary")
+
+        dialog.open()
+
+    await project_meta_section()
 
     @ui.refreshable
     async def content():

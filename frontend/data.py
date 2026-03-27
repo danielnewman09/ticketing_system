@@ -14,10 +14,39 @@ from db.models import (
     OntologyNode,
     OntologyTriple,
     Predicate,
+    ProjectMeta,
     VerificationMethod,
 )
 
 log = logging.getLogger(__name__)
+
+
+def fetch_project_meta() -> dict:
+    """Fetch project metadata (single row), creating defaults if missing."""
+    with get_session() as session:
+        meta = session.query(ProjectMeta).filter_by(id=1).first()
+        if not meta:
+            meta = ProjectMeta(id=1, name="", description="", working_directory="")
+            session.add(meta)
+            session.flush()
+        return {
+            "name": meta.name,
+            "description": meta.description,
+            "working_directory": meta.working_directory,
+        }
+
+
+def update_project_meta(name: str, description: str, working_directory: str) -> bool:
+    """Update project metadata. Returns True on success."""
+    with get_session() as session:
+        meta = session.query(ProjectMeta).filter_by(id=1).first()
+        if not meta:
+            meta = ProjectMeta(id=1)
+            session.add(meta)
+        meta.name = name
+        meta.description = description
+        meta.working_directory = working_directory
+        return True
 
 
 def fetch_requirements_data():

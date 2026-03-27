@@ -52,6 +52,7 @@ from db.models.verification import (
     VerificationCondition,
     VerificationMethod,
 )
+from db.models.project import ProjectMeta
 from db.models.codebase import (
     CodebaseBase,
     CodebaseFile,
@@ -111,6 +112,8 @@ __all__ = [
     "VerificationAction",
     "VerificationCondition",
     "VerificationMethod",
+    # Project
+    "ProjectMeta",
     # Codebase (external, read-only)
     "CodebaseBase",
     "CodebaseFile",
