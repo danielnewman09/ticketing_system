@@ -25,8 +25,11 @@ Configure via environment variables:
 """
 
 import json
+import logging
 import os
 import re
+
+log = logging.getLogger("agents.llm_client")
 
 
 # ---------------------------------------------------------------------------
