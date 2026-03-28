@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Domain-specific AI agents for the ticketing system"
 requires-python = ">=3.12"
 dependencies = [
-    "llm-caller",
+    "llm-caller @ git+https://github.com/danielnewman09/llm-caller.git",
     "mcp[cli]>=1.0",
     "neo4j>=5.0",
     "ddgs>=7.0",
@@ -18,6 +18,9 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["ticketing_agent"]

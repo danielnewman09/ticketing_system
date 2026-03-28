@@ -21,7 +21,7 @@ Ticket management with requirements traceability and semantic search.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ./llm_caller -e ./ticketing_agent -e ".[dev]"
+pip install -e ./ticketing_agent -e ".[dev]"
 ```
 
 ### Adding dependencies

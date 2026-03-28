@@ -13,7 +13,7 @@ dependencies = [
     "sqlite-vec>=0.1.6",
     "sentence-transformers>=3.0",
     "nicegui>=2.0",
-    "llm-caller",
+    "llm-caller @ git+https://github.com/danielnewman09/llm-caller.git",
     "ticketing-agent",
 ]
 
@@ -21,6 +21,9 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["db", "requirements", "codebase", "components", "tickets", "search"]
