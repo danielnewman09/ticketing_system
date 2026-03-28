@@ -194,9 +194,9 @@ def main():
     print(result.get("summary", "(no summary)"))
     print()
 
-    files = result.get("files_created", [])
+    files = result.get("files_modified", [])
     if files:
-        print(f"Files created ({len(files)}):")
+        print(f"Files ({len(files)}):")
         for f in files:
             print(f"  {f}")
 

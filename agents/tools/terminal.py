@@ -124,6 +124,39 @@ TOOL_DEFINITIONS: list[dict] = [
         },
     },
     {
+        "name": "edit_file",
+        "description": (
+            "Replace an exact string match in a file with new content.  "
+            "Prefer this over write_file for targeted fixes."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Relative path to the file within the project.",
+                },
+                "old_string": {
+                    "type": "string",
+                    "description": (
+                        "The exact text to find in the file.  Must match exactly "
+                        "including whitespace and indentation."
+                    ),
+                },
+                "new_string": {
+                    "type": "string",
+                    "description": "The replacement text.",
+                },
+                "replace_all": {
+                    "type": "boolean",
+                    "description": "Replace all occurrences, not just the first.",
+                    "default": False,
+                },
+            },
+            "required": ["path", "old_string", "new_string"],
+        },
+    },
+    {
         "name": "write_file",
         "description": (
             "Create or overwrite a file inside the project working directory.  "
@@ -262,6 +295,37 @@ def _handle_list_directory(root: Path, path: str = ".", show_hidden: bool = Fals
     return {"path": str(target.relative_to(root)), "entries": entries}
 
 
+def _handle_edit_file(
+    root: Path, path: str, old_string: str, new_string: str, replace_all: bool = False,
+) -> dict:
+    target = (root / path).resolve()
+    if not _is_safe_path(root, target):
+        return {"error": f"Path '{path}' is outside the project directory"}
+    if not target.is_file():
+        return {"error": f"Not a file: {path}"}
+
+    try:
+        content = target.read_text(errors="replace")
+    except PermissionError:
+        return {"error": f"Permission denied: {path}"}
+
+    if old_string not in content:
+        return {"error": "old_string not found in file"}
+
+    if replace_all:
+        count = content.count(old_string)
+        new_content = content.replace(old_string, new_string)
+    else:
+        count = 1
+        new_content = content.replace(old_string, new_string, 1)
+
+    target.write_text(new_content)
+    return {
+        "path": str(target.relative_to(root)),
+        "replacements": count,
+    }
+
+
 def _handle_write_file(root: Path, path: str, content: str) -> dict:
     target = (root / path).resolve()
     if not _is_safe_path(root, target):
@@ -334,6 +398,7 @@ def make_dispatcher(working_directory: str | None = None):
         "run_command": lambda args: _handle_run_command(root, **args),
         "list_directory": lambda args: _handle_list_directory(root, **args),
         "read_file": lambda args: _handle_read_file(root, **args),
+        "edit_file": lambda args: _handle_edit_file(root, **args),
         "write_file": lambda args: _handle_write_file(root, **args),
     }
 

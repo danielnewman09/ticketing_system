@@ -1,9 +1,9 @@
 # Placeholder Source Files Template
 
 Variables to substitute:
-- `{{NAMESPACE}}` — C++ namespace (e.g., `my_engine_core`)
-- `{{LIB_DIR_NAME}}` — Library directory for includes (e.g., `my-engine-core`)
-- `{{LIB_TARGET_NAME}}` — Library target name (e.g., `my_engine_core`)
+- `{{NAMESPACE}}` — C++ namespace
+- `{{LIB_DIR_NAME}}` — Library directory for includes
+- `{{LIB_TARGET_NAME}}` — Library target name
 
 ## src/placeholder.hpp
 
