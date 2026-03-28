@@ -33,7 +33,8 @@ _NUDGE_MESSAGE = (
 # ---------------------------------------------------------------------------
 
 def _call_anthropic_loop(system, messages, tools, final_tool_name,
-                         tool_dispatcher, model, max_tokens, max_turns):
+                         tool_dispatcher, model, max_tokens, max_turns,
+                         on_turn=None):
     """Multi-turn Anthropic loop. Returns (final_tool_input, message_history)."""
     import anthropic
 
@@ -55,11 +56,15 @@ def _call_anthropic_loop(system, messages, tools, final_tool_name,
             log.debug("Tool loop turn %d: text-only response, nudging", turn + 1)
             history.append({"role": "assistant", "content": response.content})
             history.append({"role": "user", "content": _NUDGE_MESSAGE})
+            if on_turn:
+                on_turn(turn + 1, history)
             continue
 
         # Check if any call is the final tool
         for block in tool_calls:
             if block.name == final_tool_name:
+                if on_turn:
+                    on_turn(turn + 1, history)
                 return block.input, history
 
         # Dispatch intermediate tool calls
@@ -74,6 +79,8 @@ def _call_anthropic_loop(system, messages, tools, final_tool_name,
                 "content": result_str,
             })
         history.append({"role": "user", "content": tool_results})
+        if on_turn:
+            on_turn(turn + 1, history)
 
     raise RuntimeError(f"Tool loop exceeded max_turns={max_turns}")
 
@@ -84,7 +91,7 @@ def _call_anthropic_loop(system, messages, tools, final_tool_name,
 
 def _call_openai_loop(system, messages, tools, final_tool_name,
                       tool_dispatcher, model, max_tokens, max_turns,
-                      *, base_url=None, api_key=None):
+                      *, base_url=None, api_key=None, on_turn=None):
     """Multi-turn OpenAI-compatible loop. Returns (final_tool_input, message_history)."""
     from openai import OpenAI
 
@@ -111,11 +118,15 @@ def _call_openai_loop(system, messages, tools, final_tool_name,
                 "content": choice.message.content or "",
             })
             history.append({"role": "user", "content": _NUDGE_MESSAGE})
+            if on_turn:
+                on_turn(turn + 1, history)
             continue
 
         # Check for the final tool call
         for call in choice.message.tool_calls:
             if call.function.name == final_tool_name:
+                if on_turn:
+                    on_turn(turn + 1, history)
                 return json.loads(call.function.arguments), history
 
         # Append the full assistant message (OpenAI requires all tool_calls
@@ -147,6 +158,9 @@ def _call_openai_loop(system, messages, tools, final_tool_name,
                 "content": result_str,
             })
 
+        if on_turn:
+            on_turn(turn + 1, history)
+
     raise RuntimeError(f"Tool loop exceeded max_turns={max_turns}")
 
 
@@ -155,7 +169,8 @@ def _call_openai_loop(system, messages, tools, final_tool_name,
 # ---------------------------------------------------------------------------
 
 def _call_gemini_loop(system, messages, tools, final_tool_name,
-                      tool_dispatcher, model, max_tokens, max_turns):
+                      tool_dispatcher, model, max_tokens, max_turns,
+                      on_turn=None):
     """Multi-turn Gemini loop. Returns (final_tool_input, message_history)."""
     from google import genai
     from google.genai import types
@@ -218,11 +233,15 @@ def _call_gemini_loop(system, messages, tools, final_tool_name,
             contents.append(
                 types.Content(role="user", parts=[types.Part.from_text(text=_NUDGE_MESSAGE)])
             )
+            if on_turn:
+                on_turn(turn + 1, contents)
             continue
 
         # Check for the final tool call
         for part in func_calls:
             if part.function_call.name == final_tool_name:
+                if on_turn:
+                    on_turn(turn + 1, contents)
                 return dict(part.function_call.args), contents
 
         # Append model response and dispatch intermediate calls
@@ -239,6 +258,8 @@ def _call_gemini_loop(system, messages, tools, final_tool_name,
                 )
             )
         contents.append(types.Content(role="user", parts=response_parts))
+        if on_turn:
+            on_turn(turn + 1, contents)
 
     raise RuntimeError(f"Tool loop exceeded max_turns={max_turns}")
 
@@ -249,7 +270,7 @@ def _call_gemini_loop(system, messages, tools, final_tool_name,
 
 def _write_conversation_log(path, system, history, final_tool_name=""):
     """Write a multi-turn conversation to a file for traceability."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w") as f:
         f.write(f"# Tool Loop (final: {final_tool_name})\n\n")
         f.write("## System Prompt\n\n")
@@ -264,6 +285,14 @@ def _write_conversation_log(path, system, history, final_tool_name=""):
             else:
                 f.write(json.dumps(content, indent=2, default=str))
             f.write("\n\n")
+
+
+def _make_turn_logger(prompt_log_file, system, final_tool_name):
+    """Return an on_turn callback that rewrites the log file after each turn."""
+    def on_turn(turn_number, history):
+        _write_conversation_log(prompt_log_file, system, history, final_tool_name)
+        log.debug("Log updated after turn %d: %s", turn_number, prompt_log_file)
+    return on_turn
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +316,9 @@ def call_tool_loop(
     Non-final tool calls are dispatched to tool_dispatcher(name, args) -> str,
     and the result is fed back as a tool result message.
 
+    When *prompt_log_file* is set, the conversation log is **rewritten after
+    every turn** so you can tail the file and watch progress in real time.
+
     Args:
         system: System prompt text.
         messages: Initial message list (role + content).
@@ -299,33 +331,42 @@ def call_tool_loop(
         model: Model name override.
         max_tokens: Max tokens per turn.
         max_turns: Safety limit on loop iterations.
-        prompt_log_file: If set, write the full conversation to this path.
+        prompt_log_file: If set, write the full conversation to this path
+            after every turn (not just at the end).
 
     Returns:
         The parsed input dict from the final tool call.
     """
     model = _resolve_model(model, BACKEND)
 
+    on_turn = None
+    if prompt_log_file:
+        on_turn = _make_turn_logger(prompt_log_file, system, final_tool_name)
+
     if BACKEND == "openai":
         result, history = _call_openai_loop(
             system, messages, tools, final_tool_name,
             tool_dispatcher, model, max_tokens, max_turns,
+            on_turn=on_turn,
         )
     elif BACKEND == "gemini":
         result, history = _call_gemini_loop(
             system, messages, tools, final_tool_name,
             tool_dispatcher, model, max_tokens, max_turns,
+            on_turn=on_turn,
         )
     else:
         result, history = _call_anthropic_loop(
             system, messages, tools, final_tool_name,
             tool_dispatcher, model, max_tokens, max_turns,
+            on_turn=on_turn,
         )
 
+    # Final write to ensure the complete conversation is captured
     if prompt_log_file:
         _write_conversation_log(prompt_log_file, system, history, final_tool_name)
         response_path = os.path.splitext(prompt_log_file)[0] + "_response.json"
-        os.makedirs(os.path.dirname(response_path), exist_ok=True)
+        os.makedirs(os.path.dirname(response_path) or ".", exist_ok=True)
         with open(response_path, "w") as f:
             json.dump(result, f, indent=2)
 
