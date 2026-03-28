@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Domain-specific AI agents for the ticketing system"
 requires-python = ">=3.12"
 dependencies = [
-    "llm-caller @ git+https://github.com/danielnewman09/llm-caller.git",
+    "llm-caller",
     "mcp[cli]>=1.0",
     "neo4j>=5.0",
     "ddgs>=7.0",
