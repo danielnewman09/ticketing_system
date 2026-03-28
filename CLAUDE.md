@@ -8,7 +8,7 @@ Ticket management with requirements traceability and semantic search.
 - **Migrations**: Alembic
 - **Frontend**: NiceGUI
 - **Search**: sqlite-vec + sentence-transformers
-- **AI agents**: Anthropic API + MCP server
+- **AI agents**: llm_caller (multi-backend) + ticketing_agent (domain agents) + MCP server
 
 ## Python Environment
 
@@ -21,7 +21,7 @@ Ticket management with requirements traceability and semantic search.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ./llm_caller -e ./ticketing_agent -e ".[dev]"
 ```
 
 ### Adding dependencies
@@ -44,7 +44,7 @@ Then visit http://127.0.0.1:8081
 ## MCP Server
 
 ```bash
-python -m agents.mcp_server
+python -m ticketing_agent.mcp_server
 ```
 
 ## Demo Pipeline
@@ -69,17 +69,31 @@ pytest
 ## Project Structure
 
 ```
+llm_caller/            # Standalone LLM client library (separate package)
+  llm_caller/
+    backends/          # anthropic.py, openai.py, gemini.py
+    tools/             # terminal.py (sandboxed file/command tools)
+    client.py          # call_tool, call_text, call_reasoned_tool
+    tool_loop.py       # call_tool_loop (multi-turn)
+    skill_runner.py    # Generic skill runner
+    config.py          # Env var configuration
+ticketing_agent/       # Domain-specific agents (separate package)
+  ticketing_agent/
+    design/            # OO design, ontology, scaffolding, dependencies
+    review/            # HLR review, challenge design, conflict detection
+    verify/            # Verification procedure generation
+    decompose/         # HLR → LLR decomposition
+    search/            # Web search for dependency discovery
+    mcp_server.py      # MCP server exposing persistence tools
 db/                    # SQLAlchemy models, session management, events
   models/              # One file per domain (components, tickets, etc.)
   base.py              # DeclarativeBase
   events.py            # Event listeners (replaces Django signals)
   vec.py               # sqlite-vec virtual table setup
 alembic/               # Alembic migration config
-agents/                # AI agents (design, review, verify)
-requirements/          # Schemas, services, agents for requirements
+requirements/          # Schemas and services for requirements
   schemas.py           # Pydantic schemas
   services/            # Persistence service layer
-  agents/              # Decomposition agent
 codebase/              # Pydantic schemas for design pipeline
 search/                # Embedding generation and vector search
 ```

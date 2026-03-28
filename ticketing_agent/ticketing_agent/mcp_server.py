@@ -79,7 +79,7 @@ def list_ontology() -> str:
 @mcp.tool()
 def get_graph_metrics() -> str:
     """Compute structural metrics for the requirements-ontology graph."""
-    from agents.review.challenge_design import compute_graph_metrics, format_metrics_for_prompt
+    from ticketing_agent.review.challenge_design import compute_graph_metrics, format_metrics_for_prompt
 
     with get_session() as session:
         hlrs = [{"id": h.id, "description": h.description} for h in session.query(HighLevelRequirement).all()]

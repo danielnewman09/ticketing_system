@@ -214,7 +214,7 @@ def _do_research(component_id: int) -> dict:
                 for d in dm.dependencies:
                     existing_deps.append(d.name)
 
-    from agents.design.research_dependencies import research_dependencies
+    from ticketing_agent.design.research_dependencies import research_dependencies
     return research_dependencies(
         component_name=comp.name,
         component_description=comp.description or "",

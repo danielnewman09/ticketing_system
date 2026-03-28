@@ -9,7 +9,7 @@ Usage
 -----
 ::
 
-    from agents.skill_runner import run_skill
+    from llm_caller.skill_runner import run_skill
 
     result = run_skill(
         skill_dir="skills/cpp-project-scaffold",
@@ -21,10 +21,10 @@ Usage
 import logging
 from pathlib import Path
 
-from agents.llm_tool_loop import call_tool_loop
-from agents.tools.terminal import TOOL_DEFINITIONS, make_dispatcher
+from llm_caller.tool_loop import call_tool_loop
+from llm_caller.tools.terminal import TOOL_DEFINITIONS, make_dispatcher
 
-log = logging.getLogger("agents.skill_runner")
+log = logging.getLogger("llm_caller.skill_runner")
 
 
 # ---------------------------------------------------------------------------

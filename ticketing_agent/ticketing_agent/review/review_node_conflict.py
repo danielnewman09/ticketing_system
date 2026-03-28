@@ -13,9 +13,9 @@ It also ensures that any resolution correctly updates triples and
 preserves HLR/LLR mapping integrity.
 """
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 
-from agents.review.review_node_conflict_prompt import (
+from ticketing_agent.review.review_node_conflict_prompt import (
     SYSTEM_PROMPT,
     TOOL_DEFINITION,
     NodeResolution,

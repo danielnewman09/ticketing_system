@@ -12,13 +12,13 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 
 import json
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 from db.models import Predicate
 from db.models.ontology import NODE_KIND_VALUES
 from codebase.schemas import DesignSchema
 from db.models.requirements import format_hlrs_for_prompt
 
-from agents.design.design_ontology_prompt import (
+from ticketing_agent.design.design_ontology_prompt import (
     SYSTEM_PROMPT,
     build_specializations_section,
 )

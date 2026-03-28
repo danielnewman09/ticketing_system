@@ -9,10 +9,10 @@ decompose_hlr (stage 1), so that decomposition and OO design are
 dependency-aware.
 """
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 from db.models.requirements import format_hlrs_for_prompt
 
-from agents.design.assess_dependencies_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
+from ticketing_agent.design.assess_dependencies_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
 
 
 def assess_dependencies(

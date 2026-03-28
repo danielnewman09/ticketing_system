@@ -10,9 +10,9 @@ import logging
 import os
 
 from codebase.schemas import DesignSchema, OODesignSchema
-from agents.design.design_oo import design_oo
-from agents.design.map_to_ontology import map_oo_to_ontology
-from agents.design.order_hlrs import order_hlrs
+from ticketing_agent.design.design_oo import design_oo
+from ticketing_agent.design.map_to_ontology import map_oo_to_ontology
+from ticketing_agent.design.order_hlrs import order_hlrs
 
 log = logging.getLogger("agents.design")
 

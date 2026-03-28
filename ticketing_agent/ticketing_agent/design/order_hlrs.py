@@ -9,10 +9,10 @@ This ensures that when designing classes for a later HLR, the classes it
 depends on already exist in the ontology.
 """
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 from db.models.requirements import format_hlrs_for_prompt
 
-from agents.design.order_hlrs_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
+from ticketing_agent.design.order_hlrs_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
 
 
 def order_hlrs(

@@ -378,7 +378,7 @@ def review_class_design(session: Session):
 
 def violations_to_challenges(violations):
     """Convert violation objects to DesignChallenge objects."""
-    from agents.review.challenge_design import DesignChallenge
+    from ticketing_agent.review.challenge_design import DesignChallenge
 
     challenges = []
     for v in violations:
@@ -525,7 +525,7 @@ def _is_nested_enum_value(session: Session, existing_node):
 
 def sanitize_new_nodes(session: Session, plan, prompt_log_file=""):
     """Check proposed new_nodes against existing nodes for near-duplicates."""
-    from agents.review.review_node_conflict import review_conflicts
+    from ticketing_agent.review.review_node_conflict import review_conflicts
 
     if not plan.new_nodes:
         return []

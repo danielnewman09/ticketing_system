@@ -13,10 +13,10 @@ Runs after design_ontology so it can reference concrete ontology members.
 
 import json
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 from requirements.schemas import VerificationSchema
 
-from agents.verify.verify_llr_prompt import (
+from ticketing_agent.verify.verify_llr_prompt import (
     SYSTEM_PROMPT,
     TOOL_DEFINITION,
     format_structured_context,

@@ -8,7 +8,7 @@ Usage
 -----
 ::
 
-    from agents.design.scaffold_project import scaffold_project
+    from ticketing_agent.design.scaffold_project import scaffold_project
 
     result = scaffold_project(
         skill_dir="skills/cpp-project-scaffold",
@@ -21,8 +21,8 @@ Usage
     )
 """
 
-from agents.skill_runner import run_skill
-from agents.design.scaffold_project_prompt import build_user_message
+from llm_caller.skill_runner import run_skill
+from ticketing_agent.design.scaffold_project_prompt import build_user_message
 
 
 def scaffold_project(

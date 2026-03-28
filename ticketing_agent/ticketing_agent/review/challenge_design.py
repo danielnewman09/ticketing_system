@@ -16,9 +16,9 @@ than counting.
 import json
 from collections import defaultdict
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 
-from agents.review.challenge_design_prompt import (
+from ticketing_agent.review.challenge_design_prompt import (
     SYSTEM_PROMPT,
     TOOL_DEFINITION,
     DesignChallenge,

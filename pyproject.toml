@@ -12,12 +12,9 @@ dependencies = [
     "alembic>=1.13",
     "sqlite-vec>=0.1.6",
     "sentence-transformers>=3.0",
-    "anthropic>=0.84",
-    "google-genai>=1.0",
-    "mcp[cli]>=1.0",
     "nicegui>=2.0",
-    "neo4j>=5.0",
-    "ddgs>=7.0",
+    "llm-caller",
+    "ticketing-agent",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +23,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["db", "agents", "requirements", "codebase", "components", "tickets", "search"]
+packages = ["db", "requirements", "codebase", "components", "tickets", "search"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

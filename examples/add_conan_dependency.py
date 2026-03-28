@@ -35,7 +35,7 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from agents.skill_runner import run_skill
+from llm_caller.skill_runner import run_skill
 
 
 def parse_args() -> argparse.Namespace:

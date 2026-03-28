@@ -80,7 +80,7 @@ def step_assign_components():
     print("STEP 2: Create HLRs and assign components")
     print("=" * 60)
 
-    from agents.design.assign_components import assign_components
+    from ticketing_agent.design.assign_components import assign_components
 
     with get_session() as session:
         for desc in HLR_DESCRIPTIONS:
@@ -151,7 +151,7 @@ def step_research_dependencies():
     print("STEP 2.5: Research dependencies for each component")
     print("=" * 60)
 
-    from agents.design.research_dependencies import research_dependencies
+    from ticketing_agent.design.research_dependencies import research_dependencies
     from frontend.data import save_recommendations
 
     with get_session() as session:
@@ -225,7 +225,7 @@ def step_decompose():
     print("STEP 3: Decompose requirements")
     print("=" * 60)
 
-    from requirements.agents.decompose_hlr import decompose
+    from ticketing_agent.decompose.decompose_hlr import decompose
     from requirements.services.persistence import persist_decomposition
 
     with get_session() as session:
@@ -265,7 +265,7 @@ def step_design():
     print("=" * 60)
     print("  Designing each HLR individually in dependency order...\n")
 
-    from agents.design.design_per_hlr import design_all_hlrs
+    from ticketing_agent.design.design_per_hlr import design_all_hlrs
     from requirements.services.persistence import persist_design
 
     with get_session() as session:
@@ -321,7 +321,7 @@ def step_verify():
     print("STEP 5: Verify — flesh out LLR verification procedures")
     print("=" * 60)
 
-    from agents.verify.verify_llr import verify
+    from ticketing_agent.verify.verify_llr import verify
     from requirements.services.persistence import (
         build_verification_context,
         persist_verification,

@@ -5,10 +5,10 @@ a more robust, complete set with rationale for each change.
 Used interactively: the user sees the proposals and decides which to keep.
 """
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 from db.models.requirements import format_hlrs_for_prompt
 
-from agents.review.review_hlrs_prompt import (
+from ticketing_agent.review.review_hlrs_prompt import (
     SYSTEM_PROMPT,
     TOOL_DEFINITION,
     ProposedHLR,

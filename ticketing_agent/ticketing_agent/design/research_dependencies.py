@@ -9,10 +9,10 @@ Runs after assign_components so each component has HLRs and a description.
 
 import logging
 
-from agents.llm_client import call_tool
-from agents.search.web_search import search_and_enrich
+from llm_caller import call_tool
+from ticketing_agent.search.web_search import search_and_enrich
 
-from agents.design.research_dependencies_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
+from ticketing_agent.design.research_dependencies_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
 
 log = logging.getLogger(__name__)
 

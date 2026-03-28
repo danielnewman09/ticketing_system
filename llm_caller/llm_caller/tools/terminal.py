@@ -1,18 +1,14 @@
 """Terminal command tool for the LLM tool loop.
 
 Provides a sandboxed ``run_command`` tool that executes shell commands
-**only** inside the configured project working directory.  The working
-directory is read from the ``ProjectMeta`` table so it stays in sync
-with whatever the user set in the dashboard.
+**only** inside the configured project working directory.
 
 Usage
 -----
 ::
 
-    from agents.tools.terminal import TOOL_DEFINITIONS, make_dispatcher
+    from llm_caller.tools.terminal import TOOL_DEFINITIONS, make_dispatcher
 
-    dispatcher = make_dispatcher()          # reads working_directory from DB
-    # -- or supply it explicitly --
     dispatcher = make_dispatcher("/abs/path/to/project")
 
     # Feed TOOL_DEFINITIONS + dispatcher into call_tool_loop's extra_tools
@@ -26,7 +22,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
-log = logging.getLogger("agents.tools.terminal")
+log = logging.getLogger("llm_caller.tools.terminal")
 
 # Hard cap on stdout/stderr returned to the LLM to avoid blowing up context.
 _MAX_OUTPUT_CHARS = 30_000
@@ -424,7 +420,7 @@ def make_composite_dispatcher(
 
     Use this to combine terminal tools with other tool dispatchers::
 
-        from agents.tools.terminal import TOOL_DEFINITIONS, make_composite_dispatcher
+        from llm_caller.tools.terminal import TOOL_DEFINITIONS, make_composite_dispatcher
 
         dispatcher = make_composite_dispatcher(
             existing_dispatcher,

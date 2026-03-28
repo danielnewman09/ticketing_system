@@ -8,10 +8,10 @@ This runs before decomposition so that each HLR has architectural context,
 which helps the decompose agent maintain separation of concerns.
 """
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 from db.models.requirements import format_hlrs_for_prompt
 
-from agents.design.assign_components_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
+from ticketing_agent.design.assign_components_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
 
 
 def assign_components(

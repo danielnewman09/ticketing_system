@@ -7,7 +7,7 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 
 import json
 
-from agents.llm_client import call_tool
+from llm_caller import call_tool
 from db.models.requirements import format_hlr_dict
 from requirements.schemas import DecomposedRequirementSchema as DecomposedRequirement
 

@@ -11,12 +11,12 @@ Uses the more capable model via call_tool (single-model reasoning + tool call).
 import logging
 from typing import Callable
 
-from agents.llm_client import call_tool
-from agents.llm_tool_loop import call_tool_loop
+from llm_caller import call_tool
+from llm_caller import call_tool_loop
 from codebase.schemas import OODesignSchema
 from db.models.requirements import format_hlrs_for_prompt
 
-from agents.design.design_oo_prompt import (
+from ticketing_agent.design.design_oo_prompt import (
     SYSTEM_PROMPT,
     TOOL_DEFINITION,
     build_specializations_section,
