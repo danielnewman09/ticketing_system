@@ -12,6 +12,8 @@ from frontend.data import (
     save_recommendations,
     update_recommendation_status,
     accept_recommendation,
+    add_manual_recommendation,
+    reject_use_stdlib,
 )
 
 
@@ -47,6 +49,41 @@ async def dependency_review_page(component_id: int):
                 "Run Research", icon="science",
                 on_click=lambda: run_research(),
             ).props("color=primary size=sm")
+            ui.button(
+                "Add Manually", icon="add",
+                on_click=lambda: add_dialog.open(),
+            ).props("size=sm outline").classes("text-white border-white")
+
+    # --- Add-manually dialog ---
+
+    with ui.dialog() as add_dialog, ui.card().classes("w-96"):
+        ui.label("Add Dependency").classes("text-lg font-bold mb-2")
+        name_input = ui.input("Package name").classes("w-full")
+        version_input = ui.input("Version").classes("w-full")
+        url_input = ui.input("GitHub URL").classes("w-full")
+        with ui.row().classes("w-full justify-end gap-2 mt-2"):
+            ui.button("Cancel", on_click=add_dialog.close).props("flat size=sm")
+            ui.button(
+                "Add", icon="check",
+                on_click=lambda: submit_manual(),
+            ).props("color=primary size=sm")
+
+    async def submit_manual():
+        name = name_input.value.strip()
+        if not name:
+            ui.notify("Package name is required", type="warning")
+            return
+        await asyncio.to_thread(add_manual_recommendation, component_id, {
+            "name": name,
+            "version": version_input.value.strip(),
+            "github_url": url_input.value.strip(),
+        })
+        add_dialog.close()
+        name_input.value = ""
+        version_input.value = ""
+        url_input.value = ""
+        ui.notify(f"Added {name}", type="positive")
+        await recs_section.refresh()
 
     # --- Handlers ---
 
@@ -66,14 +103,24 @@ async def dependency_review_page(component_id: int):
         except Exception as e:
             ui.notify(f"Research failed: {e}", type="negative")
 
-    async def do_accept(rec_id: int, name: str):
+    async def do_accept(rec_id: int, name: str, pending_recs: list[dict]):
         await asyncio.to_thread(accept_recommendation, rec_id)
-        ui.notify(f"Accepted {name} — added to dependencies", type="positive")
+        # Reject the rest
+        for rec in pending_recs:
+            if rec["id"] != rec_id:
+                await asyncio.to_thread(update_recommendation_status, rec["id"], "rejected")
+        ui.notify(f"Accepted {name} — rejected others", type="positive")
         await recs_section.refresh()
 
     async def do_reject(rec_id: int, name: str):
         await asyncio.to_thread(update_recommendation_status, rec_id, "rejected")
         ui.notify(f"Rejected {name}", type="info")
+        await recs_section.refresh()
+
+    async def do_use_stdlib_all(pending_recs: list[dict]):
+        for rec in pending_recs:
+            await asyncio.to_thread(reject_use_stdlib, rec["id"])
+        ui.notify("Rejected all — will use standard library", type="info")
         await recs_section.refresh()
 
     # --- Recommendations list ---
@@ -100,20 +147,35 @@ async def dependency_review_page(component_id: int):
         # Group by status
         pending = [r for r in recs if r["status"] == "pending"]
         accepted = [r for r in recs if r["status"] == "accepted"]
+        stdlib = [r for r in recs if r["status"] == "rejected_stdlib"]
         rejected = [r for r in recs if r["status"] == "rejected"]
 
         if pending:
-            ui.label("Pending Review").classes(
-                "text-sm font-semibold text-gray-300 px-2 mt-2 mb-2"
-            )
+            with ui.row().classes("w-full items-center justify-between px-2 mt-2 mb-2"):
+                ui.label("Pending Review").classes(
+                    "text-sm font-semibold text-gray-300"
+                )
+                ui.button(
+                    "Use Standard Library", icon="code",
+                    on_click=lambda p=pending: do_use_stdlib_all(p),
+                ).props("size=sm outline").classes("text-blue-400 border-blue-400").tooltip(
+                    "Reject all pending and use standard library instead"
+                )
             for rec in pending:
-                _render_recommendation_card(rec, show_actions=True)
+                _render_recommendation_card(rec, show_actions=True, pending_recs=pending)
 
         if accepted:
             ui.label("Accepted").classes(
                 "text-sm font-semibold text-green-400 px-2 mt-4 mb-2"
             )
             for rec in accepted:
+                _render_recommendation_card(rec, show_actions=False)
+
+        if stdlib:
+            ui.label("Using Standard Library").classes(
+                "text-sm font-semibold text-blue-400 px-2 mt-4 mb-2"
+            )
+            for rec in stdlib:
                 _render_recommendation_card(rec, show_actions=False)
 
         if rejected:
@@ -123,10 +185,12 @@ async def dependency_review_page(component_id: int):
             for rec in rejected:
                 _render_recommendation_card(rec, show_actions=False)
 
-    def _render_recommendation_card(rec: dict, show_actions: bool):
+    def _render_recommendation_card(rec: dict, show_actions: bool, pending_recs: list[dict] | None = None):
         status_style = ""
         if rec["status"] == "accepted":
             status_style = "border-left: 3px solid #10b981;"
+        elif rec["status"] == "rejected_stdlib":
+            status_style = "border-left: 3px solid #60a5fa; opacity: 0.7;"
         elif rec["status"] == "rejected":
             status_style = "border-left: 3px solid #6b7280; opacity: 0.6;"
 
@@ -147,14 +211,22 @@ async def dependency_review_page(component_id: int):
                     with ui.row().classes("gap-1"):
                         ui.button(
                             "Accept", icon="check",
-                            on_click=lambda _, r=rec: do_accept(r["id"], r["name"]),
+                            on_click=lambda _, r=rec, p=pending_recs: do_accept(r["id"], r["name"], p or []),
                         ).props("color=positive size=sm")
                         ui.button(
                             "Reject", icon="close",
                             on_click=lambda _, r=rec: do_reject(r["id"], r["name"]),
                         ).props("color=negative size=sm outline")
                 else:
-                    ui.badge(rec["status"], color="positive" if rec["status"] == "accepted" else "grey")
+                    status_label = rec["status"]
+                    if status_label == "rejected_stdlib":
+                        status_label = "stdlib"
+                    status_color = {
+                        "accepted": "positive",
+                        "rejected": "grey",
+                        "rejected_stdlib": "blue-grey",
+                    }.get(rec["status"], "grey")
+                    ui.badge(status_label, color=status_color)
 
             # GitHub link
             if rec["github_url"]:

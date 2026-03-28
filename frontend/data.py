@@ -766,6 +766,37 @@ def accept_recommendation(rec_id: int) -> bool:
         return True
 
 
+def add_manual_recommendation(component_id: int, rec: dict) -> int:
+    """Add a manually researched dependency recommendation. Returns the new record ID."""
+    with get_session() as session:
+        obj = DependencyRecommendation(
+            component_id=component_id,
+            name=rec.get("name", ""),
+            github_url=rec.get("github_url", ""),
+            description=rec.get("description", ""),
+            version=rec.get("version", ""),
+            stars=rec.get("stars", 0),
+            license=rec.get("license", ""),
+            pros=rec.get("pros"),
+            cons=rec.get("cons"),
+            summary="Manually added",
+            status="pending",
+        )
+        session.add(obj)
+        session.flush()
+        return obj.id
+
+
+def reject_use_stdlib(rec_id: int) -> bool:
+    """Reject a recommendation with a note that stdlib will be used instead."""
+    with get_session() as session:
+        rec = session.query(DependencyRecommendation).filter_by(id=rec_id).first()
+        if not rec:
+            return False
+        rec.status = "rejected_stdlib"
+        return True
+
+
 def fetch_pending_recommendations_summary() -> list[dict]:
     """Fetch components that have pending dependency recommendations.
 
