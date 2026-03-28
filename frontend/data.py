@@ -2,8 +2,8 @@
 
 import logging
 
-from db import get_session
-from db.models import (
+from backend.db import get_session
+from backend.db.models import (
     Component,
     Dependency,
     DependencyManager,
@@ -394,8 +394,8 @@ def decompose_hlr(hlr_id: int) -> dict:
 
     Returns dict with llrs_created and verifications_created.
     """
-    from requirements.agents.decompose_hlr import decompose
-    from requirements.services.persistence import persist_decomposition
+    from backend.requirements.agents.decompose_hlr import decompose
+    from backend.requirements.services.persistence import persist_decomposition
 
     with get_session() as session:
         hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
@@ -459,7 +459,7 @@ def fetch_ontology_graph_data(
 ) -> dict:
     """Fetch design graph from Neo4j for Cytoscape.js rendering."""
     try:
-        from db.neo4j_queries import fetch_design_graph
+        from backend.db.neo4j_queries import fetch_design_graph
         return fetch_design_graph(kind_filter, search, component_id)
     except Exception:
         log.warning("Neo4j query failed — returning empty graph", exc_info=True)
@@ -472,7 +472,7 @@ def fetch_codebase_graph_data(
 ) -> dict:
     """Fetch the as-built codebase graph from Neo4j for Cytoscape.js rendering."""
     try:
-        from db.neo4j_queries import fetch_codebase_graph
+        from backend.db.neo4j_queries import fetch_codebase_graph
         return fetch_codebase_graph(search, namespace_filter)
     except Exception:
         log.warning("Neo4j codebase query failed — returning empty graph", exc_info=True)
@@ -482,7 +482,7 @@ def fetch_codebase_graph_data(
 def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
     """Fetch the ontology subgraph around an HLR for Cytoscape.js."""
     try:
-        from db.neo4j_queries import fetch_hlr_subgraph
+        from backend.db.neo4j_queries import fetch_hlr_subgraph
         return fetch_hlr_subgraph(hlr_id, component_id)
     except Exception:
         log.warning("Neo4j HLR subgraph query failed — returning empty graph", exc_info=True)
@@ -492,7 +492,7 @@ def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
 def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
     """Fetch the 1-hop neighbourhood graph with collapsed members."""
     try:
-        from db.neo4j_queries import fetch_neighbourhood_graph
+        from backend.db.neo4j_queries import fetch_neighbourhood_graph
         return fetch_neighbourhood_graph(qualified_name)
     except Exception:
         log.warning("Neo4j neighbourhood query failed", exc_info=True)
@@ -502,7 +502,7 @@ def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
 def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     """Fetch node detail from Neo4j (properties + relationships + requirements)."""
     try:
-        from db.neo4j_queries import fetch_node_detail
+        from backend.db.neo4j_queries import fetch_node_detail
         return fetch_node_detail(qualified_name)
     except Exception:
         log.warning("Neo4j node detail query failed", exc_info=True)
@@ -568,7 +568,7 @@ def update_member_type(qualified_name: str, type_signature: str) -> bool:
         node.type_signature = type_signature
     # Also update Neo4j
     try:
-        from db.neo4j import get_neo4j_session
+        from backend.db.neo4j import get_neo4j_session
         with get_neo4j_session() as ns:
             ns.run(
                 "MATCH (n:Design {qualified_name: $qn}) SET n.type_signature = $ts",
@@ -585,7 +585,7 @@ def update_member_type(qualified_name: str, type_signature: str) -> bool:
 
 def ensure_component_language(component_id: int, language_name: str, version: str = "") -> int:
     """Ensure a component has a language set, creating it if needed. Returns language id."""
-    from db import get_or_create
+    from backend.db import get_or_create
     with get_session() as session:
         lang, _ = get_or_create(session, Language, defaults={"version": version}, name=language_name)
         comp = session.query(Component).filter_by(id=component_id).first()
@@ -718,7 +718,7 @@ def accept_recommendation(rec_id: int) -> bool:
 
     If no dependency manager exists, creates one automatically.
     """
-    from db import get_or_create
+    from backend.db import get_or_create
 
     with get_session() as session:
         rec = session.query(DependencyRecommendation).filter_by(id=rec_id).first()

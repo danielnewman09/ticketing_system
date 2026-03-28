@@ -193,8 +193,8 @@ async def dependency_review_page(component_id: int):
 
 def _do_research(component_id: int) -> dict:
     """Run the research agent (called in a thread)."""
-    from db import get_session
-    from db.models import Component, HighLevelRequirement
+    from backend.db import get_session
+    from backend.db.models import Component, HighLevelRequirement
 
     with get_session() as session:
         comp = session.query(Component).filter_by(id=component_id).first()
@@ -214,7 +214,7 @@ def _do_research(component_id: int) -> dict:
                 for d in dm.dependencies:
                     existing_deps.append(d.name)
 
-    from ticketing_agent.design.research_dependencies import research_dependencies
+    from backend.ticketing_agent.design.research_dependencies import research_dependencies
     return research_dependencies(
         component_name=comp.name,
         component_description=comp.description or "",

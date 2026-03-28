@@ -1,6 +1,6 @@
 ---
 name: cpp-project-scaffold
-description: Scaffold a new C++20+ project with Conan 2.x, GTest, CMake presets, Doxygen documentation pipeline (SQLite + Neo4j codebase databases), component-based library structure, VSCode tasks, coverage, benchmarking, and profiling support. Produces a complete, buildable project skeleton.
+description: Scaffold a new C++20+ project with Conan 2.x, GTest, CMake presets, Doxygen documentation pipeline (SQLite + Neo4j via doxygen-index library), component-based library structure, VSCode tasks, coverage, benchmarking, and profiling support. Produces a complete, buildable project skeleton.
 
 <example>
 Context: User wants to create a brand-new C++ project from scratch.
@@ -27,13 +27,13 @@ Generates a complete, buildable C++20+ project skeleton with:
 - **Conan 2.x** dependency management (GTest included by default)
 - **CMake presets** for Debug/Release builds, per-component builds, and tooling targets
 - **GTest** integration with a reusable `add_project_test()` helper
-- **Doxygen** documentation pipeline → SQLite codebase database → Neo4j graph database
+- **Doxygen** documentation pipeline → SQLite / Neo4j via `doxygen-index` library
 - **VSCode tasks** for build, test, coverage, and documentation
 - **Code coverage** (lcov/genhtml)
 - **Optional benchmarking** (Google Benchmark)
 - **Optional profiling** (macOS Instruments)
 - **Component-based library structure** with per-library CMakeLists patterns
-- **Python environment** for documentation indexing scripts
+- **Python environment** with `doxygen-index` for documentation indexing
 
 ## Inputs
 
@@ -59,11 +59,7 @@ For each library, optionally specify:
 │
 ├── python/
 │   ├── setup.sh                # Python venv setup script
-│   └── requirements.txt        # Python dependencies (doxygen indexing)
-│
-├── scripts/
-│   ├── doxygen_to_sqlite.py    # Doxygen XML → SQLite database
-│   └── doxygen_to_neo4j.py     # Doxygen XML → Neo4j graph database
+│   └── requirements.txt        # Python dependencies (doxygen-index)
 │
 ├── .vscode/
 │   └── tasks.json              # Build, test, coverage tasks
@@ -186,19 +182,9 @@ Use the template from `assets/doxyfile.in.md`. Features:
 ### 8. Generate Python Environment
 
 **python/setup.sh** — Creates venv and installs requirements
-**python/requirements.txt** — neo4j driver (for Neo4j ingestion)
+**python/requirements.txt** — `doxygen-index` library (provides SQLite + Neo4j ingestion from Doxygen XML)
 
-### 9. Generate Documentation Scripts
-
-**scripts/doxygen_to_sqlite.py** — Parses Doxygen XML, creates SQLite codebase database with:
-- Files, classes, functions, parameters, includes, documentation tables
-- FTS5 full-text search index
-
-**scripts/doxygen_to_neo4j.py** — Parses Doxygen XML, creates Neo4j property graph with:
-- File, Class, Function, Parameter nodes
-- CONTAINS, CALLS, INCLUDES, INHERITS relationships
-
-### 10. Generate VSCode Tasks
+### 9. Generate VSCode Tasks
 
 Use the template from `assets/vscode-tasks.json.md`. Tasks:
 - **Conan Build** (default) — `conan build . --build=missing -s build_type={Debug|Release}`
@@ -207,25 +193,23 @@ Use the template from `assets/vscode-tasks.json.md`. Tasks:
 - **Open Coverage Report** — opens HTML report
 - **Run clang-tidy** — static analysis
 
-### 11. Generate .gitignore
+### 10. Generate .gitignore
 
 Standard C++ project gitignore including `build/`, `installs/`, `python/.venv/`, etc.
 
-### 12. Generate Placeholder Source Files
+### 11. Generate Placeholder Source Files
 
 For each compiled library:
 - `src/placeholder.cpp` with namespace and a stub function
 - `src/placeholder.hpp` with header guard and declaration
 - `test/placeholder_test.cpp` with a GTest that includes the header
 
-### 13. Verify Build
+### 12. Verify Build
 
 After generation, run:
 ```bash
 cd {project-name}
-python3 -m venv python/.venv
-source python/.venv/bin/activate
-pip install neo4j
+python/setup.sh
 conan install . --build=missing -s build_type=Debug
 cmake --preset conan-debug
 cmake --build --preset conan-debug
@@ -246,5 +230,5 @@ Report success or any issues.
 - Test targets append `_test`: `{project}_{lib}_test`
 - The generated project is immediately buildable after `conan install`
 - GTest is always included; other dependencies are user-configurable
-- The Python environment is minimal (just neo4j driver for graph database ingestion)
-- The doxygen scripts are self-contained Python using only stdlib + neo4j driver
+- The Python environment installs `doxygen-index` which handles all Doxygen XML → database ingestion
+- `doxygen-index` also supports indexing Conan dependencies via `doxygen-index full`

@@ -20,9 +20,9 @@ Requires ANTHROPIC_API_KEY in the environment.
 import os
 import sys
 
-from db import init_db, get_session, get_or_create
-from db.base import Base
-from db.models import (
+from backend.db import init_db, get_session, get_or_create
+from backend.db.base import Base
+from backend.db.models import (
     Component,
     HighLevelRequirement,
     LowLevelRequirement,
@@ -33,7 +33,7 @@ from db.models import (
     VerificationCondition,
     VerificationMethod,
 )
-from db.vec import ensure_vec_table
+from backend.db.vec import ensure_vec_table
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -52,8 +52,8 @@ def step_flush():
     print("STEP 1: Flush database")
     print("=" * 60)
 
-    from db import get_main_engine
-    from db.neo4j_sync import clear_design_graph
+    from backend.db import get_main_engine
+    from backend.db.neo4j_sync import clear_design_graph
 
     engine = get_main_engine()
     Base.metadata.drop_all(engine)
@@ -80,7 +80,7 @@ def step_assign_components():
     print("STEP 2: Create HLRs and assign components")
     print("=" * 60)
 
-    from ticketing_agent.design.assign_components import assign_components
+    from backend.ticketing_agent.design.assign_components import assign_components
 
     with get_session() as session:
         for desc in HLR_DESCRIPTIONS:
@@ -151,7 +151,7 @@ def step_research_dependencies():
     print("STEP 2.5: Research dependencies for each component")
     print("=" * 60)
 
-    from ticketing_agent.design.research_dependencies import research_dependencies
+    from backend.ticketing_agent.design.research_dependencies import research_dependencies
     from frontend.data import save_recommendations
 
     with get_session() as session:
@@ -225,8 +225,8 @@ def step_decompose():
     print("STEP 3: Decompose requirements")
     print("=" * 60)
 
-    from ticketing_agent.decompose.decompose_hlr import decompose
-    from requirements.services.persistence import persist_decomposition
+    from backend.ticketing_agent.decompose.decompose_hlr import decompose
+    from backend.requirements.services.persistence import persist_decomposition
 
     with get_session() as session:
         hlrs = session.query(HighLevelRequirement).all()
@@ -265,8 +265,8 @@ def step_design():
     print("=" * 60)
     print("  Designing each HLR individually in dependency order...\n")
 
-    from ticketing_agent.design.design_per_hlr import design_all_hlrs
-    from requirements.services.persistence import persist_design
+    from backend.ticketing_agent.design.design_per_hlr import design_all_hlrs
+    from backend.requirements.services.persistence import persist_design
 
     with get_session() as session:
         hlrs = [
@@ -321,8 +321,8 @@ def step_verify():
     print("STEP 5: Verify — flesh out LLR verification procedures")
     print("=" * 60)
 
-    from ticketing_agent.verify.verify_llr import verify
-    from requirements.services.persistence import (
+    from backend.ticketing_agent.verify.verify_llr import verify
+    from backend.requirements.services.persistence import (
         build_verification_context,
         persist_verification,
         augment_design_for_unresolved,

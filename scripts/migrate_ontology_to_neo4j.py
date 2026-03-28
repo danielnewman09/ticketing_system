@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import sys
 
-from db import init_db, get_session
-from db.neo4j import verify_connection, get_neo4j_session
-from db.neo4j_constraints import ensure_neo4j_constraints
-from db.neo4j_sync import sync_full_design
+from backend.db import init_db, get_session
+from backend.db.neo4j import verify_connection, get_neo4j_session
+from backend.db.neo4j_constraints import ensure_neo4j_constraints
+from backend.db.neo4j_sync import sync_full_design
 
 
 def main():

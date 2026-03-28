@@ -153,11 +153,10 @@ if(DOXYGEN_FOUND)
   set(DOXYGEN_DB ${CMAKE_BINARY_DIR}/docs/codebase.db)
 
   if(EXISTS ${PROJECT_PYTHON})
-    # Doxygen XML → SQLite codebase database
+    # Doxygen XML → SQLite codebase database (via doxygen-index library)
     add_custom_target(doxygen-db
-      COMMAND ${PROJECT_PYTHON} ${CMAKE_SOURCE_DIR}/scripts/doxygen_to_sqlite.py
-              ${CMAKE_BINARY_DIR}/docs/xml ${DOXYGEN_DB}
-              --project-root ${CMAKE_SOURCE_DIR}
+      COMMAND ${PROJECT_PYTHON} -c
+              "from doxygen_index.sqlite_backend import ingest$<SEMICOLON> ingest('${CMAKE_BINARY_DIR}/docs/xml', '${DOXYGEN_DB}', source='${PROJECT_NAME}')"
       DEPENDS doxygen
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
       COMMENT "Generating codebase SQLite database from Doxygen XML"
@@ -168,11 +167,10 @@ if(DOXYGEN_FOUND)
     add_custom_target(codebase-db DEPENDS doxygen-db)
     message(STATUS "  Run 'cmake --build <build-dir> --target codebase-db' to generate codebase SQLite database")
 
-    # Doxygen XML → Neo4j graph database
+    # Doxygen XML → Neo4j graph database (via doxygen-index library)
     add_custom_target(doxygen-neo4j
-      COMMAND ${PROJECT_PYTHON} ${CMAKE_SOURCE_DIR}/scripts/doxygen_to_neo4j.py
-              ${CMAKE_BINARY_DIR}/docs/xml
-              --project-root ${CMAKE_SOURCE_DIR}
+      COMMAND ${PROJECT_PYTHON} -c
+              "from doxygen_index.neo4j_backend import ingest$<SEMICOLON> ingest('${CMAKE_BINARY_DIR}/docs/xml', source='${PROJECT_NAME}')"
       DEPENDS doxygen
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
       COMMENT "Ingesting Doxygen XML into Neo4j graph database"

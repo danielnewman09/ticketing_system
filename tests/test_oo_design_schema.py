@@ -11,7 +11,7 @@ schema supports it.
 
 import pytest
 
-from codebase.schemas import (
+from backend.codebase.schemas import (
     AssociationSchema,
     AttributeSchema,
     ClassSchema,

@@ -14,7 +14,9 @@ dependencies = [
     "sentence-transformers>=3.0",
     "nicegui>=2.0",
     "llm-caller",
-    "ticketing-agent",
+    "mcp[cli]>=1.0",
+    "neo4j>=5.0",
+    "ddgs>=7.0",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +28,7 @@ dev = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["db", "requirements", "codebase", "components", "tickets", "search"]
+packages = ["backend", "frontend"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
