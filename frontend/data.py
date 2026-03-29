@@ -49,6 +49,39 @@ def update_project_meta(name: str, description: str, working_directory: str) -> 
         return True
 
 
+def fetch_environment_data() -> list[dict]:
+    """Fetch languages with their build systems, test frameworks, and dependencies."""
+    with get_session() as session:
+        langs = session.query(Language).all()
+        result = []
+        for lang in langs:
+            deps = []
+            for dm in lang.dependency_managers:
+                for d in dm.dependencies:
+                    deps.append({
+                        "name": d.name,
+                        "version": d.version,
+                        "manager": dm.name,
+                        "is_dev": d.is_dev,
+                    })
+            result.append({
+                "id": lang.id,
+                "name": lang.name,
+                "version": lang.version,
+                "build_systems": [
+                    {"name": bs.name, "config_file": bs.config_file}
+                    for bs in lang.build_systems
+                ],
+                "test_frameworks": [
+                    {"name": tf.name, "config_file": tf.config_file}
+                    for tf in lang.test_frameworks
+                ],
+                "dependency_managers": [dm.name for dm in lang.dependency_managers],
+                "dependencies": deps,
+            })
+        return result
+
+
 def fetch_requirements_data():
     """Fetch all data needed for the requirements dashboard."""
     with get_session() as session:

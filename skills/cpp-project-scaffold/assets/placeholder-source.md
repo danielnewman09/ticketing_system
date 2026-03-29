@@ -8,7 +8,8 @@ Variables to substitute:
 ## src/placeholder.hpp
 
 ```cpp
-#pragma once
+#ifndef PLACEHOLDER_HPP
+#define PLACEHOLDER_HPP
 
 namespace {{NAMESPACE}} {
 
@@ -16,6 +17,8 @@ namespace {{NAMESPACE}} {
 int placeholder();
 
 }  // namespace {{NAMESPACE}}
+
+#endif //PLACEHOLDER_HPP
 ```
 
 ## src/placeholder.cpp

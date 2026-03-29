@@ -20,13 +20,14 @@ Given a library name like `core` in project `my-engine`:
 
 | Context | Transform | Example |
 |---------|-----------|---------|
-| Directory name | `{project}-{lib}` (kebab-case) | `my-engine-core/` |
+| Directory name | `{project}/{lib}` (kebab-case) | `my-engine/core/` |
 | CMake target name | `{project}_{lib}` (snake_case) | `my_engine_core` |
 | CMake variable prefix | `{PROJECT}_{LIB}` (UPPER_SNAKE) | `MY_ENGINE_CORE` |
+| Test directory name | `{project}/{lib}/test` | `my_engine/core/test` |
 | Test target name | `{project}_{lib}_test` | `my_engine_core_test` |
-| C++ namespace | `{project}_{lib}` (snake_case) | `my_engine_core` |
-| Include path | `{project}-{lib}/src/File.hpp` | `my-engine-core/src/File.hpp` |
-| Install header dest | `include/{target_name}` | `include/my_engine_core` |
+| C++ namespace | `{project}::{lib}` (snake_case) | `my_engine::core` |
+| Include path | `{project}/{lib}/src/File.hpp` | `my-engine/core/src/File.hpp` |
+| Install header dest | `include/{target_name}` | `include/my_engine/core` |
 
 ## Library Parent Directory
 

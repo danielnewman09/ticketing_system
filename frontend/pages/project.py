@@ -13,6 +13,7 @@ from frontend.data import (
     update_project_meta,
     fetch_requirements_data,
     fetch_pending_recommendations_summary,
+    fetch_environment_data,
 )
 
 
@@ -117,6 +118,38 @@ async def project_page():
         stat_card("Ontology Nodes", data["total_nodes"], "purple-5")
 
     # ---------------------------------------------------------------
+    # Build environment
+    # ---------------------------------------------------------------
+
+    env_data = await asyncio.to_thread(fetch_environment_data)
+    if env_data:
+        with ui.card().classes("w-full mx-2 mt-4"):
+            ui.label("Build Environment").classes("text-sm font-semibold mb-2")
+            for lang in env_data:
+                with ui.row().classes("w-full items-start gap-4 flex-wrap"):
+                    # Language
+                    version_str = f" {lang['version']}" if lang["version"] else ""
+                    ui.badge(f"{lang['name']}{version_str}", color="blue").classes("text-xs")
+
+                    # Build systems
+                    for bs in lang["build_systems"]:
+                        ui.badge(f"{bs['name']}", color="grey").classes("text-xs")
+
+                    # Test frameworks
+                    for tf in lang["test_frameworks"]:
+                        ui.badge(f"{tf['name']}", color="grey").classes("text-xs")
+
+                # Dependencies
+                if lang["dependencies"]:
+                    with ui.row().classes("w-full gap-2 flex-wrap mt-1 ml-2"):
+                        for dep in lang["dependencies"]:
+                            version = f"=={dep['version']}" if dep["version"] else ""
+                            color = "grey" if not dep["is_dev"] else "orange"
+                            ui.badge(
+                                f"{dep['name']}{version}", color=color,
+                            ).classes("text-xs font-mono")
+
+    # ---------------------------------------------------------------
     # Pending recommendations alert
     # ---------------------------------------------------------------
 
@@ -150,6 +183,8 @@ async def project_page():
     meta = await asyncio.to_thread(fetch_project_meta)
     scaffolded = _project_exists(meta["working_directory"], meta["name"])
 
+    project_dir = os.path.join(meta["working_directory"], meta["name"]) if meta["working_directory"] and meta["name"] else ""
+
     with ui.card().classes("w-full mx-2 mt-4"):
         with ui.row().classes("w-full items-center justify-between"):
             with ui.column().classes("gap-0"):
@@ -167,15 +202,30 @@ async def project_page():
                     ui.badge("Created", color="positive").classes("text-xs")
                     ui.button(
                         "Open in VS Code", icon="open_in_new",
-                        on_click=lambda: open_in_vscode(
-                            os.path.join(meta["working_directory"], meta["name"])
-                        ),
+                        on_click=lambda: open_in_vscode(project_dir),
                     ).props("flat size=sm").classes("text-blue-400")
             else:
                 ui.button(
                     "Create Scaffold", icon="construction",
-                    on_click=lambda: scaffold_dialog.open(),
+                    on_click=lambda: open_scaffold_dialog(),
                 ).props("color=primary size=sm")
+
+        # Show project file tree when scaffolded
+        if scaffolded and project_dir:
+            ui.separator().classes("my-2")
+            tree = await asyncio.to_thread(_scan_project_tree, project_dir)
+            _render_file_tree(tree, project_dir)
+
+    async def open_scaffold_dialog():
+        from frontend.data import fetch_components_options
+        components = await asyncio.to_thread(fetch_components_options)
+        # Filter out "Environment" and its children
+        lib_names = [
+            c["name"] for c in components
+            if c["name"] != "Environment" and not c["name"].startswith("Environment:")
+        ]
+        libs_input.value = ", ".join(lib_names)
+        scaffold_dialog.open()
 
     # ---------------------------------------------------------------
     # Scaffold dialog
@@ -257,11 +307,10 @@ def _project_exists(working_directory: str, project_name: str) -> bool:
 
 
 def open_in_vscode(path: str):
-    """Open a path in VS Code."""
+    """Open a directory or file in VS Code."""
     try:
         subprocess.Popen(["code", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except FileNotFoundError:
-        # Fallback: use macOS open -a
         try:
             subprocess.Popen(
                 ["open", "-a", "Visual Studio Code", path],
@@ -269,3 +318,67 @@ def open_in_vscode(path: str):
             )
         except Exception:
             ui.notify("Could not open VS Code", type="warning")
+
+
+def open_file_in_vscode(project_dir: str, file_path: str):
+    """Open a specific file in an existing VS Code window for the project."""
+    full_path = os.path.join(project_dir, file_path)
+    try:
+        # --goto opens in existing window; -r reuses the window for the folder
+        subprocess.Popen(
+            ["code", "--goto", full_path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        try:
+            subprocess.Popen(
+                ["open", "-a", "Visual Studio Code", full_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            ui.notify("Could not open VS Code", type="warning")
+
+
+_IGNORED_DIRS = {"build", ".git", "__pycache__", ".venv", "installs", ".vscode", "node_modules"}
+_SHOW_FILES = {"CMakeLists.txt", "CMakeUserPresets.json"}
+
+
+def _scan_project_tree(root: str, rel: str = "") -> list[dict]:
+    """Scan directory tree, returning only CMake files in a nested structure."""
+    full = os.path.join(root, rel) if rel else root
+    try:
+        items = sorted(os.listdir(full))
+    except OSError:
+        return []
+
+    dirs = []
+    files = []
+    for name in items:
+        path = os.path.join(full, name)
+        rel_path = os.path.join(rel, name) if rel else name
+        if os.path.isdir(path) and name not in _IGNORED_DIRS and not name.startswith("."):
+            children = _scan_project_tree(root, rel_path)
+            if children:  # only include dirs that contain matching files
+                dirs.append({"name": name, "path": rel_path, "is_dir": True, "children": children})
+        elif name in _SHOW_FILES:
+            files.append({"name": name, "path": rel_path, "is_dir": False})
+
+    return dirs + files
+
+
+def _render_file_tree(tree: list[dict], project_dir: str, depth: int = 0):
+    """Render a file tree with clickable files and expandable directories."""
+    for entry in tree:
+        indent = f"padding-left: {depth * 16 + 4}px;"
+        if entry["is_dir"]:
+            with ui.expansion(
+                entry["name"], icon="folder",
+            ).classes("w-full").props("dense").style(indent):
+                _render_file_tree(entry["children"], project_dir, depth + 1)
+        else:
+            ui.label(entry["name"]).classes(
+                "text-xs font-mono text-blue-400 cursor-pointer py-0.5"
+            ).style(indent).on(
+                "click",
+                lambda _, p=entry["path"]: open_file_in_vscode(project_dir, p),
+            ).tooltip(entry["path"])

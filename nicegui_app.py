@@ -22,6 +22,10 @@ log = logging.getLogger(__name__)
 if __name__ in {"__main__", "__mp_main__"}:
     init_db()
 
+    # Install agent log hooks for the dashboard console
+    from frontend.agent_log import install_hooks
+    install_hooks()
+
     # Neo4j constraints (best-effort)
     try:
         from backend.db.neo4j_constraints import ensure_neo4j_constraints

@@ -44,7 +44,6 @@ async def components_page():
     all_components = await asyncio.to_thread(fetch_components_data)
 
     arch_components = [c for c in all_components if not _is_environment(c)]
-    env_components = [c for c in all_components if _is_environment(c) and c["name"] != "Environment"]
 
     # --- Architectural Components ---
     with ui.row().classes("w-full items-center justify-between px-2 mt-4 mb-4"):
@@ -55,15 +54,4 @@ async def components_page():
     else:
         with ui.row().classes("w-full gap-4 flex-wrap px-2"):
             for comp in arch_components:
-                _render_component_card(comp)
-
-    # --- Environments ---
-    with ui.row().classes("w-full items-center justify-between px-2 mt-6 mb-4"):
-        ui.label("Environments").classes("text-xl font-semibold")
-
-    if not env_components:
-        ui.label("No environments configured yet.").classes("text-gray-500 px-2")
-    else:
-        with ui.row().classes("w-full gap-4 flex-wrap px-2"):
-            for comp in env_components:
                 _render_component_card(comp)
