@@ -22,7 +22,8 @@ Ticket management with requirements traceability and semantic search.
 python -m venv .venv
 source .venv/bin/activate
 git clone https://github.com/danielnewman09/llm-caller.git ../llm-caller  # if not already cloned
-pip install -e ../llm-caller -e ".[dev]"
+git clone https://github.com/danielnewman09/Doxygen-Dependency-Parser.git ../Doxygen-Dependency-Parser  # if not already cloned
+pip install -e ../llm-caller -e "../Doxygen-Dependency-Parser[cppreference]" -e ".[dev]"
 ```
 
 ### Adding dependencies

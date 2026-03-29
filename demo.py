@@ -4,6 +4,7 @@ Demo: end-to-end workflow from requirements to ontology design.
 
 Workflow:
   1. Flush all data (clean slate, no re-migration)
+  1.5. Load C++ standard library docs into Neo4j (via doxygen-index cppreference)
   2. Create HLRs, assign components, and assess dependencies
   3. Decompose HLR descriptions into structured Actor/Action/Subject + LLRs
   4. Run the design agent to derive ontology nodes, triples, and requirement links
@@ -18,7 +19,6 @@ Requires ANTHROPIC_API_KEY in the environment.
 """
 
 import os
-import sys
 
 from backend.db import init_db, get_session, get_or_create
 from backend.db.base import Base
@@ -63,7 +63,7 @@ def step_flush():
     with get_session() as session:
         Predicate.ensure_defaults(session)
 
-    # Clear Neo4j design graph
+    # Clear Neo4j design graph (preserves cppreference data)
     clear_design_graph()
 
     # Clear and recreate logs directory
@@ -72,7 +72,62 @@ def step_flush():
         shutil.rmtree(LOGS_DIR)
     os.makedirs(LOGS_DIR, exist_ok=True)
 
-    print("  Database cleared (SQLite + Neo4j).\n")
+    print("  Database cleared (SQLite + Neo4j design graph).\n")
+
+
+def step_load_stdlib():
+    """Load C++ standard library docs into Neo4j via doxygen-index cppreference."""
+    print("=" * 60)
+    print("STEP 1.5: Load C++ standard library documentation")
+    print("=" * 60)
+
+    from pathlib import Path
+
+    try:
+        from doxygen_index.cppreference import download, parse
+        from doxygen_index.neo4j_backend import (
+            _get_driver,
+            ensure_schema,
+            write_result,
+        )
+    except ImportError:
+        print("  doxygen-index[cppreference] not installed — skipping stdlib load")
+        print("  Install with: pip install doxygen-index[cppreference]\n")
+        return
+
+    from backend.db.neo4j import verify_connection
+
+    if not verify_connection():
+        print("  Neo4j unavailable — skipping stdlib load\n")
+        return
+
+    # Check if cppreference is already loaded
+    from backend.db.neo4j import get_neo4j_session
+    with get_neo4j_session() as session:
+        result = session.run(
+            "MATCH (n) WHERE n.source = 'cppreference' RETURN count(n) AS cnt"
+        )
+        count = result.single()["cnt"]
+
+    if count > 0:
+        print(f"  cppreference already loaded ({count} nodes) — skipping\n")
+        return
+
+    cache_dir = Path("~/.cache/doxygen-index/cppreference").expanduser()
+    print("  Downloading cppreference archive (cached)...")
+    archive_root = download(cache_dir)
+
+    print("  Parsing cppreference HTML...")
+    parsed = parse(archive_root)
+
+    print("  Ingesting into Neo4j...")
+    from backend.db.neo4j import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+    driver = _get_driver(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    ensure_schema(driver)
+    write_result(driver, parsed)
+    driver.close()
+
+    print(f"  Loaded {len(parsed.compounds)} classes, {len(parsed.members)} members\n")
 
 
 def step_assign_components():
@@ -433,6 +488,7 @@ def step_summary():
 if __name__ == "__main__":
     init_db()
     step_flush()
+    step_load_stdlib()
     step_assign_components()
     step_research_dependencies()  # optional: requires web access
     step_decompose()

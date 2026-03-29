@@ -14,6 +14,7 @@ dependencies = [
     "sentence-transformers>=3.0",
     "nicegui>=2.0",
     "llm-caller",
+    "doxygen-index",
     "mcp[cli]>=1.0",
     "neo4j>=5.0",
     "ddgs>=7.0",
