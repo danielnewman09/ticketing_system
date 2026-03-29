@@ -4,10 +4,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, Integer, String, Text, Boolean, JSON, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, String, Table, Text, Boolean, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
+
+# Many-to-many: which components use which dependencies
+dependency_components = Table(
+    "dependency_components",
+    Base.metadata,
+    Column("dependency_id", Integer, ForeignKey("dependencies.id", ondelete="CASCADE"), primary_key=True),
+    Column("component_id", Integer, ForeignKey("components.id", ondelete="CASCADE"), primary_key=True),
+)
 
 if TYPE_CHECKING:
     from backend.db.models.ontology import OntologyNode
@@ -35,6 +43,9 @@ class Component(Base):
     # Reverse relationships
     high_level_requirements: Mapped[list[HighLevelRequirement]] = relationship("HighLevelRequirement", back_populates="component")
     ontology_nodes: Mapped[list[OntologyNode]] = relationship("OntologyNode", back_populates="component")
+    dependencies: Mapped[list[Dependency]] = relationship(
+        "Dependency", secondary=dependency_components, back_populates="components",
+    )
 
     def __repr__(self):
         return self.name
@@ -139,6 +150,9 @@ class Dependency(Base):
     is_dev: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     manager: Mapped[DependencyManager] = relationship("DependencyManager", back_populates="dependencies")
+    components: Mapped[list[Component]] = relationship(
+        "Component", secondary=dependency_components, back_populates="dependencies",
+    )
 
     def __repr__(self):
         if self.version:

@@ -7,9 +7,6 @@ from nicegui import ui
 
 from frontend.theme import (
     BACKGROUNDS,
-    CLS_DIALOG_MD,
-    CLS_DIALOG_TITLE,
-    CLS_DIALOG_ACTIONS,
     KIND_COLORS_JS,
     add_cytoscape_cdn,
     cytoscape_base_styles,
@@ -20,11 +17,8 @@ from frontend.layout import page_layout
 from frontend.data import (
     fetch_component_detail,
     fetch_ontology_graph_data,
-    ensure_component_language,
-    create_dependency_manager,
     add_dependency,
     delete_dependency,
-    delete_dependency_manager,
 )
 
 
@@ -117,51 +111,16 @@ async def component_detail_page(component_id: int):
                             ).classes("text-xs")
                         ui.separator()
 
-            # --- Dependency manager handlers ---
+            # --- Dependencies ---
 
-            async def show_setup_dialog():
-                """Setup language + dependency manager in one dialog."""
-                with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
-                    ui.label("Setup Dependencies").classes(CLS_DIALOG_TITLE)
-                    lang_input = ui.input("Language (e.g. C++, Python)").classes("w-full")
-                    lang_ver = ui.input("Language version (optional)").classes("w-full")
-                    ui.separator().classes("my-2")
-                    dm_name = ui.input("Dependency manager (e.g. conan, pip, vcpkg)").classes("w-full")
-                    dm_manifest = ui.input("Manifest file (e.g. conanfile.txt)").classes("w-full")
-
-                    with ui.row().classes(CLS_DIALOG_ACTIONS):
-                        ui.button("Cancel", on_click=dialog.close).props("flat")
-
-                        async def do_setup():
-                            lang = lang_input.value.strip()
-                            name = dm_name.value.strip()
-                            manifest = dm_manifest.value.strip()
-                            if not lang or not name or not manifest:
-                                ui.notify("Language, manager name, and manifest are required", type="warning")
-                                return
-                            lang_id = await asyncio.to_thread(
-                                ensure_component_language,
-                                component_id, lang, lang_ver.value.strip(),
-                            )
-                            await asyncio.to_thread(
-                                create_dependency_manager,
-                                lang_id, name, manifest,
-                            )
-                            dialog.close()
-                            ui.notify(f"Created {name} for {lang}", type="positive")
-                            await refresh_data()
-                            await dep_section.refresh()
-
-                        ui.button("Save", on_click=do_setup).props("color=positive")
-                dialog.open()
-
-            async def do_add_dep(manager_id, name_input, ver_input, dev_checkbox):
+            async def do_add_dep(manager_id, comp_id, name_input, ver_input, dev_checkbox):
                 name = name_input.value.strip()
                 if not name:
                     ui.notify("Package name is required", type="warning")
                     return
                 await asyncio.to_thread(
-                    add_dependency, manager_id, name, ver_input.value.strip(), dev_checkbox.value,
+                    add_dependency, manager_id, name, ver_input.value.strip(),
+                    dev_checkbox.value, component_id=comp_id,
                 )
                 ui.notify(f"Added {name}", type="positive")
                 name_input.value = ""
@@ -176,38 +135,21 @@ async def component_detail_page(component_id: int):
                 await refresh_data()
                 await dep_section.refresh()
 
-            # Dependency Manager (one per component)
             @ui.refreshable
             async def dep_section():
                 d = data_ref["data"]
-                env = d["environment"]
-                dm = None
-                if env and env["dependency_managers"]:
-                    dm = env["dependency_managers"][0]
+                deps = d["dependencies"]
+                mgr_id = d["default_manager_id"]
 
                 with ui.card().classes("w-full"):
-                    section_header("Dependency Manager")
+                    section_header("Dependencies")
 
-                    if not dm:
+                    if not deps:
                         ui.label(
-                            "No dependency manager configured."
-                        ).classes("text-sm text-gray-500 mb-2")
-                        ui.button(
-                            "Setup Dependencies", icon="add",
-                            on_click=show_setup_dialog,
-                        ).props("flat size=sm color=primary")
+                            "No dependencies configured."
+                        ).classes("text-sm text-gray-500")
                     else:
-                        # Manager header
-                        with ui.row().classes("items-center gap-2 mb-3"):
-                            ui.label(dm["name"]).classes("text-sm font-semibold")
-                            ui.label(dm["manifest_file"]).classes(
-                                "text-xs text-gray-500 font-mono"
-                            )
-                            if env:
-                                ui.badge(env["language"], color="grey").classes("text-xs")
-
-                        # Dependencies list
-                        for dep in dm["dependencies"]:
+                        for dep in deps:
                             with ui.row().classes("items-center gap-2 py-1 w-full"):
                                 ui.label(dep["name"]).classes("text-sm font-mono flex-1")
                                 ui.label(dep["version"] or "-").classes(
@@ -220,7 +162,7 @@ async def component_detail_page(component_id: int):
                                     on_click=lambda _, did=dep["id"]: do_delete_dep(did),
                                 ).props("flat round size=xs color=negative")
 
-                        # Add dependency row
+                    if mgr_id:
                         ui.separator().classes("my-2")
                         with ui.row().classes("items-end gap-2 w-full"):
                             dep_name = ui.input("Package").classes("flex-1").props("dense")
@@ -228,7 +170,7 @@ async def component_detail_page(component_id: int):
                             dep_dev = ui.checkbox("Dev").classes("text-xs")
                             ui.button(
                                 "Add",
-                                on_click=lambda _, mid=dm["id"], n=dep_name, v=dep_ver, dv=dep_dev: do_add_dep(mid, n, v, dv),
+                                on_click=lambda _, mid=mgr_id, cid=component_id, n=dep_name, v=dep_ver, dv=dep_dev: do_add_dep(mid, cid, n, v, dv),
                             ).props("flat size=xs color=positive")
 
             await dep_section()

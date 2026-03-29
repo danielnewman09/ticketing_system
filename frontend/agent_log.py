@@ -1,7 +1,9 @@
 """Shared agent activity log for the dashboard console.
 
-Patches llm_caller's logging functions to capture LLM requests and responses
-into an in-memory buffer that the frontend can display.
+Patches llm_caller's public API (call_tool, call_text, call_reasoned_tool)
+to capture LLM requests and responses into an in-memory buffer that the
+frontend can display.  These wrappers fire regardless of whether
+prompt_log_file is set.
 """
 
 from __future__ import annotations
@@ -62,79 +64,103 @@ class AgentLog:
 agent_log = AgentLog()
 
 
+def _preview_messages(messages: list[dict]) -> str:
+    """Extract a short preview from the last user message."""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                return content[:200]
+    return ""
+
+
 def install_hooks():
-    """Monkey-patch llm_caller.logging to also push to the agent log."""
+    """Wrap llm_caller's public call functions to push to the agent log.
+
+    This patches call_tool, call_text, and call_reasoned_tool directly,
+    so entries appear even when prompt_log_file is not set.
+    """
     try:
-        import llm_caller.logging as llm_logging
+        import llm_caller.client as client
     except ImportError:
-        print('ERROR: Could not import llm_caller logs')
+        print("ERROR: Could not import llm_caller.client")
         return
 
-    _orig_write_prompt = llm_logging.write_prompt_log
-    _orig_write_raw = llm_logging.write_raw_log
-    _orig_make_turn_logger = llm_logging.make_turn_logger
+    _orig_call_tool = client.call_tool
+    _orig_call_text = client.call_text
+    _orig_call_reasoned_tool = client.call_reasoned_tool
 
-    def patched_write_prompt_log(path, system, messages, tool_name=""):
-        # Summarize the request
-        user_msgs = [m for m in messages if m.get("role") == "user"]
-        preview = ""
-        if user_msgs:
-            content = user_msgs[-1].get("content", "")
-            if isinstance(content, str):
-                preview = content[:200]
-        label = f"Tool: {tool_name}" if tool_name else "Text call"
-        agent_log.push("request", label, preview)
-        return _orig_write_prompt(path, system, messages, tool_name)
+    def patched_call_tool(system, messages, tools, tool_name, **kwargs):
+        preview = _preview_messages(messages)
+        agent_log.push("request", f"call_tool: {tool_name}", preview)
+        result = _orig_call_tool(system, messages, tools, tool_name, **kwargs)
+        agent_log.push("response", f"call_tool: {tool_name} complete")
+        return result
 
-    def patched_write_raw(prompt_log_file, raw_text):
-        if raw_text:
-            preview = raw_text[:300]
-            agent_log.push("response", "LLM response", preview)
-        return _orig_write_raw(prompt_log_file, raw_text)
+    def patched_call_text(system, messages, **kwargs):
+        preview = _preview_messages(messages)
+        agent_log.push("request", "call_text", preview)
+        result = _orig_call_text(system, messages, **kwargs)
+        agent_log.push("response", "call_text complete", result[:200] if isinstance(result, str) else "")
+        return result
 
-    def patched_make_turn_logger(prompt_log_file, system, final_tool_name):
-        orig_callback = _orig_make_turn_logger(prompt_log_file, system, final_tool_name)
-
-        def on_turn(turn_number, history):
-            # Summarize the latest assistant message
-            last_assistant = ""
-            for msg in reversed(history):
-                if isinstance(msg, dict) and msg.get("role") == "assistant":
-                    content = msg.get("content", "")
-                    if isinstance(content, str):
-                        last_assistant = content[:200]
-                    elif isinstance(content, list):
-                        # Tool use blocks
-                        for block in content:
-                            if isinstance(block, dict) and block.get("type") == "tool_use":
-                                last_assistant = f"Tool call: {block.get('name', '?')}"
-                                break
-                    break
-            agent_log.push(
-                "turn",
-                f"Turn {turn_number} (target: {final_tool_name})",
-                last_assistant,
-            )
-            return orig_callback(turn_number, history)
-
-        return on_turn
+    def patched_call_reasoned_tool(reasoner_system, messages, tools, tool_name, **kwargs):
+        preview = _preview_messages(messages)
+        agent_log.push("request", f"call_reasoned_tool: {tool_name}", preview)
+        result = _orig_call_reasoned_tool(reasoner_system, messages, tools, tool_name, **kwargs)
+        agent_log.push("response", f"call_reasoned_tool: {tool_name} complete")
+        return result
 
     # Patch the module-level references
-    llm_logging.write_prompt_log = patched_write_prompt_log
-    llm_logging.write_raw_log = patched_write_raw
-    llm_logging.make_turn_logger = patched_make_turn_logger
+    client.call_tool = patched_call_tool
+    client.call_text = patched_call_text
+    client.call_reasoned_tool = patched_call_reasoned_tool
 
-    # Also patch the already-imported references in client and tool_loop,
-    # since they use `from llm_caller.logging import ...` at import time
+    # Also patch the top-level package imports (from llm_caller import call_tool)
     try:
-        import llm_caller.client as _client
-        _client.write_prompt_log = patched_write_prompt_log
-        _client.write_raw_log = patched_write_raw
+        import llm_caller
+        llm_caller.call_tool = patched_call_tool
+        llm_caller.call_text = patched_call_text
+        llm_caller.call_reasoned_tool = patched_call_reasoned_tool
     except (ImportError, AttributeError):
-        print('ERROR: Could not import llm_caller logs')
+        pass
+
+    # Patch any already-imported modules that did `from llm_caller import call_tool`
+    import sys
+    for mod in list(sys.modules.values()):
+        if mod is None or mod is client:
+            continue
+        try:
+            if getattr(mod, "call_tool", None) is _orig_call_tool:
+                mod.call_tool = patched_call_tool
+            if getattr(mod, "call_text", None) is _orig_call_text:
+                mod.call_text = patched_call_text
+            if getattr(mod, "call_reasoned_tool", None) is _orig_call_reasoned_tool:
+                mod.call_reasoned_tool = patched_call_reasoned_tool
+        except Exception:
+            pass
+
+    # Patch tool_loop which has its own on_turn logging
     try:
-        import llm_caller.tool_loop as _tool_loop
-        _tool_loop.write_conversation_log = llm_logging.write_conversation_log
-        _tool_loop.make_turn_logger = patched_make_turn_logger
+        import llm_caller.tool_loop as tool_loop
+        _orig_tool_loop_run = tool_loop.run_tool_loop
+
+        def patched_tool_loop_run(system, messages, tools, final_tool_name, **kwargs):
+            agent_log.push("request", f"tool_loop: {final_tool_name}", _preview_messages(messages))
+
+            # Wrap on_turn if provided to also log turns
+            orig_on_turn = kwargs.get("on_turn")
+
+            def logging_on_turn(turn_number, history):
+                agent_log.push("turn", f"Turn {turn_number} ({final_tool_name})")
+                if orig_on_turn:
+                    return orig_on_turn(turn_number, history)
+
+            kwargs["on_turn"] = logging_on_turn
+            result = _orig_tool_loop_run(system, messages, tools, final_tool_name, **kwargs)
+            agent_log.push("response", f"tool_loop: {final_tool_name} complete")
+            return result
+
+        tool_loop.run_tool_loop = patched_tool_loop_run
     except (ImportError, AttributeError):
-        print('ERROR: Could not import llm_caller logs')
+        pass

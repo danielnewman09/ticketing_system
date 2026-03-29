@@ -59,11 +59,15 @@ def fetch_environment_data() -> list[dict]:
             for dm in lang.dependency_managers:
                 for d in dm.dependencies:
                     deps.append({
+                        "id": d.id,
                         "name": d.name,
                         "version": d.version,
                         "github_url": d.github_url,
                         "manager": dm.name,
                         "is_dev": d.is_dev,
+                        "components": [
+                            {"id": c.id, "name": c.name} for c in d.components
+                        ],
                     })
             result.append({
                 "id": lang.id,
@@ -324,6 +328,19 @@ def fetch_component_detail(component_id: int) -> dict | None:
                     "kind": n.kind,
                 })
 
+        # Dependencies linked to this component (via M2M)
+        comp_deps = [
+            {"id": d.id, "name": d.name, "version": d.version, "is_dev": d.is_dev}
+            for d in comp.dependencies
+        ]
+
+        # Find default manager_id for add-dependency form
+        default_manager_id = None
+        if comp.language:
+            for dm in comp.language.dependency_managers:
+                default_manager_id = dm.id
+                break
+
         return {
             "id": comp.id,
             "name": comp.name,
@@ -333,6 +350,8 @@ def fetch_component_detail(component_id: int) -> dict | None:
             "children": children,
             "environment": env,
             "hlrs": hlrs,
+            "dependencies": comp_deps,
+            "default_manager_id": default_manager_id,
             "node_kinds": node_kinds,
             "nodes_sample": nodes_sample,
             "node_count": len(comp.ontology_nodes),
@@ -644,7 +663,10 @@ def create_dependency_manager(
         return dm.id
 
 
-def add_dependency(manager_id: int, name: str, version: str = "", is_dev: bool = False) -> int:
+def add_dependency(
+    manager_id: int, name: str, version: str = "", is_dev: bool = False,
+    component_id: int | None = None,
+) -> int:
     """Add a dependency to a manager. Returns the new id."""
     with get_session() as session:
         dep = Dependency(
@@ -655,6 +677,10 @@ def add_dependency(manager_id: int, name: str, version: str = "", is_dev: bool =
         )
         session.add(dep)
         session.flush()
+        if component_id:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            if comp:
+                dep.components.append(comp)
         return dep.id
 
 
@@ -792,12 +818,21 @@ def accept_recommendation(rec_id: int) -> bool:
             manager_id=dm.id, name=rec.name,
         ).first()
         if not existing:
-            session.add(Dependency(
+            dep = Dependency(
                 manager_id=dm.id,
                 name=rec.name,
                 version=rec.version,
                 github_url=rec.github_url,
-            ))
+            )
+            session.add(dep)
+            session.flush()
+        else:
+            dep = existing
+
+        # Link dependency to the component
+        if comp not in dep.components:
+            dep.components.append(comp)
+
         return True
 
 

@@ -13,6 +13,7 @@ from frontend.data import (
     fetch_requirements_data,
     fetch_pending_recommendations_summary,
     fetch_environment_data,
+    delete_dependency,
 )
 from frontend.pages.project.vscode import open_directory, open_file
 from frontend.pages.project.file_tree import (
@@ -129,47 +130,117 @@ async def section_stats():
 
 
 async def section_dependencies(project_dir: str):
-    """Dependency management card with integration status and conan files."""
-    env_data = await asyncio.to_thread(fetch_environment_data)
-    if not env_data:
-        return
-
+    """Dependency management table with integration status."""
     integrate_state = {"name": ""}
 
-    with ui.card().classes("w-full mx-2 mt-4"):
-        ui.label("Dependency Management").classes("text-sm font-semibold mb-2")
+    # --- Handlers ---
 
+    async def do_delete_dep(dep_id: int, dep_name: str):
+        await asyncio.to_thread(delete_dependency, dep_id)
+        ui.notify(f"Removed {dep_name}", type="info")
+        await dep_table.refresh()
+
+    # --- Refreshable table ---
+
+    @ui.refreshable
+    async def dep_table():
+        env_data = await asyncio.to_thread(fetch_environment_data)
+        if not env_data:
+            return
+
+        # Flatten all deps across languages and compute integration status
+        conan_deps = get_conan_deps(project_dir) if project_dir else set()
+        all_deps: list[dict] = []
         for lang in env_data:
-            with ui.row().classes("w-full items-start gap-4 flex-wrap"):
-                version_str = f" {lang['version']}" if lang["version"] else ""
-                ui.badge(f"{lang['name']}{version_str}", color="blue").classes("text-xs")
-                for bs in lang["build_systems"]:
-                    ui.badge(bs["name"], color="grey").classes("text-xs")
-                for tf in lang["test_frameworks"]:
-                    ui.badge(tf["name"], color="grey").classes("text-xs")
+            lang_label = lang["name"]
+            if lang["version"]:
+                lang_label += f" {lang['version']}"
+            for dep in lang["dependencies"]:
+                integrated = dep["name"].lower() in conan_deps
+                status = "integrated" if integrated else ("not in build" if project_dir else "unknown")
+                all_deps.append({**dep, "language": lang_label, "integration_status": status})
 
-            if lang["dependencies"]:
-                conan_deps = get_conan_deps(project_dir) if project_dir else set()
-                for dep in lang["dependencies"]:
-                    integrated = dep["name"].lower() in conan_deps
-                    with ui.row().classes("w-full items-center gap-2 mt-1 ml-2"):
-                        version = f"=={dep['version']}" if dep["version"] else ""
-                        color = "grey" if not dep["is_dev"] else "orange"
-                        ui.badge(f"{dep['name']}{version}", color=color).classes("text-xs font-mono")
-                        if integrated:
-                            ui.badge("integrated", color="positive").classes("text-xs")
-                        elif project_dir:
-                            ui.badge("not in build", color="negative").classes("text-xs")
-                            ui.button(
-                                "Integrate", icon="add_circle",
-                                on_click=lambda _, d=dep: _open_integrate(d),
-                            ).props("flat size=xs").classes("text-blue-400")
+        with ui.card().classes("w-full mx-2 mt-4"):
+            ui.label("Dependency Management").classes("text-sm font-semibold mb-2")
 
-        if project_dir:
-            conan_files = scan_conan_files(project_dir)
-            if conan_files:
-                ui.separator().classes("my-2")
-                render_file_tree(conan_files, project_dir)
+            if not all_deps:
+                ui.label("No dependencies configured.").classes("text-sm text-gray-500")
+            else:
+                columns = [
+                    {"name": "name", "label": "Name", "field": "name", "align": "left", "sortable": True},
+                    {"name": "source_url", "label": "Source URL", "field": "source_url", "align": "left"},
+                    {"name": "version", "label": "Version", "field": "version", "align": "left"},
+                    {"name": "components", "label": "Used in Components", "field": "components", "align": "left"},
+                    {"name": "status", "label": "Integration Status", "field": "status", "align": "left"},
+                    {"name": "language", "label": "Language", "field": "language", "align": "left"},
+                    {"name": "actions", "label": "", "field": "actions", "align": "right"},
+                ]
+                rows = []
+                for dep in all_deps:
+                    comps = dep.get("components", [])
+                    comp_names = ", ".join(c["name"] for c in comps) or "—"
+                    rows.append({
+                        "id": dep["id"],
+                        "name": dep["name"],
+                        "source_url": dep.get("github_url") or "—",
+                        "version": dep.get("version") or "—",
+                        "components": comp_names,
+                        "unused": len(comps) == 0,
+                        "status": dep["integration_status"],
+                        "language": dep["language"],
+                    })
+
+                table = ui.table(
+                    columns=columns, rows=rows, row_key="id",
+                ).classes("w-full").props("dense flat")
+
+                # Custom cell rendering for status badges and actions
+                table.add_slot("body-cell-status", r'''
+                    <q-td :props="props">
+                        <q-badge
+                            :color="props.value === 'integrated' ? 'positive' : props.value === 'not in build' ? 'negative' : 'grey'"
+                            class="text-xs"
+                        >{{ props.value }}</q-badge>
+                    </q-td>
+                ''')
+
+                table.add_slot("body-cell-source_url", r'''
+                    <q-td :props="props">
+                        <a v-if="props.value !== '—'"
+                           :href="props.value" target="_blank"
+                           class="text-blue-400 text-xs font-mono no-underline hover:underline">
+                            {{ props.value }}
+                        </a>
+                        <span v-else class="text-gray-500">—</span>
+                    </q-td>
+                ''')
+
+                table.add_slot("body-cell-actions", r'''
+                    <q-td :props="props">
+                        <q-btn v-if="props.row.status === 'not in build'"
+                            flat round dense size="xs" icon="add_circle"
+                            class="text-blue-400"
+                            @click="$parent.$emit('integrate', props.row)"
+                        />
+                        <q-btn v-if="props.row.unused"
+                            flat round dense size="xs" icon="delete"
+                            class="text-red-400"
+                            @click="$parent.$emit('remove', props.row)"
+                        >
+                            <q-tooltip>Remove unused dependency</q-tooltip>
+                        </q-btn>
+                    </q-td>
+                ''')
+                table.on("integrate", lambda e: _open_integrate(e.args))
+                table.on("remove", lambda e: do_delete_dep(e.args["id"], e.args["name"]))
+
+            if project_dir:
+                conan_files = scan_conan_files(project_dir)
+                if conan_files:
+                    ui.separator().classes("my-2")
+                    render_file_tree(conan_files, project_dir)
+
+    await dep_table()
 
     # --- Integrate dialog ---
 
@@ -192,11 +263,11 @@ async def section_dependencies(project_dir: str):
                 on_click=lambda: _run_integrate(),
             ).props("color=primary size=sm")
 
-    def _open_integrate(dep: dict):
-        integrate_state["name"] = dep["name"]
-        int_dep_label.text = f"Dependency: {dep['name']}"
-        int_version.value = dep.get("version", "")
-        int_source_url.value = dep.get("github_url", "")
+    def _open_integrate(row: dict):
+        integrate_state["name"] = row["name"]
+        int_dep_label.text = f"Dependency: {row['name']}"
+        int_version.value = row.get("version", "") if row.get("version") != "—" else ""
+        int_source_url.value = row.get("source_url", "") if row.get("source_url") != "—" else ""
         int_consuming_lib.value = ""
         integrate_dialog.open()
 
