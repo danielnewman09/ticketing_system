@@ -4,7 +4,35 @@ from pathlib import Path
 
 from nicegui import ui
 
-from frontend.theme import VERIFICATION_COLORS
+from frontend.theme import (
+    VERIFICATION_COLORS,
+    CLS_SECTION_HEADER,
+    CLS_SECTION_SUBHEADER,
+    CLS_BREADCRUMB_LINK,
+    CLS_BREADCRUMB_SEP,
+    CLS_BREADCRUMB_CURRENT,
+)
+
+
+def section_header(text: str):
+    """Render a standard section header label (uppercase, small, gray)."""
+    ui.label(text).classes(CLS_SECTION_HEADER)
+
+
+def breadcrumb(*parts: tuple[str, str | None]):
+    """Render a breadcrumb trail.
+
+    Each *part* is ``(label, href)`` — if *href* is ``None`` the part is
+    rendered as plain text (the current page).
+    """
+    with ui.row().classes("items-center gap-1 px-2 mt-4"):
+        for i, (label, href) in enumerate(parts):
+            if i > 0:
+                ui.label("/").classes(CLS_BREADCRUMB_SEP)
+            if href is not None:
+                ui.link(label, href).classes(CLS_BREADCRUMB_LINK)
+            else:
+                ui.label(label).classes(CLS_BREADCRUMB_CURRENT)
 
 
 def directory_picker(
@@ -247,7 +275,7 @@ def render_verification_card(v):
 
         if v["preconditions"]:
             ui.separator().classes("my-2")
-            ui.label("Pre-conditions").classes("text-xs uppercase tracking-wider text-gray-500 mb-1")
+            ui.label("Pre-conditions").classes(CLS_SECTION_SUBHEADER)
             for c in v["preconditions"]:
                 with ui.row().classes("items-center gap-1"):
                     ui.label(c["member_qualified_name"]).classes("text-xs font-mono text-blue-300")
@@ -256,7 +284,7 @@ def render_verification_card(v):
 
         if v["actions"]:
             ui.separator().classes("my-2")
-            ui.label("Actions").classes("text-xs uppercase tracking-wider text-gray-500 mb-1")
+            ui.label("Actions").classes(CLS_SECTION_SUBHEADER)
             for i, a in enumerate(v["actions"], 1):
                 with ui.row().classes("items-center gap-2"):
                     ui.badge(str(i), color="grey").props("rounded").classes("text-xs")
@@ -266,7 +294,7 @@ def render_verification_card(v):
 
         if v["postconditions"]:
             ui.separator().classes("my-2")
-            ui.label("Post-conditions").classes("text-xs uppercase tracking-wider text-gray-500 mb-1")
+            ui.label("Post-conditions").classes(CLS_SECTION_SUBHEADER)
             for c in v["postconditions"]:
                 with ui.row().classes("items-center gap-1"):
                     ui.label(c["member_qualified_name"]).classes("text-xs font-mono text-blue-300")
@@ -278,7 +306,7 @@ def render_triples_card(triples):
     """Render an ontology triples card from plain dicts."""
     with ui.card().classes("w-full"):
         ui.label("Ontology Triples").classes(
-            "text-xs uppercase tracking-wider text-gray-400 mb-2"
+            CLS_SECTION_HEADER
         )
         if triples:
             triple_cols = [

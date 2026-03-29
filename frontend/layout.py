@@ -5,6 +5,7 @@ import time
 from nicegui import ui
 
 from frontend.agent_log import agent_log
+from frontend.theme import BACKGROUNDS
 
 _NAV_ITEMS = [
     ("Project", "/"),
@@ -34,7 +35,7 @@ def page_layout(title: str = ""):
             for label, href in _NAV_ITEMS:
                 ui.link(label, href).classes("text-white/80 hover:text-white no-underline text-sm px-2")
 
-    drawer = ui.left_drawer(value=False).classes("bg-[#1a1a2e]").props("width=220 breakpoint=960")
+    drawer = ui.left_drawer(value=False).classes(f"bg-[{BACKGROUNDS['base']}]").props("width=220 breakpoint=960")
     with drawer:
         ui.label("Navigation").classes("text-white/60 text-xs uppercase tracking-wider px-4 pt-4 pb-2")
         for label, href in _NAV_ITEMS:
@@ -57,12 +58,12 @@ def _agent_console():
     with ui.expansion("Agent Console", icon="terminal").classes(
         "w-full fixed bottom-0 left-0 right-0 z-50"
     ).style(
-        "background: #0f172a; border-top: 1px solid #334155;"
+        f"background: {BACKGROUNDS['panel']}; border-top: 1px solid {BACKGROUNDS['border']};"
     ).props("dense") as panel:
         panel.classes("text-gray-300")
         log_widget = ui.log(max_lines=200).classes(
             "w-full h-48 text-xs font-mono"
-        ).style("background: #0f172a; color: #94a3b8;")
+        ).style(f"background: {BACKGROUNDS['panel']}; color: #94a3b8;")
 
         last_version = {"v": 0}
 

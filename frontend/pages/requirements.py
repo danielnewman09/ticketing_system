@@ -4,7 +4,7 @@ import asyncio
 
 from nicegui import ui
 
-from frontend.theme import apply_theme
+from frontend.theme import CLS_DIALOG_SM, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS, apply_theme
 from frontend.layout import page_layout, stat_card
 from frontend.data import (
     fetch_requirements_data,
@@ -55,12 +55,12 @@ async def requirements_page():
         comp_map = {c["name"]: c["id"] for c in components}
         comp_names = ["(none)"] + [c["name"] for c in components]
 
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
-            ui.label("Create HLR").classes("text-lg font-bold mb-2")
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label("Create HLR").classes(CLS_DIALOG_TITLE)
             desc_input = ui.textarea("Description").classes("w-full")
             comp_select = ui.select(comp_names, value="(none)", label="Component").classes("w-full")
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_create():
@@ -83,12 +83,12 @@ async def requirements_page():
     # ---------------------------------------------------------------
 
     async def confirm_delete_hlr(hlr_id: int):
-        with ui.dialog() as dialog, ui.card().classes("w-80"):
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_SM):
             ui.label(f"Delete HLR {hlr_id}?").classes("text-lg font-bold")
             ui.label("This will also delete all child LLRs and their verifications.").classes(
                 "text-sm text-gray-400 mt-1"
             )
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_delete():
@@ -106,14 +106,14 @@ async def requirements_page():
     # ---------------------------------------------------------------
 
     async def confirm_decompose_hlr(hlr_id: int):
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
             ui.label(f"Decompose HLR {hlr_id}?").classes("text-lg font-bold")
             ui.label(
                 "This will run the decomposition agent to generate low-level "
                 "requirements and verification methods."
             ).classes("text-sm text-gray-400 mt-1")
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_decompose():
@@ -139,11 +139,11 @@ async def requirements_page():
     # ---------------------------------------------------------------
 
     async def show_add_llr_dialog(hlr_id: int):
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
-            ui.label(f"Add LLR to HLR {hlr_id}").classes("text-lg font-bold mb-2")
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label(f"Add LLR to HLR {hlr_id}").classes(CLS_DIALOG_TITLE)
             desc_input = ui.textarea("Description").classes("w-full")
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_create():

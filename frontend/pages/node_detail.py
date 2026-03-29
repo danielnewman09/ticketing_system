@@ -5,7 +5,18 @@ import json
 
 from nicegui import ui
 
-from frontend.theme import KIND_COLORS, apply_theme
+from frontend.theme import (
+    KIND_COLORS,
+    BACKGROUNDS,
+    STATUS_COLORS,
+    CLS_SECTION_HEADER,
+    CLS_SECTION_SUBHEADER,
+    KIND_COLORS_JS,
+    add_cytoscape_cdn,
+    cytoscape_base_styles,
+    apply_theme,
+)
+from frontend.widgets import breadcrumb
 from frontend.layout import page_layout
 from frontend.data import fetch_node_detail_full, fetch_neighbourhood_graph_data, update_member_type
 
@@ -15,14 +26,8 @@ async def node_detail_page(node_id: int):
     apply_theme()
     page_layout("Node Detail")
 
-    # Cytoscape CDN for the neighbourhood graph
-    ui.add_head_html(
-        '<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>'
-        '<script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>'
-        '<script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>'
-        '<script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>'
-    )
-    kind_colors_js = json.dumps(KIND_COLORS)
+    add_cytoscape_cdn()
+    base_styles = cytoscape_base_styles(size="small")
 
     @ui.refreshable
     async def content():
@@ -36,13 +41,11 @@ async def node_detail_page(node_id: int):
         kind = node["kind"]
         color = KIND_COLORS.get(kind, "#666")
 
-        # Breadcrumb
-        with ui.row().classes("items-center gap-1 px-2 mt-4"):
-            ui.link("Ontology", "/ontology").classes("text-blue-400 text-sm no-underline")
-            ui.label("/").classes("text-gray-500 text-sm")
-            ui.link("Graph", "/ontology/graph").classes("text-blue-400 text-sm no-underline")
-            ui.label("/").classes("text-gray-500 text-sm")
-            ui.label(node["name"]).classes("text-sm text-gray-300")
+        breadcrumb(
+            ("Ontology", "/ontology"),
+            ("Graph", "/ontology/graph"),
+            (node["name"], None),
+        )
 
         # Header
         with ui.row().classes("w-full items-center justify-between px-2 mt-2 mb-4"):
@@ -63,9 +66,7 @@ async def node_detail_page(node_id: int):
             with ui.column().classes("flex-1 gap-4"):
                 # Identity card
                 with ui.card().classes("w-full"):
-                    ui.label("Identity").classes(
-                        "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                    )
+                    ui.label("Identity").classes(CLS_SECTION_HEADER)
                     _prop_row("Qualified Name", node["qualified_name"])
                     with ui.row().classes("gap-2 mt-2"):
                         ui.badge(kind, color="grey").style(
@@ -82,9 +83,7 @@ async def node_detail_page(node_id: int):
                 # Description
                 if node["description"]:
                     with ui.card().classes("w-full"):
-                        ui.label("Description").classes(
-                            "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                        )
+                        ui.label("Description").classes(CLS_SECTION_HEADER)
                         ui.label(node["description"]).classes("text-sm")
 
                 # Members documentation (Doxygen-style)
@@ -120,9 +119,7 @@ async def node_detail_page(node_id: int):
                 visible_code = [(l, v) for l, v in code_fields if v]
                 if visible_code:
                     with ui.card().classes("w-full"):
-                        ui.label("Code Details").classes(
-                            "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                        )
+                        ui.label("Code Details").classes(CLS_SECTION_HEADER)
                         for label, value in visible_code:
                             _prop_row(label, value)
 
@@ -133,9 +130,7 @@ async def node_detail_page(node_id: int):
                         flags.append(flag_name.replace("is_", ""))
                 if flags:
                     with ui.card().classes("w-full"):
-                        ui.label("Flags").classes(
-                            "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                        )
+                        ui.label("Flags").classes(CLS_SECTION_HEADER)
                         with ui.row().classes("gap-2"):
                             for f in flags:
                                 ui.badge(f, color="grey")
@@ -145,11 +140,9 @@ async def node_detail_page(node_id: int):
                 # Neighbourhood graph
                 if neo4j:
                     with ui.card().classes("w-full"):
-                        ui.label("Neighbourhood").classes(
-                            "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                        )
+                        ui.label("Neighbourhood").classes(CLS_SECTION_HEADER)
                         cy = ui.element("div").style(
-                            "height: calc(100vh - 280px); min-height: 400px; background: #1a1a2e; border-radius: 8px;"
+                            f"height: calc(100vh - 280px); min-height: 400px; background: {BACKGROUNDS['base']}; border-radius: 8px;"
                         ).classes("w-full")
                         cy._props["id"] = "node-cy-container"
 
@@ -159,145 +152,26 @@ async def node_detail_page(node_id: int):
                     )
                     elements_json = json.dumps(graph["nodes"] + graph["edges"])
                     if graph["nodes"]:
+                        # Add center-node highlight on top of base styles
+                        center_style = f"""{{
+                            selector: 'node[is_center="true"]',
+                            style: {{
+                                'border-width': 3,
+                                'border-color': '{STATUS_COLORS["selected"]}',
+                                'border-style': 'solid',
+                            }}
+                        }}"""
                         await ui.run_javascript(f"""
                             if (window._nodeCy) window._nodeCy.destroy();
-                            const KIND_COLORS = {kind_colors_js};
+                            const KIND_COLORS = {KIND_COLORS_JS};
                             const container = document.getElementById('node-cy-container');
                             if (!container) return;
+                            const styles = {base_styles};
+                            styles.push({center_style});
                             window._nodeCy = cytoscape({{
                                 container: container,
                                 elements: {elements_json},
-                                style: [
-                                    {{
-                                        selector: 'node[layer="design"]',
-                                        style: {{
-                                            'label': 'data(label)',
-                                            'background-color': '#666',
-                                            'color': '#fff',
-                                            'text-valign': 'bottom',
-                                            'text-halign': 'center',
-                                            'font-size': '9px',
-                                            'width': 30,
-                                            'height': 30,
-                                            'border-width': 2,
-                                            'border-style': 'dashed',
-                                            'border-color': '#aaa',
-                                            'text-wrap': 'ellipsis',
-                                            'text-max-width': '70px',
-                                            'text-margin-y': 3,
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'node[has_members="true"]',
-                                        style: {{
-                                            'shape': 'roundrectangle',
-                                            'text-valign': 'center',
-                                            'text-halign': 'center',
-                                            'text-wrap': 'wrap',
-                                            'text-max-width': '200px',
-                                            'font-size': '8px',
-                                            'font-family': 'monospace',
-                                            'text-justification': 'left',
-                                            'width': 'label',
-                                            'height': 'label',
-                                            'padding': '10px',
-                                            'border-style': 'solid',
-                                            'border-width': 2,
-                                            'text-margin-y': 0,
-                                        }}
-                                    }},
-                                    ...Object.entries(KIND_COLORS).flatMap(([kind, color]) => [
-                                        {{
-                                            selector: 'node[kind="' + kind + '"][layer="design"]',
-                                            style: {{ 'background-color': color }}
-                                        }},
-                                    ]),
-                                    {{
-                                        selector: 'node[is_center="true"]',
-                                        style: {{
-                                            'border-width': 3,
-                                            'border-color': '#f1c40f',
-                                            'border-style': 'solid',
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'node[layer="as-built"]',
-                                        style: {{
-                                            'label': 'data(label)',
-                                            'background-color': '#555',
-                                            'color': '#ccc',
-                                            'text-valign': 'bottom',
-                                            'text-halign': 'center',
-                                            'font-size': '9px',
-                                            'width': 28,
-                                            'height': 28,
-                                            'border-width': 2,
-                                            'border-style': 'solid',
-                                            'border-color': '#888',
-                                            'text-wrap': 'ellipsis',
-                                            'text-max-width': '70px',
-                                            'text-margin-y': 3,
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'node[layer="requirement"]',
-                                        style: {{
-                                            'label': 'data(label)',
-                                            'background-color': '#e67e22',
-                                            'color': '#fff',
-                                            'text-valign': 'bottom',
-                                            'text-halign': 'center',
-                                            'font-size': '9px',
-                                            'shape': 'diamond',
-                                            'width': 30,
-                                            'height': 30,
-                                            'border-width': 2,
-                                            'border-color': '#d35400',
-                                            'text-wrap': 'ellipsis',
-                                            'text-max-width': '70px',
-                                            'text-margin-y': 3,
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'edge',
-                                        style: {{
-                                            'label': 'data(label)',
-                                            'width': 1.5,
-                                            'line-color': '#555',
-                                            'target-arrow-color': '#555',
-                                            'target-arrow-shape': 'triangle',
-                                            'curve-style': 'bezier',
-                                            'font-size': '7px',
-                                            'color': '#999',
-                                            'text-rotation': 'autorotate',
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'edge[label="IMPLEMENTED_BY"]',
-                                        style: {{
-                                            'line-style': 'dotted',
-                                            'line-color': '#3b82f6',
-                                            'target-arrow-color': '#3b82f6',
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'edge[label="TRACES_TO"]',
-                                        style: {{
-                                            'line-style': 'dashed',
-                                            'line-color': '#e67e22',
-                                            'target-arrow-color': '#e67e22',
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'edge[label="INHERITS_FROM"]',
-                                        style: {{
-                                            'line-style': 'solid',
-                                            'line-color': '#9b59b6',
-                                            'target-arrow-color': '#9b59b6',
-                                            'target-arrow-shape': 'triangle-tee',
-                                        }}
-                                    }},
-                                ],
+                                style: styles,
                                 layout: {{ name: 'fcose', animate: false }},
                             }});
                         """)
@@ -305,9 +179,7 @@ async def node_detail_page(node_id: int):
                 if neo4j:
                     if neo4j.get("implemented_by"):
                         with ui.card().classes("w-full"):
-                            ui.label("Implemented By").classes(
-                                "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                            )
+                            ui.label("Implemented By").classes(CLS_SECTION_HEADER)
                             for impl in neo4j["implemented_by"]:
                                 ui.label(
                                     impl.get("qualified_name", impl.get("name", ""))
@@ -315,9 +187,7 @@ async def node_detail_page(node_id: int):
 
                     if neo4j.get("requirements"):
                         with ui.card().classes("w-full"):
-                            ui.label("Traced Requirements").classes(
-                                "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                            )
+                            ui.label("Traced Requirements").classes(CLS_SECTION_HEADER)
                             for req in neo4j["requirements"]:
                                 with ui.row().classes("items-center gap-2 py-1"):
                                     req_type = req["type"]
@@ -354,7 +224,7 @@ def _render_members_card(
 
     with ui.card().classes("w-full"):
         ui.label("Member Documentation").classes(
-            "text-xs uppercase tracking-wider text-gray-400 mb-3"
+            CLS_SECTION_HEADER
         )
 
         for vis in sorted(grouped.keys(), key=lambda v: _VIS_ORDER.get(v, 9)):
@@ -371,7 +241,7 @@ def _render_members_card(
             attrs = by_kind.get("attribute", [])
             if attrs:
                 ui.label("Attributes").classes(
-                    "text-xs text-gray-500 uppercase tracking-wider mb-1 ml-2"
+                    CLS_SECTION_SUBHEADER + " ml-2"
                 )
                 for a in sorted(attrs, key=lambda x: x["name"]):
                     _render_member_row(a, "attribute", available_types, content_refreshable)
@@ -380,7 +250,7 @@ def _render_members_card(
             methods = by_kind.get("method", [])
             if methods:
                 ui.label("Methods").classes(
-                    "text-xs text-gray-500 uppercase tracking-wider mb-1 ml-2 mt-2"
+                    CLS_SECTION_SUBHEADER + " ml-2 mt-2"
                 )
                 for m in sorted(methods, key=lambda x: x["name"]):
                     _render_member_row(m, "method", available_types, content_refreshable)

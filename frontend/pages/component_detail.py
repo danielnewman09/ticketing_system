@@ -5,7 +5,17 @@ import json
 
 from nicegui import ui
 
-from frontend.theme import KIND_COLORS, apply_theme
+from frontend.theme import (
+    BACKGROUNDS,
+    CLS_DIALOG_MD,
+    CLS_DIALOG_TITLE,
+    CLS_DIALOG_ACTIONS,
+    KIND_COLORS_JS,
+    add_cytoscape_cdn,
+    cytoscape_base_styles,
+    apply_theme,
+)
+from frontend.widgets import section_header, breadcrumb
 from frontend.layout import page_layout
 from frontend.data import (
     fetch_component_detail,
@@ -23,14 +33,8 @@ async def component_detail_page(component_id: int):
     apply_theme()
     page_layout("Component Detail")
 
-    # Cytoscape CDN
-    ui.add_head_html(
-        '<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>'
-        '<script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>'
-        '<script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>'
-        '<script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>'
-    )
-    kind_colors_js = json.dumps(KIND_COLORS)
+    add_cytoscape_cdn()
+    base_styles = cytoscape_base_styles(size="small")
 
     data_ref = {"data": await asyncio.to_thread(fetch_component_detail, component_id)}
 
@@ -43,16 +47,11 @@ async def component_detail_page(component_id: int):
         return
 
     # Breadcrumb
-    with ui.row().classes("items-center gap-1 px-2 mt-4"):
-        ui.link("Components", "/components").classes("text-blue-400 text-sm no-underline")
-        if data["parent"]:
-            ui.label("/").classes("text-gray-500 text-sm")
-            ui.link(
-                data["parent"]["name"],
-                f"/component/{data['parent']['id']}",
-            ).classes("text-blue-400 text-sm no-underline")
-        ui.label("/").classes("text-gray-500 text-sm")
-        ui.label(data["name"]).classes("text-sm text-gray-300")
+    crumbs = [("Components", "/components")]
+    if data["parent"]:
+        crumbs.append((data["parent"]["name"], f"/component/{data['parent']['id']}"))
+    crumbs.append((data["name"], None))
+    breadcrumb(*crumbs)
 
     # Header
     with ui.row().classes("w-full items-center justify-between px-2 mt-2 mb-4"):
@@ -82,9 +81,7 @@ async def component_detail_page(component_id: int):
             # Sub-components
             if data["children"]:
                 with ui.card().classes("w-full"):
-                    ui.label("Sub-Components").classes(
-                        "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                    )
+                    section_header("Sub-Components")
                     with ui.row().classes("gap-3 flex-wrap"):
                         for child in data["children"]:
                             with ui.card().classes("w-56 cursor-pointer").on(
@@ -107,9 +104,7 @@ async def component_detail_page(component_id: int):
             # Requirements (HLRs)
             if data["hlrs"]:
                 with ui.card().classes("w-full"):
-                    ui.label("Requirements").classes(
-                        "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                    )
+                    section_header("Requirements")
                     for hlr in data["hlrs"]:
                         with ui.row().classes("items-start gap-2 py-2 w-full"):
                             ui.link(
@@ -126,15 +121,15 @@ async def component_detail_page(component_id: int):
 
             async def show_setup_dialog():
                 """Setup language + dependency manager in one dialog."""
-                with ui.dialog() as dialog, ui.card().classes("w-96"):
-                    ui.label("Setup Dependencies").classes("text-lg font-bold mb-2")
+                with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+                    ui.label("Setup Dependencies").classes(CLS_DIALOG_TITLE)
                     lang_input = ui.input("Language (e.g. C++, Python)").classes("w-full")
                     lang_ver = ui.input("Language version (optional)").classes("w-full")
                     ui.separator().classes("my-2")
                     dm_name = ui.input("Dependency manager (e.g. conan, pip, vcpkg)").classes("w-full")
                     dm_manifest = ui.input("Manifest file (e.g. conanfile.txt)").classes("w-full")
 
-                    with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                    with ui.row().classes(CLS_DIALOG_ACTIONS):
                         ui.button("Cancel", on_click=dialog.close).props("flat")
 
                         async def do_setup():
@@ -191,9 +186,7 @@ async def component_detail_page(component_id: int):
                     dm = env["dependency_managers"][0]
 
                 with ui.card().classes("w-full"):
-                    ui.label("Dependency Manager").classes(
-                        "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                    )
+                    section_header("Dependency Manager")
 
                     if not dm:
                         ui.label(
@@ -243,12 +236,10 @@ async def component_detail_page(component_id: int):
         # Right column — ontology graph
         with ui.column().classes("flex-1 gap-4"):
             with ui.card().classes("w-full"):
-                ui.label("Design Graph").classes(
-                    "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                )
+                section_header("Design Graph")
                 cy = ui.element("div").style(
-                    "height: calc(100vh - 280px); min-height: 400px; "
-                    "background: #1a1a2e; border-radius: 8px;"
+                    f"height: calc(100vh - 280px); min-height: 400px; "
+                    f"background: {BACKGROUNDS['base']}; border-radius: 8px;"
                 ).classes("w-full")
                 cy._props["id"] = "comp-cy-container"
 
@@ -260,105 +251,13 @@ async def component_detail_page(component_id: int):
             if graph["nodes"]:
                 await ui.run_javascript(f"""
                     if (window._compCy) window._compCy.destroy();
-                    const KIND_COLORS = {kind_colors_js};
+                    const KIND_COLORS = {KIND_COLORS_JS};
                     const container = document.getElementById('comp-cy-container');
                     if (!container) return;
                     window._compCy = cytoscape({{
                         container: container,
                         elements: {elements_json},
-                        style: [
-                            {{
-                                selector: 'node[layer="design"]',
-                                style: {{
-                                    'label': 'data(label)',
-                                    'background-color': '#666',
-                                    'color': '#fff',
-                                    'text-valign': 'bottom',
-                                    'text-halign': 'center',
-                                    'font-size': '9px',
-                                    'width': 30,
-                                    'height': 30,
-                                    'border-width': 2,
-                                    'border-style': 'dashed',
-                                    'border-color': '#aaa',
-                                    'text-wrap': 'ellipsis',
-                                    'text-max-width': '70px',
-                                    'text-margin-y': 3,
-                                }}
-                            }},
-                            {{
-                                selector: 'node[has_members="true"]',
-                                style: {{
-                                    'shape': 'roundrectangle',
-                                    'text-valign': 'center',
-                                    'text-halign': 'center',
-                                    'text-wrap': 'wrap',
-                                    'text-max-width': '200px',
-                                    'font-size': '8px',
-                                    'font-family': 'monospace',
-                                    'text-justification': 'left',
-                                    'width': 'label',
-                                    'height': 'label',
-                                    'padding': '10px',
-                                    'border-style': 'solid',
-                                    'border-width': 2,
-                                    'text-margin-y': 0,
-                                }}
-                            }},
-                            {{
-                                selector: 'node[is_namespace="true"]',
-                                style: {{
-                                    'shape': 'roundrectangle',
-                                    'background-color': '#1a1a2e',
-                                    'background-opacity': 0.6,
-                                    'border-width': 2,
-                                    'border-style': 'dashed',
-                                    'border-color': '#1abc9c',
-                                    'label': 'data(label)',
-                                    'color': '#1abc9c',
-                                    'text-valign': 'top',
-                                    'text-halign': 'center',
-                                    'font-size': '10px',
-                                    'font-weight': 'bold',
-                                    'padding': '16px',
-                                    'text-margin-y': -4,
-                                }}
-                            }},
-                            ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
-                                selector: 'node[kind="' + kind + '"][layer="design"]',
-                                style: {{ 'background-color': color }}
-                            }})),
-                            {{
-                                selector: 'edge',
-                                style: {{
-                                    'label': 'data(label)',
-                                    'width': 1.5,
-                                    'line-color': '#555',
-                                    'target-arrow-color': '#555',
-                                    'target-arrow-shape': 'triangle',
-                                    'curve-style': 'bezier',
-                                    'font-size': '7px',
-                                    'color': '#999',
-                                    'text-rotation': 'autorotate',
-                                }}
-                            }},
-                            {{
-                                selector: 'edge[label="INHERITS_FROM"]',
-                                style: {{
-                                    'line-style': 'solid',
-                                    'line-color': '#9b59b6',
-                                    'target-arrow-color': '#9b59b6',
-                                    'target-arrow-shape': 'triangle-tee',
-                                }}
-                            }},
-                            {{
-                                selector: ':selected',
-                                style: {{
-                                    'border-width': 4,
-                                    'border-color': '#f1c40f',
-                                }}
-                            }},
-                        ],
+                        style: {base_styles},
                         layout: {{ name: 'fcose', animate: false }},
                     }});
                 """)

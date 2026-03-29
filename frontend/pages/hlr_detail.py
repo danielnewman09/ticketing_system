@@ -5,9 +5,19 @@ import json
 
 from nicegui import ui
 
-from frontend.theme import KIND_COLORS, apply_theme
+from frontend.theme import (
+    BACKGROUNDS,
+    CLS_DIALOG_SM,
+    CLS_DIALOG_MD,
+    CLS_DIALOG_TITLE,
+    CLS_DIALOG_ACTIONS,
+    KIND_COLORS_JS,
+    add_cytoscape_cdn,
+    cytoscape_base_styles,
+    apply_theme,
+)
 from frontend.layout import page_layout
-from frontend.widgets import render_llr_table
+from frontend.widgets import render_llr_table, section_header, breadcrumb
 from frontend.data import (
     fetch_hlr_detail,
     fetch_hlr_graph_data,
@@ -26,14 +36,8 @@ async def hlr_detail_page(hlr_id: int):
     apply_theme()
     page_layout(f"HLR {hlr_id}")
 
-    # Cytoscape CDN
-    ui.add_head_html(
-        '<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>'
-        '<script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>'
-        '<script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>'
-        '<script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>'
-    )
-    kind_colors_js = json.dumps(KIND_COLORS)
+    add_cytoscape_cdn()
+    base_styles = cytoscape_base_styles(size="small")
 
     # ---------------------------------------------------------------
     # Refreshable content
@@ -46,11 +50,7 @@ async def hlr_detail_page(hlr_id: int):
             ui.label("HLR not found").classes("text-xl text-red-400")
             return
 
-        # Breadcrumb
-        with ui.row().classes("items-center gap-1 px-2 mt-4"):
-            ui.link("Requirements", "/").classes("text-blue-400 text-sm no-underline")
-            ui.label("/").classes("text-gray-500 text-sm")
-            ui.label(f"HLR {hlr['id']}").classes("text-sm text-gray-300")
+        breadcrumb(("Requirements", "/"), (f"HLR {hlr['id']}", None))
 
         # Header
         with ui.row().classes("w-full items-center justify-between px-2 mt-2 mb-4"):
@@ -75,14 +75,12 @@ async def hlr_detail_page(hlr_id: int):
         with ui.row().classes("w-full gap-4 px-2 items-start"):
             with ui.column().classes("flex-1 gap-4"):
                 with ui.card().classes("w-full"):
-                    ui.label("Description").classes("text-xs uppercase tracking-wider text-gray-400 mb-2")
+                    section_header("Description")
                     ui.label(hlr["description"]).classes("text-sm")
 
                 with ui.card().classes("w-full"):
                     with ui.row().classes("w-full items-center justify-between mb-2"):
-                        ui.label("Low-Level Requirements").classes(
-                            "text-xs uppercase tracking-wider text-gray-400"
-                        )
+                        section_header("Low-Level Requirements")
                         with ui.row().classes("gap-1"):
                             ui.button(
                                 "Decompose",
@@ -100,11 +98,9 @@ async def hlr_detail_page(hlr_id: int):
 
             with ui.column().classes("flex-1 gap-4"):
                 with ui.card().classes("w-full"):
-                    ui.label("Design Graph").classes(
-                        "text-xs uppercase tracking-wider text-gray-400 mb-2"
-                    )
+                    section_header("Design Graph")
                     cy = ui.element("div").style(
-                        "height: 400px; background: #1a1a2e; border-radius: 8px;"
+                        f"height: 400px; background: {BACKGROUNDS['base']}; border-radius: 8px;"
                     ).classes("w-full")
                     cy._props["id"] = "hlr-cy-container"
 
@@ -116,105 +112,13 @@ async def hlr_detail_page(hlr_id: int):
                 if graph["nodes"]:
                     await ui.run_javascript(f"""
                         if (window._hlrCy) window._hlrCy.destroy();
-                        const KIND_COLORS = {kind_colors_js};
+                        const KIND_COLORS = {KIND_COLORS_JS};
                         const container = document.getElementById('hlr-cy-container');
                         if (!container) return;
                         window._hlrCy = cytoscape({{
                             container: container,
                             elements: {elements_json},
-                            style: [
-                                {{
-                                    selector: 'node[layer="design"]',
-                                    style: {{
-                                        'label': 'data(label)',
-                                        'background-color': '#666',
-                                        'color': '#fff',
-                                        'text-valign': 'bottom',
-                                        'text-halign': 'center',
-                                        'font-size': '9px',
-                                        'width': 30,
-                                        'height': 30,
-                                        'border-width': 2,
-                                        'border-style': 'dashed',
-                                        'border-color': '#aaa',
-                                        'text-wrap': 'ellipsis',
-                                        'text-max-width': '70px',
-                                        'text-margin-y': 3,
-                                    }}
-                                }},
-                                {{
-                                    selector: 'node[has_members="true"]',
-                                    style: {{
-                                        'shape': 'roundrectangle',
-                                        'text-valign': 'center',
-                                        'text-halign': 'center',
-                                        'text-wrap': 'wrap',
-                                        'text-max-width': '200px',
-                                        'font-size': '8px',
-                                        'font-family': 'monospace',
-                                        'text-justification': 'left',
-                                        'width': 'label',
-                                        'height': 'label',
-                                        'padding': '10px',
-                                        'border-style': 'solid',
-                                        'border-width': 2,
-                                        'text-margin-y': 0,
-                                    }}
-                                }},
-                                {{
-                                    selector: 'node[is_namespace="true"]',
-                                    style: {{
-                                        'shape': 'roundrectangle',
-                                        'background-color': '#1a1a2e',
-                                        'background-opacity': 0.6,
-                                        'border-width': 2,
-                                        'border-style': 'dashed',
-                                        'border-color': '#1abc9c',
-                                        'label': 'data(label)',
-                                        'color': '#1abc9c',
-                                        'text-valign': 'top',
-                                        'text-halign': 'center',
-                                        'font-size': '10px',
-                                        'font-weight': 'bold',
-                                        'padding': '16px',
-                                        'text-margin-y': -4,
-                                    }}
-                                }},
-                                ...Object.entries(KIND_COLORS).map(([kind, color]) => ({{
-                                    selector: 'node[kind="' + kind + '"][layer="design"]',
-                                    style: {{ 'background-color': color }}
-                                }})),
-                                {{
-                                    selector: 'edge',
-                                    style: {{
-                                        'label': 'data(label)',
-                                        'width': 1.5,
-                                        'line-color': '#555',
-                                        'target-arrow-color': '#555',
-                                        'target-arrow-shape': 'triangle',
-                                        'curve-style': 'bezier',
-                                        'font-size': '7px',
-                                        'color': '#999',
-                                        'text-rotation': 'autorotate',
-                                    }}
-                                }},
-                                {{
-                                    selector: 'edge[label="INHERITS_FROM"]',
-                                    style: {{
-                                        'line-style': 'solid',
-                                        'line-color': '#9b59b6',
-                                        'target-arrow-color': '#9b59b6',
-                                        'target-arrow-shape': 'triangle-tee',
-                                    }}
-                                }},
-                                {{
-                                    selector: ':selected',
-                                    style: {{
-                                        'border-width': 4,
-                                        'border-color': '#f1c40f',
-                                    }}
-                                }},
-                            ],
+                            style: {base_styles},
                             layout: {{ name: 'fcose', animate: false }},
                         }});
                     """)
@@ -229,12 +133,12 @@ async def hlr_detail_page(hlr_id: int):
         comp_names = ["(none)"] + [c["name"] for c in components]
         current_comp = hlr["component"] if hlr["component"] else "(none)"
 
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
-            ui.label(f"Edit HLR {hlr['id']}").classes("text-lg font-bold mb-2")
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label(f"Edit HLR {hlr['id']}").classes(CLS_DIALOG_TITLE)
             desc_input = ui.textarea("Description", value=hlr["description"]).classes("w-full")
             comp_select = ui.select(comp_names, value=current_comp, label="Component").classes("w-full")
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_update():
@@ -257,12 +161,12 @@ async def hlr_detail_page(hlr_id: int):
     # ---------------------------------------------------------------
 
     async def confirm_delete(hid: int):
-        with ui.dialog() as dialog, ui.card().classes("w-80"):
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_SM):
             ui.label(f"Delete HLR {hid}?").classes("text-lg font-bold")
             ui.label("This will also delete all child LLRs and their verifications.").classes(
                 "text-sm text-gray-400 mt-1"
             )
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_delete():
@@ -280,14 +184,14 @@ async def hlr_detail_page(hlr_id: int):
     # ---------------------------------------------------------------
 
     async def confirm_decompose():
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
             ui.label(f"Decompose HLR {hlr_id}?").classes("text-lg font-bold")
             ui.label(
                 "This will run the decomposition agent to generate low-level "
                 "requirements and verification methods."
             ).classes("text-sm text-gray-400 mt-1")
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_decompose():
@@ -313,11 +217,11 @@ async def hlr_detail_page(hlr_id: int):
     # ---------------------------------------------------------------
 
     async def show_add_llr_dialog():
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
-            ui.label(f"Add LLR to HLR {hlr_id}").classes("text-lg font-bold mb-2")
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label(f"Add LLR to HLR {hlr_id}").classes(CLS_DIALOG_TITLE)
             desc_input = ui.textarea("Description").classes("w-full")
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_create():
@@ -339,11 +243,11 @@ async def hlr_detail_page(hlr_id: int):
     # ---------------------------------------------------------------
 
     async def show_edit_llr_dialog(llr_id: int, current_description: str):
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
-            ui.label(f"Edit LLR {llr_id}").classes("text-lg font-bold mb-2")
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label(f"Edit LLR {llr_id}").classes(CLS_DIALOG_TITLE)
             desc_input = ui.textarea("Description", value=current_description or "").classes("w-full")
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_update():
@@ -365,12 +269,12 @@ async def hlr_detail_page(hlr_id: int):
     # ---------------------------------------------------------------
 
     async def confirm_delete_llr(llr_id: int):
-        with ui.dialog() as dialog, ui.card().classes("w-80"):
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_SM):
             ui.label(f"Delete LLR {llr_id}?").classes("text-lg font-bold")
             ui.label("This will also delete its verification methods.").classes(
                 "text-sm text-gray-400 mt-1"
             )
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_delete():

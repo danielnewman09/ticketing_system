@@ -5,6 +5,7 @@ import os
 
 from nicegui import ui
 
+from frontend.theme import BACKGROUNDS, COLORS, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS
 from frontend.layout import stat_card
 from frontend.data import (
     fetch_project_meta,
@@ -39,7 +40,7 @@ async def section_project_meta():
     async def card():
         meta = await asyncio.to_thread(fetch_project_meta)
         with ui.card().classes("w-full mx-2 mt-4").style(
-            "background: #1e293b; border-left: 4px solid #5c7cfa;"
+            f"background: {BACKGROUNDS['surface']}; border-left: 4px solid {COLORS['primary']};"
         ):
             with ui.row().classes("w-full items-start justify-between"):
                 with ui.column().classes("flex-1 gap-1"):
@@ -64,8 +65,8 @@ async def section_project_meta():
 async def _show_edit_dialog(meta: dict, refreshable):
     from frontend.widgets import directory_picker
 
-    with ui.dialog() as dialog, ui.card().classes("w-96"):
-        ui.label("Project Settings").classes("text-lg font-bold mb-2")
+    with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+        ui.label("Project Settings").classes(CLS_DIALOG_TITLE)
         name_input = ui.input("Name", value=meta["name"]).classes("w-full")
         desc_input = ui.textarea("Description", value=meta["description"]).classes("w-full")
 
@@ -86,7 +87,7 @@ async def _show_edit_dialog(meta: dict, refreshable):
                 "flat round size=sm"
             ).tooltip("Browse…")
 
-        with ui.row().classes("w-full justify-end gap-2 mt-4"):
+        with ui.row().classes(CLS_DIALOG_ACTIONS):
             ui.button("Cancel", on_click=dialog.close).props("flat")
 
             async def do_save():
@@ -251,7 +252,7 @@ async def section_pending_recommendations():
         return
 
     with ui.card().classes("w-full mx-2 mt-4").style(
-        "background: #1e293b; border-left: 4px solid #f59e0b;"
+        f"background: {BACKGROUNDS['surface']}; border-left: 4px solid {COLORS['warning']};"
     ):
         with ui.row().classes("items-center gap-3"):
             ui.icon("science", color="warning", size="sm")

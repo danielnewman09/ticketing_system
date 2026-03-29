@@ -5,7 +5,15 @@ import json
 
 from nicegui import ui
 
-from frontend.theme import KIND_COLORS, LAYER_STYLES, apply_theme
+from frontend.theme import (
+    KIND_COLORS,
+    BACKGROUNDS,
+    CLS_SECTION_HEADER,
+    KIND_COLORS_JS,
+    add_cytoscape_cdn,
+    cytoscape_base_styles,
+    apply_theme,
+)
 from frontend.layout import page_layout
 from frontend.data import (
     fetch_ontology_graph_data,
@@ -26,16 +34,8 @@ async def ontology_graph_page():
     selected_node = {"data": None}
     graph_layer = {"value": "design"}  # "design" or "codebase"
 
-    # -- Cytoscape CDN --
-    ui.add_head_html(
-        '<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>'
-        '<script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>'
-        '<script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>'
-        '<script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>'
-    )
-
-    # -- Build KIND_COLORS JS object --
-    kind_colors_js = json.dumps(KIND_COLORS)
+    add_cytoscape_cdn()
+    base_styles = cytoscape_base_styles(size="large")
 
     async def load_graph():
         if graph_layer["value"] == "codebase":
@@ -52,168 +52,13 @@ async def ontology_graph_page():
         elements_json = json.dumps(data["nodes"] + data["edges"])
         await ui.run_javascript(f"""
             if (window._cy) window._cy.destroy();
-            const KIND_COLORS = {kind_colors_js};
+            const KIND_COLORS = {KIND_COLORS_JS};
             const container = document.getElementById('cy-container');
             if (!container) {{ console.error('cy-container not found'); return; }}
             window._cy = cytoscape({{
                 container: container,
                 elements: {elements_json},
-                style: [
-                    {{
-                        selector: 'node[layer="design"]',
-                        style: {{
-                            'label': 'data(label)',
-                            'background-color': '#666',
-                            'color': '#fff',
-                            'text-valign': 'bottom',
-                            'text-halign': 'center',
-                            'font-size': '10px',
-                            'width': 40,
-                            'height': 40,
-                            'border-width': 2,
-                            'border-style': 'dashed',
-                            'border-color': '#aaa',
-                            'text-wrap': 'ellipsis',
-                            'text-max-width': '80px',
-                            'text-margin-y': 4,
-                        }}
-                    }},
-                    // Class/object nodes with collapsed private attributes
-                    {{
-                        selector: 'node[has_members="true"]',
-                        style: {{
-                            'shape': 'roundrectangle',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '200px',
-                            'font-size': '9px',
-                            'font-family': 'monospace',
-                            'text-justification': 'left',
-                            'width': 'label',
-                            'height': 'label',
-                            'padding': '12px',
-                            'border-style': 'solid',
-                            'border-width': 2,
-                            'text-margin-y': 0,
-                        }}
-                    }},
-                    // Namespace compound nodes
-                    {{
-                        selector: 'node[is_namespace="true"]',
-                        style: {{
-                            'shape': 'roundrectangle',
-                            'background-color': '#1a1a2e',
-                            'background-opacity': 0.6,
-                            'border-width': 2,
-                            'border-style': 'dashed',
-                            'border-color': '#1abc9c',
-                            'label': 'data(label)',
-                            'color': '#1abc9c',
-                            'text-valign': 'top',
-                            'text-halign': 'center',
-                            'font-size': '11px',
-                            'font-weight': 'bold',
-                            'padding': '20px',
-                            'text-margin-y': -4,
-                        }}
-                    }},
-                    // Per-kind color selectors (both layers)
-                    ...Object.entries(KIND_COLORS).flatMap(([kind, color]) => [
-                        {{
-                            selector: 'node[kind="' + kind + '"][layer="design"]',
-                            style: {{ 'background-color': color }}
-                        }},
-                        {{
-                            selector: 'node[kind="' + kind + '"][layer="as-built"]',
-                            style: {{ 'background-color': color }}
-                        }},
-                    ]),
-                    {{
-                        selector: 'node[layer="as-built"]',
-                        style: {{
-                            'label': 'data(label)',
-                            'background-color': '#555',
-                            'color': '#ddd',
-                            'text-valign': 'bottom',
-                            'text-halign': 'center',
-                            'font-size': '10px',
-                            'width': 40,
-                            'height': 40,
-                            'border-width': 2,
-                            'border-style': 'solid',
-                            'border-color': '#888',
-                            'text-wrap': 'ellipsis',
-                            'text-max-width': '80px',
-                            'text-margin-y': 4,
-                        }}
-                    }},
-                    {{
-                        selector: 'node[layer="requirement"]',
-                        style: {{
-                            'label': 'data(label)',
-                            'background-color': '#e67e22',
-                            'color': '#fff',
-                            'text-valign': 'bottom',
-                            'text-halign': 'center',
-                            'font-size': '9px',
-                            'shape': 'diamond',
-                            'width': 35,
-                            'height': 35,
-                            'border-width': 2,
-                            'border-color': '#d35400',
-                            'text-wrap': 'ellipsis',
-                            'text-max-width': '80px',
-                            'text-margin-y': 4,
-                        }}
-                    }},
-                    {{
-                        selector: 'edge',
-                        style: {{
-                            'label': 'data(label)',
-                            'width': 1.5,
-                            'line-color': '#555',
-                            'target-arrow-color': '#555',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'font-size': '8px',
-                            'color': '#999',
-                            'text-rotation': 'autorotate',
-                        }}
-                    }},
-                    {{
-                        selector: 'edge[label="IMPLEMENTED_BY"]',
-                        style: {{
-                            'line-style': 'dotted',
-                            'line-color': '#3b82f6',
-                            'target-arrow-color': '#3b82f6',
-                        }}
-                    }},
-                    {{
-                        selector: 'edge[label="TRACES_TO"]',
-                        style: {{
-                            'line-style': 'dashed',
-                            'line-color': '#e67e22',
-                            'target-arrow-color': '#e67e22',
-                        }}
-                    }},
-                    {{
-                        selector: 'edge[label="INHERITS_FROM"]',
-                        style: {{
-                            'line-style': 'solid',
-                            'line-color': '#9b59b6',
-                            'target-arrow-color': '#9b59b6',
-                            'target-arrow-shape': 'triangle-tee',
-                        }}
-                    }},
-                    {{
-                        selector: ':selected',
-                        style: {{
-                            'border-width': 4,
-                            'border-color': '#f1c40f',
-                        }}
-                    }},
-                ],
+                style: {base_styles},
                 layout: {{ name: window._cyLayout || 'fcose', animate: true, animationDuration: 500 }},
             }});
             window._cy.on('tap', 'node', function(evt) {{
@@ -303,7 +148,7 @@ async def ontology_graph_page():
     with ui.row().classes("w-full gap-0 px-2").style("height: calc(100vh - 240px); min-height: 400px"):
         # Graph container — single div with id for Cytoscape to mount into
         cy = ui.element("div").classes("flex-grow").style(
-            "height: 100%; background: #1a1a2e; border-radius: 8px;"
+            f"height: 100%; background: {BACKGROUNDS['base']}; border-radius: 8px;"
         )
         cy._props["id"] = "cy-container"
 
@@ -334,7 +179,7 @@ async def ontology_graph_page():
                 # Outgoing relationships
                 if d["outgoing"]:
                     ui.separator().classes("my-2")
-                    ui.label("Outgoing").classes("text-xs uppercase tracking-wider text-gray-400")
+                    ui.label("Outgoing").classes(CLS_SECTION_HEADER)
                     for r in d["outgoing"]:
                         with ui.row().classes("items-center gap-1"):
                             ui.badge(r["rel"], color="grey").classes("text-xs")
@@ -343,7 +188,7 @@ async def ontology_graph_page():
                 # Incoming relationships
                 if d["incoming"]:
                     ui.separator().classes("my-2")
-                    ui.label("Incoming").classes("text-xs uppercase tracking-wider text-gray-400")
+                    ui.label("Incoming").classes(CLS_SECTION_HEADER)
                     for r in d["incoming"]:
                         with ui.row().classes("items-center gap-1"):
                             ui.label(r.get("source_name") or r.get("source_qn", "")).classes("text-xs")
@@ -352,14 +197,14 @@ async def ontology_graph_page():
                 # Implemented by
                 if d["implemented_by"]:
                     ui.separator().classes("my-2")
-                    ui.label("Implemented By").classes("text-xs uppercase tracking-wider text-gray-400")
+                    ui.label("Implemented By").classes(CLS_SECTION_HEADER)
                     for impl in d["implemented_by"]:
                         ui.label(impl.get("qualified_name", impl.get("name", ""))).classes("text-xs text-blue-300")
 
                 # Requirements
                 if d["requirements"]:
                     ui.separator().classes("my-2")
-                    ui.label("Traced Requirements").classes("text-xs uppercase tracking-wider text-gray-400")
+                    ui.label("Traced Requirements").classes(CLS_SECTION_HEADER)
                     for req in d["requirements"]:
                         with ui.row().classes("items-center gap-1"):
                             ui.badge(req["type"], color="orange" if req["type"] == "HLR" else "amber").classes("text-xs")
