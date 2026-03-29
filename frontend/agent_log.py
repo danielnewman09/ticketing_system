@@ -67,6 +67,7 @@ def install_hooks():
     try:
         import llm_caller.logging as llm_logging
     except ImportError:
+        print('ERROR: Could not import llm_caller logs')
         return
 
     _orig_write_prompt = llm_logging.write_prompt_log
@@ -118,6 +119,22 @@ def install_hooks():
 
         return on_turn
 
+    # Patch the module-level references
     llm_logging.write_prompt_log = patched_write_prompt_log
     llm_logging.write_raw_log = patched_write_raw
     llm_logging.make_turn_logger = patched_make_turn_logger
+
+    # Also patch the already-imported references in client and tool_loop,
+    # since they use `from llm_caller.logging import ...` at import time
+    try:
+        import llm_caller.client as _client
+        _client.write_prompt_log = patched_write_prompt_log
+        _client.write_raw_log = patched_write_raw
+    except (ImportError, AttributeError):
+        print('ERROR: Could not import llm_caller logs')
+    try:
+        import llm_caller.tool_loop as _tool_loop
+        _tool_loop.write_conversation_log = llm_logging.write_conversation_log
+        _tool_loop.make_turn_logger = patched_make_turn_logger
+    except (ImportError, AttributeError):
+        print('ERROR: Could not import llm_caller logs')
