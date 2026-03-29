@@ -135,6 +135,7 @@ class Dependency(Base):
     manager_id: Mapped[int] = mapped_column(ForeignKey("dependency_managers.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     version: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    github_url: Mapped[str] = mapped_column(String(500), default="", server_default="")
     is_dev: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     manager: Mapped[DependencyManager] = relationship("DependencyManager", back_populates="dependencies")

@@ -61,6 +61,7 @@ def fetch_environment_data() -> list[dict]:
                     deps.append({
                         "name": d.name,
                         "version": d.version,
+                        "github_url": d.github_url,
                         "manager": dm.name,
                         "is_dev": d.is_dev,
                     })
@@ -795,6 +796,7 @@ def accept_recommendation(rec_id: int) -> bool:
                 manager_id=dm.id,
                 name=rec.name,
                 version=rec.version,
+                github_url=rec.github_url,
             ))
         return True
 

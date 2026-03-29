@@ -106,6 +106,9 @@ async def project_page():
     # Quick stats
     # ---------------------------------------------------------------
 
+    meta = await asyncio.to_thread(fetch_project_meta)
+    project_dir = os.path.join(meta["working_directory"], meta["name"]) if meta["working_directory"] and meta["name"] else ""
+
     data = await asyncio.to_thread(fetch_requirements_data)
 
     with ui.row().classes("w-full gap-4 flex-wrap px-2 mt-4"):
@@ -118,36 +121,134 @@ async def project_page():
         stat_card("Ontology Nodes", data["total_nodes"], "purple-5")
 
     # ---------------------------------------------------------------
-    # Build environment
+    # Dependency management
     # ---------------------------------------------------------------
 
     env_data = await asyncio.to_thread(fetch_environment_data)
     if env_data:
         with ui.card().classes("w-full mx-2 mt-4"):
-            ui.label("Build Environment").classes("text-sm font-semibold mb-2")
+            ui.label("Dependency Management").classes("text-sm font-semibold mb-2")
             for lang in env_data:
                 with ui.row().classes("w-full items-start gap-4 flex-wrap"):
-                    # Language
                     version_str = f" {lang['version']}" if lang["version"] else ""
                     ui.badge(f"{lang['name']}{version_str}", color="blue").classes("text-xs")
-
-                    # Build systems
                     for bs in lang["build_systems"]:
                         ui.badge(f"{bs['name']}", color="grey").classes("text-xs")
-
-                    # Test frameworks
                     for tf in lang["test_frameworks"]:
                         ui.badge(f"{tf['name']}", color="grey").classes("text-xs")
 
-                # Dependencies
                 if lang["dependencies"]:
-                    with ui.row().classes("w-full gap-2 flex-wrap mt-1 ml-2"):
-                        for dep in lang["dependencies"]:
+                    conan_deps = _get_conan_deps(project_dir) if project_dir else set()
+                    for dep in lang["dependencies"]:
+                        integrated = dep["name"].lower() in conan_deps
+                        with ui.row().classes("w-full items-center gap-2 mt-1 ml-2"):
                             version = f"=={dep['version']}" if dep["version"] else ""
                             color = "grey" if not dep["is_dev"] else "orange"
                             ui.badge(
                                 f"{dep['name']}{version}", color=color,
                             ).classes("text-xs font-mono")
+                            if integrated:
+                                ui.badge("integrated", color="positive").classes("text-xs")
+                            elif project_dir:
+                                ui.badge("not in build", color="negative").classes("text-xs")
+                                ui.button(
+                                    "Integrate", icon="add_circle",
+                                    on_click=lambda _, d=dep: open_integrate_dialog(d),
+                                ).props("flat size=xs").classes("text-blue-400")
+
+            # Conan files
+            if project_dir:
+                conan_files = _scan_conan_files(project_dir)
+                if conan_files:
+                    ui.separator().classes("my-2")
+                    _render_file_tree(conan_files, project_dir)
+
+    # ---------------------------------------------------------------
+    # Integrate dependency dialog
+    # ---------------------------------------------------------------
+
+    with ui.dialog() as integrate_dialog, ui.card().classes("w-[480px]"):
+        ui.label("Integrate Dependency").classes("text-lg font-bold mb-2")
+        ui.label(
+            "This will run the add-conan-dependency skill to create a Conan recipe "
+            "and wire the dependency into your build."
+        ).classes("text-sm text-gray-400 mb-3")
+
+        int_dep_label = ui.label("").classes("text-sm font-semibold")
+        int_source_url = ui.input("Source URL (git repo or download)").classes("w-full")
+        int_version = ui.input("Version / git tag").classes("w-full")
+        int_consuming_lib = ui.input(
+            "Consuming library (which project lib uses this)",
+        ).classes("w-full")
+
+        with ui.row().classes("w-full justify-end gap-2 mt-2"):
+            ui.button("Cancel", on_click=integrate_dialog.close).props("flat size=sm")
+            ui.button(
+                "Integrate", icon="build",
+                on_click=lambda: run_integrate(),
+            ).props("color=primary size=sm")
+
+    _integrate_dep = {"name": ""}
+
+    def open_integrate_dialog(dep: dict):
+        _integrate_dep["name"] = dep["name"]
+        int_dep_label.text = f"Dependency: {dep['name']}"
+        int_version.value = dep.get("version", "")
+        int_source_url.value = dep.get("github_url", "")
+        int_consuming_lib.value = ""
+        integrate_dialog.open()
+
+    async def run_integrate():
+        dep_name = _integrate_dep["name"]
+        source_url = int_source_url.value.strip()
+        version = int_version.value.strip()
+        consuming_lib = int_consuming_lib.value.strip()
+
+        if not source_url:
+            ui.notify("Source URL is required", type="warning")
+            return
+        if not version:
+            ui.notify("Version is required", type="warning")
+            return
+        if not consuming_lib:
+            ui.notify("Consuming library is required", type="warning")
+            return
+
+        integrate_dialog.close()
+        ui.notify(f"Integrating {dep_name} — this may take a few minutes...", type="info")
+
+        try:
+            from llm_caller.skill_runner import run_skill
+
+            user_msg = (
+                f"Add `{dep_name}` as a locally-built Conan dependency.\n\n"
+                f"**Library name:** `{dep_name}`\n"
+                f"**Source URL:** `{source_url}`\n"
+                f"**Version/tag:** `{version}`\n"
+                f"**Consuming library:** `{consuming_lib}`\n\n"
+                f"Follow the skill instructions: research the library, create the conan recipe, "
+                f"register it, update VS Code tasks, wire into the consuming library, and verify "
+                f"the build. Call task_complete when done."
+            )
+
+            skill_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                "skills", "add-conan-dependency",
+            )
+
+            result = await asyncio.to_thread(
+                run_skill,
+                skill_dir=skill_dir,
+                user_message=user_msg,
+                working_directory=project_dir,
+            )
+            if result.get("build_success"):
+                ui.notify(f"{dep_name} integrated and build verified!", type="positive")
+            else:
+                ui.notify(f"{dep_name} integrated (build not verified)", type="warning")
+            ui.navigate.to("/")
+        except Exception as e:
+            ui.notify(f"Integration failed: {e}", type="negative")
 
     # ---------------------------------------------------------------
     # Pending recommendations alert
@@ -180,10 +281,7 @@ async def project_page():
     # Scaffold section
     # ---------------------------------------------------------------
 
-    meta = await asyncio.to_thread(fetch_project_meta)
     scaffolded = _project_exists(meta["working_directory"], meta["name"])
-
-    project_dir = os.path.join(meta["working_directory"], meta["name"]) if meta["working_directory"] and meta["name"] else ""
 
     with ui.card().classes("w-full mx-2 mt-4"):
         with ui.row().classes("w-full items-center justify-between"):
@@ -340,11 +438,12 @@ def open_file_in_vscode(project_dir: str, file_path: str):
 
 
 _IGNORED_DIRS = {"build", ".git", "__pycache__", ".venv", "installs", ".vscode", "node_modules"}
-_SHOW_FILES = {"CMakeLists.txt", "CMakeUserPresets.json"}
+_CMAKE_FILES = {"CMakeLists.txt", "CMakeUserPresets.json"}
+_CONAN_FILES = {"conanfile.py", "conanfile.txt"}
 
 
-def _scan_project_tree(root: str, rel: str = "") -> list[dict]:
-    """Scan directory tree, returning only CMake files in a nested structure."""
+def _scan_filtered_tree(root: str, allowed_files: set[str], rel: str = "") -> list[dict]:
+    """Scan directory tree, returning only files matching allowed_files."""
     full = os.path.join(root, rel) if rel else root
     try:
         items = sorted(os.listdir(full))
@@ -357,13 +456,79 @@ def _scan_project_tree(root: str, rel: str = "") -> list[dict]:
         path = os.path.join(full, name)
         rel_path = os.path.join(rel, name) if rel else name
         if os.path.isdir(path) and name not in _IGNORED_DIRS and not name.startswith("."):
-            children = _scan_project_tree(root, rel_path)
-            if children:  # only include dirs that contain matching files
+            children = _scan_filtered_tree(root, allowed_files, rel_path)
+            if children:
                 dirs.append({"name": name, "path": rel_path, "is_dir": True, "children": children})
-        elif name in _SHOW_FILES:
+        elif name in allowed_files:
             files.append({"name": name, "path": rel_path, "is_dir": False})
 
     return dirs + files
+
+
+def _scan_project_tree(root: str) -> list[dict]:
+    return _scan_filtered_tree(root, _CMAKE_FILES)
+
+
+def _scan_conan_files(root: str) -> list[dict]:
+    """Scan for conanfile.py/txt at root + full conan/ directory contents."""
+    entries = []
+    for name in _CONAN_FILES:
+        if os.path.isfile(os.path.join(root, name)):
+            entries.append({"name": name, "path": name, "is_dir": False})
+    conan_dir = os.path.join(root, "conan")
+    if os.path.isdir(conan_dir):
+        children = _scan_all_files(root, "conan")
+        if children:
+            entries.append({"name": "conan", "path": "conan", "is_dir": True, "children": children})
+    return entries
+
+
+def _scan_all_files(root: str, rel: str) -> list[dict]:
+    """Scan a directory recursively, returning all files."""
+    full = os.path.join(root, rel)
+    try:
+        items = sorted(os.listdir(full))
+    except OSError:
+        return []
+
+    dirs = []
+    files = []
+    for name in items:
+        path = os.path.join(full, name)
+        rel_path = os.path.join(rel, name)
+        if os.path.isdir(path) and not name.startswith("."):
+            children = _scan_all_files(root, rel_path)
+            if children:
+                dirs.append({"name": name, "path": rel_path, "is_dir": True, "children": children})
+        elif not name.startswith("."):
+            files.append({"name": name, "path": rel_path, "is_dir": False})
+
+    return dirs + files
+
+
+def _get_conan_deps(project_dir: str) -> set[str]:
+    """Parse conanfile.py to find integrated dependency names (lowercase)."""
+    conanfile = os.path.join(project_dir, "conanfile.py")
+    if not os.path.isfile(conanfile):
+        return set()
+    try:
+        import re
+        with open(conanfile) as f:
+            content = f.read()
+        # Match self.requires("name/version") and self.build_requires("name/version")
+        # Also match requires = "name/version" style
+        deps = set()
+        for m in re.finditer(r'self\.(?:build_)?requires\(\s*["\']([^/"\'"]+)', content):
+            deps.add(m.group(1).lower())
+        # Also check conan/ directory for local recipes
+        conan_dir = os.path.join(project_dir, "conan")
+        if os.path.isdir(conan_dir):
+            for name in os.listdir(conan_dir):
+                if os.path.isdir(os.path.join(conan_dir, name)):
+                    deps.add(name.lower())
+        return deps
+    except Exception:
+        return set()
 
 
 def _render_file_tree(tree: list[dict], project_dir: str, depth: int = 0):
