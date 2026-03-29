@@ -1,5 +1,6 @@
 """Page definitions. Import this module to register all routes."""
 
+from frontend.pages.project import project_page
 from frontend.pages.requirements import requirements_page
 from frontend.pages.hlr_detail import hlr_detail_page
 from frontend.pages.llr_detail import llr_detail_page
@@ -11,6 +12,7 @@ from frontend.pages.component_detail import component_detail_page
 from frontend.pages.dependency_review import dependency_review_page
 
 __all__ = [
+    "project_page",
     "requirements_page",
     "hlr_detail_page",
     "llr_detail_page",

@@ -3,7 +3,8 @@
 from nicegui import ui
 
 _NAV_ITEMS = [
-    ("Requirements", "/"),
+    ("Project", "/"),
+    ("Requirements", "/requirements"),
     ("Components", "/components"),
     ("Ontology", "/ontology"),
     ("Ontology Graph", "/ontology/graph"),
