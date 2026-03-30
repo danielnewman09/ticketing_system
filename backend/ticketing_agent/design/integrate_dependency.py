@@ -95,7 +95,7 @@ def integrate_dependency(
 
     user_msg = (
         f"Add `{dep_name}` as a locally-built Conan dependency.\n\n"
-        f"**Library name:** `{dep_name}`\n"
+        f"**Dependency name:** `{dep_name}`\n"
         f"**Source URL:** `{source_url}`\n"
         f"**Version/tag:** `{version}`\n"
         f"**Consuming library:** `{consuming_lib}`\n\n"

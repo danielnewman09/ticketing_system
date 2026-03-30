@@ -1,5 +1,7 @@
 # conanfile.py Template — Download Source
 
+**Output path:** `conan/{dependency_name}/conanfile.py` (e.g., `conan/sqlite3/conanfile.py`)
+
 For libraries distributed as tarballs/zips rather than Git repositories.
 
 Variables to substitute:

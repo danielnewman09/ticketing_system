@@ -1,5 +1,7 @@
 # conanfile.py Template — Git Source (Most Common)
 
+**Output path:** `conan/{dependency_name}/conanfile.py`
+
 This is the standard pattern for libraries fetched from a Git repository.
 
 Variables to substitute:

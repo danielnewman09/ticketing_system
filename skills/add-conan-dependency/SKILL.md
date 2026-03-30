@@ -1,18 +1,18 @@
 ---
 name: add-conan-dependency
-description: Add a new from-source Conan dependency to the project. Creates a local conanfile.py in conan/{lib}/, registers it in the root conanfile.py, updates the VSCode "Create Conan Dependencies" task, and wires the library into the consuming CMakeLists.txt.
+description: Add a new from-source Conan dependency to the project. Creates a local conanfile.py in conan/{dependency_name}/, registers it in the root conanfile.py, updates the VSCode "Create Conan Dependencies" task, and wires the library into the consuming CMakeLists.txt.
 
 <example>
 Context: User wants to add a new library dependency.
 user: "Add nlopt as a dependency for msd-sim"
-assistant: "I'll create a local Conan recipe in conan/nlopt/, register it in the root conanfile, update the VSCode task, and wire it into msd-sim's CMakeLists.txt."
+assistant: "I'll create a local Conan recipe, register it in the root conanfile, update the VSCode task, and wire it into the consuming library's CMakeLists.txt."
 <Follows skill steps>
 </example>
 
 <example>
 Context: User wants to add a header-only or C library.
 user: "Add sqlite3 as a C dependency"
-assistant: "I'll create a local Conan recipe for sqlite3 with C-only settings (removing cppstd/libcxx), generate its CMakeLists.txt, and register it."
+assistant: "I'll create a local Conan recipe with C-only settings (removing cppstd/libcxx) and register it."
 <Follows skill steps>
 </example>
 
@@ -23,15 +23,15 @@ model: sonnet
 
 ## What This Does
 
-Adds a new third-party library as a **locally-built from-source** Conan dependency. This follows the project convention where all dependencies are compiled locally via recipes stored in `conan/{lib}/conanfile.py`, rather than relying on Conan Center packages.
+Adds a new third-party library as a **locally-built from-source** Conan dependency. This follows the project convention where all dependencies are compiled locally via recipes stored in `conan/{dependency_name}/conanfile.py`, rather than relying on Conan Center packages.
 
 ## Inputs
 
 The user must provide:
-1. **Library name** (e.g., `nlopt`, `sqlite3`, `eigen`)
+1. **Dependency name** — the package name to use in Conan
 2. **Source URL** — Git repository URL or download URL
 3. **Version / tag** — Git tag or release version
-4. **Which project library consumes it** (e.g., `msd-sim`, `my-engine-core`)
+4. **Consuming library** — which project library uses this dependency
 
 The user may optionally provide:
 - **License** and **author**
@@ -49,8 +49,8 @@ The user may optionally provide:
 
 Before generating anything, understand how the library builds:
 
-**First, discover the correct git tag/branch for checkout.** Tag names vary widely
-across projects (e.g., `v1.4.4`, `release-1.4.4`, `1.4.4`, `FLTK-1.4.4`). Run:
+**First, discover the correct git tag/branch for checkout.** Tag naming
+conventions vary widely across projects — do not guess. Run:
 ```bash
 git ls-remote --tags --refs {source_url} | head -30
 ```
@@ -64,12 +64,15 @@ Then examine the library's build system:
 - Check if it has its own dependencies
 - Note any known compatibility issues (e.g., C++20 incompatible syntax)
 
-### 2. Create conan/{lib}/conanfile.py
+### 2. Create conan/{dependency_name}/conanfile.py
+
+Write the recipe file to `conan/{dependency_name}/conanfile.py`.
+Do NOT add extra subdirectories — the conanfile goes directly inside `conan/{dependency_name}/`.
 
 Use the appropriate template:
 
 - **Git source** (most libraries) — `assets/conanfile-git.py.md`
-- **Download source** (e.g., sqlite amalgamation) — `assets/conanfile-download.py.md`
+- **Download source** (e.g., tarball/zip) — `assets/conanfile-download.py.md`
 
 Key decisions:
 - **Source patching**: If `cmake_minimum_required` is below 3.15, patch it in `source()`. If `add_library` is hardcoded to SHARED/STATIC, patch to use `BUILD_SHARED_LIBS`.
@@ -80,7 +83,7 @@ Key decisions:
 
 ### 3. Register in Root conanfile.py
 
-Add a `self.requires("{name}/{version}")` line in the root `conanfile.py`'s `requirements()` method. Follow existing ordering conventions. Add a comment with the ticket reference if applicable.
+Add a `self.requires("{dependency_name}/{version}")` line in the root `conanfile.py`'s `requirements()` method. Follow existing ordering conventions.
 
 If the new library has **transitive Conan dependencies** that aren't already in the root conanfile, also add those (or ensure the local recipe's `requirements()` handles them).
 
@@ -89,8 +92,8 @@ If the new library has **transitive Conan dependencies** that aren't already in 
 Add `conan create` commands to the "Create Conan Dependencies" task in `.vscode/tasks.json`. The commands follow this pattern:
 
 ```
-"conan create conan/{lib} --build=missing -s build_type=Debug;",
-"conan create conan/{lib} --build=missing -s build_type=Release;"
+"conan create conan/{dependency_name} --build=missing -s build_type=Debug;",
+"conan create conan/{dependency_name} --build=missing -s build_type=Release;"
 ```
 
 **Order matters**: Dependencies must be built before their dependents. Place the new commands after any dependencies it requires and before any packages that depend on it.
@@ -104,33 +107,11 @@ In the consuming library's `CMakeLists.txt`:
    - **PUBLIC** if the dependency appears in the library's public headers
    - **PRIVATE** if only used internally
 
-Example:
-```cmake
-find_package(NLopt CONFIG REQUIRED)
+### 6. Done
 
-target_link_libraries(${LIB_NAME}
-    PRIVATE
-      NLopt::nlopt
-)
-```
-
-### 6. Verify Build
-
-Run the following to verify the new dependency integrates correctly:
-
-```bash
-# Build the local Conan package
-conan create conan/{lib} --build=missing -s build_type=Debug
-
-# Reinstall project dependencies to pick up the new one
-conan install . --build=missing -s build_type=Debug
-
-# Reconfigure and build
-cmake --preset conan-debug
-cmake --build --preset debug-{consuming-lib}-only
-```
-
-Report success or errors.
+After completing steps 1–5, call `write_complete` with the list of files you
+created or modified. Do NOT run any build or conan commands — a separate
+build verification phase handles that.
 
 ## Decision Guide
 
@@ -144,7 +125,7 @@ In this project, all local Conan recipes should use CONFIG mode.
 ### When to use components vs single target
 
 - **Single target**: When the library has one CMake target (most libraries). Use `cpp_info.libs = ["{name}"]` and set `cmake_target_name`.
-- **Components**: When the library has multiple link targets (e.g., qhull has `qhullcpp` and `qhullstatic_r`). Use `cpp_info.components["{name}"]` for each.
+- **Components**: When the library has multiple link targets. Use `cpp_info.components["{name}"]` for each.
 
 ### Public vs Private linking
 
@@ -154,7 +135,7 @@ In this project, all local Conan recipes should use CONFIG mode.
 ### Shared vs Static default
 
 - Default to `shared: False` (static linking) — matches project convention
-- Use `shared: True` only when the library specifically requires it (e.g., SDL with dynamic loading)
+- Use `shared: True` only when the library specifically requires it
 
 ## Reference Files
 
