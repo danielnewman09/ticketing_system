@@ -3,6 +3,7 @@
 Variables to substitute:
 - `{{LIB_VAR_PREFIX}}` — Uppercase variable prefix (e.g., `MY_ENGINE_TYPES`)
 - `{{LIB_TARGET_NAME}}` — CMake target name (e.g., `my_engine_types`)
+- `{{LIB_DIR_NAME}}` — Library directory name (e.g., `types`)
 - `{{FIND_PACKAGES}}` — `find_package()` calls for external dependencies
 - `{{INTERFACE_LINK_LIBRARIES}}` — Interface link targets
 
@@ -36,9 +37,9 @@ install(TARGETS ${{{LIB_VAR_PREFIX}}_NAME}
   RUNTIME DESTINATION bin
 )
 
-# Install headers
+# Install headers — preserves the {lib-dir}/src/ structure for consumers
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
-  DESTINATION include/{{LIB_DIR_NAME}}
+  DESTINATION include/{{LIB_DIR_NAME}}/src
   FILES_MATCHING PATTERN "*.hpp"
 )
 ```
@@ -47,5 +48,4 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
 
 - Header-only libraries use `INTERFACE` for all target properties
 - No `src/CMakeLists.txt` needed since there are no compiled sources
-- The `FILES_MATCHING PATTERN "*.hpp"` installs all headers recursively
-- `{{LIB_DIR_NAME}}` is the directory name (e.g., `my-engine-types`) used for install destination
+- Headers are installed to `include/{lib-dir}/src/` to match the build-time include path `#include "{lib-dir}/src/File.hpp"`

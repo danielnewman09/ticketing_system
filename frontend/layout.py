@@ -61,10 +61,13 @@ def _agent_console():
         f"background: {BACKGROUNDS['panel']}; border-top: 1px solid {BACKGROUNDS['border']};"
     ).props("dense") as panel:
         panel.classes("text-gray-300")
-        log_widget = ui.log(max_lines=200).classes(
-            "w-full h-48 text-xs font-mono"
-        ).style(f"background: {BACKGROUNDS['panel']}; color: #94a3b8;")
 
+        with ui.scroll_area().classes("w-full h-48 text-xs font-mono").style(
+            f"background: {BACKGROUNDS['panel']}; color: #94a3b8;"
+        ):
+            log_col = ui.column().classes("w-full gap-0 px-2 py-1")
+
+        max_lines = 200
         last_version = {"v": 0}
 
         def poll_log():
@@ -83,15 +86,22 @@ def _agent_console():
                 }.get(entry.kind, entry.kind)
                 line = f"[{ts}] {kind_tag}  {entry.summary}"
                 if entry.detail:
-                    # Show first line of detail
-                    first_line = entry.detail.split("\n")[0][:120]
-                    line += f"  |  {first_line}"
-                log_widget.push(line)
+                    line += f"\n         {entry.detail[:300]}"
+                with log_col:
+                    ui.label(line).classes("whitespace-pre-wrap break-all text-xs")
+            # Trim old lines
+            while len(log_col.default_slot.children) > max_lines:
+                log_col.remove(0)
 
         ui.timer(1.0, poll_log)
 
+        def clear_log():
+            agent_log.clear()
+            log_col.clear()
+            last_version["v"] = agent_log.version
+
         with ui.row().classes("w-full justify-end px-2 py-1"):
-            ui.button("Clear", on_click=lambda: (agent_log.clear(), log_widget.clear())).props(
+            ui.button("Clear", on_click=clear_log).props(
                 "flat size=xs"
             ).classes("text-gray-500")
 

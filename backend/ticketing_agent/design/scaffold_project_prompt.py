@@ -49,8 +49,13 @@ def build_user_message(
 
     lines.append("")
     lines.append(
-        "Create ALL project files and verify the build passes.  "
-        "Call task_complete when done."
+        f"**Library parent directory:** `{project_name}/` — all libraries go inside "
+        f"`{project_name}/{project_name}/`, NOT directly in the project root."
+    )
+    lines.append("")
+    lines.append(
+        "Create ALL project files.  "
+        "Call write_complete when all files have been generated."
     )
 
     return "\n".join(lines)

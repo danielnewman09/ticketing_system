@@ -268,7 +268,8 @@ async def section_dependencies(project_dir: str):
         int_dep_label.text = f"Dependency: {row['name']}"
         int_version.value = row.get("version", "") if row.get("version") != "—" else ""
         int_source_url.value = row.get("source_url", "") if row.get("source_url") != "—" else ""
-        int_consuming_lib.value = ""
+        components = row.get("components", "")
+        int_consuming_lib.value = components if components != "—" else ""
         integrate_dialog.open()
 
     async def _run_integrate():
@@ -285,21 +286,14 @@ async def section_dependencies(project_dir: str):
         ui.notify(f"Integrating {dep_name} — this may take a few minutes...", type="info")
 
         try:
-            from llm_caller.skill_runner import run_skill
-            user_msg = (
-                f"Add `{dep_name}` as a locally-built Conan dependency.\n\n"
-                f"**Library name:** `{dep_name}`\n"
-                f"**Source URL:** `{source_url}`\n"
-                f"**Version/tag:** `{version}`\n"
-                f"**Consuming library:** `{consuming_lib}`\n\n"
-                f"Follow the skill instructions: research the library, create the conan recipe, "
-                f"register it, update VS Code tasks, wire into the consuming library, and verify "
-                f"the build. Call task_complete when done."
-            )
+            from backend.ticketing_agent.design.integrate_dependency import integrate_dependency
             result = await asyncio.to_thread(
-                run_skill,
+                integrate_dependency,
                 skill_dir=_CONAN_DEP_SKILL,
-                user_message=user_msg,
+                dep_name=dep_name,
+                source_url=source_url,
+                version=version,
+                consuming_lib=consuming_lib,
                 working_directory=project_dir,
             )
             if result.get("build_success"):

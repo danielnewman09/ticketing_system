@@ -26,7 +26,7 @@ model: sonnet
 Generates a complete, buildable C++20+ project skeleton with:
 - **Conan 2.x** dependency management (GTest included by default)
 - **CMake presets** for Debug/Release builds, per-component builds, and tooling targets
-- **GTest** integration with a reusable `add_project_test()` helper
+- **GTest** integration with per-library test executables
 - **Doxygen** documentation pipeline → SQLite / Neo4j via `doxygen-index` library
 - **VSCode tasks** for build, test, coverage, and documentation
 - **Code coverage** (lcov/genhtml)
@@ -62,18 +62,20 @@ For each library, optionally specify:
 │   └── requirements.txt        # Python dependencies (doxygen-index)
 │
 ├── .vscode/
-│   └── tasks.json              # Build, test, coverage tasks
+│   ├── tasks.json              # Build, test, coverage tasks
+│   └── c_cpp_properties.json   # IntelliSense configuration
 │
 ├── test/
-│   └── CMakeLists.txt          # Test helper function (add_project_test)
+│   └── CMakeLists.txt          # Project-level test directory (integration tests)
 │
-├── {lib-parent}/               # Library parent directory (named after project)
+├── {lib-parent}/               # **REQUIRED**: library parent dir, same name as project
 │   ├── CMakeLists.txt          # Adds all library subdirectories
 │   │
 │   ├── {lib-name}/             # One per library
 │   │   ├── CMakeLists.txt      # Library target, deps, tests, install
 │   │   ├── src/
 │   │   │   ├── CMakeLists.txt  # Source file collection (target_sources)
+│   │   │   ├── placeholder.hpp # Initial header file
 │   │   │   └── placeholder.cpp # Initial source file
 │   │   └── test/
 │   │       ├── CMakeLists.txt  # Test executable setup
@@ -83,6 +85,32 @@ For each library, optionally specify:
 ├── build/                      # (gitignored) CMake build output
 └── .gitignore
 ```
+
+**CRITICAL**: Libraries are NOT placed directly in the project root. They go inside a
+**library parent directory** that has the same name as the project. For example, a
+project called `calculator` with libraries `calculation_engine` and `user_interface`:
+
+```
+calculator/                     # project root
+├── CMakeLists.txt
+├── conanfile.py
+├── calculator/                 # library parent directory (same name as project!)
+│   ├── CMakeLists.txt          # add_subdirectory(calculation_engine)
+│   │                           # add_subdirectory(user_interface)
+│   ├── calculation_engine/
+│   │   ├── CMakeLists.txt
+│   │   ├── src/
+│   │   └── test/
+│   └── user_interface/
+│       ├── CMakeLists.txt
+│       ├── src/
+│       └── test/
+└── ...
+```
+
+The root CMakeLists.txt references this via `add_subdirectory(calculator)`.
+Do NOT place libraries at `calculator/calculation_engine/` — they must be at
+`calculator/calculator/calculation_engine/`.
 
 ## Steps
 
@@ -134,39 +162,35 @@ Use the template from `assets/cmake-user-presets.json.md`. Generate:
 - `doxygen`, `codebase-db` presets
 - `debug-all` preset listing all targets
 
-### 5. Generate Test Helper (test/CMakeLists.txt)
+### 5. Generate Test Directory (test/CMakeLists.txt)
 
-Use the template from `assets/test-cmakelists.txt.md`. Creates:
-- `add_project_test()` function with NAME, SOURCES, LIBS, INCLUDES parameters
-- GTest discovery with timeout
-- Integration test subdirectory support
+Use the template from `assets/test-cmakelists.txt.md`. This is a minimal project-level test directory for integration tests. Individual libraries define their own test executables directly.
 
 ### 6. Generate Library Structure
 
 For each library, generate using templates from `assets/`:
 
 **Compiled library** (`assets/lib-cmakelists.txt.md`):
-- Library target with C++ standard
+- Library target with `CXX_STANDARD` set via `set_target_properties`
 - Package finding for external deps
 - `src/` and `test/` subdirectories (conditional on `BUILD_TESTING`)
 - `bench/` subdirectory (conditional on `ENABLE_BENCHMARKS`)
 - Public/private library linking
 - Include directories with generator expressions
-- Install rules
+- Directory-based header install preserving `{lib-dir}/src/` structure
 
 **Header-only library** (`assets/lib-interface-cmakelists.txt.md`):
 - INTERFACE library target
 - INTERFACE dependencies
 - INTERFACE include directories
-- Install rules with header pattern matching
+- Directory-based header install preserving `{lib-dir}/src/` structure
 
 **Source CMakeLists** (`assets/lib-src-cmakelists.txt.md`):
 - `target_sources()` for source files
-- `HEADER_FILES` variable for installation
 
 **Test CMakeLists** (`assets/lib-test-cmakelists.txt.md`):
-- Test executable
-- GTest linking
+- Direct `add_executable()` with `set_target_properties` for C++ standard
+- Links `GTest::gtest` and `GTest::gtest_main` (lowercase)
 - Include directories
 - `gtest_discover_tests()`
 
@@ -193,11 +217,20 @@ Use the template from `assets/vscode-tasks.json.md`. Tasks:
 - **Open Coverage Report** — opens HTML report
 - **Run clang-tidy** — static analysis
 
-### 10. Generate .gitignore
+### 10. Generate VSCode C/C++ Properties
+
+Use the template from `assets/c-cpp-properties.json.md`. Creates `.vscode/c_cpp_properties.json` with:
+- Mac and Linux configurations
+- Include paths for each library directory
+- Conan cache include paths (glob patterns)
+- C++ standard matching the project
+- CMake Tools as the configuration provider
+
+### 12. Generate .gitignore
 
 Standard C++ project gitignore including `build/`, `installs/`, `python/.venv/`, etc.
 
-### 11. Generate Placeholder Source Files
+### 13. Generate Placeholder Source Files
 
 For each compiled library:
 - `src/placeholder.cpp` with namespace and a stub function

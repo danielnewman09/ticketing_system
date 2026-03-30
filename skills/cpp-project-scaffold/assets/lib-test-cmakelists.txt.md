@@ -16,17 +16,20 @@ target_sources(${{{LIB_VAR_PREFIX}}_TEST_NAME} PRIVATE
     placeholder_test.cpp
 )
 
-set_target_properties(${{{LIB_VAR_PREFIX}}_TEST_NAME} PROPERTIES LINKER_LANGUAGE CXX)
+set_target_properties(${{{LIB_VAR_PREFIX}}_TEST_NAME} PROPERTIES
+    LINKER_LANGUAGE CXX
+    CXX_STANDARD {{CXX_STANDARD}}
+    CXX_STANDARD_REQUIRED ON
+)
 
 target_link_libraries(${{{LIB_VAR_PREFIX}}_TEST_NAME}
     PRIVATE
       {{LIB_TARGET_NAME}}
-      GTest::GTest
-      GTest::Main
+      GTest::gtest
+      GTest::gtest_main
       {{ADDITIONAL_TEST_LINK_LIBRARIES}}
 )
 
-target_compile_features(${{{LIB_VAR_PREFIX}}_TEST_NAME} PRIVATE cxx_std_{{CXX_STANDARD}})
 target_compile_options(${{{LIB_VAR_PREFIX}}_TEST_NAME} PRIVATE -Wno-unused-result)
 
 target_include_directories(${{{LIB_VAR_PREFIX}}_TEST_NAME} PUBLIC

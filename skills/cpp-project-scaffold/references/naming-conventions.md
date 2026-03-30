@@ -25,15 +25,33 @@ Given a library name like `core` in project `my-engine`:
 | CMake variable prefix | `{PROJECT}_{LIB}` (UPPER_SNAKE) | `MY_ENGINE_CORE` |
 | Test directory name | `{project}/{lib}/test` | `my_engine/core/test` |
 | Test target name | `{project}_{lib}_test` | `my_engine_core_test` |
-| C++ namespace | `{project}::{lib}` (snake_case) | `my_engine::core` |
-| Include path | `{project}/{lib}/src/File.hpp` | `my-engine/core/src/File.hpp` |
-| Install header dest | `include/{target_name}` | `include/my_engine/core` |
+| C++ namespace | short, terse name (single level) | `engine`, `core`, `phys` |
+| Include path | `{lib}/src/File.hpp` (NOT `{project}/{lib}/...`) | `core/src/File.hpp` |
+| Install header dest | `include/{lib-dir}/src/` | `include/core/src/` |
+
+## C++ Namespace Style
+
+Use a **single flat namespace** per library — no nested `project::lib` namespaces. Pick a short, terse name that's easy to type:
+
+| Library | Good namespace | Bad namespace |
+|---------|---------------|---------------|
+| `calculation_engine` | `calc` | `calculator::calculation_engine` |
+| `user_interface` | `ui` | `calculator::user_interface` |
+| `physics` | `phys` | `my_engine::physics` |
+| `core` | `core` | `my_engine::core` |
+| `rendering` | `render` | `my_engine::rendering` |
 
 ## Library Parent Directory
 
-The parent directory containing all libraries uses the project name:
-- Directory: `{project}/` (kebab-case, e.g., `my-engine/`)
-- Contains: `CMakeLists.txt` that adds all library subdirectories
+**All libraries live inside a parent directory with the same name as the project.**
+This creates a two-level structure: `{project-root}/{project-name}/{lib}/`.
+
+- Directory: `{project-name}/` inside the project root (e.g., `my-engine/my-engine/`)
+- Contains: `CMakeLists.txt` that calls `add_subdirectory()` for each library
+
+Example for project `calculator` with libraries `core` and `ui`:
+- `calculator/calculator/core/` — CORRECT
+- `calculator/core/` — WRONG (library directly in project root)
 
 ## Build Preset Names
 

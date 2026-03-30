@@ -48,6 +48,16 @@ The user may optionally provide:
 ### 1. Research the Library
 
 Before generating anything, understand how the library builds:
+
+**First, discover the correct git tag/branch for checkout.** Tag names vary widely
+across projects (e.g., `v1.4.4`, `release-1.4.4`, `1.4.4`, `FLTK-1.4.4`). Run:
+```bash
+git ls-remote --tags --refs {source_url} | head -30
+```
+Find the tag that matches the requested version. Use the exact tag name in the
+conanfile's `git.checkout()` — do not guess the format.
+
+Then examine the library's build system:
 - Check its CMakeLists.txt for the `project()` name, `cmake_minimum_required`, library targets, and install rules
 - Identify what CMake variables control build options (tests, apps, language bindings)
 - Determine the header install structure
@@ -56,11 +66,10 @@ Before generating anything, understand how the library builds:
 
 ### 2. Create conan/{lib}/conanfile.py
 
-Use the appropriate template based on the source type:
+Use the appropriate template:
 
-**Git source** (most common) — `assets/conanfile-git.py.md`
-**Download source** (e.g., sqlite amalgamation) — `assets/conanfile-download.py.md`
-**Source with generated CMakeLists** (no existing CMake support) — `assets/conanfile-generated-cmake.py.md`
+- **Git source** (most libraries) — `assets/conanfile-git.py.md`
+- **Download source** (e.g., sqlite amalgamation) — `assets/conanfile-download.py.md`
 
 Key decisions:
 - **Source patching**: If `cmake_minimum_required` is below 3.15, patch it in `source()`. If `add_library` is hardcoded to SHARED/STATIC, patch to use `BUILD_SHARED_LIBS`.

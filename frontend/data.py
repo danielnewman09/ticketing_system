@@ -736,11 +736,11 @@ def fetch_recommendations(component_id: int) -> list[dict]:
 
 
 def save_recommendations(component_id: int, summary: str, recommendations: list[dict]):
-    """Save research results as pending recommendations, clearing previous pending ones."""
+    """Save research results as pending recommendations, replacing all previous ones."""
     with get_session() as session:
-        # Remove old pending recommendations
+        # Remove all previous recommendations (pending, accepted, rejected)
         session.query(DependencyRecommendation).filter_by(
-            component_id=component_id, status="pending",
+            component_id=component_id,
         ).delete()
         session.flush()
 

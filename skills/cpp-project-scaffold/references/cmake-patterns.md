@@ -16,10 +16,16 @@ target_include_directories(${LIB_NAME}
 
 This allows consumers to write:
 ```cpp
-#include "my-engine-core/src/MyClass.hpp"
+#include "core/src/MyClass.hpp"
 ```
 
-The `..` goes up from the library directory to the parent, so `my-engine-core/src/...` resolves correctly.
+**CRITICAL**: The `..` goes up from the library directory to the library parent directory.
+This means `#include` paths start from the **library directory name**, NOT the project root.
+For a project `calculator` with library `user_interface`:
+```cpp
+#include "user_interface/src/Widget.hpp"   // CORRECT
+// NOT: #include "calculator/user_interface/src/Widget.hpp"
+```
 
 ## Source Collection Pattern
 
@@ -30,15 +36,22 @@ target_sources(${LIB_NAME} PRIVATE
     File1.cpp
     File2.cpp
 )
+```
 
-set(HEADER_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/File1.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/File2.hpp
-    PARENT_SCOPE
+Headers live alongside sources in `src/` and are installed by the parent CMakeLists via directory install.
+
+## Header Installation Pattern
+
+Both compiled and header-only libraries use the same directory-based install:
+
+```cmake
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
+    DESTINATION include/{lib-dir}/src
+    FILES_MATCHING PATTERN "*.hpp"
 )
 ```
 
-`PARENT_SCOPE` propagates `HEADER_FILES` to the library's CMakeLists for install rules.
+This preserves the include path structure: `#include "{lib-dir}/src/File.hpp"` works identically at build time and after install.
 
 ## Modular Source Subdirectories
 
@@ -58,19 +71,49 @@ src/
 
 Each subdirectory's CMakeLists calls `target_sources()` on the same library target.
 
+## C++ Standard Pattern
+
+All targets (libraries and tests) use `set_target_properties` with `CXX_STANDARD`:
+
+```cmake
+set_target_properties(${TARGET_NAME} PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+)
+```
+
+The root CMakeLists also sets the global default:
+
+```cmake
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+```
+
 ## Test Pattern
 
-Tests create a separate executable linking the library:
+Each library defines its own test executable directly using `add_executable()`:
 
 ```cmake
 enable_testing()
 find_package(GTest REQUIRED)
+
 add_executable(${TEST_NAME})
 target_sources(${TEST_NAME} PRIVATE test_file.cpp)
-target_link_libraries(${TEST_NAME} PRIVATE ${LIB_NAME} GTest::GTest GTest::Main)
+
+set_target_properties(${TEST_NAME} PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+)
+
+target_link_libraries(${TEST_NAME}
+    PRIVATE ${LIB_NAME} GTest::gtest GTest::gtest_main
+)
+
 include(GoogleTest)
 gtest_discover_tests(${TEST_NAME})
 ```
+
+Note: GTest components use **lowercase** names: `GTest::gtest` and `GTest::gtest_main`.
 
 ## Conan + CMake Preset Integration
 

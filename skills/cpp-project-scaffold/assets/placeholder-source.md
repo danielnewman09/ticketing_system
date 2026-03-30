@@ -1,11 +1,19 @@
 # Placeholder Source Files Template
 
 Variables to substitute:
-- `{{NAMESPACE}}` — C++ namespace
-- `{{LIB_DIR_NAME}}` — Library directory for includes
+- `{{NAMESPACE}}` — A short, terse C++ namespace (single level, no nesting). Pick a concise abbreviation, e.g., `calc` not `calculator::calculation_engine`, `ui` not `user_interface`, `phys` not `physics_engine`
+- `{{LIB_DIR_NAME}}` — Library directory name only (e.g., `user_interface`), NOT the full path from project root
 - `{{LIB_TARGET_NAME}}` — Library target name
 
-## src/placeholder.hpp
+**CRITICAL**: `#include` paths start from the library directory name, NOT the project root directory.
+For a project `calculator` with library `user_interface`, the include is:
+```cpp
+#include "user_interface/src/placeholder.hpp"   // CORRECT
+// NOT: #include "calculator/user_interface/src/placeholder.hpp"
+```
+This works because the CMake include directory is set to the library parent directory.
+
+## {{LIB_DIR_NAME}}/src/placeholder.hpp
 
 ```cpp
 #ifndef PLACEHOLDER_HPP
@@ -21,7 +29,7 @@ int placeholder();
 #endif //PLACEHOLDER_HPP
 ```
 
-## src/placeholder.cpp
+## {{LIB_DIR_NAME}}/src/placeholder.cpp
 
 ```cpp
 #include "{{LIB_DIR_NAME}}/src/placeholder.hpp"
@@ -35,7 +43,7 @@ int placeholder() {
 }  // namespace {{NAMESPACE}}
 ```
 
-## test/placeholder_test.cpp
+## {{LIB_DIR_NAME}}/test/placeholder_test.cpp
 
 ```cpp
 #include <gtest/gtest.h>

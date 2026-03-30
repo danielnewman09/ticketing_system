@@ -81,24 +81,18 @@ def scan_conan_files(root: str) -> list[dict]:
 
 
 def get_conan_deps(project_dir: str) -> set[str]:
-    """Parse conanfile.py to find integrated dependency names (lowercase)."""
-    conanfile = os.path.join(project_dir, "conanfile.py")
-    if not os.path.isfile(conanfile):
+    """Find integrated dependencies by checking for conan/{name}/conanfile.py."""
+    conan_dir = os.path.join(project_dir, "conan")
+    if not os.path.isdir(conan_dir):
         return set()
+    deps = set()
     try:
-        with open(conanfile) as f:
-            content = f.read()
-        deps = set()
-        for m in re.finditer(r'self\.(?:build_)?requires\(\s*["\']([^/"\']+)', content):
-            deps.add(m.group(1).lower())
-        conan_dir = os.path.join(project_dir, "conan")
-        if os.path.isdir(conan_dir):
-            for name in os.listdir(conan_dir):
-                if os.path.isdir(os.path.join(conan_dir, name)):
-                    deps.add(name.lower())
-        return deps
+        for name in os.listdir(conan_dir):
+            if os.path.isfile(os.path.join(conan_dir, name, "conanfile.py")):
+                deps.add(name.lower())
     except Exception:
-        return set()
+        pass
+    return deps
 
 
 def project_exists(working_directory: str, project_name: str) -> bool:

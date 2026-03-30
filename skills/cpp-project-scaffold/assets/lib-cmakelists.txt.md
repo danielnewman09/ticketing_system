@@ -4,6 +4,7 @@ Variables to substitute:
 - `{{LIB_VAR_PREFIX}}` — Uppercase variable prefix (e.g., `MY_ENGINE_CORE`)
 - `{{LIB_TARGET_NAME}}` — CMake target name (e.g., `my_engine_core`)
 - `{{LIB_TEST_TARGET_NAME}}` — Test target name (e.g., `my_engine_core_test`)
+- `{{LIB_DIR_NAME}}` — Library directory name (e.g., `core`)
 - `{{CXX_STANDARD}}` — C++ standard (20, 23, 26)
 - `{{FIND_PACKAGES}}` — `find_package()` calls for external dependencies
 - `{{PUBLIC_LINK_LIBRARIES}}` — Public link targets (project libs + external)
@@ -56,14 +57,16 @@ install(TARGETS ${{{LIB_VAR_PREFIX}}_NAME}
     LIBRARY DESTINATION lib
 )
 
-# Install headers
-install(FILES ${HEADER_FILES}
-    DESTINATION include/${{{LIB_VAR_PREFIX}}_NAME})
+# Install headers — preserves the {lib-dir}/src/ structure for consumers
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
+    DESTINATION include/{{LIB_DIR_NAME}}/src
+    FILES_MATCHING PATTERN "*.hpp"
+)
 ```
 
 ## Notes
 
-- The include directory pattern `$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>` allows includes like `#include "{lib-dir}/src/MyClass.hpp"` from any library that depends on this one
-- `HEADER_FILES` is populated by `src/CMakeLists.txt` via `PARENT_SCOPE`
+- The include directory pattern `$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>` sets the include root to the library parent directory, so includes use the library name only: `#include "{lib-dir}/src/MyClass.hpp"` — do NOT prefix with the project root directory
+- Headers are installed to `include/{lib-dir}/src/` to match the build-time include path
 - Remove the `PRIVATE` section from `target_link_libraries` if there are no private dependencies
 - Remove `if(ENABLE_BENCHMARKS)` block if benchmarks are not needed for this library
