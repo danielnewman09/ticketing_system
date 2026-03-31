@@ -13,30 +13,6 @@ from backend.db.models import (
 
 log = logging.getLogger(__name__)
 
-
-def fetch_dependency_graph_data(
-    search: str,
-    source_filter: str | None = None,
-) -> dict:
-    """Fetch dependency graph from Neo4j for Cytoscape.js rendering."""
-    try:
-        from backend.db.neo4j_queries import fetch_dependency_graph
-        return fetch_dependency_graph(search, source_filter)
-    except Exception:
-        log.warning("Neo4j dependency graph query failed — returning empty graph", exc_info=True)
-        return {"nodes": [], "edges": []}
-
-
-def fetch_dependency_node_detail_data(qualified_name: str) -> dict | None:
-    """Fetch dependency node detail from Neo4j."""
-    try:
-        from backend.db.neo4j_queries import fetch_dependency_node_detail
-        return fetch_dependency_node_detail(qualified_name)
-    except Exception:
-        log.warning("Neo4j dependency node detail query failed", exc_info=True)
-        return None
-
-
 def fetch_design_dependency_links_data(design_qnames: list[str]) -> dict:
     """Fetch cross-layer links between Design nodes and dependency Compounds."""
     try:

@@ -1,21 +1,19 @@
 """Component detail page."""
 
 import asyncio
-import json
 
 from nicegui import ui
 
 from frontend.theme import (
     BACKGROUNDS,
-    KIND_COLORS_JS,
     add_cytoscape_cdn,
     cytoscape_base_styles,
     apply_theme,
 )
-from frontend.widgets import section_header, breadcrumb
+from frontend.widgets import section_header, breadcrumb, render_cytoscape_graph
 from frontend.layout import page_layout
 from frontend.data.components import fetch_component_detail, add_dependency, delete_dependency
-from frontend.data.ontology import fetch_ontology_graph_data
+from frontend.data.ontology import fetch_ontology_graph_data, resolve_node_id_by_qualified_name
 
 
 @ui.page("/component/{component_id}")
@@ -181,28 +179,25 @@ async def component_detail_page(component_id: int):
                 ).classes("w-full")
                 cy._props["id"] = "comp-cy-container"
 
-            # Load graph filtered to this component
-            graph = await asyncio.to_thread(
-                fetch_ontology_graph_data, component_id=data["id"],
-            )
-            elements_json = json.dumps(graph["nodes"] + graph["edges"])
-            if graph["nodes"]:
-                await ui.run_javascript(f"""
-                    if (window._compCy) window._compCy.destroy();
-                    const KIND_COLORS = {KIND_COLORS_JS};
-                    const container = document.getElementById('comp-cy-container');
-                    if (!container) return;
-                    window._compCy = cytoscape({{
-                        container: container,
-                        elements: {elements_json},
-                        style: {base_styles},
-                        layout: {{ name: 'fcose', animate: false }},
-                    }});
-                """)
+    async def handle_node_dblclick(e):
+        qn = e.args.get("qualified_name", "")
+        if not qn:
+            return
+        node_id = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
+        if node_id:
+            ui.navigate.to(f"/node/{node_id}")
 
+    ui.on("node_dblclick", handle_node_dblclick)
 
-def _render_table(headers: list[str], rows: list[list[str]]):
-    """Render a simple table with headers and rows."""
-    columns = [{"name": h, "label": h, "field": h, "align": "left"} for h in headers]
-    table_rows = [{h: v for h, v in zip(headers, row)} for row in rows]
-    ui.table(columns=columns, rows=table_rows).classes("w-full").props("dense flat")
+    # Load graph filtered to this component
+    graph = await asyncio.to_thread(
+        fetch_ontology_graph_data, component_id=data["id"],
+    )
+    if graph["nodes"]:
+        await render_cytoscape_graph(
+            graph["nodes"] + graph["edges"],
+            base_styles,
+            container_id="comp-cy-container",
+            cy_var="_compCy",
+            animate=False,
+        )

@@ -32,29 +32,23 @@ def fetch_ontology_data():
 
 
 def fetch_ontology_graph_data(
+    layer: str = "design",
     kind_filter: str | None = None,
     search: str | None = None,
     component_id: int | None = None,
+    source_filter: str | None = None,
 ) -> dict:
-    """Fetch design graph from Neo4j for Cytoscape.js rendering."""
+    """Fetch graph from Neo4j for Cytoscape.js rendering.
+
+    *layer* is ``"design"``, ``"codebase"``, or ``"dependency"``.
+    Delegates to the unified ``fetch_graph()`` backend, which filters
+    by the appropriate Neo4j labels.
+    """
     try:
-        from backend.db.neo4j_queries import fetch_design_graph
-        return fetch_design_graph(kind_filter, search, component_id)
+        from backend.db.neo4j_queries import fetch_graph
+        return fetch_graph(layer, kind_filter, search, component_id, source_filter)
     except Exception:
         log.warning("Neo4j query failed — returning empty graph", exc_info=True)
-        return {"nodes": [], "edges": []}
-
-
-def fetch_codebase_graph_data(
-    search: str | None = None,
-    namespace_filter: str | None = None,
-) -> dict:
-    """Fetch the as-built codebase graph from Neo4j for Cytoscape.js rendering."""
-    try:
-        from backend.db.neo4j_queries import fetch_codebase_graph
-        return fetch_codebase_graph(search, namespace_filter)
-    except Exception:
-        log.warning("Neo4j codebase query failed — returning empty graph", exc_info=True)
         return {"nodes": [], "edges": []}
 
 

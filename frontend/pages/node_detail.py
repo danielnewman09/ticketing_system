@@ -1,7 +1,6 @@
 """Ontology node detail page."""
 
 import asyncio
-import json
 
 from nicegui import ui
 
@@ -11,14 +10,18 @@ from frontend.theme import (
     STATUS_COLORS,
     CLS_SECTION_HEADER,
     CLS_SECTION_SUBHEADER,
-    KIND_COLORS_JS,
     add_cytoscape_cdn,
     cytoscape_base_styles,
     apply_theme,
 )
-from frontend.widgets import breadcrumb
+from frontend.widgets import breadcrumb, render_cytoscape_graph
 from frontend.layout import page_layout
-from frontend.data.ontology import fetch_node_detail_full, fetch_neighbourhood_graph_data, update_member_type
+from frontend.data.ontology import (
+    fetch_neighbourhood_graph_data,
+    fetch_node_detail_full,
+    resolve_node_id_by_qualified_name,
+    update_member_type,
+)
 
 
 @ui.page("/node/{node_id}")
@@ -146,36 +149,6 @@ async def node_detail_page(node_id: int):
                         ).classes("w-full")
                         cy._props["id"] = "node-cy-container"
 
-                    # Fetch neighbourhood with collapsed members
-                    graph = await asyncio.to_thread(
-                        fetch_neighbourhood_graph_data, node["qualified_name"],
-                    )
-                    elements_json = json.dumps(graph["nodes"] + graph["edges"])
-                    if graph["nodes"]:
-                        # Add center-node highlight on top of base styles
-                        center_style = f"""{{
-                            selector: 'node[is_center="true"]',
-                            style: {{
-                                'border-width': 3,
-                                'border-color': '{STATUS_COLORS["selected"]}',
-                                'border-style': 'solid',
-                            }}
-                        }}"""
-                        await ui.run_javascript(f"""
-                            if (window._nodeCy) window._nodeCy.destroy();
-                            const KIND_COLORS = {KIND_COLORS_JS};
-                            const container = document.getElementById('node-cy-container');
-                            if (!container) return;
-                            const styles = {base_styles};
-                            styles.push({center_style});
-                            window._nodeCy = cytoscape({{
-                                container: container,
-                                elements: {elements_json},
-                                style: styles,
-                                layout: {{ name: 'fcose', animate: false }},
-                            }});
-                        """)
-
                 if neo4j:
                     if neo4j.get("implemented_by"):
                         with ui.card().classes("w-full"):
@@ -196,6 +169,35 @@ async def node_detail_page(node_id: int):
                                         color="orange" if req_type == "HLR" else "amber",
                                     ).classes("text-xs")
                                     ui.label(req.get("name", "")).classes("text-sm")
+
+        # Load neighbourhood graph after layout is built
+        if neo4j and node["qualified_name"]:
+            center_style = (
+                f'{{"selector": \'node[is_center="true"]\', '
+                f'"style": {{"border-width": 3, "border-color": "{STATUS_COLORS["selected"]}", "border-style": "solid"}}}}'
+            )
+            graph = await asyncio.to_thread(
+                fetch_neighbourhood_graph_data, node["qualified_name"],
+            )
+            if graph["nodes"]:
+                await render_cytoscape_graph(
+                    graph["nodes"] + graph["edges"],
+                    base_styles,
+                    container_id="node-cy-container",
+                    cy_var="_nodeCy",
+                    animate=False,
+                    extra_styles=center_style,
+                )
+
+    async def handle_node_dblclick(e):
+        qn = e.args.get("qualified_name", "")
+        if not qn:
+            return
+        nid = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
+        if nid:
+            ui.navigate.to(f"/node/{nid}")
+
+    ui.on("node_dblclick", handle_node_dblclick)
 
     await content()
 

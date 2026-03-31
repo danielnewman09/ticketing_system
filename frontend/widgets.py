@@ -1,5 +1,6 @@
 """Reusable UI rendering helpers. No DB access — work with plain dicts."""
 
+import json
 from pathlib import Path
 
 from nicegui import ui
@@ -11,6 +12,7 @@ from frontend.theme import (
     CLS_BREADCRUMB_LINK,
     CLS_BREADCRUMB_SEP,
     CLS_BREADCRUMB_CURRENT,
+    KIND_COLORS_JS,
 )
 
 
@@ -33,6 +35,56 @@ def breadcrumb(*parts: tuple[str, str | None]):
                 ui.link(label, href).classes(CLS_BREADCRUMB_LINK)
             else:
                 ui.label(label).classes(CLS_BREADCRUMB_CURRENT)
+
+
+async def render_cytoscape_graph(
+    elements: list[dict],
+    base_styles: str,
+    *,
+    container_id: str = "cy-container",
+    cy_var: str = "_cy",
+    layout: str = "fcose",
+    animate: bool = True,
+    extra_styles: str | None = None,
+):
+    """Render a Cytoscape.js graph into a container, with tap/dbltap events.
+
+    The container element must already exist with the given *container_id*.
+    Emits ``node_selected`` on tap and ``node_dblclick`` on double-tap.
+    *extra_styles* is an optional JS expression for additional style entries
+    that get appended to the base styles array.
+    """
+    elements_json = json.dumps(elements)
+    layout_name = f"window._cyLayout || '{layout}'" if animate else f"'{layout}'"
+    animation_opts = "animate: true, animationDuration: 500" if animate else "animate: false"
+    styles_expr = base_styles
+    if extra_styles:
+        styles_expr = f"[...{base_styles}, {extra_styles}]"
+    await ui.run_javascript(f"""
+        if (window.{cy_var}) window.{cy_var}.destroy();
+        const KIND_COLORS = {KIND_COLORS_JS};
+        const container = document.getElementById('{container_id}');
+        if (!container) {{ console.error('{container_id} not found'); return; }}
+        window.{cy_var} = cytoscape({{
+            container: container,
+            elements: {elements_json},
+            style: {styles_expr},
+            layout: {{ name: {layout_name}, {animation_opts} }},
+        }});
+        window.{cy_var}.ready(function() {{ window.{cy_var}.fit(); }});
+        window.{cy_var}.on('tap', 'node', function(evt) {{
+            const data = evt.target.data();
+            if (data.qualified_name) {{
+                emitEvent('node_selected', data);
+            }}
+        }});
+        window.{cy_var}.on('dbltap', 'node', function(evt) {{
+            const data = evt.target.data();
+            if (data.qualified_name) {{
+                emitEvent('node_dblclick', data);
+            }}
+        }});
+    """)
 
 
 def directory_picker(

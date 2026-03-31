@@ -453,109 +453,6 @@ def fetch_design_graph(
     return {"nodes": nodes, "edges": edges}
 
 
-def _make_codebase_node(n, kind_override: str = "") -> dict:
-    """Build Cytoscape node-data dict from a codebase Neo4j node (Compound/Member)."""
-    kind = kind_override or n.get("kind", "")
-    return {
-        "id": n.element_id,
-        "label": n.get("name", ""),
-        "qualified_name": n.get("qualified_name", ""),
-        "kind": kind,
-        "description": n.get("brief_description", "") or n.get("detailed_description", ""),
-        "visibility": n.get("visibility", ""),
-        "type_signature": n.get("type", ""),
-        "argsstring": n.get("argsstring", ""),
-        "layer": "as-built",
-    }
-
-
-def fetch_codebase_graph(
-    search: str | None = None,
-    namespace_filter: str | None = None,
-) -> dict:
-    """Fetch the as-built codebase graph (Compound/Member/Namespace) for Cytoscape.js.
-
-    Returns {"nodes": [...], "edges": [...]}.
-    """
-    with get_neo4j_session() as session:
-        nodes = []
-        edges = []
-        node_ids: set[str] = set()
-
-        # Build optional filter
-        conditions = []
-        params: dict = {}
-        if namespace_filter:
-            conditions.append("c.qualified_name STARTS WITH $ns")
-            params["ns"] = namespace_filter
-        if search:
-            conditions.append(
-                "(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)"
-            )
-            params["search"] = search
-
-        where = " AND ".join(conditions)
-        where_clause = f"WHERE {where}" if where else ""
-
-        # Compounds + their Members (via CONTAINS)
-        result = session.run(f"""
-            MATCH (c:Compound) {where_clause}
-            OPTIONAL MATCH (c)-[r:CONTAINS]->(m:Member)
-            RETURN c, r, m
-        """, params)
-
-        for record in result:
-            c = record["c"]
-            if c.element_id not in node_ids:
-                node_ids.add(c.element_id)
-                nodes.append({"data": _make_codebase_node(c)})
-
-            m = record["m"]
-            r = record["r"]
-            if m is not None and m.element_id not in node_ids:
-                node_ids.add(m.element_id)
-                nodes.append({"data": _make_codebase_node(m)})
-            if r is not None and m is not None:
-                edges.append({
-                    "data": {
-                        "id": r.element_id,
-                        "source": c.element_id,
-                        "target": m.element_id,
-                        "label": "CONTAINS",
-                    }
-                })
-
-        # Inter-compound relationships (INHERITS_FROM, CALLS between compounds)
-        result2 = session.run(f"""
-            MATCH (c1:Compound)-[r:INHERITS_FROM]->(c2:Compound)
-            {where_clause.replace('c.', 'c1.')}
-            RETURN c1, r, c2
-        """, params)
-
-        for record in result2:
-            c1 = record["c1"]
-            c2 = record["c2"]
-            r = record["r"]
-            for c in [c1, c2]:
-                if c.element_id not in node_ids:
-                    node_ids.add(c.element_id)
-                    nodes.append({"data": _make_codebase_node(c)})
-            edges.append({
-                "data": {
-                    "id": r.element_id,
-                    "source": c1.element_id,
-                    "target": c2.element_id,
-                    "label": "INHERITS_FROM",
-                }
-            })
-
-    # Collapse members into compounds, then group by namespace
-    nodes, edges = _collapse_members(nodes, edges)
-    nodes, edges = _assign_namespace_parents(nodes, edges)
-
-    return {"nodes": nodes, "edges": edges}
-
-
 def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
     """Fetch the requirement neighbourhood of an HLR in Cytoscape.js format.
 
@@ -625,90 +522,6 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def fetch_combined_graph(design_qnames: list[str]) -> dict:
-    """Fetch design subgraph + linked as-built nodes via IMPLEMENTED_BY."""
-    if not design_qnames:
-        return {"nodes": [], "edges": []}
-
-    with get_neo4j_session() as session:
-        result = session.run("""
-        UNWIND $qnames AS qn
-        MATCH (d:Design {qualified_name: qn})
-        OPTIONAL MATCH (d)-[impl:IMPLEMENTED_BY]->(code)
-        OPTIONAL MATCH (d)-[r]->(d2:Design)
-        RETURN d, impl, code, r, d2
-        """, {"qnames": design_qnames})
-
-        nodes = []
-        edges = []
-        seen_ids = set()
-
-        for record in result:
-            d = record["d"]
-            if d.element_id not in seen_ids:
-                seen_ids.add(d.element_id)
-                nodes.append({
-                    "data": {
-                        "id": d.element_id,
-                        "label": d.get("name", ""),
-                        "qualified_name": d.get("qualified_name", ""),
-                        "kind": d.get("kind", ""),
-                        "layer": "design",
-                    },
-                })
-
-            if record["code"] is not None:
-                code = record["code"]
-                if code.element_id not in seen_ids:
-                    seen_ids.add(code.element_id)
-                    labels = list(code.labels)
-                    nodes.append({
-                        "data": {
-                            "id": code.element_id,
-                            "label": code.get("name", code.get("qualified_name", "")),
-                            "qualified_name": code.get("qualified_name", ""),
-                            "kind": labels[0] if labels else "Unknown",
-                            "layer": "as-built",
-                        },
-                    })
-                impl = record["impl"]
-                if impl is not None:
-                    edges.append({
-                        "data": {
-                            "id": impl.element_id,
-                            "source": d.element_id,
-                            "target": code.element_id,
-                            "label": "IMPLEMENTED_BY",
-                        },
-                    })
-
-            if record["d2"] is not None:
-                d2 = record["d2"]
-                if d2.element_id not in seen_ids:
-                    seen_ids.add(d2.element_id)
-                    nodes.append({
-                        "data": {
-                            "id": d2.element_id,
-                            "label": d2.get("name", ""),
-                            "qualified_name": d2.get("qualified_name", ""),
-                            "kind": d2.get("kind", ""),
-                            "layer": "design",
-                        },
-                    })
-                r = record["r"]
-                if r is not None:
-                    edges.append({
-                        "data": {
-                            "id": r.element_id,
-                            "source": d.element_id,
-                            "target": d2.element_id,
-                            "label": r.type,
-                        },
-                    })
-
-    return {"nodes": nodes, "edges": edges}
-
-
 def fetch_neighbourhood_graph(qualified_name: str) -> dict:
     """Fetch the 1-hop neighbourhood of a Design node with collapsed members.
 
@@ -717,7 +530,7 @@ def fetch_neighbourhood_graph(qualified_name: str) -> dict:
     with get_neo4j_session() as session:
         # Fetch center + all direct neighbours (both directions)
         result = session.run("""
-        MATCH (center:Design {qualified_name: $qn})
+        MATCH (center {qualified_name: $qn})
         OPTIONAL MATCH (center)-[r_out]->(target)
         OPTIONAL MATCH (source)-[r_in]->(center)
         RETURN center,
@@ -792,7 +605,7 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
     """Fetch full node properties + relationships + traced requirements + members."""
     with get_neo4j_session() as session:
         result = session.run("""
-        MATCH (n:Design {qualified_name: $qn})
+        MATCH (n {qualified_name: $qn})
         OPTIONAL MATCH (n)-[r_out]->(target)
         OPTIONAL MATCH (source)-[r_in]->(n)
         RETURN n,
@@ -989,33 +802,56 @@ def _make_dependency_node(n) -> dict:
     }
 
 
-def fetch_dependency_graph(
-    search: str,
-    source_filter: str | None = None,
-    limit: int = 100,
-) -> dict:
-    """Fetch dependency-layer graph (external library symbols) for Cytoscape.js.
+def _make_compound_node(n, layer: str) -> dict:
+    """Build Cytoscape node-data from a Compound/Member Neo4j node.
 
-    Uses Neo4j full-text index (``doc_search``) for scored, Lucene-powered
-    search across symbol names and documentation.  Requires a non-empty
-    search string to prevent loading the entire dependency graph.
-
-    Returns {"nodes": [...], "edges": [...]}.
+    Unifies _make_codebase_node and _make_dependency_node — the only
+    difference is the layer tag and which property holds visibility.
     """
-    if not search or not search.strip():
-        return {"nodes": [], "edges": []}
+    is_dep = layer == "dependency"
+    return {
+        "id": n.element_id,
+        "label": n.get("name", ""),
+        "qualified_name": n.get("qualified_name", ""),
+        "kind": n.get("kind", ""),
+        "description": (
+            n.get("brief_description", "") or n.get("detailed_description", "")
+        ),
+        "visibility": n.get("protection", "") if is_dep else n.get("visibility", ""),
+        "type_signature": n.get("type", ""),
+        "argsstring": n.get("argsstring", ""),
+        "source": n.get("source", "") if is_dep else "",
+        "layer": "dependency" if is_dep else "as-built",
+    }
 
-    with get_neo4j_session() as session:
-        nodes = []
-        edges = []
-        node_ids: set[str] = set()
-        compound_ids: set[str] = set()
 
-        # --- Step 1: full-text search to discover matching Compounds ----------
-        # If a hit is a Member, resolve its owning Compound so we always
-        # work with Compounds (just like the as-built layer).
-        source_clause = "AND node.source CONTAINS $source_filter" if source_filter else ""
-        params: dict = {"query": search.strip(), "limit": limit}
+def _discover_compounds(
+    session,
+    layer: str,
+    search: str | None,
+    source_filter: str | None,
+    limit: int,
+) -> set[str]:
+    """Find root Compound element-IDs for a compound-based layer.
+
+    For *codebase*: returns all Compounds without a ``source`` property
+    (optionally filtered by search text).
+
+    For *dependency*: uses the Neo4j full-text index ``doc_search``
+    (falling back to CONTAINS) to find matching Compounds that *do*
+    have a ``source`` property.
+    """
+    compound_ids: set[str] = set()
+
+    if layer == "dependency":
+        search_term = (search or "").strip()
+        if not search_term:
+            return compound_ids
+
+        source_clause = (
+            "AND node.source CONTAINS $source_filter" if source_filter else ""
+        )
+        params: dict = {"query": search_term, "limit": limit}
         if source_filter:
             params["source_filter"] = source_filter
 
@@ -1044,8 +880,13 @@ def fetch_dependency_graph(
                 RETURN DISTINCT c
             """, params)
         except Exception:
-            log.warning("Full-text index 'doc_search' unavailable, falling back to CONTAINS search")
-            fallback_where = "n.source IS NOT NULL AND n.source <> '' AND (n.name CONTAINS $search OR n.qualified_name CONTAINS $search)"
+            log.warning(
+                "Full-text index 'doc_search' unavailable, falling back to CONTAINS search"
+            )
+            fallback_where = (
+                "n.source IS NOT NULL AND n.source <> '' "
+                "AND (n.name CONTAINS $search OR n.qualified_name CONTAINS $search)"
+            )
             if source_filter:
                 fallback_where += " AND n.source CONTAINS $source_filter"
             result = session.run(f"""
@@ -1057,18 +898,68 @@ def fetch_dependency_graph(
                 WITH coalesce(direct_compound, owner) AS c
                 WHERE c IS NOT NULL
                 RETURN DISTINCT c
-            """, {"search": search.strip(), "limit": limit, "source_filter": source_filter})
+            """, {
+                "search": search_term,
+                "limit": limit,
+                "source_filter": source_filter,
+            })
 
         for record in result:
-            c = record["c"]
-            compound_ids.add(c.element_id)
+            compound_ids.add(record["c"].element_id)
 
+    else:
+        # Codebase: all Compounds without a source property
+        conditions: list[str] = []
+        params = {}
+        if search:
+            conditions.append(
+                "(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)"
+            )
+            params["search"] = search
+
+        where = " AND ".join(conditions)
+        where_clause = f"WHERE {where}" if where else ""
+
+        result = session.run(
+            f"MATCH (c:Compound) {where_clause} RETURN c", params
+        )
+        for record in result:
+            c = record["c"]
+            src = c.get("source", "")
+            if not src:
+                compound_ids.add(c.element_id)
+
+    return compound_ids
+
+
+def _fetch_compound_layer(
+    layer: str,
+    search: str | None,
+    source_filter: str | None,
+    limit: int,
+) -> dict:
+    """Fetch graph for compound-based layers (codebase / dependency).
+
+    Shared pipeline:
+      1. Discover root Compound IDs (method varies by layer).
+      2. Fetch inheritance edges (1 hop up/down).
+      3. Fetch all Compounds with their CONTAINS→Member edges.
+      4. Collapse members + assign namespace parents.
+    """
+    with get_neo4j_session() as session:
+        compound_ids = _discover_compounds(
+            session, layer, search, source_filter, limit
+        )
         if not compound_ids:
             return {"nodes": [], "edges": []}
 
-        # --- Step 2: direct inheritance only (1 up, 1 down) -------------------
-        # Only show classes directly inheriting from/to matched compounds.
-        result2 = session.run("""
+        nodes: list[dict] = []
+        edges: list[dict] = []
+        node_ids: set[str] = set()
+        edge_ids: set[str] = set()
+
+        # --- Inheritance edges (1 up, 1 down) ---
+        result = session.run("""
             UNWIND $cids AS cid
             MATCH (c:Compound) WHERE elementId(c) = cid
             OPTIONAL MATCH (c)-[r1:INHERITS_FROM]->(base:Compound)
@@ -1076,60 +967,53 @@ def fetch_dependency_graph(
             RETURN c, r1, base, r2, derived
         """, {"cids": list(compound_ids)})
 
-        edge_ids: set[str] = set()
-        for record in result2:
-            c = record["c"]
-            compound_ids.add(c.element_id)
-
-            base = record["base"]
-            r1 = record["r1"]
-            if base is not None:
-                compound_ids.add(base.element_id)
-                if r1 is not None and r1.element_id not in edge_ids:
-                    edge_ids.add(r1.element_id)
+        for record in result:
+            compound_ids.add(record["c"].element_id)
+            for role, rel in [("base", "r1"), ("derived", "r2")]:
+                n = record[role]
+                r = record[rel]
+                if n is not None:
+                    compound_ids.add(n.element_id)
+                if r is not None and r.element_id not in edge_ids:
+                    edge_ids.add(r.element_id)
+                    src = (
+                        record["c"].element_id
+                        if role == "base"
+                        else n.element_id
+                    )
+                    tgt = (
+                        n.element_id
+                        if role == "base"
+                        else record["c"].element_id
+                    )
                     edges.append({
                         "data": {
-                            "id": r1.element_id,
-                            "source": c.element_id,
-                            "target": base.element_id,
+                            "id": r.element_id,
+                            "source": src,
+                            "target": tgt,
                             "label": "INHERITS_FROM",
                         }
                     })
 
-            derived = record["derived"]
-            r2 = record["r2"]
-            if derived is not None:
-                compound_ids.add(derived.element_id)
-                if r2 is not None and r2.element_id not in edge_ids:
-                    edge_ids.add(r2.element_id)
-                    edges.append({
-                        "data": {
-                            "id": r2.element_id,
-                            "source": derived.element_id,
-                            "target": c.element_id,
-                            "label": "INHERITS_FROM",
-                        }
-                    })
-
-        # --- Step 3: fetch all Compounds + their Members (same as as-built) ---
-        result3 = session.run("""
+        # --- Compounds + Members ---
+        result2 = session.run("""
             UNWIND $cids AS cid
             MATCH (c:Compound) WHERE elementId(c) = cid
             OPTIONAL MATCH (c)-[r:CONTAINS]->(m:Member)
             RETURN c, r, m
         """, {"cids": list(compound_ids)})
 
-        for record in result3:
+        for record in result2:
             c = record["c"]
             if c.element_id not in node_ids:
                 node_ids.add(c.element_id)
-                nodes.append({"data": _make_dependency_node(c)})
+                nodes.append({"data": _make_compound_node(c, layer)})
 
             m = record["m"]
             r = record["r"]
             if m is not None and m.element_id not in node_ids:
                 node_ids.add(m.element_id)
-                nodes.append({"data": _make_dependency_node(m)})
+                nodes.append({"data": _make_compound_node(m, layer)})
             if r is not None and m is not None:
                 edges.append({
                     "data": {
@@ -1140,88 +1024,28 @@ def fetch_dependency_graph(
                     }
                 })
 
-    # Collapse members into compounds, then group by namespace
     nodes, edges = _collapse_members(nodes, edges)
     nodes, edges = _assign_namespace_parents(nodes, edges)
-
     return {"nodes": nodes, "edges": edges}
 
 
-def fetch_dependency_node_detail(qualified_name: str) -> dict | None:
-    """Fetch full details for a dependency node (Compound/Member with source).
+def fetch_graph(
+    layer: str = "design",
+    kind_filter: str | None = None,
+    search: str | None = None,
+    component_id: int | None = None,
+    source_filter: str | None = None,
+    limit: int = 100,
+) -> dict:
+    """Unified graph fetch — single entry point for all layers.
 
-    Returns properties, members, inheritance, and links to Design nodes.
+    *layer* is one of ``"design"``, ``"codebase"``, or ``"dependency"``.
+    Filters by the appropriate Neo4j labels and returns Cytoscape.js
+    ``{"nodes": [...], "edges": [...]}``.
     """
-    with get_neo4j_session() as session:
-        # Try Compound first, then Member
-        result = session.run("""
-        MATCH (n:Compound {qualified_name: $qn})
-        WHERE n.source IS NOT NULL AND n.source <> ''
-        OPTIONAL MATCH (n)-[r_out]->(target)
-        OPTIONAL MATCH (source)-[r_in]->(n)
-        RETURN n,
-               collect(DISTINCT {rel: type(r_out), target_qn: target.qualified_name, target_name: target.name, target_labels: labels(target)}) AS outgoing,
-               collect(DISTINCT {rel: type(r_in), source_qn: source.qualified_name, source_name: source.name, source_labels: labels(source)}) AS incoming
-        """, {"qn": qualified_name})
-
-        record = result.single()
-        if not record or record["n"] is None:
-            # Try Member
-            result = session.run("""
-            MATCH (n:Member {qualified_name: $qn})
-            WHERE n.source IS NOT NULL AND n.source <> ''
-            OPTIONAL MATCH (c:Compound)-[:CONTAINS]->(n)
-            RETURN n, c.qualified_name AS compound_qn, c.name AS compound_name
-            """, {"qn": qualified_name})
-            record = result.single()
-            if not record:
-                return None
-            n = record["n"]
-            props = dict(n)
-            props["layer"] = "dependency"
-            return {
-                "properties": props,
-                "outgoing": [],
-                "incoming": [],
-                "members": [],
-                "design_links": [],
-                "compound": {"qualified_name": record["compound_qn"], "name": record["compound_name"]} if record["compound_qn"] else None,
-            }
-
-        n = record["n"]
-        props = dict(n)
-        props["layer"] = "dependency"
-
-        outgoing = [r for r in record["outgoing"] if r["rel"] is not None]
-        incoming = [r for r in record["incoming"] if r["rel"] is not None]
-
-        # Fetch members via CONTAINS
-        members = _fetch_codebase_members(session, qualified_name)
-
-        # Find Design nodes that reference this dependency (cross-layer links)
-        design_result = session.run("""
-        MATCH (d:Design)-[r]->(dep:Compound {qualified_name: $qn})
-        WHERE dep.source IS NOT NULL AND dep.source <> ''
-        RETURN d.qualified_name AS design_qn, d.name AS design_name, d.kind AS design_kind, type(r) AS rel
-        """, {"qn": qualified_name})
-        design_links = [dict(r) for r in design_result]
-
-        # Also check by name match (Design nodes that DEPENDS_ON something with same qualified_name)
-        if not design_links:
-            design_result2 = session.run("""
-            MATCH (d:Design)-[r:DEPENDS_ON]->(d2:Design)
-            WHERE d2.qualified_name = $qn
-            RETURN d.qualified_name AS design_qn, d.name AS design_name, d.kind AS design_kind, type(r) AS rel
-            """, {"qn": qualified_name})
-            design_links = [dict(r) for r in design_result2]
-
-        return {
-            "properties": props,
-            "outgoing": [r for r in outgoing if r["rel"] not in ("CONTAINS",)],
-            "incoming": [r for r in incoming if r["rel"] not in ("CONTAINS",)],
-            "members": members,
-            "design_links": design_links,
-        }
+    if layer == "design":
+        return fetch_design_graph(kind_filter, search, component_id)
+    return _fetch_compound_layer(layer, search, source_filter, limit)
 
 
 def fetch_design_dependency_links(design_qnames: list[str]) -> dict:
@@ -1302,70 +1126,3 @@ def fetch_design_dependency_links(design_qnames: list[str]) -> dict:
             })
 
     return {"nodes": nodes, "edges": edges}
-
-
-def fetch_design_stats() -> dict:
-    """Counts for dashboard."""
-    with get_neo4j_session() as session:
-        result = session.run("""
-        MATCH (d:Design)
-        RETURN count(d) AS design_nodes,
-               count(DISTINCT d.kind) AS kinds
-        """)
-        record = result.single()
-        design_nodes = record["design_nodes"] if record else 0
-        kinds = record["kinds"] if record else 0
-
-        result2 = session.run("""
-        MATCH (:Design)-[r]->(:Design)
-        WHERE type(r) <> 'IMPLEMENTED_BY'
-        RETURN count(r) AS design_rels
-        """)
-        record2 = result2.single()
-        design_rels = record2["design_rels"] if record2 else 0
-
-        result3 = session.run("""
-        MATCH (:Design)-[:IMPLEMENTED_BY]->()
-        RETURN count(*) AS implemented
-        """)
-        record3 = result3.single()
-        implemented = record3["implemented"] if record3 else 0
-
-        return {
-            "design_nodes": design_nodes,
-            "design_kinds": kinds,
-            "design_relationships": design_rels,
-            "implemented_links": implemented,
-        }
-
-
-def fetch_traceability(hlr_id: int) -> dict:
-    """Full chain: HLR → LLRs → design nodes → as-built code."""
-    with get_neo4j_session() as session:
-        result = session.run("""
-        MATCH (h:HLR {sqlite_id: $hid})
-        OPTIONAL MATCH (l:LLR)-[:DECOMPOSES]->(h)
-        OPTIONAL MATCH (h)-[:TRACES_TO]->(d:Design)
-        OPTIONAL MATCH (l)-[:TRACES_TO]->(d2:Design)
-        OPTIONAL MATCH (d)-[:IMPLEMENTED_BY]->(c1)
-        OPTIONAL MATCH (d2)-[:IMPLEMENTED_BY]->(c2)
-        RETURN h,
-               collect(DISTINCT {id: l.sqlite_id, title: l.title}) AS llrs,
-               collect(DISTINCT {qn: d.qualified_name, name: d.name, kind: d.kind}) AS hlr_design,
-               collect(DISTINCT {qn: d2.qualified_name, name: d2.name, kind: d2.kind}) AS llr_design,
-               collect(DISTINCT {qn: c1.qualified_name, name: c1.name}) AS hlr_code,
-               collect(DISTINCT {qn: c2.qualified_name, name: c2.name}) AS llr_code
-        """, {"hid": hlr_id})
-
-        record = result.single()
-        if not record:
-            return {}
-
-        return {
-            "hlr": {"sqlite_id": record["h"].get("sqlite_id"), "title": record["h"].get("title", "")},
-            "llrs": [l for l in record["llrs"] if l["id"] is not None],
-            "hlr_design_nodes": [d for d in record["hlr_design"] if d["qn"] is not None],
-            "llr_design_nodes": [d for d in record["llr_design"] if d["qn"] is not None],
-            "hlr_code_nodes": [c for c in record["hlr_code"] if c["qn"] is not None],
-            "llr_code_nodes": [c for c in record["llr_code"] if c["qn"] is not None],
-        }

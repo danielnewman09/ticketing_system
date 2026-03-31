@@ -1,7 +1,6 @@
 """Ontology graph visualization page using Cytoscape.js."""
 
 import asyncio
-import json
 
 from nicegui import ui
 
@@ -9,21 +8,18 @@ from frontend.theme import (
     KIND_COLORS,
     BACKGROUNDS,
     CLS_SECTION_HEADER,
-    KIND_COLORS_JS,
     add_cytoscape_cdn,
     cytoscape_base_styles,
     apply_theme,
 )
 from frontend.layout import page_layout
+from frontend.widgets import render_cytoscape_graph
 from frontend.data.ontology import (
     fetch_ontology_graph_data,
-    fetch_codebase_graph_data,
     fetch_graph_node_detail,
     resolve_node_id_by_qualified_name,
 )
 from frontend.data.dependencies import (
-    fetch_dependency_graph_data,
-    fetch_dependency_node_detail_data,
     fetch_design_dependency_links_data,
 )
 
@@ -44,59 +40,33 @@ async def ontology_graph_page():
     base_styles = cytoscape_base_styles(size="large")
 
     async def load_graph():
-        if graph_layer["value"] == "dependency":
-            search = search_text["value"] or ""
-            if not search.strip():
-                # Show placeholder — don't load the entire dependency graph
-                await ui.run_javascript("""
-                    if (window._cy) window._cy.destroy();
-                    const container = document.getElementById('cy-container');
-                    if (container) {
-                        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
-                    }
-                """)
-                return
-            data = await asyncio.to_thread(
-                fetch_dependency_graph_data,
-                search=search,
-                source_filter=source_filter["value"],
-            )
-        elif graph_layer["value"] == "codebase":
-            data = await asyncio.to_thread(
-                fetch_codebase_graph_data,
-                search=search_text["value"] or None,
-            )
-        else:
-            data = await asyncio.to_thread(
-                fetch_ontology_graph_data,
-                kind_filter=kind_filter["value"],
-                search=search_text["value"] or None,
-            )
-        elements_json = json.dumps(data["nodes"] + data["edges"])
-        await ui.run_javascript(f"""
-            if (window._cy) window._cy.destroy();
-            const KIND_COLORS = {KIND_COLORS_JS};
-            const container = document.getElementById('cy-container');
-            if (!container) {{ console.error('cy-container not found'); return; }}
-            window._cy = cytoscape({{
-                container: container,
-                elements: {elements_json},
-                style: {base_styles},
-                layout: {{ name: window._cyLayout || 'fcose', animate: true, animationDuration: 500 }},
-            }});
-            window._cy.on('tap', 'node', function(evt) {{
-                const data = evt.target.data();
-                if (data.qualified_name) {{
-                    emitEvent('node_selected', data);
-                }}
-            }});
-            window._cy.on('dbltap', 'node', function(evt) {{
-                const data = evt.target.data();
-                if (data.qualified_name) {{
-                    emitEvent('node_dblclick', data);
-                }}
-            }});
-        """)
+        layer = graph_layer["value"]
+        search = search_text["value"] or ""
+
+        if layer == "dependency" and not search.strip():
+            # Show placeholder — don't load the entire dependency graph
+            await ui.run_javascript("""
+                if (window._cy) window._cy.destroy();
+                const container = document.getElementById('cy-container');
+                if (container) {
+                    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
+                }
+            """)
+            return
+
+        data = await asyncio.to_thread(
+            fetch_ontology_graph_data,
+            layer=layer,
+            kind_filter=kind_filter["value"],
+            search=search or None,
+            source_filter=source_filter["value"],
+        )
+        await render_cytoscape_graph(
+            data["nodes"] + data["edges"],
+            base_styles,
+            container_id="cy-container",
+            cy_var="_cy",
+        )
 
     async def on_layer_change(e):
         graph_layer["value"] = e.value
@@ -121,14 +91,11 @@ async def ontology_graph_page():
         if not qn:
             return
         layer = e.args.get("layer", "")
-        if layer == "dependency":
-            detail = await asyncio.to_thread(fetch_dependency_node_detail_data, qn)
-        else:
-            detail = await asyncio.to_thread(fetch_graph_node_detail, qn)
-            # Fetch dependency links for design nodes
-            if detail and layer == "design":
-                dep_links = await asyncio.to_thread(fetch_design_dependency_links_data, [qn])
-                detail["dependency_links"] = dep_links.get("nodes", [])
+        detail = await asyncio.to_thread(fetch_graph_node_detail, qn)
+        # Fetch dependency links for design nodes
+        if detail and layer == "design":
+            dep_links = await asyncio.to_thread(fetch_design_dependency_links_data, [qn])
+            detail["dependency_links"] = dep_links.get("nodes", [])
         if detail:
             selected_node["data"] = detail
             detail_panel.refresh()

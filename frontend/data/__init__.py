@@ -14,8 +14,6 @@ from frontend.data.components import (
 from frontend.data.dependencies import (
     accept_recommendation,
     add_manual_recommendation,
-    fetch_dependency_graph_data,
-    fetch_dependency_node_detail_data,
     fetch_design_dependency_links_data,
     fetch_pending_recommendations_summary,
     fetch_recommendations,
@@ -38,7 +36,6 @@ from frontend.data.llr import (
     update_llr,
 )
 from frontend.data.ontology import (
-    fetch_codebase_graph_data,
     fetch_graph_node_detail,
     fetch_hlr_graph_data,
     fetch_neighbourhood_graph_data,
@@ -84,7 +81,6 @@ __all__ = [
     # ontology
     "fetch_ontology_data",
     "fetch_ontology_graph_data",
-    "fetch_codebase_graph_data",
     "fetch_hlr_graph_data",
     "fetch_neighbourhood_graph_data",
     "fetch_graph_node_detail",
@@ -92,8 +88,6 @@ __all__ = [
     "resolve_node_id_by_qualified_name",
     "update_member_type",
     # dependencies
-    "fetch_dependency_graph_data",
-    "fetch_dependency_node_detail_data",
     "fetch_design_dependency_links_data",
     "fetch_recommendations",
     "save_recommendations",
