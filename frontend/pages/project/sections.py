@@ -14,6 +14,7 @@ from frontend.data import (
     fetch_pending_recommendations_summary,
     fetch_environment_data,
     delete_dependency,
+    update_dependency_index_config,
 )
 from frontend.pages.project.vscode import open_directory, open_file
 from frontend.pages.project.file_tree import (
@@ -140,6 +141,16 @@ async def section_dependencies(project_dir: str):
         ui.notify(f"Removed {dep_name}", type="info")
         await dep_table.refresh()
 
+    async def do_index_dep(dep_name: str):
+        ui.notify(f"Indexing {dep_name}...", type="info")
+        from backend.codebase.indexing import index_dependency
+        result = await asyncio.to_thread(index_dependency, project_dir, dep_name)
+        if result["success"]:
+            ui.notify(result["message"], type="positive")
+        else:
+            ui.notify(result["message"], type="negative")
+        await dep_table.refresh()
+
     # --- Refreshable table ---
 
     @ui.refreshable
@@ -149,15 +160,15 @@ async def section_dependencies(project_dir: str):
             return
 
         # Flatten all deps across languages and compute integration status
-        conan_deps = get_conan_deps(project_dir) if project_dir else set()
+        conan_deps = get_conan_deps(project_dir) if project_dir else {}
         all_deps: list[dict] = []
         for lang in env_data:
             lang_label = lang["name"]
             if lang["version"]:
                 lang_label += f" {lang['version']}"
             for dep in lang["dependencies"]:
-                integrated = dep["name"].lower() in conan_deps
-                status = "integrated" if integrated else ("not in build" if project_dir else "unknown")
+                dep_lower = dep["name"].lower()
+                status = conan_deps.get(dep_lower, "not in build" if project_dir else "unknown")
                 all_deps.append({**dep, "language": lang_label, "integration_status": status})
 
         with ui.card().classes("w-full mx-2 mt-4"):
@@ -188,6 +199,10 @@ async def section_dependencies(project_dir: str):
                         "unused": len(comps) == 0,
                         "status": dep["integration_status"],
                         "language": dep["language"],
+                        "index_file_patterns": dep.get("index_file_patterns", "*.h *.hpp"),
+                        "index_subdir": dep.get("index_subdir", ""),
+                        "index_exclude_patterns": dep.get("index_exclude_patterns", ""),
+                        "index_recursive": dep.get("index_recursive", True),
                     })
 
                 table = ui.table(
@@ -198,7 +213,7 @@ async def section_dependencies(project_dir: str):
                 table.add_slot("body-cell-status", r'''
                     <q-td :props="props">
                         <q-badge
-                            :color="props.value === 'integrated' ? 'positive' : props.value === 'not in build' ? 'negative' : 'grey'"
+                            :color="props.value === 'indexed' ? 'positive' : props.value === 'integrated' ? 'info' : props.value === 'not in build' ? 'negative' : 'grey'"
                             class="text-xs"
                         >{{ props.value }}</q-badge>
                     </q-td>
@@ -221,7 +236,23 @@ async def section_dependencies(project_dir: str):
                             flat round dense size="xs" icon="add_circle"
                             class="text-blue-400"
                             @click="$parent.$emit('integrate', props.row)"
-                        />
+                        >
+                            <q-tooltip>Integrate dependency</q-tooltip>
+                        </q-btn>
+                        <q-btn v-if="props.row.status === 'integrated'"
+                            flat round dense size="xs" icon="menu_book"
+                            class="text-amber-400"
+                            @click="$parent.$emit('reindex', props.row)"
+                        >
+                            <q-tooltip>Index into documentation graph</q-tooltip>
+                        </q-btn>
+                        <q-btn v-if="props.row.status !== 'not in build'"
+                            flat round dense size="xs" icon="settings"
+                            class="text-gray-400"
+                            @click="$parent.$emit('configure', props.row)"
+                        >
+                            <q-tooltip>Configure indexing</q-tooltip>
+                        </q-btn>
                         <q-btn v-if="props.row.unused"
                             flat round dense size="xs" icon="delete"
                             class="text-red-400"
@@ -232,6 +263,8 @@ async def section_dependencies(project_dir: str):
                     </q-td>
                 ''')
                 table.on("integrate", lambda e: _open_integrate(e.args))
+                table.on("reindex", lambda e: do_index_dep(e.args["name"]))
+                table.on("configure", lambda e: _open_index_config(e.args))
                 table.on("remove", lambda e: do_delete_dep(e.args["id"], e.args["name"]))
 
             if project_dir:
@@ -303,6 +336,49 @@ async def section_dependencies(project_dir: str):
             ui.navigate.to("/")
         except Exception as e:
             ui.notify(f"Integration failed: {e}", type="negative")
+
+    # --- Index config dialog ---
+
+    idx_config_state = {"id": None, "name": ""}
+
+    with ui.dialog() as idx_config_dialog, ui.card().classes(CLS_DIALOG_MD):
+        ui.label("Indexing Configuration").classes(CLS_DIALOG_TITLE)
+        idx_name_label = ui.label("").classes("text-sm font-semibold mb-2")
+        idx_file_patterns = ui.input("File patterns", value="*.h *.hpp").classes("w-full")
+        idx_file_patterns.tooltip("Space-separated glob patterns for header files")
+        idx_subdir = ui.input("Include subdirectory (optional)").classes("w-full")
+        idx_subdir.tooltip("Subdirectory under include/ to index, e.g. 'eigen3/Eigen'")
+        idx_exclude = ui.input("Exclude patterns (optional)").classes("w-full")
+        idx_exclude.tooltip("Doxygen EXCLUDE_PATTERNS, e.g. '*/detail/* */impl/*'")
+        idx_recursive = ui.checkbox("Recursive", value=True)
+
+        with ui.row().classes(CLS_DIALOG_ACTIONS):
+            ui.button("Cancel", on_click=idx_config_dialog.close).props("flat")
+
+            async def _save_index_config():
+                await asyncio.to_thread(
+                    update_dependency_index_config,
+                    idx_config_state["id"],
+                    idx_file_patterns.value.strip(),
+                    idx_subdir.value.strip(),
+                    idx_exclude.value.strip(),
+                    idx_recursive.value,
+                )
+                idx_config_dialog.close()
+                ui.notify(f"Indexing config saved for {idx_config_state['name']}", type="positive")
+                await dep_table.refresh()
+
+            ui.button("Save", on_click=_save_index_config).props("color=primary")
+
+    def _open_index_config(row: dict):
+        idx_config_state["id"] = row["id"]
+        idx_config_state["name"] = row["name"]
+        idx_name_label.text = f"Dependency: {row['name']}"
+        idx_file_patterns.value = row.get("index_file_patterns", "*.h *.hpp")
+        idx_subdir.value = row.get("index_subdir", "")
+        idx_exclude.value = row.get("index_exclude_patterns", "")
+        idx_recursive.value = row.get("index_recursive", True)
+        idx_config_dialog.open()
 
 
 # ---------------------------------------------------------------------------

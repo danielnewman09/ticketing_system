@@ -149,6 +149,12 @@ class Dependency(Base):
     github_url: Mapped[str] = mapped_column(String(500), default="", server_default="")
     is_dev: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
+    # Doxygen indexing config — controls how doxygen-index processes this dependency
+    index_file_patterns: Mapped[str] = mapped_column(String(200), default="*.h *.hpp", server_default="*.h *.hpp")
+    index_subdir: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    index_exclude_patterns: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    index_recursive: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+
     manager: Mapped[DependencyManager] = relationship("DependencyManager", back_populates="dependencies")
     components: Mapped[list[Component]] = relationship(
         "Component", secondary=dependency_components, back_populates="dependencies",

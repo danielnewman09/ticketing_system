@@ -80,19 +80,46 @@ def scan_conan_files(root: str) -> list[dict]:
     return entries
 
 
-def get_conan_deps(project_dir: str) -> set[str]:
-    """Find integrated dependencies by checking for conan/{name}/conanfile.py."""
+def get_conan_deps(project_dir: str) -> dict[str, str]:
+    """Check integration status of dependencies.
+
+    Returns a dict mapping lowercase dep names to their status:
+      - "indexed"    — conanfile exists AND dependency is indexed in Neo4j
+      - "integrated" — conanfile exists but not yet indexed
+    """
     conan_dir = os.path.join(project_dir, "conan")
     if not os.path.isdir(conan_dir):
-        return set()
-    deps = set()
+        return {}
+
+    # Find deps with a conanfile
+    deps_with_recipe: set[str] = set()
     try:
         for name in os.listdir(conan_dir):
             if os.path.isfile(os.path.join(conan_dir, name, "conanfile.py")):
-                deps.add(name.lower())
+                deps_with_recipe.add(name.lower())
     except Exception:
         pass
-    return deps
+
+    if not deps_with_recipe:
+        return {}
+
+    # Check which deps have been indexed into Neo4j
+    indexed: set[str] = set()
+    try:
+        from backend.db.neo4j import get_neo4j_session
+        with get_neo4j_session() as session:
+            result = session.run(
+                "MATCH (n) WHERE n.source IS NOT NULL "
+                "RETURN DISTINCT n.source AS source"
+            )
+            indexed = {r["source"].lower() for r in result if r["source"]}
+    except Exception:
+        pass
+
+    return {
+        name: "indexed" if name in indexed else "integrated"
+        for name in deps_with_recipe
+    }
 
 
 def project_exists(working_directory: str, project_name: str) -> bool:

@@ -65,6 +65,10 @@ def fetch_environment_data() -> list[dict]:
                         "github_url": d.github_url,
                         "manager": dm.name,
                         "is_dev": d.is_dev,
+                        "index_file_patterns": d.index_file_patterns,
+                        "index_subdir": d.index_subdir,
+                        "index_exclude_patterns": d.index_exclude_patterns,
+                        "index_recursive": d.index_recursive,
                         "components": [
                             {"id": c.id, "name": c.name} for c in d.components
                         ],
@@ -682,6 +686,25 @@ def add_dependency(
             if comp:
                 dep.components.append(comp)
         return dep.id
+
+
+def update_dependency_index_config(
+    dep_id: int,
+    file_patterns: str,
+    subdir: str,
+    exclude_patterns: str,
+    recursive: bool,
+) -> bool:
+    """Update the Doxygen indexing config for a dependency."""
+    with get_session() as session:
+        dep = session.query(Dependency).filter_by(id=dep_id).first()
+        if not dep:
+            return False
+        dep.index_file_patterns = file_patterns
+        dep.index_subdir = subdir
+        dep.index_exclude_patterns = exclude_patterns
+        dep.index_recursive = recursive
+        return True
 
 
 def delete_dependency(dep_id: int) -> bool:

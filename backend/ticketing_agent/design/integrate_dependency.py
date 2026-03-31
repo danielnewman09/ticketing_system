@@ -156,6 +156,16 @@ def integrate_dependency(
         prompt_log_file=build_log,
     )
 
+    # --- Phase 3: Index dependency headers with doxygen-index into Neo4j ---
+    index_summary = ""
+    if build_result.get("build_success"):
+        log.info("Phase 3 (index): indexing %s headers with doxygen-index", dep_name)
+        from backend.codebase.indexing import index_dependency
+        idx = index_dependency(working_directory, dep_name)
+        index_summary = idx["message"]
+    else:
+        log.info("Skipping phase 3 (index): build failed")
+
     # Merge results
     all_files = list(dict.fromkeys(
         files_written + build_result.get("files_modified", [])
@@ -166,11 +176,15 @@ def integrate_dependency(
         len(all_files), build_result.get("build_success"),
     )
 
+    summary_parts = [
+        f"Write phase: {write_result.get('summary', '')}",
+        f"Build phase: {build_result.get('summary', '')}",
+    ]
+    if index_summary:
+        summary_parts.append(f"Index phase: {index_summary}")
+
     return {
-        "summary": (
-            f"Write phase: {write_result.get('summary', '')}\n\n"
-            f"Build phase: {build_result.get('summary', '')}"
-        ),
+        "summary": "\n\n".join(summary_parts),
         "files_modified": all_files,
         "build_success": build_result.get("build_success", False),
     }
