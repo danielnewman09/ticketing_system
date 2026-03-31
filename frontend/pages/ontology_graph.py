@@ -15,14 +15,16 @@ from frontend.theme import (
     apply_theme,
 )
 from frontend.layout import page_layout
-from frontend.data import (
+from frontend.data.ontology import (
     fetch_ontology_graph_data,
     fetch_codebase_graph_data,
+    fetch_graph_node_detail,
+    resolve_node_id_by_qualified_name,
+)
+from frontend.data.dependencies import (
     fetch_dependency_graph_data,
     fetch_dependency_node_detail_data,
     fetch_design_dependency_links_data,
-    fetch_graph_node_detail,
-    resolve_node_id_by_qualified_name,
 )
 
 

@@ -7,7 +7,7 @@ from nicegui import ui
 
 from frontend.theme import apply_theme
 from frontend.layout import page_layout
-from frontend.data import fetch_project_meta
+from frontend.data.project import fetch_project_meta
 from frontend.pages.project.sections import (
     section_project_meta,
     section_stats,

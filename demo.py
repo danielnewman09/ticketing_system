@@ -207,7 +207,7 @@ def step_research_dependencies():
     print("=" * 60)
 
     from backend.ticketing_agent.design.research_dependencies import research_dependencies
-    from frontend.data import save_recommendations
+    from frontend.data.dependencies import save_recommendations
 
     with get_session() as session:
         components = session.query(Component).all()
@@ -251,7 +251,7 @@ def step_research_dependencies():
                 print(f"      - {rec['name']} ({stars} stars): {rec.get('description', '')[:60]}")
 
     # Check for pending recommendations — block until resolved
-    from frontend.data import fetch_pending_recommendations_summary
+    from frontend.data.dependencies import fetch_pending_recommendations_summary
     pending = fetch_pending_recommendations_summary()
     if pending:
         total = sum(p["pending_count"] for p in pending)

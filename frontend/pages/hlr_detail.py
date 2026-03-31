@@ -18,17 +18,15 @@ from frontend.theme import (
 )
 from frontend.layout import page_layout
 from frontend.widgets import render_llr_table, section_header, breadcrumb
-from frontend.data import (
+from frontend.data.hlr import (
     fetch_hlr_detail,
-    fetch_hlr_graph_data,
-    fetch_components_options,
     update_hlr,
     delete_hlr,
-    create_llr,
-    update_llr,
-    delete_llr,
     decompose_hlr,
 )
+from frontend.data.llr import create_llr, update_llr, delete_llr
+from frontend.data.components import fetch_components_options
+from frontend.data.ontology import fetch_hlr_graph_data
 
 
 @ui.page("/hlr/{hlr_id}")

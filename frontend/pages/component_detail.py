@@ -14,12 +14,8 @@ from frontend.theme import (
 )
 from frontend.widgets import section_header, breadcrumb
 from frontend.layout import page_layout
-from frontend.data import (
-    fetch_component_detail,
-    fetch_ontology_graph_data,
-    add_dependency,
-    delete_dependency,
-)
+from frontend.data.components import fetch_component_detail, add_dependency, delete_dependency
+from frontend.data.ontology import fetch_ontology_graph_data
 
 
 @ui.page("/component/{component_id}")

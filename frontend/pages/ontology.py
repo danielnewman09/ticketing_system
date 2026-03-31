@@ -6,7 +6,7 @@ from nicegui import ui
 
 from frontend.theme import KIND_COLORS, apply_theme
 from frontend.layout import page_layout, stat_card
-from frontend.data import fetch_ontology_data
+from frontend.data.ontology import fetch_ontology_data
 
 
 @ui.page("/ontology")

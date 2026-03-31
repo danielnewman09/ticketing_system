@@ -18,7 +18,7 @@ from frontend.theme import (
 )
 from frontend.widgets import breadcrumb
 from frontend.layout import page_layout
-from frontend.data import fetch_node_detail_full, fetch_neighbourhood_graph_data, update_member_type
+from frontend.data.ontology import fetch_node_detail_full, fetch_neighbourhood_graph_data, update_member_type
 
 
 @ui.page("/node/{node_id}")

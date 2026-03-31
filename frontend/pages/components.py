@@ -6,7 +6,7 @@ from nicegui import ui
 
 from frontend.theme import apply_theme
 from frontend.layout import page_layout
-from frontend.data import fetch_components_data
+from frontend.data.components import fetch_components_data
 
 
 def _is_environment(comp: dict) -> bool:

@@ -6,14 +6,9 @@ from nicegui import ui
 
 from frontend.theme import CLS_DIALOG_SM, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS, apply_theme
 from frontend.layout import page_layout, stat_card
-from frontend.data import (
-    fetch_requirements_data,
-    fetch_components_options,
-    create_hlr,
-    delete_hlr,
-    create_llr,
-    decompose_hlr,
-)
+from frontend.data.hlr import fetch_requirements_data, create_hlr, delete_hlr, decompose_hlr
+from frontend.data.llr import create_llr
+from frontend.data.components import fetch_components_options
 
 
 @ui.page("/requirements")

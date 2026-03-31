@@ -7,7 +7,7 @@ from nicegui import ui
 from frontend.theme import apply_theme
 from frontend.layout import page_layout
 from frontend.widgets import render_verification_card, render_triples_card
-from frontend.data import fetch_llr_detail, update_llr
+from frontend.data.llr import fetch_llr_detail, update_llr
 
 
 @ui.page("/llr/{llr_id}")

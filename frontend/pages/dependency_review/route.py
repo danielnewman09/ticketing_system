@@ -7,8 +7,8 @@ from nicegui import ui
 from frontend.theme import CLS_DIALOG_MD, CLS_DIALOG_TITLE, apply_theme
 from frontend.widgets import section_header, breadcrumb
 from frontend.layout import page_layout
-from frontend.data import (
-    fetch_component_detail,
+from frontend.data.components import fetch_component_detail
+from frontend.data.dependencies import (
     fetch_recommendations,
     save_recommendations,
     update_recommendation_status,

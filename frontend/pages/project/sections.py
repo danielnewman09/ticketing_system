@@ -7,15 +7,10 @@ from nicegui import ui
 
 from frontend.theme import BACKGROUNDS, COLORS, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS
 from frontend.layout import stat_card
-from frontend.data import (
-    fetch_project_meta,
-    update_project_meta,
-    fetch_requirements_data,
-    fetch_pending_recommendations_summary,
-    fetch_environment_data,
-    delete_dependency,
-    update_dependency_index_config,
-)
+from frontend.data.project import fetch_project_meta, update_project_meta, fetch_environment_data
+from frontend.data.hlr import fetch_requirements_data
+from frontend.data.components import delete_dependency, update_dependency_index_config
+from frontend.data.dependencies import fetch_pending_recommendations_summary
 from frontend.pages.project.vscode import open_directory, open_file
 from frontend.pages.project.file_tree import (
     scan_cmake_tree,
@@ -480,7 +475,7 @@ async def section_scaffold(meta: dict, project_dir: str):
             ).props("color=primary size=sm")
 
     async def _open_scaffold_dialog():
-        from frontend.data import fetch_components_options
+        from frontend.data.components import fetch_components_options
         components = await asyncio.to_thread(fetch_components_options)
         lib_names = [
             c["name"] for c in components
