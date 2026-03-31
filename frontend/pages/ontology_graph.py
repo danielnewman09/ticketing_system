@@ -18,6 +18,9 @@ from frontend.layout import page_layout
 from frontend.data import (
     fetch_ontology_graph_data,
     fetch_codebase_graph_data,
+    fetch_dependency_graph_data,
+    fetch_dependency_node_detail_data,
+    fetch_design_dependency_links_data,
     fetch_graph_node_detail,
     resolve_node_id_by_qualified_name,
 )
@@ -32,13 +35,31 @@ async def ontology_graph_page():
     kind_filter = {"value": None}
     search_text = {"value": ""}
     selected_node = {"data": None}
-    graph_layer = {"value": "design"}  # "design" or "codebase"
+    graph_layer = {"value": "design"}  # "design", "codebase", or "dependency"
+    source_filter = {"value": None}  # dependency source filter (e.g. "eigen")
 
     add_cytoscape_cdn()
     base_styles = cytoscape_base_styles(size="large")
 
     async def load_graph():
-        if graph_layer["value"] == "codebase":
+        if graph_layer["value"] == "dependency":
+            search = search_text["value"] or ""
+            if not search.strip():
+                # Show placeholder — don't load the entire dependency graph
+                await ui.run_javascript("""
+                    if (window._cy) window._cy.destroy();
+                    const container = document.getElementById('cy-container');
+                    if (container) {
+                        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
+                    }
+                """)
+                return
+            data = await asyncio.to_thread(
+                fetch_dependency_graph_data,
+                search=search,
+                source_filter=source_filter["value"],
+            )
+        elif graph_layer["value"] == "codebase":
             data = await asyncio.to_thread(
                 fetch_codebase_graph_data,
                 search=search_text["value"] or None,
@@ -97,7 +118,15 @@ async def ontology_graph_page():
         qn = e.args.get("qualified_name", "")
         if not qn:
             return
-        detail = await asyncio.to_thread(fetch_graph_node_detail, qn)
+        layer = e.args.get("layer", "")
+        if layer == "dependency":
+            detail = await asyncio.to_thread(fetch_dependency_node_detail_data, qn)
+        else:
+            detail = await asyncio.to_thread(fetch_graph_node_detail, qn)
+            # Fetch dependency links for design nodes
+            if detail and layer == "design":
+                dep_links = await asyncio.to_thread(fetch_design_dependency_links_data, [qn])
+                detail["dependency_links"] = dep_links.get("nodes", [])
         if detail:
             selected_node["data"] = detail
             detail_panel.refresh()
@@ -118,7 +147,7 @@ async def ontology_graph_page():
     # Controls
     with ui.row().classes("w-full gap-4 px-2 mb-2 items-end"):
         ui.select(
-            {"design": "Design Intent", "codebase": "As-Built Codebase"},
+            {"design": "Design Intent", "codebase": "As-Built Codebase", "dependency": "Dependencies"},
             value="design",
             label="Layer",
             on_change=on_layer_change,
@@ -143,6 +172,9 @@ async def ontology_graph_page():
         with ui.row().classes("items-center gap-1"):
             ui.html('<div style="width:10px;height:10px;transform:rotate(45deg);background:#e67e22"></div>')
             ui.label("Requirement").classes("text-xs")
+        with ui.row().classes("items-center gap-1"):
+            ui.html('<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>')
+            ui.label("Dependency").classes("text-xs")
 
     # Main content: graph + detail panel
     with ui.row().classes("w-full gap-0 px-2").style("height: calc(100vh - 240px); min-height: 400px"):
@@ -177,7 +209,7 @@ async def ontology_graph_page():
                     ui.label(props["description"]).classes("text-sm")
 
                 # Outgoing relationships
-                if d["outgoing"]:
+                if d.get("outgoing"):
                     ui.separator().classes("my-2")
                     ui.label("Outgoing").classes(CLS_SECTION_HEADER)
                     for r in d["outgoing"]:
@@ -186,7 +218,7 @@ async def ontology_graph_page():
                             ui.label(r.get("target_name") or r.get("target_qn", "")).classes("text-xs")
 
                 # Incoming relationships
-                if d["incoming"]:
+                if d.get("incoming"):
                     ui.separator().classes("my-2")
                     ui.label("Incoming").classes(CLS_SECTION_HEADER)
                     for r in d["incoming"]:
@@ -195,20 +227,55 @@ async def ontology_graph_page():
                             ui.badge(r["rel"], color="grey").classes("text-xs")
 
                 # Implemented by
-                if d["implemented_by"]:
+                if d.get("implemented_by"):
                     ui.separator().classes("my-2")
                     ui.label("Implemented By").classes(CLS_SECTION_HEADER)
                     for impl in d["implemented_by"]:
                         ui.label(impl.get("qualified_name", impl.get("name", ""))).classes("text-xs text-blue-300")
 
                 # Requirements
-                if d["requirements"]:
+                if d.get("requirements"):
                     ui.separator().classes("my-2")
                     ui.label("Traced Requirements").classes(CLS_SECTION_HEADER)
                     for req in d["requirements"]:
                         with ui.row().classes("items-center gap-1"):
                             ui.badge(req["type"], color="orange" if req["type"] == "HLR" else "amber").classes("text-xs")
                             ui.label(req.get("name", "")).classes("text-xs")
+
+                # Dependency links (shown for design nodes)
+                if d.get("dependency_links"):
+                    ui.separator().classes("my-2")
+                    ui.label("Dependencies").classes(CLS_SECTION_HEADER)
+                    for dep in d["dependency_links"]:
+                        dep_data = dep.get("data", dep)
+                        with ui.row().classes("items-center gap-1"):
+                            ui.badge(dep_data.get("source", ""), color="teal").classes("text-xs")
+                            ui.label(dep_data.get("qualified_name", dep_data.get("label", ""))).classes("text-xs text-teal-300")
+
+                # Design links (shown for dependency nodes)
+                if d.get("design_links"):
+                    ui.separator().classes("my-2")
+                    ui.label("Referenced by Design").classes(CLS_SECTION_HEADER)
+                    for link in d["design_links"]:
+                        with ui.row().classes("items-center gap-1"):
+                            ui.badge(link.get("rel", ""), color="grey").classes("text-xs")
+                            ui.label(link.get("design_name", link.get("design_qn", ""))).classes("text-xs text-blue-300")
+
+                # Members (shown for dependency compound nodes)
+                if d.get("members") and props.get("layer") == "dependency":
+                    ui.separator().classes("my-2")
+                    ui.label("Members").classes(CLS_SECTION_HEADER)
+                    for m in d["members"][:20]:
+                        with ui.row().classes("items-center gap-1"):
+                            ui.badge(m.get("kind", ""), color="grey").classes("text-xs")
+                            ui.label(m.get("name", "")).classes("text-xs")
+
+                # Source library (shown for dependency nodes)
+                if props.get("source"):
+                    ui.separator().classes("my-2")
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label("Source:").classes("text-xs text-gray-400")
+                        ui.badge(props["source"], color="teal").classes("text-xs")
 
         detail_panel()
 

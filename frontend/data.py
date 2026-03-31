@@ -566,6 +566,39 @@ def fetch_graph_node_detail(qualified_name: str) -> dict | None:
         return None
 
 
+def fetch_dependency_graph_data(
+    search: str,
+    source_filter: str | None = None,
+) -> dict:
+    """Fetch dependency graph from Neo4j for Cytoscape.js rendering."""
+    try:
+        from backend.db.neo4j_queries import fetch_dependency_graph
+        return fetch_dependency_graph(search, source_filter)
+    except Exception:
+        log.warning("Neo4j dependency graph query failed — returning empty graph", exc_info=True)
+        return {"nodes": [], "edges": []}
+
+
+def fetch_dependency_node_detail_data(qualified_name: str) -> dict | None:
+    """Fetch dependency node detail from Neo4j."""
+    try:
+        from backend.db.neo4j_queries import fetch_dependency_node_detail
+        return fetch_dependency_node_detail(qualified_name)
+    except Exception:
+        log.warning("Neo4j dependency node detail query failed", exc_info=True)
+        return None
+
+
+def fetch_design_dependency_links_data(design_qnames: list[str]) -> dict:
+    """Fetch cross-layer links between Design nodes and dependency Compounds."""
+    try:
+        from backend.db.neo4j_queries import fetch_design_dependency_links
+        return fetch_design_dependency_links(design_qnames)
+    except Exception:
+        log.warning("Neo4j design-dependency links query failed", exc_info=True)
+        return {"nodes": [], "edges": []}
+
+
 def fetch_node_detail_full(node_id: int) -> dict | None:
     """Fetch ontology node by SQLite id with all properties + Neo4j relationships."""
     with get_session() as session:

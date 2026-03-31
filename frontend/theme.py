@@ -153,6 +153,25 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
             }}
         }},
         {{
+            selector: 'node[layer="dependency"]',
+            style: {{
+                'label': 'data(label)',
+                'background-color': '#555',
+                'color': '#ccc',
+                'text-valign': 'bottom',
+                'text-halign': 'center',
+                'font-size': '{font}px',
+                'width': {node_w},
+                'height': {node_h},
+                'border-width': 2,
+                'border-style': 'dashed',
+                'border-color': '#009688',
+                'text-wrap': 'ellipsis',
+                'text-max-width': '{txt_max}px',
+                'text-margin-y': {txt_margin},
+            }}
+        }},
+        {{
             selector: 'node[has_members="true"]',
             style: {{
                 'shape': 'roundrectangle',
@@ -197,6 +216,10 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
             }},
             {{
                 selector: 'node[kind="' + kind + '"][layer="as-built"]',
+                style: {{ 'background-color': color }}
+            }},
+            {{
+                selector: 'node[kind="' + kind + '"][layer="dependency"]',
                 style: {{ 'background-color': color }}
             }},
         ]),

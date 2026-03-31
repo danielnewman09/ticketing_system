@@ -405,5 +405,143 @@ def ensure_predicates() -> str:
         return json.dumps(predicates, indent=2)
 
 
+# ---------------------------------------------------------------------------
+# Codebase dependency query tools (delegated to doxygen_index)
+# ---------------------------------------------------------------------------
+
+_codebase_tools = None
+
+
+def _get_codebase_tools():
+    """Lazy singleton for DependencyGraphTools from doxygen_index."""
+    global _codebase_tools
+    if _codebase_tools is None:
+        from doxygen_index.tools import create_toolset
+        from backend.db.neo4j import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+        _codebase_tools = create_toolset(
+            uri=NEO4J_URI, user=NEO4J_USER, password=NEO4J_PASSWORD,
+        )
+    return _codebase_tools
+
+
+@mcp.tool()
+def codebase_list_sources() -> str:
+    """List all indexed dependency sources and their symbol counts."""
+    try:
+        results = _get_codebase_tools().list_sources()
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase query failed: {e}"})
+
+
+@mcp.tool()
+def codebase_search_symbols(query: str, source: str | None = None, limit: int = 20) -> str:
+    """Full-text search across all codebase symbols (classes, functions, variables).
+
+    Args:
+        query: Search term (supports Lucene syntax: AND, OR, quotes, ~fuzzy)
+        source: Optional dependency filter (e.g. "eigen", "sdl")
+        limit: Maximum results (default 20)
+    """
+    try:
+        results = _get_codebase_tools().search_symbols(query, source=source, limit=limit)
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase search failed: {e}"})
+
+
+@mcp.tool()
+def codebase_get_compound(name: str, source: str | None = None) -> str:
+    """Get full details of a class/struct and all its members.
+
+    Args:
+        name: Exact or qualified name (e.g. "Matrix3d", "Eigen::Matrix3d")
+        source: Optional dependency filter
+    """
+    try:
+        results = _get_codebase_tools().get_compound(name, source=source)
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase compound query failed: {e}"})
+
+
+@mcp.tool()
+def codebase_get_member(name: str, source: str | None = None, fuzzy: bool = False) -> str:
+    """Get detailed info on a specific function, variable, or enum.
+
+    Args:
+        name: Exact or qualified name (e.g. "CreateContext", "ImGui::Begin")
+        source: Optional dependency filter
+        fuzzy: If true, match names containing the term
+    """
+    try:
+        results = _get_codebase_tools().get_member(name, source=source, fuzzy=fuzzy)
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase member query failed: {e}"})
+
+
+@mcp.tool()
+def codebase_browse_namespace(name: str, source: str | None = None, limit: int = 50) -> str:
+    """List classes and free functions in a namespace.
+
+    Args:
+        name: Namespace name (e.g. "Eigen", "ImGui")
+        source: Optional dependency filter
+        limit: Maximum results per category
+    """
+    try:
+        results = _get_codebase_tools().browse_namespace(name, source=source, limit=limit)
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase namespace query failed: {e}"})
+
+
+@mcp.tool()
+def codebase_find_inheritance(name: str, direction: str = "both", max_depth: int = 5) -> str:
+    """Explore class inheritance hierarchy.
+
+    Args:
+        name: Exact or qualified class name
+        direction: "up" (base classes), "down" (derived), or "both"
+        max_depth: Maximum traversal depth
+    """
+    try:
+        results = _get_codebase_tools().find_inheritance(name, direction=direction, max_depth=max_depth)
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase inheritance query failed: {e}"})
+
+
+@mcp.tool()
+def codebase_find_callers_and_callees(name: str, direction: str = "both", limit: int = 30) -> str:
+    """Explore call graph around a function.
+
+    Args:
+        name: Exact or qualified function name
+        direction: "callers", "callees", or "both"
+        limit: Maximum results per direction
+    """
+    try:
+        results = _get_codebase_tools().find_callers_and_callees(name, direction=direction, limit=limit)
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase call graph query failed: {e}"})
+
+
+@mcp.tool()
+def codebase_get_include_chain(header: str) -> str:
+    """Find which header files are needed for a given header.
+
+    Args:
+        header: Header file name (e.g. "imgui.h", "Eigen/Dense")
+    """
+    try:
+        results = _get_codebase_tools().get_include_chain(header)
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"Codebase include chain query failed: {e}"})
+
+
 if __name__ == "__main__":
     mcp.run()

@@ -27,13 +27,21 @@ def _make_node_data(n) -> dict:
 _VISIBILITY_PREFIX = {"private": "-", "protected": "#", "public": "+"}
 
 # Member kinds that get collapsed into their owning class node
-_COLLAPSIBLE_KINDS = {"attribute", "method", "variable", "function"}
-
-# Map codebase member kinds to design-intent kinds for collapsing
-_KIND_NORMALIZE = {"variable": "attribute", "function": "method"}
+_COLLAPSIBLE_KINDS = {"attribute", "method", "variable", "function", "friend", "enum", "typedef"}
 
 # Owner kinds whose members should be collapsed
 _OWNER_KINDS = {"class", "interface", "enum", "struct"}
+
+
+def _dedup_by_name(members: list[dict]) -> list[dict]:
+    """Keep only the first member with each name (removes overloads)."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for m in members:
+        if m["name"] not in seen:
+            seen.add(m["name"])
+            out.append(m)
+    return out
 
 
 def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -43,10 +51,17 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
     and folded into the parent's label as a PlantUML-style compartment list
     using visibility prefixes (+ public, - private, # protected).
 
+    For dependency-layer nodes, private members are hidden and overloaded
+    methods (same name) are deduplicated.
+
     Handles both design-intent nodes (COMPOSES) and codebase nodes (CONTAINS).
 
     Returns the pruned (nodes, edges) tuple.
     """
+    # Map codebase member kinds to design-intent kinds for grouping
+    kind_normalize = {"variable": "attribute", "function": "method",
+                      "friend": "attribute", "enum": "attribute", "typedef": "attribute"}
+
     node_by_id: dict[str, dict] = {n["data"]["id"]: n for n in nodes}
 
     # Collect members to collapse, keyed by owner node id
@@ -71,13 +86,22 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
         owner = node_by_id.get(owner_id)
         if owner is None or owner["data"]["kind"] not in _OWNER_KINDS:
             continue
-        # Normalize codebase kinds to design kinds for grouping
-        norm_kind = _KIND_NORMALIZE.get(raw_kind, raw_kind)
+
+        is_dependency = td.get("layer") == "dependency"
+
+        # For dependency nodes, only show public API
+        if is_dependency and td.get("visibility") in ("private", "protected"):
+            remove_node_ids.add(d["target"])
+            remove_edge_ids.add(d["id"])
+            continue
+
+        norm_kind = kind_normalize.get(raw_kind, raw_kind)
         collapsed.setdefault(owner_id, {}).setdefault(norm_kind, []).append({
             "name": td["label"],
             "type_signature": td.get("type_signature", ""),
             "visibility": td.get("visibility", ""),
             "qualified_name": td.get("qualified_name", ""),
+            "layer": td.get("layer", ""),
         })
         remove_node_ids.add(d["target"])
         remove_edge_ids.add(d["id"])
@@ -95,6 +119,7 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
     for owner_id, by_kind in collapsed.items():
         owner = node_by_id[owner_id]
         od = owner["data"]
+        is_dependency = od.get("layer") == "dependency"
         class_name = od["label"]
         separator = "─" * max(len(class_name), 10)
         lines = [class_name]
@@ -102,6 +127,8 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
         # Attributes compartment
         attrs = by_kind.get("attribute", [])
         if attrs:
+            if is_dependency:
+                attrs = _dedup_by_name(attrs)
             lines.append(separator)
             attrs.sort(key=lambda a: a["name"])
             for a in attrs:
@@ -112,6 +139,8 @@ def _collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict],
         # Methods compartment
         methods = by_kind.get("method", [])
         if methods:
+            if is_dependency:
+                methods = _dedup_by_name(methods)
             lines.append(separator)
             methods.sort(key=lambda m: m["name"])
             for m in methods:
@@ -941,6 +970,338 @@ def _fetch_available_types(
     completions.update(builtins)
 
     return sorted(completions)
+
+
+def _make_dependency_node(n) -> dict:
+    """Build Cytoscape node-data dict from a dependency Neo4j node (Compound/Member)."""
+    kind = n.get("kind", "")
+    return {
+        "id": n.element_id,
+        "label": n.get("name", ""),
+        "qualified_name": n.get("qualified_name", ""),
+        "kind": kind,
+        "description": n.get("brief_description", "") or n.get("detailed_description", ""),
+        "visibility": n.get("protection", ""),
+        "type_signature": n.get("type", ""),
+        "argsstring": n.get("argsstring", ""),
+        "source": n.get("source", ""),
+        "layer": "dependency",
+    }
+
+
+def fetch_dependency_graph(
+    search: str,
+    source_filter: str | None = None,
+    limit: int = 100,
+) -> dict:
+    """Fetch dependency-layer graph (external library symbols) for Cytoscape.js.
+
+    Uses Neo4j full-text index (``doc_search``) for scored, Lucene-powered
+    search across symbol names and documentation.  Requires a non-empty
+    search string to prevent loading the entire dependency graph.
+
+    Returns {"nodes": [...], "edges": [...]}.
+    """
+    if not search or not search.strip():
+        return {"nodes": [], "edges": []}
+
+    with get_neo4j_session() as session:
+        nodes = []
+        edges = []
+        node_ids: set[str] = set()
+        compound_ids: set[str] = set()
+
+        # --- Step 1: full-text search to discover matching Compounds ----------
+        # If a hit is a Member, resolve its owning Compound so we always
+        # work with Compounds (just like the as-built layer).
+        source_clause = "AND node.source CONTAINS $source_filter" if source_filter else ""
+        params: dict = {"query": search.strip(), "limit": limit}
+        if source_filter:
+            params["source_filter"] = source_filter
+
+        try:
+            result = session.run(f"""
+                CALL db.index.fulltext.queryNodes('doc_search', $query)
+                YIELD node, score
+                WHERE node.source IS NOT NULL AND node.source <> ''
+                  {source_clause}
+                WITH node, score
+                ORDER BY score DESC
+                LIMIT $limit
+                WITH collect({{node: node, score: score}}) AS hits,
+                     max(score) AS top_score
+                UNWIND hits AS hit
+                WITH hit.node AS node, hit.score AS score, top_score
+                WHERE score >= top_score * 0.4
+                WITH CASE
+                    WHEN node:Compound THEN node
+                    ELSE null
+                END AS direct_compound, node
+                OPTIONAL MATCH (owner:Compound)-[:CONTAINS]->(node)
+                WHERE NOT node:Compound AND owner.source IS NOT NULL
+                WITH coalesce(direct_compound, owner) AS c
+                WHERE c IS NOT NULL
+                RETURN DISTINCT c
+            """, params)
+        except Exception:
+            log.warning("Full-text index 'doc_search' unavailable, falling back to CONTAINS search")
+            fallback_where = "n.source IS NOT NULL AND n.source <> '' AND (n.name CONTAINS $search OR n.qualified_name CONTAINS $search)"
+            if source_filter:
+                fallback_where += " AND n.source CONTAINS $source_filter"
+            result = session.run(f"""
+                MATCH (n) WHERE ({fallback_where}) AND (n:Compound OR n:Member)
+                WITH n LIMIT $limit
+                WITH CASE WHEN n:Compound THEN n ELSE null END AS direct_compound, n
+                OPTIONAL MATCH (owner:Compound)-[:CONTAINS]->(n)
+                WHERE NOT n:Compound AND owner.source IS NOT NULL
+                WITH coalesce(direct_compound, owner) AS c
+                WHERE c IS NOT NULL
+                RETURN DISTINCT c
+            """, {"search": search.strip(), "limit": limit, "source_filter": source_filter})
+
+        for record in result:
+            c = record["c"]
+            compound_ids.add(c.element_id)
+
+        if not compound_ids:
+            return {"nodes": [], "edges": []}
+
+        # --- Step 2: direct inheritance only (1 up, 1 down) -------------------
+        # Only show classes directly inheriting from/to matched compounds.
+        result2 = session.run("""
+            UNWIND $cids AS cid
+            MATCH (c:Compound) WHERE elementId(c) = cid
+            OPTIONAL MATCH (c)-[r1:INHERITS_FROM]->(base:Compound)
+            OPTIONAL MATCH (derived:Compound)-[r2:INHERITS_FROM]->(c)
+            RETURN c, r1, base, r2, derived
+        """, {"cids": list(compound_ids)})
+
+        edge_ids: set[str] = set()
+        for record in result2:
+            c = record["c"]
+            compound_ids.add(c.element_id)
+
+            base = record["base"]
+            r1 = record["r1"]
+            if base is not None:
+                compound_ids.add(base.element_id)
+                if r1 is not None and r1.element_id not in edge_ids:
+                    edge_ids.add(r1.element_id)
+                    edges.append({
+                        "data": {
+                            "id": r1.element_id,
+                            "source": c.element_id,
+                            "target": base.element_id,
+                            "label": "INHERITS_FROM",
+                        }
+                    })
+
+            derived = record["derived"]
+            r2 = record["r2"]
+            if derived is not None:
+                compound_ids.add(derived.element_id)
+                if r2 is not None and r2.element_id not in edge_ids:
+                    edge_ids.add(r2.element_id)
+                    edges.append({
+                        "data": {
+                            "id": r2.element_id,
+                            "source": derived.element_id,
+                            "target": c.element_id,
+                            "label": "INHERITS_FROM",
+                        }
+                    })
+
+        # --- Step 3: fetch all Compounds + their Members (same as as-built) ---
+        result3 = session.run("""
+            UNWIND $cids AS cid
+            MATCH (c:Compound) WHERE elementId(c) = cid
+            OPTIONAL MATCH (c)-[r:CONTAINS]->(m:Member)
+            RETURN c, r, m
+        """, {"cids": list(compound_ids)})
+
+        for record in result3:
+            c = record["c"]
+            if c.element_id not in node_ids:
+                node_ids.add(c.element_id)
+                nodes.append({"data": _make_dependency_node(c)})
+
+            m = record["m"]
+            r = record["r"]
+            if m is not None and m.element_id not in node_ids:
+                node_ids.add(m.element_id)
+                nodes.append({"data": _make_dependency_node(m)})
+            if r is not None and m is not None:
+                edges.append({
+                    "data": {
+                        "id": r.element_id,
+                        "source": c.element_id,
+                        "target": m.element_id,
+                        "label": "CONTAINS",
+                    }
+                })
+
+    # Collapse members into compounds, then group by namespace
+    nodes, edges = _collapse_members(nodes, edges)
+    nodes, edges = _assign_namespace_parents(nodes, edges)
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def fetch_dependency_node_detail(qualified_name: str) -> dict | None:
+    """Fetch full details for a dependency node (Compound/Member with source).
+
+    Returns properties, members, inheritance, and links to Design nodes.
+    """
+    with get_neo4j_session() as session:
+        # Try Compound first, then Member
+        result = session.run("""
+        MATCH (n:Compound {qualified_name: $qn})
+        WHERE n.source IS NOT NULL AND n.source <> ''
+        OPTIONAL MATCH (n)-[r_out]->(target)
+        OPTIONAL MATCH (source)-[r_in]->(n)
+        RETURN n,
+               collect(DISTINCT {rel: type(r_out), target_qn: target.qualified_name, target_name: target.name, target_labels: labels(target)}) AS outgoing,
+               collect(DISTINCT {rel: type(r_in), source_qn: source.qualified_name, source_name: source.name, source_labels: labels(source)}) AS incoming
+        """, {"qn": qualified_name})
+
+        record = result.single()
+        if not record or record["n"] is None:
+            # Try Member
+            result = session.run("""
+            MATCH (n:Member {qualified_name: $qn})
+            WHERE n.source IS NOT NULL AND n.source <> ''
+            OPTIONAL MATCH (c:Compound)-[:CONTAINS]->(n)
+            RETURN n, c.qualified_name AS compound_qn, c.name AS compound_name
+            """, {"qn": qualified_name})
+            record = result.single()
+            if not record:
+                return None
+            n = record["n"]
+            props = dict(n)
+            props["layer"] = "dependency"
+            return {
+                "properties": props,
+                "outgoing": [],
+                "incoming": [],
+                "members": [],
+                "design_links": [],
+                "compound": {"qualified_name": record["compound_qn"], "name": record["compound_name"]} if record["compound_qn"] else None,
+            }
+
+        n = record["n"]
+        props = dict(n)
+        props["layer"] = "dependency"
+
+        outgoing = [r for r in record["outgoing"] if r["rel"] is not None]
+        incoming = [r for r in record["incoming"] if r["rel"] is not None]
+
+        # Fetch members via CONTAINS
+        members = _fetch_codebase_members(session, qualified_name)
+
+        # Find Design nodes that reference this dependency (cross-layer links)
+        design_result = session.run("""
+        MATCH (d:Design)-[r]->(dep:Compound {qualified_name: $qn})
+        WHERE dep.source IS NOT NULL AND dep.source <> ''
+        RETURN d.qualified_name AS design_qn, d.name AS design_name, d.kind AS design_kind, type(r) AS rel
+        """, {"qn": qualified_name})
+        design_links = [dict(r) for r in design_result]
+
+        # Also check by name match (Design nodes that DEPENDS_ON something with same qualified_name)
+        if not design_links:
+            design_result2 = session.run("""
+            MATCH (d:Design)-[r:DEPENDS_ON]->(d2:Design)
+            WHERE d2.qualified_name = $qn
+            RETURN d.qualified_name AS design_qn, d.name AS design_name, d.kind AS design_kind, type(r) AS rel
+            """, {"qn": qualified_name})
+            design_links = [dict(r) for r in design_result2]
+
+        return {
+            "properties": props,
+            "outgoing": [r for r in outgoing if r["rel"] not in ("CONTAINS",)],
+            "incoming": [r for r in incoming if r["rel"] not in ("CONTAINS",)],
+            "members": members,
+            "design_links": design_links,
+        }
+
+
+def fetch_design_dependency_links(design_qnames: list[str]) -> dict:
+    """Find dependency Compounds linked to given Design nodes.
+
+    Uses query-time matching: checks if Design DEPENDS_ON targets match
+    Compound nodes with a non-null source field.
+
+    Returns Cytoscape-format {"nodes": [...], "edges": [...]}.
+    """
+    if not design_qnames:
+        return {"nodes": [], "edges": []}
+
+    with get_neo4j_session() as session:
+        nodes = []
+        edges = []
+        node_ids: set[str] = set()
+
+        # Direct relationships from Design to dependency Compounds
+        result = session.run("""
+        UNWIND $qnames AS qn
+        MATCH (d:Design {qualified_name: qn})-[r]->(dep:Compound)
+        WHERE dep.source IS NOT NULL AND dep.source <> ''
+        RETURN d, r, dep
+        """, {"qnames": design_qnames})
+
+        for record in result:
+            d = record["d"]
+            dep = record["dep"]
+            r = record["r"]
+
+            if d.element_id not in node_ids:
+                node_ids.add(d.element_id)
+                nodes.append({"data": _make_node_data(d)})
+
+            if dep.element_id not in node_ids:
+                node_ids.add(dep.element_id)
+                nodes.append({"data": _make_dependency_node(dep)})
+
+            edges.append({
+                "data": {
+                    "id": r.element_id,
+                    "source": d.element_id,
+                    "target": dep.element_id,
+                    "label": r.type,
+                }
+            })
+
+        # Also check for Design→Design DEPENDS_ON where the target matches a dependency Compound by qualified_name
+        result2 = session.run("""
+        UNWIND $qnames AS qn
+        MATCH (d:Design {qualified_name: qn})-[r:DEPENDS_ON]->(d2:Design)
+        WITH d, r, d2
+        MATCH (dep:Compound {qualified_name: d2.qualified_name})
+        WHERE dep.source IS NOT NULL AND dep.source <> ''
+        RETURN d, r, d2, dep
+        """, {"qnames": design_qnames})
+
+        for record in result2:
+            d = record["d"]
+            dep = record["dep"]
+
+            if d.element_id not in node_ids:
+                node_ids.add(d.element_id)
+                nodes.append({"data": _make_node_data(d)})
+
+            if dep.element_id not in node_ids:
+                node_ids.add(dep.element_id)
+                nodes.append({"data": _make_dependency_node(dep)})
+
+            edges.append({
+                "data": {
+                    "id": f"dep_link_{d.element_id}_{dep.element_id}",
+                    "source": d.element_id,
+                    "target": dep.element_id,
+                    "label": "DEPENDS_ON",
+                }
+            })
+
+    return {"nodes": nodes, "edges": edges}
 
 
 def fetch_design_stats() -> dict:
