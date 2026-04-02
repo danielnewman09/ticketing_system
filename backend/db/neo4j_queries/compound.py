@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from backend.db.neo4j import get_neo4j_session
+from services.dependencies import get_neo4j
+
 from backend.db.neo4j_queries._graph_transforms import (
     _assign_namespace_parents,
     _collapse_members,
@@ -43,7 +44,7 @@ def _discover_dependency_compounds(
         params["source_filter"] = source_filter
 
     try:
-        result = session.run(f"""
+        query_str = f"""
             CALL db.index.fulltext.queryNodes('doc_search', $query)
             YIELD node, score
             WHERE node.source IS NOT NULL AND node.source <> ''
@@ -65,7 +66,8 @@ def _discover_dependency_compounds(
             WITH coalesce(direct_compound, owner) AS c
             WHERE c IS NOT NULL
             RETURN DISTINCT c
-        """, params)
+        """
+        result = session.run(query_str, params)
     except Exception:
         log.warning(
             "Full-text index 'doc_search' unavailable, falling back to CONTAINS search"
@@ -136,7 +138,7 @@ def _fetch_compound_layer(
       3. Fetch all Compounds with their CONTAINS -> Member edges.
       4. Collapse members + assign namespace parents.
     """
-    with get_neo4j_session() as session:
+    with get_neo4j().session() as session:
         if layer == "dependency":
             compound_ids = _discover_dependency_compounds(session, search, source_filter, limit)
         else:
@@ -225,7 +227,7 @@ def fetch_design_dependency_links(design_qnames: list[str]) -> dict:
     if not design_qnames:
         return {"nodes": [], "edges": []}
 
-    with get_neo4j_session() as session:
+    with get_neo4j().session() as session:
         nodes: list[dict] = []
         edges: list[dict] = []
         node_ids: set[str] = set()

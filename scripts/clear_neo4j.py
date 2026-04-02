@@ -1,18 +1,14 @@
 #!/usr/bin/env python
 """Clear all nodes and relationships from the Neo4j database."""
 
-from backend.db import init_db
-from backend.db.neo4j import verify_connection, get_neo4j_session
+from services.dependencies import get_neo4j
 
+from backend.db import init_db
 
 def main():
     init_db()
 
-    if not verify_connection():
-        print("Neo4j unavailable")
-        return
-
-    with get_neo4j_session() as session:
+    with get_neo4j().session() as session:
         result = session.run("MATCH (n) DETACH DELETE n")
         summary = result.consume()
         print(f"Deleted {summary.counters.nodes_deleted} nodes, "

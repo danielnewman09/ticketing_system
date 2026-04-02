@@ -1,8 +1,10 @@
 """Single-node detail and neighbourhood queries."""
 
-from __future__ import annotations
+import logging
+log = logging.getLogger(__name__)
 
-from backend.db.neo4j import get_neo4j_session
+from services.dependencies import get_neo4j
+
 from backend.db.neo4j_queries._graph_transforms import _collapse_members
 from backend.db.neo4j_queries._node_builders import _make_node_data
 
@@ -126,7 +128,7 @@ def fetch_neighbourhood_graph(qualified_name: str) -> dict:
 
     Returns Cytoscape-format ``{"nodes": [...], "edges": [...]}``.
     """
-    with get_neo4j_session() as session:
+    with get_neo4j().session() as session:
         result = session.run("""
         MATCH (center {qualified_name: $qn})
         OPTIONAL MATCH (center)-[r_out]->(target)
@@ -188,15 +190,19 @@ def fetch_neighbourhood_graph(qualified_name: str) -> dict:
 
 def fetch_node_detail(qualified_name: str) -> dict | None:
     """Fetch full node properties + relationships + traced requirements + members."""
-    with get_neo4j_session() as session:
-        result = session.run("""
+    with get_neo4j().session() as session:
+        query_str = """
         MATCH (n {qualified_name: $qn})
         OPTIONAL MATCH (n)-[r_out]->(target)
         OPTIONAL MATCH (source)-[r_in]->(n)
         RETURN n,
                collect(DISTINCT {rel: type(r_out), target_qn: target.qualified_name, target_name: target.name, target_labels: labels(target)}) AS outgoing,
                collect(DISTINCT {rel: type(r_in), source_qn: source.qualified_name, source_name: source.name, source_labels: labels(source)}) AS incoming
-        """, {"qn": qualified_name})
+        """
+
+        log.debug("Query str:\n{query_str}")
+
+        result = session.run(query_str, {"qn": qualified_name})
 
         record = result.single()
         if not record:

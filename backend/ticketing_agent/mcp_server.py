@@ -417,7 +417,7 @@ def _get_codebase_tools():
     global _codebase_tools
     if _codebase_tools is None:
         from doxygen_index.tools import create_toolset
-        from backend.db.neo4j import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+        from backend.db.neo4j.neo4j import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
         _codebase_tools = create_toolset(
             uri=NEO4J_URI, user=NEO4J_USER, password=NEO4J_PASSWORD,
         )

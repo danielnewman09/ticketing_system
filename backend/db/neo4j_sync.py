@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from backend.db.neo4j import get_neo4j_session, verify_connection
+from services.dependencies import get_neo4j
 
 if TYPE_CHECKING:
     from neo4j import Session as Neo4jSession
@@ -31,11 +31,8 @@ PREDICATE_TO_REL_TYPE = {
 
 def clear_design_graph():
     """Delete all Design, HLR, and LLR nodes (and their relationships) from Neo4j."""
-    if not verify_connection():
-        log.warning("Neo4j unavailable — skipping clear")
-        return False
     try:
-        with get_neo4j_session() as session:
+        with get_neo4j().session() as session:
             session.run("MATCH (n) WHERE n:Design OR n:HLR OR n:LLR DETACH DELETE n")
         log.info("Cleared design graph from Neo4j")
         return True
@@ -269,12 +266,8 @@ def try_sync_design_nodes_and_triples(nodes, triples):
 
     Logs a warning and returns False if Neo4j is unavailable.
     """
-    if not verify_connection():
-        log.warning("Neo4j unavailable — design sync deferred to migration script")
-        return False
-
     try:
-        with get_neo4j_session() as session:
+        with get_neo4j().session() as session:
             for node in nodes:
                 sync_design_node(session, node)
             for triple in triples:
@@ -290,12 +283,9 @@ def try_sync_requirement(req, label: str, hlr=None):
 
     Logs a warning and returns False if Neo4j is unavailable.
     """
-    if not verify_connection():
-        log.warning("Neo4j unavailable — requirement sync deferred to migration script")
-        return False
 
     try:
-        with get_neo4j_session() as session:
+        with get_neo4j().session() as session:
             sync_requirement_node(session, req, label)
             sync_requirement_links(session, req, label)
             if hlr is not None:

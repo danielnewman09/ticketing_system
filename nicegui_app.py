@@ -12,7 +12,6 @@ Then visit http://127.0.0.1:8081
 from dotenv import load_dotenv
 load_dotenv()
 
-import atexit
 import logging
 import os
 from logging.handlers import RotatingFileHandler
@@ -37,31 +36,33 @@ for _name in ("backend", "frontend", "agents", "__main__"):
     _logger.setLevel(logging.DEBUG)
     _logger.propagate = False
 
-from nicegui import ui
+from nicegui import app, ui
 
 from backend.db import init_db
+from backend.db.neo4j import Neo4jConnection
 import frontend.pages  # noqa: F401 — registers all @ui.page routes
 
 log = logging.getLogger(__name__)
 
-if __name__ in {"__main__", "__mp_main__"}:
+app.neo4j = Neo4jConnection()
+
+
+@app.on_startup
+def on_startup() -> None:
     init_db()
 
-    # Install agent log hooks for the dashboard console
     from frontend.agent_log import install_hooks
     install_hooks()
-
-    # Neo4j constraints (best-effort)
-    try:
-        from backend.db.neo4j_constraints import ensure_neo4j_constraints
-        from backend.db.neo4j import close_driver
-        ensure_neo4j_constraints()
-        atexit.register(close_driver)
-    except Exception:
-        log.warning("Neo4j not available at startup — graph features disabled", exc_info=True)
-
     log.info("Starting NiceGUI Application...")
 
+
+@app.on_shutdown
+def on_shutdown() -> None:
+    app.neo4j.close()
+    log.info("Neo4j connection closed.")
+
+
+if __name__ in {"__main__", "__mp_main__"}:
     ui.run(
         title="Ticketing System",
         port=8081,

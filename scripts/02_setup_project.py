@@ -17,6 +17,8 @@ Requires ANTHROPIC_API_KEY in the environment.
 import os
 import sys
 
+from services.dependencies import get_neo4j
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from dotenv import load_dotenv
@@ -54,14 +56,7 @@ def load_stdlib():
         print("  Install with: pip install doxygen-index[cppreference]\n")
         return
 
-    from backend.db.neo4j import verify_connection
-
-    if not verify_connection():
-        print("  Neo4j unavailable — skipping stdlib load\n")
-        return
-
-    from backend.db.neo4j import get_neo4j_session
-    with get_neo4j_session() as session:
+    with get_neo4j().session() as session:
         result = session.run(
             "MATCH (n) WHERE n.source = 'cppreference' RETURN count(n) AS cnt"
         )
@@ -79,11 +74,7 @@ def load_stdlib():
     parsed = parse(archive_root)
 
     print("  Ingesting into Neo4j...")
-    from backend.db.neo4j import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
-    driver = _get_driver(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
-    ensure_schema(driver)
-    write_result(driver, parsed)
-    driver.close()
+    write_result(get_neo4j().get_driver(), parsed)
 
     print(f"  Loaded {len(parsed.compounds)} classes, {len(parsed.members)} members\n")
 

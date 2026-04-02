@@ -1,10 +1,9 @@
 """Design-layer graph queries."""
 
-from __future__ import annotations
-
 import logging
 
-from backend.db.neo4j import get_neo4j_session
+from services.dependencies import get_neo4j
+
 from backend.db.neo4j_queries._graph_transforms import (
     _assign_namespace_parents,
     _collapse_members,
@@ -87,7 +86,7 @@ def fetch_design_graph(
 
     where = " AND ".join(conditions)
 
-    with get_neo4j_session() as session:
+    with get_neo4j().session() as session:
         # Nodes
         node_result = session.run(
             f"MATCH (n) WHERE {where} RETURN n",
@@ -176,7 +175,7 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
     Includes: the HLR node, its LLRs, any TRACES_TO design nodes, the
     component's design nodes and their inter-relationships.
     """
-    with get_neo4j_session() as session:
+    with get_neo4j().session() as session:
         nodes: list[dict] = []
         edges: list[dict] = []
         node_ids: set[str] = set()
@@ -192,9 +191,8 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
         ).single()
         if not check:
             return {"nodes": [], "edges": []}
-
-        # 2. Design nodes traced from HLR/LLRs
-        trace_result = session.run("""
+        
+        query_str = """
         MATCH (h:HLR {sqlite_id: $hid})
         OPTIONAL MATCH (h)-[:TRACES_TO]->(d1:Design)
         OPTIONAL MATCH (l:LLR)-[:DECOMPOSES]->(h)
@@ -203,7 +201,12 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
         UNWIND designs AS d
         WITH DISTINCT d WHERE d IS NOT NULL
         RETURN d
-        """, {"hid": hlr_id})
+        """
+
+        log.debug("Query Str:\n{query_str}")
+
+        # 2. Design nodes traced from HLR/LLRs
+        trace_result = session.run(query_str, {"hid": hlr_id})
         for record in trace_result:
             d = record["d"]
             _add_node(d.element_id, _make_node_data(d))

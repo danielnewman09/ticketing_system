@@ -2,6 +2,8 @@
 
 import logging
 
+from services.dependencies import get_neo4j
+
 from backend.db import get_session
 from backend.db.models import OntologyNode, OntologyTriple, Predicate
 
@@ -141,8 +143,7 @@ def update_member_type(qualified_name: str, type_signature: str) -> bool:
         node.type_signature = type_signature
     # Also update Neo4j
     try:
-        from backend.db.neo4j import get_neo4j_session
-        with get_neo4j_session() as ns:
+        with get_neo4j().session() as ns:
             ns.run(
                 "MATCH (n:Design {qualified_name: $qn}) SET n.type_signature = $ts",
                 {"qn": qualified_name, "ts": type_signature},
