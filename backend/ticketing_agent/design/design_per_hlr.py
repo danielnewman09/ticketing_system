@@ -1,17 +1,18 @@
 """
 Orchestration: per-HLR design loop.
 
-Processes each HLR individually through design_oo() -> map_oo_to_ontology(),
-with awareness of intercomponent boundaries from previously designed HLRs.
+Processes each HLR individually through the design_hlr skill
+(discover → design_oo → map_to_ontology), with awareness of
+intercomponent boundaries from previously designed HLRs.
 """
 
-import json
+from __future__ import annotations
+
 import logging
 import os
 
 from backend.codebase.schemas import DesignSchema, OODesignSchema
-from backend.ticketing_agent.design.design_oo import design_oo
-from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
+from backend.ticketing_agent.design.design_hlr import design_hlr
 from backend.ticketing_agent.design.order_hlrs import order_hlrs
 
 log = logging.getLogger("agents.design")
@@ -102,13 +103,6 @@ def _extract_intercomponent_context(
     """Extract public API classes from an OO design for intercomponent context.
 
     Only includes classes/interfaces with is_intercomponent=True.
-
-    Args:
-        oo: The OO design to extract from.
-        component_name: Name of the component this design belongs to.
-        exclude_component_id: Skip if this matches source_component_id
-            (i.e., don't include same-component classes as intercomponent).
-        source_component_id: The component ID of the design being extracted.
     """
     if source_component_id is not None and source_component_id == exclude_component_id:
         return []
@@ -150,37 +144,6 @@ def _extract_intercomponent_context(
     return results
 
 
-def _make_dependency_dispatcher(toolset):
-    """Create a tool dispatcher that routes calls to DependencyGraphTools methods.
-
-    Returns a callable (tool_name, tool_input) -> str suitable for
-    call_tool_loop's tool_dispatcher parameter.
-    """
-    method_map = {
-        "list_sources": toolset.list_sources,
-        "search_symbols": toolset.search_symbols,
-        "get_compound": toolset.get_compound,
-        "get_member": toolset.get_member,
-        "browse_namespace": toolset.browse_namespace,
-        "find_inheritance": toolset.find_inheritance,
-        "find_callers_and_callees": toolset.find_callers_and_callees,
-        "get_include_chain": toolset.get_include_chain,
-    }
-
-    def dispatch(tool_name: str, tool_input: dict) -> str:
-        method = method_map.get(tool_name)
-        if not method:
-            return json.dumps({"error": f"Unknown tool: {tool_name}"})
-        try:
-            result = method(**tool_input)
-            return json.dumps(result, default=str)
-        except Exception as e:
-            log.warning("Dependency graph tool %s failed: %s", tool_name, e)
-            return json.dumps({"error": str(e)})
-
-    return dispatch
-
-
 def design_all_hlrs(
     hlrs: list[dict],
     llrs: list[dict],
@@ -199,8 +162,7 @@ def design_all_hlrs(
         model: LLM model override.
         log_dir: Directory for per-step prompt logs.
         use_dependency_graph: If True, connect to the Neo4j dependency graph
-            and give the design agent access to query tools for exploring
-            real dependency APIs during design.
+            and use it for class discovery during design.
 
     Returns:
         List of (hlr_dict, oo_design, ontology_design) tuples in design order.
@@ -210,10 +172,8 @@ def design_all_hlrs(
     ordered = order_hlrs(hlrs, model=model, prompt_log_file=prompt_log)
     ordered_ids = [entry["id"] for entry in ordered]
 
-    # Build lookup: hlr_id -> hlr dict
+    # Build lookups
     hlr_by_id = {h["id"]: h for h in hlrs}
-
-    # Build lookup: hlr_id -> list of LLR dicts
     llrs_by_hlr: dict[int, list[dict]] = {}
     for llr in llrs:
         hlr_id = llr.get("hlr_id")
@@ -221,24 +181,17 @@ def design_all_hlrs(
             llrs_by_hlr.setdefault(hlr_id, []).append(llr)
 
     # Accumulate results per HLR
-    # Maps hlr_id -> (oo_design, component_id, component_name)
     designed: dict[int, tuple[OODesignSchema, int | None, str]] = {}
-    # Accumulated name -> qualified_name lookup across all prior designs
     accumulated_class_lookup: dict[str, str] = {}
     results: list[tuple[dict, OODesignSchema, DesignSchema]] = []
 
     # Optionally connect to the dependency graph
-    extra_tools = None
-    tool_dispatcher = None
     dep_toolset = None
-
     if use_dependency_graph:
         try:
             from doxygen_index.tools import create_toolset
             dep_toolset = create_toolset()
-            extra_tools = dep_toolset.schemas()
-            tool_dispatcher = _make_dependency_dispatcher(dep_toolset)
-            log.info("Dependency graph tools connected (%d tools)", len(extra_tools))
+            log.info("Dependency graph connected")
         except Exception as e:
             log.warning("Could not connect to dependency graph: %s", e)
 
@@ -258,13 +211,12 @@ def design_all_hlrs(
                 hlr_id, i, len(ordered_ids), hlr["description"][:60],
             )
 
-            # Gather existing_classes: same-component designs so far
+            # Gather in-memory context from prior designs
             existing_classes = []
             for prev_id, (prev_oo, prev_comp_id, _) in designed.items():
                 if prev_comp_id == component_id:
                     existing_classes.extend(_extract_existing_classes(prev_oo))
 
-            # Gather intercomponent_classes: other components' public APIs
             intercomponent_classes = []
             for prev_id, (prev_oo, prev_comp_id, prev_comp_name) in designed.items():
                 intercomponent_classes.extend(
@@ -273,7 +225,6 @@ def design_all_hlrs(
                     )
                 )
 
-            # Gather other HLR summaries
             other_hlr_summaries = []
             for other_hlr in hlrs:
                 if other_hlr["id"] == hlr_id:
@@ -285,15 +236,9 @@ def design_all_hlrs(
                     "status": status,
                 })
 
-            # Build dependency context for this HLR
             dep_ctx = hlr.get("dependency_context")
             dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
 
-            # Design
-            prompt_log = (
-                os.path.join(log_dir, f"design_oo_hlr{hlr_id}.md") if log_dir else ""
-            )
-            # Gather component namespace and siblings
             component_namespace = hlr.get("component_namespace", "")
             sibling_namespaces = [
                 h.get("component_namespace", "")
@@ -301,7 +246,8 @@ def design_all_hlrs(
                 if h["id"] != hlr_id and h.get("component_namespace")
             ]
 
-            oo = design_oo(
+            # Delegate to design_hlr skill
+            oo, ontology = design_hlr(
                 hlr=hlr,
                 llrs=hlr_llrs,
                 language=language,
@@ -311,36 +257,107 @@ def design_all_hlrs(
                 dependency_contexts=dependency_contexts,
                 component_namespace=component_namespace,
                 sibling_namespaces=sibling_namespaces or None,
-                model=model,
-                prompt_log_file=prompt_log,
-                extra_tools=extra_tools,
-                tool_dispatcher=tool_dispatcher,
-            )
-
-            # Map to ontology — pass prior class lookup so cross-HLR
-            # references (inheritance, associations) resolve to correct qnames
-            ontology = map_oo_to_ontology(
-                oo, component_id=component_id,
+                component_id=component_id,
                 prior_class_lookup=accumulated_class_lookup,
-                component_namespace=component_namespace,
+                toolset=dep_toolset,
+                model=model,
+                log_dir=log_dir,
             )
 
-            # Accumulate — update class lookup with this design's classes
+            # Accumulate
             accumulated_class_lookup.update(_build_class_lookup(oo))
             designed[hlr_id] = (oo, component_id, component_name)
             results.append((hlr, oo, ontology))
-
-            log.info(
-                "  HLR %d: %d classes, %d interfaces, %d nodes, %d triples",
-                hlr_id,
-                len(oo.classes),
-                len(oo.interfaces),
-                len(ontology.nodes),
-                len(ontology.triples),
-            )
     finally:
         if dep_toolset:
             dep_toolset.close()
-            log.info("Dependency graph tools disconnected")
+            log.info("Dependency graph disconnected")
 
     return results
+
+
+def design_and_persist_hlr(
+    hlr_id: int,
+    log_dir: str = "",
+) -> dict:
+    """Design a single HLR end-to-end: load context, discover, design, persist.
+
+    Intended for dashboard use. Handles DB loading, dependency graph
+    toolset lifecycle, context gathering, and persistence.
+
+    Returns dict with nodes_created, triples_created, links_applied.
+    """
+    from backend.db import get_session
+    from backend.db.models import HighLevelRequirement
+    from backend.requirements.services.persistence import persist_design
+
+    # --- Load data from DB ---
+    with get_session() as session:
+        hlr_obj = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
+        if not hlr_obj:
+            raise ValueError(f"HLR {hlr_id} not found")
+        if not hlr_obj.low_level_requirements:
+            raise ValueError(f"HLR {hlr_id} has no LLRs. Decompose it first.")
+
+        hlr_dict = {
+            "id": hlr_obj.id,
+            "description": hlr_obj.description,
+            "component_id": hlr_obj.component_id,
+            "component_name": hlr_obj.component.name if hlr_obj.component else None,
+            "component_namespace": hlr_obj.component.namespace if hlr_obj.component else "",
+        }
+        llr_dicts = [
+            {"id": l.id, "description": l.description, "hlr_id": hlr_obj.id}
+            for l in hlr_obj.low_level_requirements
+        ]
+
+        all_hlrs = session.query(HighLevelRequirement).all()
+        other_hlr_summaries = [
+            {"id": h.id, "description": h.description, "status": "unknown"}
+            for h in all_hlrs if h.id != hlr_id
+        ]
+
+        component_namespace = hlr_dict["component_namespace"]
+        sibling_namespaces = list({
+            h.component.namespace
+            for h in all_hlrs
+            if h.id != hlr_id and h.component and h.component.namespace
+        })
+
+        dep_ctx = hlr_obj.dependency_context
+        dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
+
+    # --- Dependency graph toolset ---
+    dep_toolset = None
+    try:
+        from doxygen_index.tools import create_toolset
+        dep_toolset = create_toolset()
+        log.info("Dependency graph connected for HLR %d", hlr_id)
+    except Exception as exc:
+        log.warning("Dependency graph unavailable for HLR %d: %s", hlr_id, exc)
+
+    try:
+        _, ontology = design_hlr(
+            hlr=hlr_dict,
+            llrs=llr_dicts,
+            other_hlr_summaries=other_hlr_summaries or None,
+            dependency_contexts=dependency_contexts,
+            component_namespace=component_namespace,
+            sibling_namespaces=sibling_namespaces or None,
+            component_id=hlr_dict["component_id"],
+            toolset=dep_toolset,
+            log_dir=log_dir,
+        )
+    finally:
+        if dep_toolset:
+            dep_toolset.close()
+            log.info("Dependency graph disconnected for HLR %d", hlr_id)
+
+    # --- Persist ---
+    with get_session() as session:
+        result = persist_design(session, ontology)
+        return {
+            "nodes_created": result.nodes_created,
+            "triples_created": result.triples_created,
+            "links_applied": result.links_applied,
+        }

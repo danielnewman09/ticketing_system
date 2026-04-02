@@ -49,10 +49,12 @@ Then visit http://127.0.0.1:8081
 python -m backend.ticketing_agent.mcp_server
 ```
 
-## Demo Pipeline
+## Scripts
 
 ```bash
-python demo.py
+python scripts/01_flush_db.py              # Reset SQLite + Neo4j
+python scripts/02_setup_project.py         # Load stdlib, create HLRs, assign components
+python scripts/03_design_requirements.py   # Decompose, design, verify
 ```
 
 ## Tests

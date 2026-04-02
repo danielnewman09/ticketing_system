@@ -131,8 +131,14 @@ def decompose_hlr(hlr_id: int) -> dict:
 
     Returns dict with llrs_created and verifications_created.
     """
-    from backend.requirements.agents.decompose_hlr import decompose
+    import os
+
+    from backend.ticketing_agent.decompose.decompose_hlr import decompose
     from backend.requirements.services.persistence import persist_decomposition
+
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    prompt_log_file = os.path.join(log_dir, f"decompose_hlr{hlr_id}_raw.txt")
 
     with get_session() as session:
         hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
@@ -156,6 +162,7 @@ def decompose_hlr(hlr_id: int) -> dict:
             other_hlrs=other_hlrs,
             component=hlr.component.name if hlr.component else "",
             dependency_context=hlr.dependency_context,
+            prompt_log_file=prompt_log_file,
         )
 
         result = persist_decomposition(session, hlr, decomposed.low_level_requirements)
@@ -163,3 +170,18 @@ def decompose_hlr(hlr_id: int) -> dict:
             "llrs_created": result.llrs_created,
             "verifications_created": result.verifications_created,
         }
+
+
+def design_single_hlr(hlr_id: int) -> dict:
+    """Run the design agent on an HLR and persist the ontology results.
+
+    Returns dict with nodes_created, triples_created, links_applied.
+    """
+    import os
+
+    from backend.ticketing_agent.design.design_per_hlr import design_and_persist_hlr
+
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+
+    return design_and_persist_hlr(hlr_id, log_dir=log_dir)

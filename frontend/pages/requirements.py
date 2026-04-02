@@ -6,7 +6,7 @@ from nicegui import ui
 
 from frontend.theme import CLS_DIALOG_SM, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS, apply_theme
 from frontend.layout import page_layout, stat_card
-from frontend.data.hlr import fetch_requirements_data, create_hlr, delete_hlr, decompose_hlr
+from frontend.data.hlr import fetch_requirements_data, create_hlr, delete_hlr, decompose_hlr, design_single_hlr
 from frontend.data.llr import create_llr
 from frontend.data.components import fetch_components_options
 
@@ -130,6 +130,40 @@ async def requirements_page():
         dialog.open()
 
     # ---------------------------------------------------------------
+    # Design HLR
+    # ---------------------------------------------------------------
+
+    async def confirm_design_hlr(hlr_id: int):
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label(f"Design HLR {hlr_id}?").classes("text-lg font-bold")
+            ui.label(
+                "This will run the design agent to generate an OO design "
+                "and ontology graph from the requirements."
+            ).classes("text-sm text-gray-400 mt-1")
+
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_design():
+                    dialog.close()
+                    ui.notify("Designing — this may take a moment…", type="info")
+                    try:
+                        result = await asyncio.to_thread(design_single_hlr, hlr_id)
+                        ui.notify(
+                            f"Created {result['nodes_created']} nodes, "
+                            f"{result['triples_created']} triples, "
+                            f"{result['links_applied']} requirement links",
+                            type="positive",
+                        )
+                        content.refresh()
+                    except Exception as e:
+                        ui.notify(f"Design failed: {e}", type="negative")
+
+                ui.button("Design", on_click=do_design).props("color=secondary")
+
+        dialog.open()
+
+    # ---------------------------------------------------------------
     # Add LLR dialog
     # ---------------------------------------------------------------
 
@@ -189,6 +223,10 @@ async def requirements_page():
                         ui.menu_item(
                             "Decompose",
                             on_click=lambda h=hlr_id: confirm_decompose_hlr(h),
+                        )
+                        ui.menu_item(
+                            "Design",
+                            on_click=lambda h=hlr_id: confirm_design_hlr(h),
                         )
                         ui.separator()
                         ui.menu_item(

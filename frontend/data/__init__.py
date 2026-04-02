@@ -25,6 +25,7 @@ from frontend.data.hlr import (
     create_hlr,
     decompose_hlr,
     delete_hlr,
+    design_single_hlr,
     fetch_hlr_detail,
     fetch_requirements_data,
     update_hlr,
@@ -63,6 +64,7 @@ __all__ = [
     "update_hlr",
     "delete_hlr",
     "decompose_hlr",
+    "design_single_hlr",
     # llr
     "fetch_llr_detail",
     "create_llr",

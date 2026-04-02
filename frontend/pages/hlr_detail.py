@@ -23,6 +23,7 @@ from frontend.data.hlr import (
     update_hlr,
     delete_hlr,
     decompose_hlr,
+    design_single_hlr,
 )
 from frontend.data.llr import create_llr, update_llr, delete_llr
 from frontend.data.components import fetch_components_options
@@ -85,6 +86,11 @@ async def hlr_detail_page(hlr_id: int):
                                 icon="auto_awesome",
                                 on_click=lambda: confirm_decompose(),
                             ).props("flat size=xs color=primary")
+                            ui.button(
+                                "Design",
+                                icon="architecture",
+                                on_click=lambda: confirm_design(),
+                            ).props("flat size=xs color=secondary")
                             ui.button(
                                 icon="add",
                                 on_click=lambda: show_add_llr_dialog(),
@@ -207,6 +213,40 @@ async def hlr_detail_page(hlr_id: int):
                         ui.notify(f"Decomposition failed: {e}", type="negative")
 
                 ui.button("Decompose", on_click=do_decompose).props("color=primary")
+
+        dialog.open()
+
+    # ---------------------------------------------------------------
+    # Design HLR
+    # ---------------------------------------------------------------
+
+    async def confirm_design():
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label(f"Design HLR {hlr_id}?").classes("text-lg font-bold")
+            ui.label(
+                "This will run the design agent to generate an OO design "
+                "and ontology graph from the requirements."
+            ).classes("text-sm text-gray-400 mt-1")
+
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_design():
+                    dialog.close()
+                    ui.notify("Designing — this may take a moment…", type="info")
+                    try:
+                        result = await asyncio.to_thread(design_single_hlr, hlr_id)
+                        ui.notify(
+                            f"Created {result['nodes_created']} nodes, "
+                            f"{result['triples_created']} triples, "
+                            f"{result['links_applied']} requirement links",
+                            type="positive",
+                        )
+                        content.refresh()
+                    except Exception as e:
+                        ui.notify(f"Design failed: {e}", type="negative")
+
+                ui.button("Design", on_click=do_design).props("color=secondary")
 
         dialog.open()
 

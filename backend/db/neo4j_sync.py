@@ -111,11 +111,16 @@ def sync_design_triple(neo4j_session: Neo4jSession, triple) -> None:
     subj_qname = triple.subject.qualified_name if hasattr(triple.subject, "qualified_name") else triple.subject
     obj_qname = triple.object.qualified_name if hasattr(triple.object, "qualified_name") else triple.object
 
+    # Try Design→Design first; fall back to Design→Compound for dependency classes
     cypher = f"""
     MATCH (s:Design {{qualified_name: $subj}})
-    MATCH (o:Design {{qualified_name: $obj}})
-    MERGE (s)-[r:{rel_type}]->(o)
+    OPTIONAL MATCH (o_design:Design {{qualified_name: $obj}})
+    OPTIONAL MATCH (o_compound:Compound {{qualified_name: $obj}})
+    WITH s, coalesce(o_design, o_compound) AS target
+    WHERE target IS NOT NULL
+    MERGE (s)-[r:{rel_type}]->(target)
     """
+    log.debug("Cypher Query: {cypher}")
     neo4j_session.run(cypher, {"subj": subj_qname, "obj": obj_qname})
 
 

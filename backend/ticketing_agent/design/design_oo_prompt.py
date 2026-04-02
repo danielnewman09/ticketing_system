@@ -102,7 +102,9 @@ interfaces, or event contracts. Internal implementation classes should have
 - Prefer attributes over classes for simple properties. Ask: "Does this entity
   have its own behavior or relationships?" If no, it is an attribute.
 
-{dependency_graph_section}
+{dependency_api_section}
+
+{as_built_section}
 
 {existing_classes_section}
 
@@ -141,6 +143,135 @@ def build_specializations_section(language):
         if specs[kind]:
             values = ", ".join(f'"{s}"' for s in specs[kind])
             lines.append(f"- **{kind}**: {values}")
+    return "\n".join(lines)
+
+
+def build_dependency_api_section(dependency_classes):
+    """Build the prompt section describing dependency API classes.
+
+    These are real classes from indexed third-party libraries that the
+    design should reference but NOT redesign.
+
+    Args:
+        dependency_classes: List of dicts from discover_classes,
+            each with keys: qualified_name, kind, source, description,
+            methods, attributes, inherits_from, relevance.
+    """
+    if not dependency_classes:
+        return ""
+
+    lines = [
+        "## Dependency API classes (read-only reference)\n",
+        "The following classes come from third-party dependency libraries indexed ",
+        "from their documentation. Use these types as-is in your design \u2014 inherit ",
+        "from them, wrap them, use them as parameter/return types \u2014 but do NOT ",
+        "redesign or duplicate them. They should be included in your output when relevant, either",
+        "wrapped, dependency-injected, or generalized where appropriate.\n",
+    ]
+
+    for cls in dependency_classes:
+        kind = cls.get("kind", "class")
+        qname = cls["qualified_name"]
+        source = cls.get("source", "")
+        desc = cls.get("description", "")
+        source_tag = f" (source: {source})" if source else ""
+        lines.append(f"### {kind}: `{qname}`{source_tag}")
+        if desc:
+            lines.append(f"  {desc}")
+
+        methods = cls.get("methods", [])
+        if methods:
+            public_methods = [
+                m["name"] for m in methods
+                if m.get("visibility", "public") == "public"
+            ]
+            if public_methods:
+                lines.append(f"  Public methods: {', '.join(public_methods)}")
+
+        attributes = cls.get("attributes", [])
+        if attributes:
+            public_attrs = [
+                a["name"] for a in attributes
+                if a.get("visibility", "public") == "public"
+            ]
+            if public_attrs:
+                lines.append(f"  Public attributes: {', '.join(public_attrs)}")
+
+        inherits = cls.get("inherits_from", [])
+        if inherits:
+            lines.append(f"  Inherits from: {', '.join(inherits)}")
+
+        relevance = cls.get("relevance", "")
+        if relevance:
+            lines.append(f"  **Relevance:** {relevance}")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def build_as_built_section(as_built_classes):
+    """Build the prompt section describing as-built project classes.
+
+    These are existing classes from the project's codebase index that
+    the design agent should evaluate for reuse, extension, or redesign.
+
+    Args:
+        as_built_classes: List of dicts from discover_classes (category
+            ``"as-built"``), each with keys: qualified_name, kind,
+            description, methods, attributes, inherits_from, relevance.
+    """
+    if not as_built_classes:
+        return ""
+
+    lines = [
+        "## As-built project classes (from codebase index)\n",
+        "The following classes exist in the project's current codebase. ",
+        "Evaluate each and decide how to handle it:\n",
+        "- **Reuse**: Use as-is if it already satisfies a requirement",
+        "- **Extend**: Add methods/attributes if it partially satisfies",
+        "- **Redesign**: Replace with a better design if inadequate",
+        "- **Ignore**: Skip if not relevant to the current requirements\n",
+        "Include reused or extended classes in your output with the same ",
+        "qualified_name. For redesigned classes, include the replacement.\n",
+    ]
+
+    for cls in as_built_classes:
+        kind = cls.get("kind", "class")
+        qname = cls["qualified_name"]
+        desc = cls.get("description", "")
+        lines.append(f"### {kind}: `{qname}`")
+        if desc:
+            lines.append(f"  {desc}")
+
+        methods = cls.get("methods", [])
+        if methods:
+            public_methods = [
+                m["name"] for m in methods
+                if m.get("visibility", "public") == "public"
+            ]
+            if public_methods:
+                lines.append(f"  Public methods: {', '.join(public_methods)}")
+
+        attributes = cls.get("attributes", [])
+        if attributes:
+            public_attrs = [
+                a["name"] for a in attributes
+                if a.get("visibility", "public") == "public"
+            ]
+            if public_attrs:
+                lines.append(f"  Public attributes: {', '.join(public_attrs)}")
+
+        inherits = cls.get("inherits_from", [])
+        if inherits:
+            lines.append(f"  Inherits from: {', '.join(inherits)}")
+
+        relevance = cls.get("relevance", "")
+        if relevance:
+            lines.append(f"  **Relevance:** {relevance}")
+
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -303,29 +434,3 @@ def build_namespace_section(component_namespace: str, sibling_namespaces: list[s
     return "\n".join(lines)
 
 
-def build_dependency_graph_section() -> str:
-    """Build the prompt section explaining available dependency graph query tools."""
-    return """\
-## Dependency Graph Query Tools
-
-You have access to tools for querying a Neo4j graph of C++ dependency APIs.
-Use these to look up real API structures when designing classes that wrap or
-integrate with third-party libraries.
-
-**Workflow:**
-1. Use `search_symbols` first to find relevant classes/functions by keyword.
-2. Use `get_compound` to inspect a class's full API (members, inheritance).
-3. Use `get_member` to get exact signatures for specific functions.
-4. Use `browse_namespace` to explore a namespace's contents.
-5. Use `find_inheritance` to understand class hierarchies.
-6. Use `find_callers_and_callees` to understand function call relationships.
-7. Use `get_include_chain` to determine required headers.
-8. Use `list_sources` to see all available indexed dependencies.
-
-**Important:** Query the graph for any dependency mentioned in the "Known
-Dependencies" section. Your class design should use correct types, method
-signatures, and inheritance from the real dependency API — not guesses.
-
-When you have gathered enough information, call `produce_oo_design` to
-return your final design.
-"""

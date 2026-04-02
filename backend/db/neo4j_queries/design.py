@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from backend.db.neo4j import get_neo4j_session
 from backend.db.neo4j_queries._graph_transforms import (
     _assign_namespace_parents,
@@ -9,6 +11,7 @@ from backend.db.neo4j_queries._graph_transforms import (
 )
 from backend.db.neo4j_queries._node_builders import _make_node_data
 
+log = logging.getLogger(__name__)
 
 def _fetch_traced_requirements(
     session,
@@ -68,6 +71,7 @@ def fetch_design_graph(
 
     Returns ``{"nodes": [...], "edges": [...]}``.
     """
+    log.info("Getting Design Graph")
     conditions = ["n:Design"]
     params: dict = {}
 
@@ -120,6 +124,40 @@ def fetch_design_graph(
                     "id": r.element_id,
                     "source": s.element_id,
                     "target": t.element_id,
+                    "label": r.type,
+                },
+            })
+
+        # Dependency compounds referenced by design nodes
+        dep_result = session.run(
+            f"""
+            MATCH (s)-[r]->(dep:Compound)
+            WHERE {where.replace('n:', 's:').replace('n.', 's.')}
+              AND dep.source IS NOT NULL AND dep.source <> ''
+            RETURN s, r, dep
+            """,
+            params,
+        )
+        for record in dep_result:
+            s = record["s"]
+            dep = record["dep"]
+            r = record["r"]
+            if dep.element_id not in node_ids:
+                node_ids.add(dep.element_id)
+                nodes.append({"data": {
+                    "id": dep.element_id,
+                    "label": dep.get("name", ""),
+                    "qualified_name": dep.get("qualified_name", ""),
+                    "kind": dep.get("kind", ""),
+                    "description": dep.get("brief_description", "") or dep.get("detailed_description", ""),
+                    "source": dep.get("source", ""),
+                    "layer": "dependency",
+                }})
+            edges.append({
+                "data": {
+                    "id": r.element_id,
+                    "source": s.element_id,
+                    "target": dep.element_id,
                     "label": r.type,
                 },
             })
