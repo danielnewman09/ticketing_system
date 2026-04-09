@@ -6,7 +6,7 @@ log = logging.getLogger(__name__)
 from services.dependencies import get_neo4j
 
 from backend.db.neo4j_queries._graph_transforms import _collapse_members
-from backend.db.neo4j_queries._node_builders import _make_node_data
+from backend.db.neo4j_queries._node_builders import _build_node
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +150,8 @@ def fetch_neighbourhood_graph(qualified_name: str) -> dict:
             if n is None or n.element_id in node_ids:
                 return
             node_ids.add(n.element_id)
-            d = _make_node_data(n)
+            layer = _detect_layer(list(n.labels))
+            d = _build_node(n, layer)
             if extra_data:
                 d.update(extra_data)
             nodes.append({"data": d})

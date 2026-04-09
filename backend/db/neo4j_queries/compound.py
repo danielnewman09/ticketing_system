@@ -10,11 +10,7 @@ from backend.db.neo4j_queries._graph_transforms import (
     _assign_namespace_parents,
     _collapse_members,
 )
-from backend.db.neo4j_queries._node_builders import (
-    _make_compound_node,
-    _make_dependency_node,
-    _make_node_data,
-)
+from backend.db.neo4j_queries._node_builders import _build_node, _make_node_data
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +63,9 @@ def _discover_dependency_compounds(
             WHERE c IS NOT NULL
             RETURN DISTINCT c
         """
+        log.debug(f"Query Str:\n{query_str}")
+        log.debug(f"Params:\n{params}")
+
         result = session.run(query_str, params)
     except Exception:
         log.warning(
@@ -138,6 +137,8 @@ def _fetch_compound_layer(
       3. Fetch all Compounds with their CONTAINS -> Member edges.
       4. Collapse members + assign namespace parents.
     """
+    log.debug("Fetching compound layer")
+
     with get_neo4j().session() as session:
         if layer == "dependency":
             compound_ids = _discover_dependency_compounds(session, search, source_filter, limit)
@@ -153,13 +154,19 @@ def _fetch_compound_layer(
         edge_ids: set[str] = set()
 
         # --- Inheritance edges (1 up, 1 down) ---
-        result = session.run("""
+        query_str = """
             UNWIND $cids AS cid
             MATCH (c:Compound) WHERE elementId(c) = cid
             OPTIONAL MATCH (c)-[r1:INHERITS_FROM]->(base:Compound)
             OPTIONAL MATCH (derived:Compound)-[r2:INHERITS_FROM]->(c)
             RETURN c, r1, base, r2, derived
-        """, {"cids": list(compound_ids)})
+        """
+        params = {"cids": list(compound_ids)}
+
+        log.debug(f"Query Str:\n{query_str}")
+        log.debug(f"Params:\n{params}")
+
+        result = session.run(query_str, params)
 
         for record in result:
             compound_ids.add(record["c"].element_id)
@@ -182,24 +189,29 @@ def _fetch_compound_layer(
                     })
 
         # --- Compounds + Members ---
-        result2 = session.run("""
+        query_str = """
             UNWIND $cids AS cid
             MATCH (c:Compound) WHERE elementId(c) = cid
             OPTIONAL MATCH (c)-[r:CONTAINS]->(m:Member)
             RETURN c, r, m
-        """, {"cids": list(compound_ids)})
+        """
+        params = {"cids": list(compound_ids)}
+        log.debug(f"Query Str:\n{query_str}")
+        log.debug(f"Params:\n{params}")
+
+        result2 = session.run(query_str, params)
 
         for record in result2:
             c = record["c"]
             if c.element_id not in node_ids:
                 node_ids.add(c.element_id)
-                nodes.append({"data": _make_compound_node(c, layer)})
+                nodes.append({"data": _build_node(c, layer)})
 
             m = record["m"]
             r = record["r"]
             if m is not None and m.element_id not in node_ids:
                 node_ids.add(m.element_id)
-                nodes.append({"data": _make_compound_node(m, layer)})
+                nodes.append({"data": _build_node(m, layer)})
             if r is not None and m is not None:
                 edges.append({
                     "data": {
@@ -247,11 +259,11 @@ def fetch_design_dependency_links(design_qnames: list[str]) -> dict:
 
             if d.element_id not in node_ids:
                 node_ids.add(d.element_id)
-                nodes.append({"data": _make_node_data(d)})
+                nodes.append({"data": _build_node(d, "design")})
 
             if dep.element_id not in node_ids:
                 node_ids.add(dep.element_id)
-                nodes.append({"data": _make_dependency_node(dep)})
+                nodes.append({"data": _build_node(dep, "dependency")})
 
             edges.append({
                 "data": {
@@ -278,11 +290,11 @@ def fetch_design_dependency_links(design_qnames: list[str]) -> dict:
 
             if d.element_id not in node_ids:
                 node_ids.add(d.element_id)
-                nodes.append({"data": _make_node_data(d)})
+                nodes.append({"data": _build_node(d, "design")})
 
             if dep.element_id not in node_ids:
                 node_ids.add(dep.element_id)
-                nodes.append({"data": _make_dependency_node(dep)})
+                nodes.append({"data": _build_node(dep, "dependency")})
 
             edges.append({
                 "data": {

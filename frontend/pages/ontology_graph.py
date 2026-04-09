@@ -2,6 +2,8 @@
 
 import asyncio
 
+import logging
+
 from nicegui import ui
 
 from frontend.theme import (
@@ -23,6 +25,7 @@ from frontend.data.dependencies import (
     fetch_design_dependency_links_data,
 )
 
+log = logging.getLogger(__name__)
 
 @ui.page("/ontology/graph")
 async def ontology_graph_page():
@@ -61,6 +64,9 @@ async def ontology_graph_page():
             search=search or None,
             source_filter=source_filter["value"],
         )
+
+        log.debug(data)
+
         await render_cytoscape_graph(
             data["nodes"] + data["edges"],
             base_styles,

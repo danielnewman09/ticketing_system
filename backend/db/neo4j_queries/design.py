@@ -8,7 +8,7 @@ from backend.db.neo4j_queries._graph_transforms import (
     _assign_namespace_parents,
     _collapse_members,
 )
-from backend.db.neo4j_queries._node_builders import _make_node_data
+from backend.db.neo4j_queries._node_builders import _build_node
 
 log = logging.getLogger(__name__)
 
@@ -88,26 +88,36 @@ def fetch_design_graph(
 
     with get_neo4j().session() as session:
         # Nodes
+        query_str = f"MATCH (n) WHERE {where} RETURN n"
         node_result = session.run(
-            f"MATCH (n) WHERE {where} RETURN n",
+            query_str,
             params,
         )
+
+        log.debug(f"Query Str:\n{query_str}")
+        log.debug(f"Params:\n{params}")
+
         nodes: list[dict] = []
         node_ids: set[str] = set()
         for record in node_result:
             n = record["n"]
             node_ids.add(n.element_id)
-            nodes.append({"data": _make_node_data(n)})
+            nodes.append({"data": _build_node(n, "design")})
 
-        # Edges between matched nodes
-        edge_result = session.run(
-            f"""
+        query_str = f"""
             MATCH (s)-[r]->(t)
             WHERE {where.replace('n:', 's:').replace('n.', 's.')}
               AND t:Design
               AND type(r) <> 'IMPLEMENTED_BY'
             RETURN s, r, t
-            """,
+            """
+        
+        log.debug(f"Query Str:\n{query_str}")
+        log.debug(f"Params:\n{params}")
+
+        # Edges between matched nodes
+        edge_result = session.run(
+            query_str,
             params,
         )
         edges: list[dict] = []
@@ -117,7 +127,7 @@ def fetch_design_graph(
             r = record["r"]
             if t.element_id not in node_ids:
                 node_ids.add(t.element_id)
-                nodes.append({"data": _make_node_data(t)})
+                nodes.append({"data": _build_node(t, "design")})
             edges.append({
                 "data": {
                     "id": r.element_id,
@@ -126,6 +136,8 @@ def fetch_design_graph(
                     "label": r.type,
                 },
             })
+        
+        log.debug(f"Edges:\n{edges}")
 
         # Dependency compounds referenced by design nodes
         dep_result = session.run(
@@ -143,15 +155,7 @@ def fetch_design_graph(
             r = record["r"]
             if dep.element_id not in node_ids:
                 node_ids.add(dep.element_id)
-                nodes.append({"data": {
-                    "id": dep.element_id,
-                    "label": dep.get("name", ""),
-                    "qualified_name": dep.get("qualified_name", ""),
-                    "kind": dep.get("kind", ""),
-                    "description": dep.get("brief_description", "") or dep.get("detailed_description", ""),
-                    "source": dep.get("source", ""),
-                    "layer": "dependency",
-                }})
+                nodes.append({"data": _build_node(dep, "dependency")})
             edges.append({
                 "data": {
                     "id": r.element_id,
@@ -209,7 +213,7 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
         trace_result = session.run(query_str, {"hid": hlr_id})
         for record in trace_result:
             d = record["d"]
-            _add_node(d.element_id, _make_node_data(d))
+            _add_node(d.element_id, _build_node(d, "design"))
 
         # 3. Component design nodes + their inter-relationships
         if component_id is not None:
@@ -221,13 +225,13 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
             """, {"cid": component_id})
             for record in comp_result:
                 d = record["d"]
-                _add_node(d.element_id, _make_node_data(d))
+                _add_node(d.element_id, _build_node(d, "design"))
                 for item in record["rels"]:
                     r = item["rel"]
                     t = item["target"]
                     if r is None or t is None:
                         continue
-                    _add_node(t.element_id, _make_node_data(t))
+                    _add_node(t.element_id, _build_node(t, "design"))
                     edges.append({"data": {
                         "id": r.element_id,
                         "source": d.element_id,
