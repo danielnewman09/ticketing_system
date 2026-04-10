@@ -33,7 +33,7 @@ def clear_design_graph():
     """Delete all Design, HLR, and LLR nodes (and their relationships) from Neo4j."""
     try:
         with get_neo4j().session() as session:
-            session.run("MATCH (n) WHERE n:Design OR n:HLR OR n:LLR DETACH DELETE n")
+            session.run("MATCH (n) WHERE n:Design OR n:DesignIntent OR n:HLR OR n:LLR DETACH DELETE n")
         log.info("Cleared design graph from Neo4j")
         return True
     except Exception:
@@ -46,27 +46,31 @@ def clear_design_graph():
 # ---------------------------------------------------------------------------
 
 def sync_design_node(neo4j_session: Neo4jSession, node) -> None:
-    """MERGE a Design node by qualified_name, setting all properties."""
+    """MERGE a Compound/Member node with layer="design" metadata.
+    
+    All layers (design/codebase/dependency) use the same :Compound/:Member labels,
+    distinguished by the `layer` property.
+    """
     kind_label = node.kind.capitalize() if node.kind else "Unknown"
-    # Cypher doesn't allow parameterized labels, so we interpolate safely
-    # (kind is from a known set of values)
+    source_type = node.source_type or "compound"
+    
+    # Determine node label based on source_type
+    node_label = "Compound" if source_type == "compound" else "Member" if source_type == "member" else "Namespace"
+    
     cypher = f"""
-    MERGE (n:Design {{qualified_name: $qname}})
+    MERGE (n:{node_label} {{qualified_name: $qname}})
     SET n:{kind_label},
         n.name = $name,
         n.kind = $kind,
+        n.layer = "design",
         n.specialization = $specialization,
         n.visibility = $visibility,
         n.description = $description,
-        n.refid = $refid,
         n.source_type = $source_type,
         n.component_id = $component_id,
         n.is_intercomponent = $is_intercomponent,
-        n.file_path = $file_path,
-        n.line_number = $line_number,
         n.type_signature = $type_signature,
         n.argsstring = $argsstring,
-        n.definition = $definition,
         n.is_static = $is_static,
         n.is_const = $is_const,
         n.is_virtual = $is_virtual,
@@ -80,15 +84,11 @@ def sync_design_node(neo4j_session: Neo4jSession, node) -> None:
         "specialization": node.specialization or "",
         "visibility": node.visibility or "",
         "description": node.description or "",
-        "refid": node.refid or "",
-        "source_type": node.source_type or "",
+        "source_type": source_type,
         "component_id": node.component_id,
         "is_intercomponent": node.is_intercomponent,
-        "file_path": node.file_path or "",
-        "line_number": node.line_number,
         "type_signature": node.type_signature or "",
         "argsstring": node.argsstring or "",
-        "definition": node.definition or "",
         "is_static": node.is_static,
         "is_const": node.is_const,
         "is_virtual": node.is_virtual,
@@ -98,7 +98,10 @@ def sync_design_node(neo4j_session: Neo4jSession, node) -> None:
 
 
 def sync_design_triple(neo4j_session: Neo4jSession, triple) -> None:
-    """MATCH endpoints and MERGE the typed relationship."""
+    """MATCH endpoints and MERGE the typed relationship.
+    
+    Creates edges between Compound/Member nodes with layer="design".
+    """
     pred_name = triple.predicate.name if hasattr(triple.predicate, "name") else triple.predicate
     rel_type = PREDICATE_TO_REL_TYPE.get(pred_name)
     if not rel_type:
@@ -108,16 +111,13 @@ def sync_design_triple(neo4j_session: Neo4jSession, triple) -> None:
     subj_qname = triple.subject.qualified_name if hasattr(triple.subject, "qualified_name") else triple.subject
     obj_qname = triple.object.qualified_name if hasattr(triple.object, "qualified_name") else triple.object
 
-    # Try Design→Design first; fall back to Design→Compound for dependency classes
+    # Create edge between nodes (any layer)
     cypher = f"""
-    MATCH (s:Design {{qualified_name: $subj}})
-    OPTIONAL MATCH (o_design:Design {{qualified_name: $obj}})
-    OPTIONAL MATCH (o_compound:Compound {{qualified_name: $obj}})
-    WITH s, coalesce(o_design, o_compound) AS target
-    WHERE target IS NOT NULL
-    MERGE (s)-[r:{rel_type}]->(target)
+    MATCH (s:Compound|Member|Namespace {{qualified_name: $subj}})
+    MATCH (o:Compound|Member|Namespace {{qualified_name: $obj}})
+    MERGE (s)-[r:{rel_type}]->(o)
     """
-    log.debug("Cypher Query: {cypher}")
+    log.debug("Cypher Query: %s", cypher)
     neo4j_session.run(cypher, {"subj": subj_qname, "obj": obj_qname})
 
 

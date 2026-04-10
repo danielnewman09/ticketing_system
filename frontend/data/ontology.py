@@ -6,6 +6,7 @@ from services.dependencies import get_neo4j
 
 from backend.db import get_session
 from backend.db.models import OntologyNode, OntologyTriple, Predicate
+from backend.db.neo4j_queries import fetch_graph
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +48,6 @@ def fetch_ontology_graph_data(
     by the appropriate Neo4j labels.
     """
     try:
-        from backend.db.neo4j_queries import fetch_graph
         return fetch_graph(layer, kind_filter, search, component_id, source_filter)
     except Exception:
         log.warning("Neo4j query failed — returning empty graph", exc_info=True)

@@ -24,6 +24,7 @@ from frontend.data.ontology import (
 from frontend.data.dependencies import (
     fetch_design_dependency_links_data,
 )
+from backend.db.neo4j_sync import clear_design_graph
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +87,19 @@ async def ontology_graph_page():
         search_text["value"] = e.value
         await load_graph()
 
+    async def on_clear_design():
+        """Clear all Design nodes from Neo4j."""
+        try:
+            success = clear_design_graph()
+            if success:
+                ui.notify("Design graph cleared", type="positive")
+                await load_graph()
+            else:
+                ui.notify("Failed to clear design graph", type="negative")
+        except Exception as e:
+            log.error(f"Clear design failed: {e}", exc_info=True)
+            ui.notify(f"Error: {e}", type="negative")
+
     async def on_layout_change(e):
         await ui.run_javascript(f"""
             window._cyLayout = '{e.value}';
@@ -137,6 +151,7 @@ async def ontology_graph_page():
             on_change=on_layout_change,
         ).classes("w-36")
         ui.button("Fit", on_click=lambda: ui.run_javascript("if(window._cy) window._cy.fit()")).props("flat dense")
+        ui.button("Clear Design", on_click=on_clear_design, color="negative").props("flat dense")
 
     # Legend
     with ui.row().classes("px-2 mb-2 gap-3 flex-wrap"):

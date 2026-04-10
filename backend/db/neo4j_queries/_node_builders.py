@@ -45,13 +45,17 @@ def _build_node(n: dict, layer: str) -> dict:
 
 
 def _build_design_node(base: dict, n: dict) -> dict:
-    """Build node data for Design layer."""
+    """Build node data for Design layer.
+    
+    Unified schema: Compound/Member nodes with layer="design".
+    """
     return {
         **base,
         "description": n.get("description", ""),
         "component_id": n.get("component_id"),
         "visibility": n.get("visibility", ""),
         "type_signature": n.get("type_signature", ""),
+        "layer": "design",
     }
 
 

@@ -27,8 +27,7 @@ _file_handler = RotatingFileHandler(
     encoding="utf-8",
 )
 _file_handler.setFormatter(logging.Formatter(
-    "%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+     "%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s"
 ))
 for _name in ("backend", "frontend", "agents", "__main__"):
     _logger = logging.getLogger(_name)

@@ -74,7 +74,12 @@ def load_stdlib():
     parsed = parse(archive_root)
 
     print("  Ingesting into Neo4j...")
-    write_result(get_neo4j().get_driver(), parsed)
+    driver = get_neo4j()
+    # Handle both GraphDatabase.driver and Neo4jConnection wrapper
+    if hasattr(driver, 'get_driver'):
+        write_result(driver.get_driver(), parsed)
+    else:
+        write_result(driver, parsed)
 
     print(f"  Loaded {len(parsed.compounds)} classes, {len(parsed.members)} members\n")
 
@@ -155,6 +160,6 @@ def assign_components():
 if __name__ == "__main__":
     init_db()
     load_stdlib()
-    assign_components()
-    print("Setup complete. Review components in the dashboard:")
-    print("  http://127.0.0.1:8081/components")
+    # assign_components()
+    # print("Setup complete. Review components in the dashboard:")
+    # print("  http://127.0.0.1:8081/components")

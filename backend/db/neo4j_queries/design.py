@@ -1,5 +1,8 @@
-"""Design-layer graph queries."""
+"""Design-layer graph queries.
 
+This module now delegates to the unified fetch functions in fetch.py
+for consistency and maintainability.
+"""
 import logging
 
 from services.dependencies import get_neo4j
@@ -11,6 +14,14 @@ from backend.db.neo4j_queries._graph_transforms import (
 from backend.db.neo4j_queries._node_builders import _build_node
 
 log = logging.getLogger(__name__)
+
+
+from backend.db.neo4j_queries._query_builder import (
+    _build_component_query,
+    _build_edge_query,
+    _build_hlr_subgraph_query,
+    _build_node_query,
+)
 
 def _fetch_traced_requirements(
     session,
@@ -71,28 +82,16 @@ def fetch_design_graph(
     Returns ``{"nodes": [...], "edges": [...]}``.
     """
     log.info("Getting Design Graph")
-    conditions = ["n:Design"]
-    params: dict = {}
-
-    if kind_filter:
-        conditions.append("n.kind = $kind")
-        params["kind"] = kind_filter
-    if component_id is not None:
-        conditions.append("n.component_id = $comp_id")
-        params["comp_id"] = component_id
-    if search:
-        conditions.append("(n.name CONTAINS $search OR n.qualified_name CONTAINS $search)")
-        params["search"] = search
-
-    where = " AND ".join(conditions)
+    filters = {
+        "kind": kind_filter,
+        "component_id": component_id,
+        "search": search,
+    }
 
     with get_neo4j().session() as session:
         # Nodes
-        query_str = f"MATCH (n) WHERE {where} RETURN n"
-        node_result = session.run(
-            query_str,
-            params,
-        )
+        query_str, params = _build_node_query("design", filters)
+        node_result = session.run(query_str, params)
 
         log.debug(f"Query Str:\n{query_str}")
         log.debug(f"Params:\n{params}")
@@ -104,22 +103,17 @@ def fetch_design_graph(
             node_ids.add(n.element_id)
             nodes.append({"data": _build_node(n, "design")})
 
-        query_str = f"""
-            MATCH (s)-[r]->(t)
-            WHERE {where.replace('n:', 's:').replace('n.', 's.')}
-              AND t:Design
-              AND type(r) <> 'IMPLEMENTED_BY'
-            RETURN s, r, t
-            """
+        # Edges between matched nodes
+        edge_query_str, params = _build_edge_query(
+            "design",
+            filters,
+            exclude_types=["IMPLEMENTED_BY"],
+        )
         
-        log.debug(f"Query Str:\n{query_str}")
+        log.debug(f"Query Str:\n{edge_query_str}")
         log.debug(f"Params:\n{params}")
 
-        # Edges between matched nodes
-        edge_result = session.run(
-            query_str,
-            params,
-        )
+        edge_result = session.run(edge_query_str, params)
         edges: list[dict] = []
         for record in edge_result:
             s = record["s"]
@@ -143,7 +137,7 @@ def fetch_design_graph(
         dep_result = session.run(
             f"""
             MATCH (s)-[r]->(dep:Compound)
-            WHERE {where.replace('n:', 's:').replace('n.', 's.')}
+            WHERE {query_str.replace('RETURN n', 'RETURN s')}
               AND dep.source IS NOT NULL AND dep.source <> ''
             RETURN s, r, dep
             """,
@@ -196,33 +190,18 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
         if not check:
             return {"nodes": [], "edges": []}
         
-        query_str = """
-        MATCH (h:HLR {sqlite_id: $hid})
-        OPTIONAL MATCH (h)-[:TRACES_TO]->(d1:Design)
-        OPTIONAL MATCH (l:LLR)-[:DECOMPOSES]->(h)
-        OPTIONAL MATCH (l)-[:TRACES_TO]->(d2:Design)
-        WITH collect(DISTINCT d1) + collect(DISTINCT d2) AS designs
-        UNWIND designs AS d
-        WITH DISTINCT d WHERE d IS NOT NULL
-        RETURN d
-        """
-
-        log.debug("Query Str:\n{query_str}")
-
         # 2. Design nodes traced from HLR/LLRs
-        trace_result = session.run(query_str, {"hid": hlr_id})
+        query_str, params = _build_hlr_subgraph_query(hlr_id)
+        log.debug(f"Query Str:\n{query_str}")
+        trace_result = session.run(query_str, params)
         for record in trace_result:
             d = record["d"]
             _add_node(d.element_id, _build_node(d, "design"))
 
         # 3. Component design nodes + their inter-relationships
         if component_id is not None:
-            comp_result = session.run("""
-            MATCH (d:Design {component_id: $cid})
-            OPTIONAL MATCH (d)-[r]->(d2:Design {component_id: $cid})
-            WHERE type(r) <> 'IMPLEMENTED_BY'
-            RETURN d, collect({rel: r, target: d2}) AS rels
-            """, {"cid": component_id})
+            query_str, params = _build_component_query(component_id)
+            comp_result = session.run(query_str, params)
             for record in comp_result:
                 d = record["d"]
                 _add_node(d.element_id, _build_node(d, "design"))
