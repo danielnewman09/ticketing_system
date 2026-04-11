@@ -11,9 +11,11 @@ LAYER_CONFIG = {
     "design": {
         "label": "Compound|Member|Namespace",
         "layer_value": "design",
-        "search_fields": ["name", "qualified_name"],
+        "search_fields": ["name", "qualified_name", "kind"],
         "extra_filters": ["kind", "component_id"],
         "node_var": "n",
+        "default_show_all": True,
+        "edge_types": ["DEPENDS_ON", "CALLS", "REFERENCES", "EXTENDS", "COMPOSES"],
     },
     "codebase": {
         "label": "Compound|Member|Namespace",
@@ -22,6 +24,8 @@ LAYER_CONFIG = {
         "extra_filters": [],
         "node_var": "c",
         "source_condition": "NOT c.source IS NOT NULL AND c.source <> ''",
+        "default_show_all": True,
+        "edge_types": ["INHERITS_FROM"],
     },
     "dependency": {
         "label": "Compound|Member|Namespace",
@@ -30,6 +34,8 @@ LAYER_CONFIG = {
         "extra_filters": ["source"],
         "node_var": "c",
         "source_condition": "c.source IS NOT NULL AND c.source <> ''",
+        "default_show_all": False,
+        "edge_types": ["INHERITS_FROM"],
     },
     "requirement": {
         "label": "HLR|LLR",
@@ -159,40 +165,114 @@ def _build_edge_query(
     return query, params
 
 
+def _build_composes_query(node_ids: list[str], layer: str = "design") -> tuple[str, dict]:
+    """Build query to fetch COMPOSES edges for specific nodes.
+    
+    Args:
+        node_ids: Element IDs of nodes to fetch COMPOSES edges for
+        layer: Layer name (design or dependency)
+    
+    Returns:
+        Tuple of (query_string, params_dict)
+    """
+    config = LAYER_CONFIG[layer]
+    label = config["label"]
+    query = f"""
+    UNWIND $node_ids AS nid
+    MATCH (s:{label}) WHERE elementId(s) = nid
+    OPTIONAL MATCH (s)-[r:COMPOSES]->(m:{label})
+    RETURN s, r, m
+    """
+    params = {"node_ids": node_ids}
+    return query, params
+
+
 def _build_compound_discovery_query(
     layer: str,
     search: str | None,
     source_filter: str | None,
+    kind_filter: str | None,
+    component_id: int | None,
     limit: int,
 ) -> tuple[str, dict]:
-    """Build query to discover Compounds for codebase/dependency layers.
-
+    """Build query to discover Compounds using full-text search.
+    
+    Behavior by layer:
+    - design: Returns all design nodes if no search, filtered by kind/component_id
+    - codebase: Returns all codebase compounds if no search
+    - dependency: Returns empty if no search, otherwise full-text search
+    
     Uses full-text search with CONTAINS fallback.
     """
-    if layer != "dependency":
-        # Codebase: simple Compound discovery
-        conditions: list[str] = []
-        params: dict = {}
+    config = LAYER_CONFIG[layer]
+    default_show_all = config.get("default_show_all", True)
+    
+    # For dependency layer with no search term and default_show_all=False, return empty
+    if layer == "dependency" and not search and not default_show_all:
+        return "MATCH (c:Compound) WHERE false RETURN c", {}
+    
+    # Build source condition based on layer
+    if layer == "codebase":
+        source_condition = "node.layer = 'codebase'"
+    elif layer == "dependency":
+        source_condition = "node.layer = 'dependency'"
+    else:  # design
+        source_condition = "node.layer = 'design'"
+    
+    # Design layer with filters - use simple MATCH query
+    if layer == "design" and (kind_filter or component_id or not search):
+        conditions = []
+        params = {}
+        conditions.append(f"c:{config['label']}")
+        conditions.append("c.layer = 'design'")
+        if kind_filter:
+            conditions.append("c.kind = $kind")
+            params["kind"] = kind_filter
+        if component_id is not None:
+            conditions.append("c.component_id = $component_id")
+            params["component_id"] = component_id
         if search:
             conditions.append(
-                "(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)"
+                "(tolower(c.name) CONTAINS tolower($search) OR tolower(c.qualified_name) CONTAINS tolower($search))"
             )
             params["search"] = search
-        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
-        return f"MATCH (c:Compound) {where_clause} RETURN c", params
-
-    # Dependency: full-text search with fallback
+        where_clause = " AND ".join(conditions)
+        return f"MATCH (c:Compound) WHERE {where_clause} RETURN c", params
+    
+    # Full-text search for all layers
     search_term = (search or "").strip()
-    source_clause = "AND node.source CONTAINS $source_filter" if source_filter else ""
-    params = {"query": search_term, "limit": limit}
+    
+    # For empty search terms, use simple MATCH instead of full-text
+    if not search_term and layer != "design":
+        conditions = []
+        params = {}
+        conditions.append(f"c:{config['label']}")
+        
+        if layer == "codebase":
+            conditions.append("NOT c.source IS NOT NULL AND c.source <> ''")
+        elif layer == "dependency":
+            conditions.append("c.source IS NOT NULL AND c.source <> ''")
+        
+        if source_filter:
+            conditions.append("c.source CONTAINS $source_filter")
+            params["source_filter"] = source_filter
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        return f"MATCH (c:Compound) WHERE {where_clause} RETURN c", params
+    
+    params = {"query": search_term if search_term else "*", "limit": limit}
     if source_filter:
         params["source_filter"] = source_filter
-
+    
+    # Build additional WHERE conditions for source filter
+    source_filter_clause = ""
+    if source_filter:
+        source_filter_clause = "AND node.source CONTAINS $source_filter"
+    
     query = f"""
-    CALL db.index.fulltext.queryNodes('doc_search', $query)
-    YIELD node, score
-    WHERE node.source IS NOT NULL AND node.source <> ''
-      {source_clause}
+    CALL db.index.fulltext.queryNodes('doc_search', $query) YIELD node, score
+    WHERE {source_condition}
+      {source_filter_clause}
     WITH node, score
     ORDER BY score DESC
     LIMIT $limit
@@ -206,7 +286,7 @@ def _build_compound_discovery_query(
         ELSE null
     END AS direct_compound, node
     OPTIONAL MATCH (owner:Compound)-[:CONTAINS]->(node)
-    WHERE NOT node:Compound AND owner.source IS NOT NULL
+    WHERE {source_condition}
     WITH coalesce(direct_compound, owner) AS c
     WHERE c IS NOT NULL
     RETURN DISTINCT c

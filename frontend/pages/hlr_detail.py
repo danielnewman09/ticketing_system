@@ -24,6 +24,7 @@ from frontend.data.hlr import (
     delete_hlr,
     decompose_hlr,
     design_single_hlr,
+    delete_hlr_llrs,
 )
 from frontend.data.llr import create_llr, update_llr, delete_llr
 from frontend.data.components import fetch_components_options
@@ -95,6 +96,11 @@ async def hlr_detail_page(hlr_id: int):
                                 icon="add",
                                 on_click=lambda: show_add_llr_dialog(),
                             ).props("flat round size=xs color=positive")
+                            if hlr["llrs"]:
+                                ui.button(
+                                    icon="delete_sweep",
+                                    on_click=lambda: confirm_wipe_llrs(),
+                                ).props("flat round size=xs color=negative")
                     if hlr["llrs"]:
                         render_llr_table(hlr["llrs"], on_delete=confirm_delete_llr, on_edit=show_edit_llr_dialog)
                     else:
@@ -322,6 +328,30 @@ async def hlr_detail_page(hlr_id: int):
                     content.refresh()
 
                 ui.button("Delete", on_click=do_delete).props("color=negative")
+
+        dialog.open()
+
+    # ---------------------------------------------------------------
+    # Wipe all LLRs
+    # ---------------------------------------------------------------
+
+    async def confirm_wipe_llrs():
+        with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+            ui.label(f"Wipe all LLRs from HLR {hlr_id}?").classes("text-lg font-bold")
+            ui.label(
+                "This will permanently delete all low-level requirements "
+                "and their verification methods."
+            ).classes("text-sm text-gray-400 mt-1")
+            with ui.row().classes(CLS_DIALOG_ACTIONS):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_wipe():
+                    count = await asyncio.to_thread(delete_hlr_llrs, hlr_id)
+                    dialog.close()
+                    ui.notify(f"Deleted {count} LLRs", type="negative")
+                    content.refresh()
+
+                ui.button("Wipe All", on_click=do_wipe).props("color=negative")
 
         dialog.open()
 

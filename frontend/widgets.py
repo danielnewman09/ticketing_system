@@ -1,5 +1,7 @@
 """Reusable UI rendering helpers. No DB access — work with plain dicts."""
 
+import logging
+
 import json
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from frontend.theme import (
     KIND_COLORS_JS,
 )
 
+log = logging.getLogger(__name__)
 
 def section_header(text: str):
     """Render a standard section header label (uppercase, small, gray)."""
@@ -46,6 +49,7 @@ async def render_cytoscape_graph(
     layout: str = "fcose",
     animate: bool = True,
     extra_styles: str | None = None,
+    timeout: float = 5.0,
 ):
     """Render a Cytoscape.js graph into a container, with tap/dbltap events.
 
@@ -54,38 +58,83 @@ async def render_cytoscape_graph(
     *extra_styles* is an optional JS expression for additional style entries
     that get appended to the base styles array.
     """
+    # Handle empty graph case
+    if not elements:
+        log.debug("Rendering empty graph - clearing container")
+        await ui.run_javascript(f"""
+            if (window.{cy_var}) window.{cy_var}.destroy();
+            const container = document.getElementById('{container_id}');
+            if (container) {{
+                container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1rem;">No nodes found</div>';
+            }}
+        """, timeout=2.0)
+        return
+    
     elements_json = json.dumps(elements)
+    log.debug(f"Graph data: {len(elements)} elements")
     layout_name = f"window._cyLayout || '{layout}'" if animate else f"'{layout}'"
     animation_opts = "animate: true, animationDuration: 500" if animate else "animate: false"
     styles_expr = base_styles
     if extra_styles:
         styles_expr = f"[...{base_styles}, {extra_styles}]"
-    await ui.run_javascript(f"""
-        if (window.{cy_var}) window.{cy_var}.destroy();
-        const KIND_COLORS = {KIND_COLORS_JS};
-        const container = document.getElementById('{container_id}');
-        if (!container) {{ console.error('{container_id} not found'); return; }}
-        window.{cy_var} = cytoscape({{
-            container: container,
-            elements: {elements_json},
-            style: {styles_expr},
-            layout: {{ name: {layout_name}, {animation_opts} }},
-        }});
-        window.{cy_var}.ready(function() {{ window.{cy_var}.fit(); }});
-        window.{cy_var}.on('tap', 'node', function(evt) {{
-            const data = evt.target.data();
-            if (data.qualified_name) {{
-                emitEvent('node_selected', data);
+    
+    result = await ui.run_javascript(f"""
+        try {{
+            console.log('Cytoscape render starting:', {{
+                container_id: '{container_id}',
+                elements_count: {len(elements)},
+                layout: '{layout}'
+            }});
+            
+            if (window.{cy_var}) window.{cy_var}.destroy();
+            const KIND_COLORS = {KIND_COLORS_JS};
+            const container = document.getElementById('{container_id}');
+            if (!container) {{ 
+                console.error('Container not found'); 
+                return {{success: false, error: 'Container not found'}}; 
             }}
-        }});
-        window.{cy_var}.on('dbltap', 'node', function(evt) {{
-            const data = evt.target.data();
-            if (data.qualified_name) {{
-                emitEvent('node_dblclick', data);
-            }}
-        }});
-    """)
-
+            
+            window.{cy_var} = cytoscape({{
+                container: container,
+                elements: {elements_json},
+                style: {styles_expr},
+                layout: {{ name: {layout_name}, {animation_opts} }},
+            }});
+            
+            window.{cy_var}.ready(function() {{ 
+                console.log('Cytoscape ready, fitting graph');
+                window.{cy_var}.fit(); 
+            }});
+            
+            window.{cy_var}.on('tap', 'node', function(evt) {{
+                const data = evt.target.data();
+                if (data.qualified_name) {{
+                    emitEvent('node_selected', data);
+                }}
+            }});
+            
+            window.{cy_var}.on('dbltap', 'node', function(evt) {{
+                const data = evt.target.data();
+                if (data.qualified_name) {{
+                    emitEvent('node_dblclick', data);
+                }}
+            }});
+            
+            console.log('Cytoscape initialization complete');
+            return {{success: true, elements: {len(elements)}}};
+            
+        }} catch (error) {{
+            console.error('Cytoscape render failed:', error);
+            return {{success: false, error: error.toString(), stack: error.stack}};
+        }}
+    """, timeout=timeout)
+    
+    if result and not result.get('success'):
+        log.error(f"Cytoscape render failed: {result.get('error')}")
+        log.error(f"Stack trace: {result.get('stack')}")
+        raise RuntimeError(f"Cytoscape render failed: {result.get('error')}")
+    
+    log.debug(f"Cytoscape render successful: {result}")
 
 def directory_picker(
     initial_path: str = "",

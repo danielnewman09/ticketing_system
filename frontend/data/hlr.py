@@ -185,3 +185,15 @@ def design_single_hlr(hlr_id: int) -> dict:
     os.makedirs(log_dir, exist_ok=True)
 
     return design_and_persist_hlr(hlr_id, log_dir=log_dir)
+
+
+def delete_hlr_llrs(hlr_id: int) -> int:
+    """Delete all LLRs for an HLR. Returns the number of LLRs deleted."""
+    with get_session() as session:
+        hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
+        if not hlr:
+            return 0
+        count = len(hlr.low_level_requirements)
+        for llr in hlr.low_level_requirements:
+            session.delete(llr)
+        return count

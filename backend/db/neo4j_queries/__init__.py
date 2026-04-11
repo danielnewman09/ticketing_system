@@ -6,6 +6,7 @@ from backend.db.neo4j_queries.compound import fetch_design_dependency_links
 from backend.db.neo4j_queries.detail import fetch_neighbourhood_graph, fetch_node_detail
 from backend.db.neo4j_queries.fetch import (
     fetch_graph_layer,
+    fetch_hlr_subgraph,
 )
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "fetch_graph",
     "fetch_neighbourhood_graph",
     "fetch_node_detail",
+    "fetch_hlr_subgraph",
 ]
 
 

@@ -39,6 +39,8 @@ async def ontology_graph_page():
     selected_node = {"data": None}
     graph_layer = {"value": "design"}  # "design", "codebase", or "dependency"
     source_filter = {"value": None}  # dependency source filter (e.g. "eigen")
+    search_debounce = {"task": None}  # Debounce timer for search
+    search_input = {"ref": None}  # Reference to search input element
 
     add_cytoscape_cdn()
     base_styles = cytoscape_base_styles(size="large")
@@ -49,13 +51,16 @@ async def ontology_graph_page():
 
         if layer == "dependency" and not search.strip():
             # Show placeholder — don't load the entire dependency graph
-            await ui.run_javascript("""
-                if (window._cy) window._cy.destroy();
-                const container = document.getElementById('cy-container');
-                if (container) {
-                    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
-                }
-            """)
+            try:
+                await ui.run_javascript("""
+                    if (window._cy) window._cy.destroy();
+                    const container = document.getElementById('cy-container');
+                    if (container) {
+                        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
+                    }
+                """, timeout=2.0)
+            except Exception as e:
+                log.warning(f"Failed to clear graph: {e}")
             return
 
         data = await asyncio.to_thread(
@@ -66,17 +71,33 @@ async def ontology_graph_page():
             source_filter=source_filter["value"],
         )
 
-        log.debug(data)
+        log.debug(f"Graph data: {len(data['nodes'])} nodes, {len(data['edges'])} edges")
 
-        await render_cytoscape_graph(
-            data["nodes"] + data["edges"],
-            base_styles,
-            container_id="cy-container",
-            cy_var="_cy",
-        )
+        try:
+            await render_cytoscape_graph(
+                data["nodes"] + data["edges"],
+                base_styles,
+                container_id="cy-container",
+                cy_var="_cy",
+                timeout=10.0,
+            )
+        except RuntimeError as e:
+            log.error(f"Graph render failed: {e}")
+            ui.notify(f"Failed to render graph: {e}", type="negative")
+        except TimeoutError:
+            log.error("Graph render timed out - check browser console (F12) for errors")
+            ui.notify("Graph loading timed out. Check browser console (F12) for details.", type="warning")
+        except Exception as e:
+            log.error(f"Graph render failed: {e}", exc_info=True)
+            ui.notify(f"Failed to render graph: {e}", type="negative")
 
     async def on_layer_change(e):
         graph_layer["value"] = e.value
+        search_text["value"] = ""  # Clear search when switching layers
+        if search_debounce["task"] is not None:
+            search_debounce["task"].cancel()  # Cancel any pending search
+        if search_input["ref"]:
+            search_input["ref"].value = ""  # Clear the UI input field
         await load_graph()
 
     async def on_kind_change(e):
@@ -84,8 +105,23 @@ async def ontology_graph_page():
         await load_graph()
 
     async def on_search(e):
+        """Debounced search - waits 1 second after last keystroke."""
+        from nicegui import context as ng_context
+        
         search_text["value"] = e.value
-        await load_graph()
+        client = ng_context.client
+        
+        # Cancel previous pending search
+        if search_debounce["task"] is not None:
+            search_debounce["task"].cancel()
+        
+        # Schedule new search after 1 second delay, preserving client context
+        async def delayed_search():
+            await asyncio.sleep(1.0)
+            with client:
+                await load_graph()
+        
+        search_debounce["task"] = asyncio.create_task(delayed_search())
 
     async def on_clear_design():
         """Clear all Design nodes from Neo4j."""
@@ -143,7 +179,7 @@ async def ontology_graph_page():
         ).classes("w-44")
         kind_options = ["all"] + sorted(KIND_COLORS.keys())
         ui.select(kind_options, value="all", label="Kind", on_change=on_kind_change).classes("w-36")
-        ui.input("Search", on_change=on_search).classes("w-48")
+        search_input["ref"] = ui.input("Search", on_change=on_search).classes("w-48")
         ui.select(
             ["fcose", "breadthfirst", "circle", "grid", "concentric"],
             value="fcose",

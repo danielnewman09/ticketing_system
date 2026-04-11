@@ -56,12 +56,8 @@ def fetch_ontology_graph_data(
 
 def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
     """Fetch the ontology subgraph around an HLR for Cytoscape.js."""
-    try:
-        from backend.db.neo4j_queries import fetch_hlr_subgraph
-        return fetch_hlr_subgraph(hlr_id, component_id)
-    except Exception:
-        log.warning("Neo4j HLR subgraph query failed — returning empty graph", exc_info=True)
-        return {"nodes": [], "edges": []}
+    from backend.db.neo4j_queries import fetch_hlr_subgraph
+    return fetch_hlr_subgraph(hlr_id, component_id)
 
 
 def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
