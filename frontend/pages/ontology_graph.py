@@ -104,23 +104,27 @@ async def ontology_graph_page():
         kind_filter["value"] = e.value if e.value != "all" else None
         await load_graph()
 
-    async def on_search(e):
+    async def on_search(e=None):
         """Debounced search - waits 1 second after last keystroke."""
         from nicegui import context as ng_context
-        
-        search_text["value"] = e.value
-        client = ng_context.client
-        
+
+        # Get current value from the input element directly (works for input events)
+        search_text["value"] = search_input["ref"].value
+
+        # Capture the current slot context for the background task
+        target_slot = ng_context.slot
+
         # Cancel previous pending search
         if search_debounce["task"] is not None:
             search_debounce["task"].cancel()
-        
-        # Schedule new search after 1 second delay, preserving client context
+
+        # Schedule new search after 1 second delay
         async def delayed_search():
             await asyncio.sleep(1.0)
-            with client:
+            # Enter the captured slot context before updating UI
+            with target_slot:
                 await load_graph()
-        
+
         search_debounce["task"] = asyncio.create_task(delayed_search())
 
     async def on_clear_design():
@@ -179,7 +183,8 @@ async def ontology_graph_page():
         ).classes("w-44")
         kind_options = ["all"] + sorted(KIND_COLORS.keys())
         ui.select(kind_options, value="all", label="Kind", on_change=on_kind_change).classes("w-36")
-        search_input["ref"] = ui.input("Search", on_change=on_search).classes("w-48")
+        search_input["ref"] = ui.input("Search").classes("w-48")
+        search_input["ref"].on_value_change(on_search)
         ui.select(
             ["fcose", "breadthfirst", "circle", "grid", "concentric"],
             value="fcose",

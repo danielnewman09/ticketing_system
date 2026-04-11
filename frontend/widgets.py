@@ -80,20 +80,22 @@ async def render_cytoscape_graph(
     
     result = await ui.run_javascript(f"""
         try {{
-            console.log('Cytoscape render starting:', {{
-                container_id: '{container_id}',
-                elements_count: {len(elements)},
-                layout: '{layout}'
-            }});
-            
-            if (window.{cy_var}) window.{cy_var}.destroy();
-            const KIND_COLORS = {KIND_COLORS_JS};
             const container = document.getElementById('{container_id}');
-            if (!container) {{ 
-                console.error('Container not found'); 
-                return {{success: false, error: 'Container not found'}}; 
+            if (!container) {{
+                return {{success: false, error: 'Container not found'}};
             }}
-            
+
+            // Destroy existing instance
+            if (window.{cy_var}) {{
+                window.{cy_var}.destroy();
+                window.{cy_var} = null;
+            }}
+
+            // Clear container content to force visual refresh
+            container.innerHTML = '';
+
+            const KIND_COLORS = {KIND_COLORS_JS};
+
             window.{cy_var} = cytoscape({{
                 container: container,
                 elements: {elements_json},
@@ -101,9 +103,10 @@ async def render_cytoscape_graph(
                 layout: {{ name: {layout_name}, {animation_opts} }},
             }});
             
-            window.{cy_var}.ready(function() {{ 
-                console.log('Cytoscape ready, fitting graph');
-                window.{cy_var}.fit(); 
+            window.{cy_var}.ready(function() {{
+                console.log('[cytoscape] Ready, fitting graph. Node count:', window.{cy_var}.nodes().length);
+                window.{cy_var}.fit();
+                window.{cy_var}.forceRender();
             }});
             
             window.{cy_var}.on('tap', 'node', function(evt) {{
