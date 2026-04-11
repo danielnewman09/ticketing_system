@@ -39,7 +39,7 @@ async def ontology_graph_page():
     selected_node = {"data": None}
     graph_layer = {"value": "design"}  # "design", "codebase", or "dependency"
     source_filter = {"value": None}  # dependency source filter (e.g. "eigen")
-    search_debounce = {"task": None}  # Debounce timer for search
+    search_debounce = {"timer": None}
     search_input = {"ref": None}  # Reference to search input element
 
     add_cytoscape_cdn()
@@ -93,11 +93,12 @@ async def ontology_graph_page():
 
     async def on_layer_change(e):
         graph_layer["value"] = e.value
-        search_text["value"] = ""  # Clear search when switching layers
-        if search_debounce["task"] is not None:
-            search_debounce["task"].cancel()  # Cancel any pending search
+        search_text["value"] = ""
+        if search_debounce["timer"] is not None:
+            search_debounce["timer"].active = False
+            search_debounce["timer"].delete()
         if search_input["ref"]:
-            search_input["ref"].value = ""  # Clear the UI input field
+            search_input["ref"].value = ""
         await load_graph()
 
     async def on_kind_change(e):
@@ -105,23 +106,16 @@ async def ontology_graph_page():
         await load_graph()
 
     async def on_search(e):
-        """Debounced search - waits 1 second after last keystroke."""
-        from nicegui import context as ng_context
-        
         search_text["value"] = e.value
-        client = ng_context.client
-        
-        # Cancel previous pending search
-        if search_debounce["task"] is not None:
-            search_debounce["task"].cancel()
-        
-        # Schedule new search after 1 second delay, preserving client context
-        async def delayed_search():
-            await asyncio.sleep(1.0)
-            with client:
-                await load_graph()
-        
-        search_debounce["task"] = asyncio.create_task(delayed_search())
+
+        if search_debounce["timer"] is not None:
+            search_debounce["timer"].active = False
+            search_debounce["timer"].delete()
+
+        async def do_search():
+            await load_graph()
+
+        search_debounce["timer"] = ui.timer(1.0, do_search, once=True)
 
     async def on_clear_design():
         """Clear all Design nodes from Neo4j."""

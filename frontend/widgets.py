@@ -93,6 +93,7 @@ async def render_cytoscape_graph(
                 console.error('Container not found'); 
                 return {{success: false, error: 'Container not found'}}; 
             }}
+            container.innerHTML = '';
             
             window.{cy_var} = cytoscape({{
                 container: container,
