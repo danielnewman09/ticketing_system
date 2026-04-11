@@ -53,7 +53,7 @@ async def ontology_graph_page():
             # Show placeholder — don't load the entire dependency graph
             try:
                 await ui.run_javascript("""
-                    if (window._cy) window._cy.destroy();
+                    if (window._cy) { window._cy.destroy(); window._cy = null; }
                     const container = document.getElementById('cy-container');
                     if (container) {
                         container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
@@ -106,22 +106,14 @@ async def ontology_graph_page():
 
     async def on_search(e):
         """Debounced search - waits 1 second after last keystroke."""
-        from nicegui import context as ng_context
-        
         search_text["value"] = e.value
-        client = ng_context.client
-        
+
         # Cancel previous pending search
         if search_debounce["task"] is not None:
-            search_debounce["task"].cancel()
-        
-        # Schedule new search after 1 second delay, preserving client context
-        async def delayed_search():
-            await asyncio.sleep(1.0)
-            with client:
-                await load_graph()
-        
-        search_debounce["task"] = asyncio.create_task(delayed_search())
+            search_debounce["task"].active = False
+
+        # Schedule search using NiceGUI timer - runs in correct client context
+        search_debounce["task"] = ui.timer(1.0, load_graph, once=True)
 
     async def on_clear_design():
         """Clear all Design nodes from Neo4j."""

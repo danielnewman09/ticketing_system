@@ -62,7 +62,7 @@ async def render_cytoscape_graph(
     if not elements:
         log.debug("Rendering empty graph - clearing container")
         await ui.run_javascript(f"""
-            if (window.{cy_var}) window.{cy_var}.destroy();
+            if (window.{cy_var}) {{ window.{cy_var}.destroy(); window.{cy_var} = null; }}
             const container = document.getElementById('{container_id}');
             if (container) {{
                 container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1rem;">No nodes found</div>';
@@ -86,14 +86,15 @@ async def render_cytoscape_graph(
                 layout: '{layout}'
             }});
             
-            if (window.{cy_var}) window.{cy_var}.destroy();
+            if (window.{cy_var}) {{ window.{cy_var}.destroy(); window.{cy_var} = null; }}
             const KIND_COLORS = {KIND_COLORS_JS};
             const container = document.getElementById('{container_id}');
-            if (!container) {{ 
-                console.error('Container not found'); 
-                return {{success: false, error: 'Container not found'}}; 
+            if (!container) {{
+                console.error('Container not found');
+                return {{success: false, error: 'Container not found'}};
             }}
-            
+            container.innerHTML = '';
+
             window.{cy_var} = cytoscape({{
                 container: container,
                 elements: {elements_json},
