@@ -86,13 +86,18 @@ async def render_cytoscape_graph(
                 layout: '{layout}'
             }});
             
-            if (window.{cy_var}) window.{cy_var}.destroy();
-            const KIND_COLORS = {KIND_COLORS_JS};
+            // Destroy existing instance and clear container
+            if (window.{cy_var}) {{
+                window.{cy_var}.destroy();
+                window.{cy_var} = null;
+            }}
             const container = document.getElementById('{container_id}');
             if (!container) {{ 
                 console.error('Container not found'); 
                 return {{success: false, error: 'Container not found'}}; 
             }}
+            container.innerHTML = ''; // Clear any placeholder content
+            const KIND_COLORS = {KIND_COLORS_JS};
             
             window.{cy_var} = cytoscape({{
                 container: container,

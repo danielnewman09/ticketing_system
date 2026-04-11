@@ -46,19 +46,25 @@ async def ontology_graph_page():
     base_styles = cytoscape_base_styles(size="large")
 
     async def load_graph():
+        from nicegui import context as ng_context
+        
         layer = graph_layer["value"]
         search = search_text["value"] or ""
+        client = ng_context.client
+
+        log.debug(f"Loading graph: layer={layer}, search={search!r}, kind={kind_filter['value']}, source={source_filter['value']}")
 
         if layer == "dependency" and not search.strip():
             # Show placeholder — don't load the entire dependency graph
             try:
-                await ui.run_javascript("""
-                    if (window._cy) window._cy.destroy();
-                    const container = document.getElementById('cy-container');
-                    if (container) {
-                        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
-                    }
-                """, timeout=2.0)
+                with client:
+                    await ui.run_javascript("""
+                        if (window._cy) { window._cy.destroy(); window._cy = null; }
+                        const container = document.getElementById('cy-container');
+                        if (container) {
+                            container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:1.1rem;">Search for a class or namespace to explore dependencies</div>';
+                        }
+                    """, timeout=2.0)
             except Exception as e:
                 log.warning(f"Failed to clear graph: {e}")
             return
@@ -74,13 +80,14 @@ async def ontology_graph_page():
         log.debug(f"Graph data: {len(data['nodes'])} nodes, {len(data['edges'])} edges")
 
         try:
-            await render_cytoscape_graph(
-                data["nodes"] + data["edges"],
-                base_styles,
-                container_id="cy-container",
-                cy_var="_cy",
-                timeout=10.0,
-            )
+            with client:
+                await render_cytoscape_graph(
+                    data["nodes"] + data["edges"],
+                    base_styles,
+                    container_id="cy-container",
+                    cy_var="_cy",
+                    timeout=10.0,
+                )
         except RuntimeError as e:
             log.error(f"Graph render failed: {e}")
             ui.notify(f"Failed to render graph: {e}", type="negative")
@@ -96,6 +103,7 @@ async def ontology_graph_page():
         search_text["value"] = ""  # Clear search when switching layers
         if search_debounce["task"] is not None:
             search_debounce["task"].cancel()  # Cancel any pending search
+            search_debounce["task"] = None
         if search_input["ref"]:
             search_input["ref"].value = ""  # Clear the UI input field
         await load_graph()
