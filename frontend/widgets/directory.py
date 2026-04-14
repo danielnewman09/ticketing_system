@@ -4,6 +4,24 @@ from pathlib import Path
 
 from nicegui import ui
 
+from frontend.theme import (
+    BADGE_COLORS,
+    CLS_CARD_FULL,
+    CLS_DIALOG_WIDE,
+    CLS_DIALOG_TITLE,
+    CLS_ROW_JUSTIFY_BETWEEN,
+    CLS_TEXT_XS,
+    CLS_TEXT_SM,
+    CLS_TEXT_MUTED,
+    CLS_TEXT_DIM,
+    CLS_MONO_XS,
+    CLS_MONO_SM,
+    CLS_EMPTY_STATE,
+    PROPS_ICON_BTN,
+    PROPS_ICON_BTN_POSITIVE,
+    PROPS_DENSE,
+)
+
 
 def _list_dirs(path: Path) -> list[Path]:
     try:
@@ -20,25 +38,25 @@ def _render_dir_listing(dir_container, current: Path, navigate) -> None:
     dirs = _list_dirs(current)
     with dir_container:
         if current.parent != current:
-            with ui.item(on_click=lambda _, p=current.parent: navigate(p)).classes("w-full"):
+            with ui.item(on_click=lambda _, p=current.parent: navigate(p)).classes(CLS_CARD_FULL):
                 with ui.item_section().props("side"):
-                    ui.icon("arrow_upward", size="sm").classes("text-gray-500")
+                    ui.icon("arrow_upward", size="sm").classes(CLS_TEXT_MUTED)
                 with ui.item_section():
-                    ui.item_label("..").classes("font-mono text-gray-400")
+                    ui.item_label("..").classes(f"{CLS_MONO_SM} {CLS_TEXT_DIM}")
 
         if not dirs:
-            ui.label("No subdirectories").classes("text-sm text-gray-500 px-4 py-2")
+            ui.label("No subdirectories").classes(f"{CLS_EMPTY_STATE} px-4 py-2")
         for d in dirs:
-            with ui.item(on_click=lambda _, p=d: navigate(p)).classes("w-full"):
+            with ui.item(on_click=lambda _, p=d: navigate(p)).classes(CLS_CARD_FULL):
                 with ui.item_section().props("side"):
-                    ui.icon("folder", size="sm", color="amber")
+                    ui.icon("folder", size="sm", color=BADGE_COLORS["folder"])
                 with ui.item_section():
-                    ui.item_label(d.name).classes("font-mono text-sm")
+                    ui.item_label(d.name).classes(CLS_MONO_SM)
 
 
 def _add_new_folder_row(state: dict, navigate) -> tuple:
-    with ui.row().classes("w-full items-center gap-2 mt-2") as new_folder_row:
-        new_folder_input = ui.input("New folder name").classes("flex-1").props("dense")
+    with ui.row().classes(f"{CLS_CARD_FULL} items-center gap-2 mt-2") as new_folder_row:
+        new_folder_input = ui.input("New folder name").classes("flex-1").props(PROPS_DENSE)
 
         def create_folder():
             name = new_folder_input.value.strip()
@@ -55,17 +73,17 @@ def _add_new_folder_row(state: dict, navigate) -> tuple:
                 ui.notify(f"Failed: {e}", type="negative")
 
         new_folder_input.on("keydown.enter", create_folder)
-        ui.button(icon="check", on_click=create_folder).props("flat round size=sm color=positive")
+        ui.button(icon="check", on_click=create_folder).props(PROPS_ICON_BTN_POSITIVE)
         ui.button(
             icon="close",
             on_click=lambda: new_folder_row.set_visibility(False),
-        ).props("flat round size=sm")
+        ).props(PROPS_ICON_BTN)
     new_folder_row.set_visibility(False)
     return new_folder_row, new_folder_input
 
 
 def _add_action_buttons(dialog, state: dict, on_select, show_new_folder) -> None:
-    with ui.row().classes("w-full justify-between mt-4"):
+    with ui.row().classes(CLS_ROW_JUSTIFY_BETWEEN):
         ui.button("New Folder", icon="create_new_folder", on_click=show_new_folder).props(
             "flat size=sm"
         )
@@ -98,13 +116,13 @@ def directory_picker(
     state = {"current": start}
 
     with ui.dialog().props("maximized=false") as dialog, \
-         ui.card().classes("w-[540px] max-h-[80vh]"):
-        ui.label("Select Directory").classes("text-lg font-bold mb-2")
+         ui.card().classes(CLS_DIALOG_WIDE):
+        ui.label("Select Directory").classes(CLS_DIALOG_TITLE)
 
-        path_input = ui.input("Path", value=str(start)).classes("w-full font-mono text-xs")
-        dir_container = ui.column().classes("w-full overflow-auto").style("max-height: 400px;")
+        path_input = ui.input("Path", value=str(start)).classes(f"{CLS_CARD_FULL} {CLS_MONO_XS}")
+        dir_container = ui.column().classes(f"{CLS_CARD_FULL} overflow-auto").style("max-height: 400px;")
         selected_label = ui.label(f"Selected: {start}").classes(
-            "text-xs text-gray-400 font-mono mt-2 truncate w-full"
+            f"{CLS_MONO_XS} {CLS_TEXT_DIM} mt-2 truncate {CLS_CARD_FULL}"
         )
 
         def navigate(path: Path):

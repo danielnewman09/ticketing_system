@@ -1,8 +1,10 @@
 """JavaScript template strings for Cytoscape graph rendering."""
 
+from frontend.theme import TEXT_HEX
+
 _EMPTY_GRAPH_HTML = (
     '<div style="display:flex;align-items:center;justify-content:center;'
-    'height:100%;color:#888;font-size:1rem;">No nodes found</div>'
+    f'height:100%;color:{TEXT_HEX["muted"]};font-size:1rem;">No nodes found</div>'
 )
 
 _JS_CLEAR_EMPTY = """

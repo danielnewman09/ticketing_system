@@ -3,30 +3,51 @@
 from nicegui import ui
 
 from frontend.theme import (
+    BADGE_COLORS,
     VERIFICATION_COLORS,
+    CLS_CARD_FULL,
+    CLS_CARD_FULL_MARGIN,
+    CLS_ROW_CENTER,
+    CLS_ROW_JUSTIFY_BETWEEN,
+    CLS_TEXT_XS,
+    CLS_MONO_SM,
+    CLS_TEXT_SECONDARY,
+    CLS_TEXT_DIM,
+    CLS_TEXT_CYAN,
+    CLS_TEXT_MUTED,
+    CLS_SECTION_HEADER,
     CLS_SECTION_SUBHEADER,
+    PROPS_ICON_BTN,
+    PROPS_DENSE,
+    PROPS_TABLE_COMPACT,
 )
+from frontend.widgets.layouts import (
+    card_section,
+    empty_state,
+    render_condition_row,
+)
+from frontend.widgets.slots import TABLE_EDIT_BTN, TABLE_DELETE_BTN
 
 
 def render_hlr_card(hlr):
     """Render a single HLR as an expandable card with its LLR table."""
     llr_count = len(hlr["llrs"])
 
-    with ui.card().classes("w-full mb-2"):
+    with ui.card().classes(CLS_CARD_FULL_MARGIN):
         with ui.row().classes("w-full items-start justify-between"):
             with ui.column().classes("flex-1 gap-0"):
-                with ui.row().classes("items-center gap-2"):
-                    ui.badge(f"HLR {hlr['id']}", color="blue").props("outline")
+                with ui.row().classes(CLS_ROW_CENTER):
+                    ui.badge(f"HLR {hlr['id']}", color=BADGE_COLORS["hlr"]).props("outline")
                     if hlr["component"]:
-                        ui.badge(hlr["component"], color="grey")
+                        ui.badge(hlr["component"], color=BADGE_COLORS["component"])
                     ui.badge(
                         f"{llr_count} LLR{'s' if llr_count != 1 else ''}",
-                        color="green" if llr_count > 0 else "grey",
-                    ).classes("text-xs")
-                ui.label(hlr["description"]).classes("text-sm mt-1")
+                        color=BADGE_COLORS["llr"] if llr_count > 0 else BADGE_COLORS["llr_empty"],
+                    ).classes(CLS_TEXT_XS)
+                ui.label(hlr["description"]).classes(f"{CLS_TEXT_SM} mt-1")
 
             hlr_id = hlr["id"]
-            with ui.button(icon="more_vert").props("flat round size=sm"):
+            with ui.button(icon="more_vert").props(PROPS_ICON_BTN):
                 with ui.menu():
                     ui.menu_item("View Details", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
                     ui.menu_item("Add LLR", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}#add-llr"))
@@ -34,7 +55,7 @@ def render_hlr_card(hlr):
                     ui.menu_item("Decompose", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
 
         if hlr["llrs"]:
-            with ui.expansion("Low-Level Requirements", icon="list").classes("w-full mt-2").props("dense"):
+            with ui.expansion("Low-Level Requirements", icon="list").classes("w-full mt-2").props(PROPS_DENSE):
                 render_llr_table(hlr["llrs"])
 
 
@@ -63,8 +84,8 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
             "verification": ", ".join(llr["methods"]) if llr["methods"] else "-",
         })
 
-    table = ui.table(columns=columns, rows=rows, row_key="id").classes("w-full")
-    table.props("dense flat")
+    table = ui.table(columns=columns, rows=rows, row_key="id").classes(CLS_CARD_FULL)
+    table.props(PROPS_TABLE_COMPACT)
     table.on("row-click", lambda e: ui.navigate.to(f"/llr/{e.args[1]['id']}"))
 
     table.add_slot(
@@ -84,18 +105,8 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
     )
 
     if on_edit or on_delete:
-        edit_btn = ""
-        if on_edit:
-            edit_btn = (
-                '<q-btn flat round dense size="xs" icon="edit" color="primary"'
-                '       @click.stop="$parent.$emit(\'edit\', props.row.id)" />'
-            )
-        delete_btn = ""
-        if on_delete:
-            delete_btn = (
-                '<q-btn flat round dense size="xs" icon="delete" color="negative"'
-                '       @click.stop="$parent.$emit(\'delete\', props.row.id)" />'
-            )
+        edit_btn = TABLE_EDIT_BTN if on_edit else ""
+        delete_btn = TABLE_DELETE_BTN if on_delete else ""
         table.add_slot(
             "body-cell-actions",
             f"<q-td :props=\"props\">{edit_btn}{delete_btn}</q-td>",
@@ -106,54 +117,46 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
             table.on("delete", lambda e: on_delete(e.args))
 
 
+def _render_action_row(index: int, a: dict):
+    with ui.row().classes(CLS_ROW_CENTER):
+        ui.badge(str(index), color=BADGE_COLORS["muted"]).props("rounded").classes(CLS_TEXT_XS)
+        ui.label(a["description"]).classes(CLS_TEXT_XS)
+        if a["member_qualified_name"]:
+            ui.label(a["member_qualified_name"]).classes(f"{CLS_TEXT_XS} {CLS_TEXT_MUTED}")
+
+
 def render_verification_card(v):
     """Render a single verification method as a card with conditions/actions."""
-    color = VERIFICATION_COLORS.get(v["method"], "grey")
+    color = VERIFICATION_COLORS.get(v["method"], BADGE_COLORS["muted"])
 
-    with ui.card().classes("w-full"):
-        with ui.row().classes("w-full items-center justify-between"):
-            with ui.row().classes("items-center gap-2"):
-                ui.badge(v["method"], color=color).classes("text-xs")
+    with ui.card().classes(CLS_CARD_FULL):
+        with ui.row().classes(CLS_ROW_JUSTIFY_BETWEEN):
+            with ui.row().classes(CLS_ROW_CENTER):
+                ui.badge(v["method"], color=color).classes(CLS_TEXT_XS)
                 if v["test_name"]:
-                    ui.label(v["test_name"]).classes("text-sm font-mono text-gray-300")
+                    ui.label(v["test_name"]).classes(f"{CLS_MONO_SM} {CLS_TEXT_SECONDARY}")
 
         if v["description"]:
-            ui.label(v["description"]).classes("text-xs text-gray-400 mt-1")
+            ui.label(v["description"]).classes(f"{CLS_TEXT_XS} {CLS_TEXT_DIM} mt-1")
 
-        if v["preconditions"]:
-            ui.separator().classes("my-2")
-            ui.label("Pre-conditions").classes(CLS_SECTION_SUBHEADER)
-            for c in v["preconditions"]:
-                with ui.row().classes("items-center gap-1"):
-                    ui.label(c["member_qualified_name"]).classes("text-xs font-mono text-blue-300")
-                    ui.label(c["operator"]).classes("text-xs text-gray-500")
-                    ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
-
-        if v["actions"]:
-            ui.separator().classes("my-2")
-            ui.label("Actions").classes(CLS_SECTION_SUBHEADER)
-            for i, a in enumerate(v["actions"], 1):
-                with ui.row().classes("items-center gap-2"):
-                    ui.badge(str(i), color="grey").props("rounded").classes("text-xs")
-                    ui.label(a["description"]).classes("text-xs")
-                    if a["member_qualified_name"]:
-                        ui.label(a["member_qualified_name"]).classes("text-xs font-mono text-gray-500")
-
-        if v["postconditions"]:
-            ui.separator().classes("my-2")
-            ui.label("Post-conditions").classes(CLS_SECTION_SUBHEADER)
-            for c in v["postconditions"]:
-                with ui.row().classes("items-center gap-1"):
-                    ui.label(c["member_qualified_name"]).classes("text-xs font-mono text-blue-300")
-                    ui.label(c["operator"]).classes("text-xs text-gray-500")
-                    ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
+        card_section(
+            "Pre-conditions", v.get("preconditions") or [],
+            lambda c: render_condition_row(c["member_qualified_name"], c["operator"], c["expected_value"]),
+        )
+        card_section(
+            "Actions", v.get("actions") or [],
+            _render_action_row,
+            enumerated=True,
+        )
+        card_section(
+            "Post-conditions", v.get("postconditions") or [],
+            lambda c: render_condition_row(c["member_qualified_name"], c["operator"], c["expected_value"]),
+        )
 
 
 def render_triples_card(triples):
     """Render an ontology triples card from plain dicts."""
-    from frontend.theme import CLS_SECTION_HEADER
-
-    with ui.card().classes("w-full"):
+    with ui.card().classes(CLS_CARD_FULL):
         ui.label("Ontology Triples").classes(CLS_SECTION_HEADER)
         if triples:
             triple_cols = [
@@ -161,11 +164,11 @@ def render_triples_card(triples):
                 {"name": "predicate", "label": "Predicate", "field": "predicate", "align": "left"},
                 {"name": "object", "label": "Object", "field": "object", "align": "left"},
             ]
-            t = ui.table(columns=triple_cols, rows=triples).classes("w-full")
-            t.props("dense flat")
+            t = ui.table(columns=triple_cols, rows=triples).classes(CLS_CARD_FULL)
+            t.props(PROPS_TABLE_COMPACT)
             t.add_slot(
                 "body-cell-predicate",
-                '<q-td :props="props"><code class="text-cyan-300">{{ props.value }}</code></q-td>',
+                f'<q-td :props="props"><code class="{CLS_TEXT_CYAN}">{{{{ props.value }}}}</code></q-td>',
             )
         else:
-            ui.label("No triples linked.").classes("text-sm text-gray-500")
+            empty_state("No triples linked.")

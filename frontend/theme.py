@@ -78,9 +78,45 @@ LAYER_STYLES = {
     "requirement": {"border_style": "solid", "opacity": 1.0, "shape": "diamond"},
 }
 
+BADGE_COLORS = {
+    "hlr": "blue",
+    "component": "grey",
+    "llr": "positive",
+    "llr_empty": "grey",
+    "muted": "grey",
+    "folder": "amber",
+}
+
+TEXT_HEX = {
+    "muted": "#888",
+    "dim": "#999",
+    "light": "#ccc",
+}
+
 # ---------------------------------------------------------------------------
 # Reusable Tailwind class strings
 # ---------------------------------------------------------------------------
+
+# --- Typography (no color — apply color separately via CLS_TEXT_*) ---
+
+CLS_TEXT_XS = "text-xs"
+CLS_TEXT_SM = "text-sm"
+CLS_TEXT_LG = "text-lg font-bold"
+CLS_MONO_XS = "text-xs font-mono"
+CLS_MONO_SM = "text-sm font-mono"
+
+# --- Semantic text colors (combine with typography above) ---
+
+CLS_TEXT_MUTED = "text-gray-500"
+CLS_TEXT_DIM = "text-gray-400"
+CLS_TEXT_SECONDARY = "text-gray-300"
+CLS_TEXT_BLUE = "text-blue-300"
+CLS_TEXT_GREEN = "text-green-300"
+CLS_TEXT_CYAN = "text-cyan-300"
+CLS_TEXT_RED = "text-red-300"
+CLS_TEXT_AMBER = "text-amber-400"
+
+# --- Composite typography+color (high-frequency combinations) ---
 
 CLS_SECTION_HEADER = "text-xs uppercase tracking-wider text-gray-400 mb-2"
 CLS_SECTION_SUBHEADER = "text-xs text-gray-500 uppercase tracking-wider mb-1"
@@ -88,13 +124,44 @@ CLS_PAGE_TITLE = "text-2xl font-bold"
 CLS_BREADCRUMB_LINK = "text-blue-400 text-sm no-underline"
 CLS_BREADCRUMB_SEP = "text-gray-500 text-sm"
 CLS_BREADCRUMB_CURRENT = "text-sm text-gray-300"
+
+# --- Empty / placeholder state ---
+
+CLS_EMPTY_STATE = "text-sm text-gray-500"
+
+# --- Layout rows ---
+
+CLS_ROW_CENTER = "items-center gap-2"
+CLS_ROW_CENTER_COMPACT = "items-center gap-1"
+CLS_ROW_SPACE_BETWEEN = "w-full items-start justify-between"
+CLS_ROW_JUSTIFY_BETWEEN = "w-full justify-between mt-4"
+CLS_ROW_JUSTIFY_END = "w-full justify-end gap-2 mt-4"
+
+# --- Cards ---
+
 CLS_CARD_FULL = "w-full"
+CLS_CARD_FULL_MARGIN = "w-full mb-2"
 CLS_CARD_SECTION = "w-full mx-2 mt-4"
+
+# --- Dialogs ---
+
 CLS_DIALOG_SM = "w-80"
 CLS_DIALOG_MD = "w-96"
 CLS_DIALOG_LG = "w-[480px]"
+CLS_DIALOG_WIDE = "w-[540px] max-h-[80vh]"
 CLS_DIALOG_TITLE = "text-lg font-bold mb-2"
 CLS_DIALOG_ACTIONS = "w-full justify-end gap-2 mt-4"
+
+# --- Breadcrumb ---
+
+CLS_BREADCRUMB_ROW = "items-center gap-1 px-2 mt-4"
+
+# --- Quasar props shortcuts ---
+
+PROPS_ICON_BTN = "flat round size=sm"
+PROPS_ICON_BTN_POSITIVE = "flat round size=sm color=positive"
+PROPS_DENSE = "dense"
+PROPS_TABLE_COMPACT = "dense flat"
 
 # ---------------------------------------------------------------------------
 # Cytoscape helpers

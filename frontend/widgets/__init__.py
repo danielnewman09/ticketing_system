@@ -16,6 +16,13 @@ from frontend.widgets.cards import (
     render_triples_card,
     render_verification_card,
 )
+from frontend.widgets.layouts import (
+    card_header_row,
+    card_section,
+    empty_state,
+    render_condition_row,
+)
+from frontend.widgets.slots import table_action_btn, TABLE_EDIT_BTN, TABLE_DELETE_BTN
 
 log = logging.getLogger(__name__)
 
@@ -79,11 +86,18 @@ async def render_cytoscape_graph(
 
 __all__ = [
     "breadcrumb",
+    "card_header_row",
+    "card_section",
     "directory_picker",
+    "empty_state",
+    "render_condition_row",
     "render_cytoscape_graph",
     "render_hlr_card",
     "render_llr_table",
     "render_triples_card",
     "render_verification_card",
     "section_header",
+    "table_action_btn",
+    "TABLE_DELETE_BTN",
+    "TABLE_EDIT_BTN",
 ]
