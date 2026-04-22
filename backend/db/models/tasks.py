@@ -22,6 +22,9 @@ class Task(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    estimated_complexity: Mapped[str] = mapped_column(
+        String(10), default="medium", server_default="medium",
+    )
     status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending")
     # pending, scaffolded, tested, implemented, verified
 
