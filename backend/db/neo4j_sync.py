@@ -258,6 +258,67 @@ def sync_full_design(neo4j_session: Neo4jSession, sql_session: SqlSession) -> di
 
 
 # ---------------------------------------------------------------------------
+# Task and Verification sync
+# ---------------------------------------------------------------------------
+
+def sync_task(neo4j_session, task):
+    """MERGE a Task node in Neo4j with its design/verification links."""
+    neo4j_session.run("""
+    MERGE (t:Task {sqlite_id: $tid})
+    SET t.title = $title,
+        t.description = $description,
+        t.status = $status,
+        t.component_id = $component_id,
+        t.created_at = $created_at,
+        t.updated_at = $updated_at
+    """, {
+        "tid": task.id,
+        "title": task.title[:300],
+        "description": task.description,
+        "status": task.status,
+        "component_id": task.component_id,
+        "created_at": str(task.created_at),
+        "updated_at": str(task.updated_at),
+    })
+
+    for td in task.design_nodes:
+        node_qname = td.ontology_node.qualified_name
+        neo4j_session.run("""
+        MATCH (t:Task {sqlite_id: $tid})
+        MATCH (d:Design {qualified_name: $qname})
+        MERGE (t)-[:IMPLEMENTING]->(d)
+        """, {"tid": task.id, "qname": node_qname})
+
+    for tv in task.verifications:
+        vm = tv.verification_method
+        neo4j_session.run("""
+        MATCH (t:Task {sqlite_id: $tid})
+        MERGE (v:Verification {sqlite_id: $vid})
+        SET v.method = $method, v.test_name = $test_name
+        MERGE (t)-[:COVERS]->(v)
+        MERGE (l:LLR {sqlite_id: $llr_id})
+        MERGE (l)-[:VERIFIED_BY]->(v)
+        """, {"tid": task.id, "vid": vm.id,
+              "method": vm.method, "test_name": vm.test_name,
+              "llr_id": vm.low_level_requirement_id})
+
+
+def sync_implementation_status(neo4j_session, node):
+    """Update a Design node's implementation status in Neo4j."""
+    neo4j_session.run("""
+    MATCH (d:Design {qualified_name: $qname})
+    SET d.implementation_status = $status,
+        d.source_file = $source_file,
+        d.test_file = $test_file
+    """, {
+        "qname": node.qualified_name,
+        "status": node.implementation_status,
+        "source_file": node.source_file,
+        "test_file": node.test_file,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Convenience: sync with graceful degradation
 # ---------------------------------------------------------------------------
 

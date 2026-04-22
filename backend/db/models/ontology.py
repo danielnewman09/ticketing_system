@@ -191,10 +191,20 @@ class OntologyNode(Base):
     component_id: Mapped[Optional[int]] = mapped_column(ForeignKey("components.id", ondelete="SET NULL"), nullable=True)
     is_intercomponent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
+    # --- Implementation tracking ---
+    implementation_status: Mapped[str] = mapped_column(
+        String(20), default="designed", server_default="designed",
+    )  # "designed" | "scaffolded" | "tested" | "implemented" | "verified"
+    source_file: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    test_file: Mapped[str] = mapped_column(String(500), default="", server_default="")
+
     # --- Relationships ---
     component: Mapped[Optional[Component]] = relationship("Component", back_populates="ontology_nodes")
     triples_as_subject: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", foreign_keys="OntologyTriple.subject_id", back_populates="subject")
     triples_as_object: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", foreign_keys="OntologyTriple.object_id", back_populates="object")
+    task_links: Mapped[list["TaskDesignNode"]] = relationship(
+        "TaskDesignNode", back_populates="ontology_node",
+    )
 
     def __repr__(self):
         return self.qualified_name or self.name
