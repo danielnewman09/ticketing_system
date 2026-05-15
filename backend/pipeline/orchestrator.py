@@ -411,11 +411,11 @@ def run_pipeline(
     # ------------------------------------------------------------------
     log.info("Phase 10: Updating Neo4j...")
     try:
-        from backend.db.neo4j_sync import (
+        from backend.db.neo4j.sync import (
             sync_task, sync_implementation_status,
             sync_full_design,
         )
-        from backend.services.neo4j_service import get_neo4j_session
+        from backend.db.neo4j.connection import get_standalone_session as get_neo4j_session
 
         with get_neo4j_session() as neo4j_sess:
             full_stats = sync_full_design(neo4j_sess, session)
