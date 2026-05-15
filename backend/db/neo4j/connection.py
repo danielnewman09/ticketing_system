@@ -19,9 +19,9 @@ class Neo4jConnection:
     """Manages a Neo4j driver singleton (NiceGUI app-bound) with session helpers."""
 
     def __init__(self) -> None:
-        self._uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
-        self._user = os.environ.get("NEO4J_USER", "neo4j")
-        self._password = os.environ.get("NEO4J_PASSWORD")
+        self._uri = NEO4J_URI
+        self._user = NEO4J_USER
+        self._password = NEO4J_PASSWORD
         self._driver = None
         log.info("Neo4jConnection created (uri=%s, user=%s)", self._uri, self._user)
 
