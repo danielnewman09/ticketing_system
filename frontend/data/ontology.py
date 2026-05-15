@@ -47,8 +47,18 @@ def fetch_ontology_graph_data(
     by the appropriate Neo4j labels.
     """
     try:
-        from backend.db.neo4j_queries import fetch_graph
-        return fetch_graph(layer, kind_filter, search, component_id, source_filter)
+        from backend.db.neo4j.queries import fetch_design_graph
+        from backend.db.neo4j.queries import fetch_dependency_compounds
+        from backend.db.neo4j.queries import fetch_codebase_compounds
+        from backend.graph import format_cytoscape_graph
+
+        if layer == "design":
+            raw = fetch_design_graph(kind_filter, search, component_id)
+        elif layer == "dependency":
+            raw = fetch_dependency_compounds(search, source_filter)
+        else:
+            raw = fetch_codebase_compounds(search)
+        return format_cytoscape_graph(raw)
     except Exception:
         log.warning("Neo4j query failed — returning empty graph", exc_info=True)
         return {"nodes": [], "edges": []}
@@ -57,8 +67,10 @@ def fetch_ontology_graph_data(
 def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
     """Fetch the ontology subgraph around an HLR for Cytoscape.js."""
     try:
-        from backend.db.neo4j_queries import fetch_hlr_subgraph
-        return fetch_hlr_subgraph(hlr_id, component_id)
+        from backend.db.neo4j.queries import fetch_hlr_subgraph
+        from backend.graph import format_cytoscape_graph
+        raw = fetch_hlr_subgraph(hlr_id, component_id)
+        return format_cytoscape_graph(raw)
     except Exception:
         log.warning("Neo4j HLR subgraph query failed — returning empty graph", exc_info=True)
         return {"nodes": [], "edges": []}
@@ -67,8 +79,10 @@ def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
 def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
     """Fetch the 1-hop neighbourhood graph with collapsed members."""
     try:
-        from backend.db.neo4j_queries import fetch_neighbourhood_graph
-        return fetch_neighbourhood_graph(qualified_name)
+        from backend.db.neo4j.queries import fetch_neighbourhood_graph
+        from backend.graph import format_cytoscape_graph
+        raw = fetch_neighbourhood_graph(qualified_name)
+        return format_cytoscape_graph(raw)
     except Exception:
         log.warning("Neo4j neighbourhood query failed", exc_info=True)
         return {"nodes": [], "edges": []}
@@ -77,7 +91,7 @@ def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
 def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     """Fetch node detail from Neo4j (properties + relationships + requirements)."""
     try:
-        from backend.db.neo4j_queries import fetch_node_detail
+        from backend.db.neo4j.queries import fetch_node_detail
         return fetch_node_detail(qualified_name)
     except Exception:
         log.warning("Neo4j node detail query failed", exc_info=True)
