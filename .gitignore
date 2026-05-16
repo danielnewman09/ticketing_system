@@ -9,4 +9,11 @@ db.sqlite3
 logs/*
 .DS_Store
 codebase.sqlite3
+
+# Pi runtime files (project-local settings committed)
+.pi/sessions/*
+.pi/npm/*
+.pi/git/*
+.pi/settings.local.json
 llm_caller/
+**/node_modules/
