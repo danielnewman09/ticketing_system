@@ -112,6 +112,32 @@ def fetch_design_graph(
                 }
             )
 
+        # As-built compounds linked via IMPLEMENTED_BY
+        as_built_result = session.run(
+            f"""
+            MATCH (s:Design)-[r:IMPLEMENTED_BY]->(c:Compound)
+            WHERE {where.replace("n:", "s:").replace("n.", "s.")}
+              AND (c.source IS NULL OR c.source = '')
+            RETURN s.qualified_name AS src, c, type(r) AS rel_type
+            """,
+            params,
+        )
+        for record in as_built_result:
+            c = record["c"]
+            qn = c.get("qualified_name", "")
+            if qn not in node_qns:
+                node_qns.add(qn)
+                d = dict(c)
+                d["layer"] = "as-built"
+                nodes.append(d)
+            edges.append(
+                {
+                    "source": record["src"],
+                    "target": qn,
+                    "type": record["rel_type"],
+                }
+            )
+
     return {"nodes": nodes, "edges": edges}
 
 
