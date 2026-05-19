@@ -120,7 +120,7 @@ def discover_classes(
     toolset,
     model: str = "",
     prompt_log_file: str = "",
-    max_turns: int = 30,
+    max_turns: int = 60,
 ) -> list[dict]:
     """Discover dependency and as-built classes relevant to requirements.
 
