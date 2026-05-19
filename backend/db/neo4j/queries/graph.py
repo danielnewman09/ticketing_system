@@ -28,7 +28,9 @@ def fetch_design_graph(
     """
     log.info(
         "fetch_design_graph(kind=%s, search=%s, component_id=%s)",
-        kind_filter, search, component_id,
+        kind_filter,
+        search,
+        component_id,
     )
     conditions = ["n:Design"]
     params: dict = {}
@@ -40,7 +42,9 @@ def fetch_design_graph(
         conditions.append("n.component_id = $comp_id")
         params["comp_id"] = component_id
     if search:
-        conditions.append("(n.name CONTAINS $search OR n.qualified_name CONTAINS $search)")
+        conditions.append(
+            "(n.name CONTAINS $search OR n.qualified_name CONTAINS $search)"
+        )
         params["search"] = search
 
     where = " AND ".join(conditions)
@@ -61,7 +65,7 @@ def fetch_design_graph(
         edge_result = session.run(
             f"""
             MATCH (s)-[r]->(t)
-            WHERE {where.replace('n:', 's:').replace('n.', 's.')}
+            WHERE {where.replace("n:", "s:").replace("n.", "s.")}
               AND t:Design
               AND type(r) <> 'IMPLEMENTED_BY'
             RETURN s.qualified_name AS src, t.qualified_name AS tgt, type(r) AS rel_type
@@ -74,11 +78,13 @@ def fetch_design_graph(
             if src and tgt:
                 if tgt not in node_qns:
                     node_qns.add(tgt)
-                edges.append({
-                    "source": src,
-                    "target": tgt,
-                    "type": record["rel_type"],
-                })
+                edges.append(
+                    {
+                        "source": src,
+                        "target": tgt,
+                        "type": record["rel_type"],
+                    }
+                )
 
         log.debug("fetch_design_graph: %d raw edges", len(edges))
 
@@ -86,7 +92,7 @@ def fetch_design_graph(
         dep_result = session.run(
             f"""
             MATCH (s)-[r]->(dep:Compound)
-            WHERE {where.replace('n:', 's:').replace('n.', 's.')}
+            WHERE {where.replace("n:", "s:").replace("n.", "s.")}
               AND dep.source IS NOT NULL AND dep.source <> ''
             RETURN s.qualified_name AS src, dep, type(r) AS rel_type
             """,
@@ -96,11 +102,13 @@ def fetch_design_graph(
             dep = record["dep"]
             if dep.get("qualified_name", "") not in node_qns:
                 nodes.append(dict(dep))
-            edges.append({
-                "source": record["src"],
-                "target": dep.get("qualified_name", ""),
-                "type": record["rel_type"],
-            })
+            edges.append(
+                {
+                    "source": record["src"],
+                    "target": dep.get("qualified_name", ""),
+                    "type": record["rel_type"],
+                }
+            )
 
         # Linked requirement nodes
         _attach_traced_requirements(session, edges, nodes)
@@ -131,18 +139,23 @@ def _attach_traced_requirements(session, edges: list[dict], nodes: list[dict]) -
             appended_ids.add(req_id)
             labels = list(req.labels)
             req_type = "HLR" if "HLR" in labels else "LLR"
-            nodes.append({
-                "qualified_name": "",
-                "name": f"{req_type} {req.get('sqlite_id', '')}",
-                "kind": req_type,
-                "title": req.get("title", ""),
-                "layer": "requirement",
-            })
-        edges.append({
-            "source": req_id,
-            "target": d_qn,
-            "type": "TRACES_TO",
-        })
+            nodes.append(
+                {
+                    "element_id": req_id,
+                    "qualified_name": "",
+                    "name": f"{req_type} {req.get('sqlite_id', '')}",
+                    "kind": req_type,
+                    "title": req.get("title", ""),
+                    "layer": "requirement",
+                }
+            )
+        edges.append(
+            {
+                "source": req_id,
+                "target": d_qn,
+                "type": "TRACES_TO",
+            }
+        )
 
     traced_count = sum(1 for e in edges if e["type"] == "TRACES_TO")
     log.debug("_attach_traced_requirements: %d requirement edges", traced_count)
@@ -153,7 +166,8 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
     log.info("fetch_hlr_subgraph(hlr_id=%d, component_id=%s)", hlr_id, component_id)
     with get_neo4j().session() as session:
         check = session.run(
-            "MATCH (h:HLR {sqlite_id: $hid}) RETURN h", {"hid": hlr_id},
+            "MATCH (h:HLR {sqlite_id: $hid}) RETURN h",
+            {"hid": hlr_id},
         ).single()
         if not check:
             log.warning("HLR %d not found in Neo4j", hlr_id)
@@ -169,7 +183,8 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
                 seen_qns.add(qn)
                 nodes.append(dict(d))
 
-        trace_result = session.run("""
+        trace_result = session.run(
+            """
         MATCH (h:HLR {sqlite_id: $hid})
         OPTIONAL MATCH (h)-[:TRACES_TO]->(d1:Design)
         OPTIONAL MATCH (l:LLR)-[:DECOMPOSES]->(h)
@@ -178,27 +193,34 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
         UNWIND designs AS d
         WITH DISTINCT d WHERE d IS NOT NULL
         RETURN d
-        """, {"hid": hlr_id})
+        """,
+            {"hid": hlr_id},
+        )
         for record in trace_result:
             _add_node(record["d"])
 
         if component_id is not None:
-            comp_result = session.run("""
+            comp_result = session.run(
+                """
             MATCH (d:Design {component_id: $cid})
             OPTIONAL MATCH (d)-[r]->(d2:Design {component_id: $cid})
             WHERE type(r) <> 'IMPLEMENTED_BY'
             RETURN d, collect({rel: type(r), target_qn: d2.qualified_name}) AS rels
-            """, {"cid": component_id})
+            """,
+                {"cid": component_id},
+            )
             for record in comp_result:
                 _add_node(record["d"])
                 for item in record["rels"]:
                     if item["rel"] is None or not item["target_qn"]:
                         continue
-                    edges.append({
-                        "source": record["d"].get("qualified_name", ""),
-                        "target": item["target_qn"],
-                        "type": item["rel"],
-                    })
+                    edges.append(
+                        {
+                            "source": record["d"].get("qualified_name", ""),
+                            "target": item["target_qn"],
+                            "type": item["rel"],
+                        }
+                    )
 
     log.debug("fetch_hlr_subgraph: %d nodes, %d edges", len(nodes), len(edges))
     return {"nodes": nodes, "edges": edges}

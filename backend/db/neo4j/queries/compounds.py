@@ -64,7 +64,8 @@ def _discover_dependency_compounds(
         )
         if source_filter:
             fallback_where += " AND n.source CONTAINS $source_filter"
-        result = session.run(f"""
+        result = session.run(
+            f"""
             MATCH (n) WHERE ({fallback_where}) AND (n:Compound OR n:Member)
             WITH n LIMIT $limit
             WITH CASE WHEN n:Compound THEN n ELSE null END AS direct_compound, n
@@ -73,14 +74,20 @@ def _discover_dependency_compounds(
             WITH coalesce(direct_compound, owner) AS c
             WHERE c IS NOT NULL
             RETURN DISTINCT c
-        """, {
-            "search": search_term,
-            "limit": limit,
-            "source_filter": source_filter,
-        })
+        """,
+            {
+                "search": search_term,
+                "limit": limit,
+                "source_filter": source_filter,
+            },
+        )
 
     ids = {record["c"].element_id for record in result}
-    log.debug("_discover_dependency_compounds: %d compounds found for %r", len(ids), search_term)
+    log.debug(
+        "_discover_dependency_compounds: %d compounds found for %r",
+        len(ids),
+        search_term,
+    )
     return ids
 
 
@@ -97,11 +104,11 @@ def _discover_codebase_compounds(session, search: str | None) -> set[str]:
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     result = session.run(f"MATCH (c:Compound) {where_clause} RETURN c", params)
     ids = {
-        record["c"].element_id
-        for record in result
-        if not record["c"].get("source", "")
+        record["c"].element_id for record in result if not record["c"].get("source", "")
     }
-    log.debug("_discover_codebase_compounds: %d compounds found for %r", len(ids), search)
+    log.debug(
+        "_discover_codebase_compounds: %d compounds found for %r", len(ids), search
+    )
     return ids
 
 
@@ -123,7 +130,9 @@ def fetch_dependency_compounds(
     """Fetch dependency compound graph as raw dicts (with source property)."""
     log.info("fetch_dependency_compounds(search=%s, source=%s)", search, source_filter)
     with get_neo4j().session() as session:
-        compound_ids = _discover_dependency_compounds(session, search, source_filter, limit)
+        compound_ids = _discover_dependency_compounds(
+            session, search, source_filter, limit
+        )
         if not compound_ids:
             return {"nodes": [], "edges": []}
         return _fetch_compound_raw(session, compound_ids, "dependency")
@@ -135,13 +144,16 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
     edges: list[dict] = []
 
     # Inheritance edges
-    result = session.run("""
+    result = session.run(
+        """
         UNWIND $cids AS cid
         MATCH (c:Compound) WHERE elementId(c) = cid
         OPTIONAL MATCH (c)-[r1:INHERITS_FROM]->(base:Compound)
         OPTIONAL MATCH (derived:Compound)-[r2:INHERITS_FROM]->(c)
         RETURN c, r1, base, r2, derived
-    """, {"cids": list(compound_ids)})
+    """,
+        {"cids": list(compound_ids)},
+    )
 
     for record in result:
         compound_ids.add(record["c"].element_id)
@@ -149,19 +161,31 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
             n = record[role]
             r = record[rel_key]
             if r is not None:
-                edges.append({
-                    "source": record["c"].element_id if role == "base" else n.element_id,
-                    "target": n.element_id if role == "base" else record["c"].element_id,
-                    "type": "INHERITS_FROM",
-                })
+                compound_ids.add(n.element_id)
+                edges.append(
+                    {
+                        "source": record["c"].get(
+                            "qualified_name", record["c"].element_id
+                        )
+                        if role == "base"
+                        else n.get("qualified_name", n.element_id),
+                        "target": n.get("qualified_name", n.element_id)
+                        if role == "base"
+                        else record["c"].get("qualified_name", record["c"].element_id),
+                        "type": "INHERITS_FROM",
+                    }
+                )
 
     # Compounds + members
-    result2 = session.run("""
+    result2 = session.run(
+        """
         UNWIND $cids AS cid
         MATCH (c:Compound) WHERE elementId(c) = cid
         OPTIONAL MATCH (c)-[r:CONTAINS]->(m:Member)
         RETURN c, r, m
-    """, {"cids": list(compound_ids)})
+    """,
+        {"cids": list(compound_ids)},
+    )
 
     seen_node_ids: set[str] = set()
     for record in result2:
@@ -179,13 +203,17 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
             d["layer"] = layer
             nodes.append(d)
         if r is not None and m is not None:
-            edges.append({
-                "source": c.element_id,
-                "target": m.element_id,
-                "type": "CONTAINS",
-            })
+            edges.append(
+                {
+                    "source": c.get("qualified_name", c.element_id),
+                    "target": m.get("qualified_name", m.element_id),
+                    "type": "CONTAINS",
+                }
+            )
 
-    log.debug("_fetch_compound_raw(%s): %d nodes, %d edges", layer, len(nodes), len(edges))
+    log.debug(
+        "_fetch_compound_raw(%s): %d nodes, %d edges", layer, len(nodes), len(edges)
+    )
     return {"nodes": nodes, "edges": edges}
 
 
@@ -206,36 +234,46 @@ def fetch_design_dependency_links(design_qnames: list[str]) -> dict:
                 seen_qns.add(qn)
                 nodes.append(dict(d))
 
-        result = session.run("""
+        result = session.run(
+            """
         UNWIND $qnames AS qn
         MATCH (d:Design {qualified_name: qn})-[r]->(dep:Compound)
         WHERE dep.source IS NOT NULL AND dep.source <> ''
         RETURN d, dep, type(r) AS rel_type
-        """, {"qnames": design_qnames})
+        """,
+            {"qnames": design_qnames},
+        )
         for record in result:
             _add(record["d"])
             _add(record["dep"])
-            edges.append({
-                "source": record["d"].get("qualified_name", ""),
-                "target": record["dep"].get("qualified_name", ""),
-                "type": record["rel_type"],
-            })
+            edges.append(
+                {
+                    "source": record["d"].get("qualified_name", ""),
+                    "target": record["dep"].get("qualified_name", ""),
+                    "type": record["rel_type"],
+                }
+            )
 
-        result2 = session.run("""
+        result2 = session.run(
+            """
         UNWIND $qnames AS qn
         MATCH (d:Design {qualified_name: qn})-[r:DEPENDS_ON]->(d2:Design)
         WITH d, r, d2
         MATCH (dep:Compound {qualified_name: d2.qualified_name})
         WHERE dep.source IS NOT NULL AND dep.source <> ''
         RETURN d, dep, type(r) AS rel_type
-        """, {"qnames": design_qnames})
+        """,
+            {"qnames": design_qnames},
+        )
         for record in result2:
             _add(record["d"])
             _add(record["dep"])
-            edges.append({
-                "source": record["d"].get("qualified_name", ""),
-                "target": record["dep"].get("qualified_name", ""),
-                "type": record["rel_type"],
-            })
+            edges.append(
+                {
+                    "source": record["d"].get("qualified_name", ""),
+                    "target": record["dep"].get("qualified_name", ""),
+                    "type": record["rel_type"],
+                }
+            )
 
     return {"nodes": nodes, "edges": edges}
