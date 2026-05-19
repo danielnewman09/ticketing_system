@@ -10,11 +10,9 @@ from frontend.theme import (
     STATUS_COLORS,
     CLS_SECTION_HEADER,
     CLS_SECTION_SUBHEADER,
-    add_cytoscape_cdn,
-    cytoscape_base_styles,
     apply_theme,
 )
-from frontend.widgets import breadcrumb, render_cytoscape_graph
+from frontend.widgets import breadcrumb, GraphConfig, render_cytoscape_graph
 from frontend.layout import page_layout
 from frontend.data.ontology import (
     fetch_neighbourhood_graph_data,
@@ -28,9 +26,6 @@ from frontend.data.ontology import (
 async def node_detail_page(node_id: int):
     apply_theme()
     page_layout("Node Detail")
-
-    add_cytoscape_cdn()
-    base_styles = cytoscape_base_styles(size="small")
 
     @ui.refreshable
     async def content():
@@ -173,24 +168,27 @@ async def node_detail_page(node_id: int):
                 node["qualified_name"],
             )
             if graph["nodes"]:
-                await render_cytoscape_graph(
-                    graph["nodes"] + graph["edges"],
-                    base_styles,
+                config = GraphConfig(
                     container_id="node-cy-container",
                     cy_var="_nodeCy",
+                    size="small",
                     animate=False,
                     extra_styles=center_style,
+                    on_node_dblclick=handle_node_dblclick,
+                )
+                await render_cytoscape_graph(
+                    graph["nodes"] + graph["edges"],
+                    config,
                 )
 
     async def handle_node_dblclick(e):
-        qn = e.args.get("qualified_name", "")
+        args = e.args
+        qn = args.get("qualified_name", "")
         if not qn:
             return
         nid = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
         if nid:
             ui.navigate.to(f"/node/{nid}")
-
-    ui.on("node_dblclick", handle_node_dblclick)
 
     await content()
 
