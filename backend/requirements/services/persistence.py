@@ -47,6 +47,8 @@ class DesignResult:
     triples_skipped: int = 0
     links_applied: int = 0
     links_skipped: int = 0
+    node_links_applied: int = 0
+    node_links_skipped: int = 0
     qname_to_node: dict[str, OntologyNode] = field(default_factory=dict)
 
 
@@ -511,6 +513,33 @@ def persist_design(
             result.links_applied += 1
         else:
             result.links_skipped += 1
+
+    # --- Node links (derived from triple links) ---
+    # Every node that appears in a triple linked to a requirement is also
+    # linked directly to that requirement via the M2M node table.
+    for link in design.requirement_links:
+        triple = None
+        if 0 <= link.triple_index < len(saved_triples):
+            triple = saved_triples[link.triple_index]
+
+        if not triple:
+            continue
+
+        if link.requirement_type == "hlr":
+            req = session.query(HighLevelRequirement).filter_by(id=link.requirement_id).first()
+        else:
+            req = session.query(LowLevelRequirement).filter_by(id=link.requirement_id).first()
+
+        if not req:
+            result.node_links_skipped += 1
+            continue
+
+        existing_node_ids = {n.id for n in req.nodes}
+        for node in [triple.subject, triple.object]:
+            if node.id not in existing_node_ids:
+                req.nodes.append(node)
+                existing_node_ids.add(node.id)
+                result.node_links_applied += 1
 
     session.flush()
 
