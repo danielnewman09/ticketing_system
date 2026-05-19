@@ -1,0 +1,5 @@
+{
+  "packages": ["./pi-extension"],
+  "skills": ["./pi-extension/skills/neo4j-dashboard"],
+  "extensions": ["./pi-extension/extension/index.ts"]
+}

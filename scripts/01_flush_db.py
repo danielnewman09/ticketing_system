@@ -30,7 +30,7 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
     from backend.db.base import Base
     from backend.db.models import Predicate
     from backend.db.vec import ensure_vec_table
-    from backend.db.neo4j_sync import clear_design_graph
+    from backend.db.neo4j.sync import clear_design_graph
 
     init_db()
     engine = get_main_engine()

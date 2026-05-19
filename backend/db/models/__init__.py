@@ -64,6 +64,11 @@ from backend.db.models.codebase import (
     Parameter,
     SymbolRef,
 )
+from backend.db.models.tasks import (
+    Task,
+    TaskDesignNode,
+    TaskVerification,
+)
 
 __all__ = [
     # Associations
@@ -124,4 +129,8 @@ __all__ = [
     "Namespace",
     "Parameter",
     "SymbolRef",
+    # Tasks
+    "Task",
+    "TaskDesignNode",
+    "TaskVerification",
 ]

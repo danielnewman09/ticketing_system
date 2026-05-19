@@ -330,7 +330,7 @@ def augment_design_for_unresolved(
             new_triples = session.query(OntologyTriple).filter(
                 OntologyTriple.object_id.in_([n.id for n in created_nodes.values()])
             ).all()
-            from backend.db.neo4j_sync import try_sync_design_nodes_and_triples
+            from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
             try_sync_design_nodes_and_triples(
                 list(created_nodes.values()), new_triples,
             )
@@ -375,7 +375,7 @@ def persist_decomposition(
 
     # -- Neo4j dual-write (best-effort) --
     try:
-        from backend.db.neo4j_sync import try_sync_requirement
+        from backend.db.neo4j.sync import try_sync_requirement
         for llr_obj in hlr.low_level_requirements:
             try_sync_requirement(llr_obj, "LLR", hlr=hlr)
     except Exception:
@@ -479,7 +479,7 @@ def persist_design(
 
     # -- Neo4j dual-write (best-effort) --
     try:
-        from backend.db.neo4j_sync import try_sync_design_nodes_and_triples
+        from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
         created_nodes = [
             qname_to_node[nd.qualified_name]
             for nd in design.nodes

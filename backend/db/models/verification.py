@@ -12,6 +12,7 @@ from backend.db.base import Base
 if TYPE_CHECKING:
     from backend.db.models.ontology import OntologyNode
     from backend.db.models.requirements import LowLevelRequirement
+    from backend.db.models.tasks import TaskVerification
 
 VERIFICATION_METHODS = ["automated", "review", "inspection"]
 
@@ -99,3 +100,8 @@ class VerificationAction(Base):
 
     def __repr__(self):
         return self.description[:80]
+
+
+VerificationMethod.task_links = relationship(
+    "TaskVerification", back_populates="verification_method",
+)
