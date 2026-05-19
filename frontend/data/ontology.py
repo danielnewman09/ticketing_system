@@ -1,4 +1,10 @@
-"""Ontology data, Neo4j graph queries, and node detail."""
+"""Ontology data, Neo4j graph queries, and node detail.
+
+Architecture:
+- Stage 1: Neo4j queries return bare topology (nodes + edges, no requirement data).
+- Stage 2: SQLite enrichment adds requirement tags to design nodes.
+- The two stages are composed in the data-layer functions below.
+"""
 
 import logging
 
@@ -41,18 +47,23 @@ def fetch_ontology_graph_data(
     search: str | None = None,
     component_id: int | None = None,
     source_filter: str | None = None,
+    requirement_tags: str = "hlr",
 ) -> dict:
-    """Fetch graph from Neo4j for Cytoscape.js rendering.
+    """Fetch graph data for Cytoscape.js rendering.
 
-    *layer* is ``"design"``, ``"codebase"``, or ``"dependency"``.
-    Delegates to the unified ``fetch_graph()`` backend, which filters
-    by the appropriate Neo4j labels.
+    Stage 1: Neo4j topology (no requirement data).
+    Stage 2: SQLite enrichment (optional HLR tags on design nodes).
+
+    Args:
+        layer: "design", "codebase", or "dependency".
+        requirement_tags: "none" for bare topology, "hlr" for HLR badges.
     """
     try:
         from backend.db.neo4j.queries import fetch_design_graph
         from backend.db.neo4j.queries import fetch_dependency_compounds
         from backend.db.neo4j.queries import fetch_codebase_compounds
         from backend.graph import format_cytoscape_graph
+        from backend.requirements.services.graph_tags import enrich_with_requirement_tags
 
         if layer == "design":
             raw = fetch_design_graph(kind_filter, search, component_id)
@@ -60,20 +71,44 @@ def fetch_ontology_graph_data(
             raw = fetch_dependency_compounds(search, source_filter)
         else:
             raw = fetch_codebase_compounds(search)
-        return format_cytoscape_graph(raw)
+
+        formatted = format_cytoscape_graph(raw)
+
+        # Enrich with requirement tags (design layer only)
+        if layer == "design" and requirement_tags != "none":
+            enrich_with_requirement_tags(formatted["nodes"], mode=requirement_tags)
+
+        return formatted
     except Exception:
         log.warning("Neo4j query failed — returning empty graph", exc_info=True)
         return {"nodes": [], "edges": []}
 
 
-def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
-    """Fetch the ontology subgraph around an HLR for Cytoscape.js."""
+def fetch_hlr_graph_data(
+    hlr_id: int,
+    component_id: int | None = None,
+    requirement_tags: str = "hlr",
+) -> dict:
+    """Fetch the ontology subgraph around an HLR for Cytoscape.js.
+
+    Stage 1: Neo4j fetches seed + 1-hop design nodes.
+    Stage 2: SQLite tags the directly-linked seed nodes.
+
+    Args:
+        requirement_tags: "none" for bare topology, "hlr" for HLR highlight + badges.
+    """
     try:
         from backend.db.neo4j.queries import fetch_hlr_subgraph
         from backend.graph import format_cytoscape_graph
+        from backend.requirements.services.graph_tags import tag_direct_nodes_only
 
         raw = fetch_hlr_subgraph(hlr_id, component_id)
-        return format_cytoscape_graph(raw)
+        formatted = format_cytoscape_graph(raw)
+
+        if requirement_tags != "none":
+            tag_direct_nodes_only(formatted["nodes"], hlr_id)
+
+        return formatted
     except Exception:
         log.warning("Neo4j HLR subgraph query failed — returning empty graph", exc_info=True)
         return {"nodes": [], "edges": []}
@@ -93,7 +128,12 @@ def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
 
 
 def fetch_graph_node_detail(qualified_name: str) -> dict | None:
-    """Fetch node detail from Neo4j (properties + relationships + requirements)."""
+    """Fetch node detail from Neo4j (properties + relationships + members).
+
+    Requirements are no longer sourced from Neo4j labels.
+    Use fetch_node_detail_full() for the complete picture including
+    requirement tags from SQLite.
+    """
     try:
         from backend.db.neo4j.queries import fetch_node_detail
 
@@ -134,12 +174,18 @@ def fetch_node_detail_full(node_id: int) -> dict | None:
             "is_final": node.is_final,
         }
 
+        # Fetch requirement tags from SQLite M2M (not from Neo4j)
+        requirements = [
+            {"id": hlr.id, "type": "HLR", "description": hlr.description[:80]}
+            for hlr in node.high_level_requirements
+        ]
+
     # Fetch Neo4j relationships if available
     neo4j_data = None
     if node_data["qualified_name"]:
         neo4j_data = fetch_graph_node_detail(node_data["qualified_name"])
 
-    return {"node": node_data, "neo4j": neo4j_data}
+    return {"node": node_data, "neo4j": neo4j_data, "requirements": requirements}
 
 
 def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
