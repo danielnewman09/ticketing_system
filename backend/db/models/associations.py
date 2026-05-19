@@ -77,3 +77,41 @@ tickets_languages = Table(
     Column("ticket_id", Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False),
     Column("language_id", Integer, ForeignKey("languages.id", ondelete="CASCADE"), nullable=False),
 )
+
+# HLR ↔ OntologyNode
+high_level_requirements_nodes = Table(
+    "high_level_requirements_nodes",
+    Base.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "highlevelrequirement_id",
+        Integer,
+        ForeignKey("high_level_requirements.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "ontologynode_id",
+        Integer,
+        ForeignKey("ontology_nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+)
+
+# LLR ↔ OntologyNode
+low_level_requirements_nodes = Table(
+    "low_level_requirements_nodes",
+    Base.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "lowlevelrequirement_id",
+        Integer,
+        ForeignKey("low_level_requirements.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "ontologynode_id",
+        Integer,
+        ForeignKey("ontology_nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+)

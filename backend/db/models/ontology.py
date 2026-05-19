@@ -8,9 +8,11 @@ from sqlalchemy import ForeignKey, Integer, String, Text, Boolean, UniqueConstra
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
+from backend.db.models.associations import high_level_requirements_nodes, low_level_requirements_nodes
 
 if TYPE_CHECKING:
     from backend.db.models.components import Component
+    from backend.db.models.requirements import HighLevelRequirement, LowLevelRequirement
 
 # ---------------------------------------------------------------------------
 # Node kinds — language-agnostic base kinds
@@ -215,6 +217,12 @@ class OntologyNode(Base):
     task_links: Mapped[list["TaskDesignNode"]] = relationship(
         "TaskDesignNode",
         back_populates="ontology_node",
+    )
+    high_level_requirements: Mapped[list["HighLevelRequirement"]] = relationship(
+        "HighLevelRequirement", secondary=high_level_requirements_nodes, back_populates="nodes"
+    )
+    low_level_requirements: Mapped[list["LowLevelRequirement"]] = relationship(
+        "LowLevelRequirement", secondary=low_level_requirements_nodes, back_populates="nodes"
     )
 
     def __repr__(self):

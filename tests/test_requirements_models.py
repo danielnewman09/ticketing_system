@@ -470,3 +470,95 @@ class TestFormatHlrsForPrompt:
         hlrs = [{"id": 1, "description": "HLR one"}]
         result = format_hlrs_for_prompt(hlrs)
         assert result == "HLR 1: HLR one"
+
+
+# ---------------------------------------------------------------------------
+# HLR ↔ OntologyNode M2M relationship
+# ---------------------------------------------------------------------------
+
+
+class TestHLRNodesRelationship:
+    """Tests for the HLR → OntologyNode M2M relationship."""
+
+    def test_hlr_has_empty_nodes_by_default(self, seeded_session):
+        hlr = seeded_session.query(HighLevelRequirement).first()
+        assert hlr.nodes == []
+
+    def test_add_node_to_hlr(self, seeded_session):
+        from backend.db.models.ontology import OntologyNode
+        hlr = seeded_session.query(HighLevelRequirement).first()
+        node = OntologyNode(kind="class", name="Calculator", qualified_name="calc::Calculator")
+        seeded_session.add(node)
+        seeded_session.flush()
+        hlr.nodes.append(node)
+        seeded_session.flush()
+        assert node in hlr.nodes
+        assert hlr in node.high_level_requirements
+
+    def test_remove_node_from_hlr(self, seeded_session):
+        from backend.db.models.ontology import OntologyNode
+        hlr = seeded_session.query(HighLevelRequirement).first()
+        node = OntologyNode(kind="class", name="Widget", qualified_name="calc::Widget")
+        seeded_session.add(node)
+        seeded_session.flush()
+        hlr.nodes.append(node)
+        seeded_session.flush()
+        hlr.nodes.remove(node)
+        seeded_session.flush()
+        assert node not in hlr.nodes
+
+    def test_hlr_nodes_distinct_from_triples(self, seeded_session):
+        """HLR.nodes and HLR.triples are independent collections."""
+        from backend.db.models.ontology import OntologyNode, OntologyTriple, Predicate
+        hlr = seeded_session.query(HighLevelRequirement).first()
+
+        sub = OntologyNode(kind="class", name="Sub", qualified_name="ns::Sub")
+        obj = OntologyNode(kind="class", name="Obj", qualified_name="ns::Obj")
+        seeded_session.add_all([sub, obj])
+        seeded_session.flush()
+
+        pred = seeded_session.query(Predicate).filter_by(name="composes").first()
+        triple = OntologyTriple(subject_id=sub.id, predicate_id=pred.id, object_id=obj.id)
+        seeded_session.add(triple)
+        seeded_session.flush()
+
+        # Link the triple
+        hlr.triples.append(triple)
+        # Also link both nodes directly
+        hlr.nodes.extend([sub, obj])
+        seeded_session.flush()
+
+        assert triple in hlr.triples
+        assert sub in hlr.nodes
+        assert obj in hlr.nodes
+        # They are independent: removing a node doesn't remove a triple
+        hlr.nodes.remove(sub)
+        seeded_session.flush()
+        assert triple in hlr.triples
+        assert sub not in hlr.nodes
+
+
+class TestLLRNodesRelationship:
+    """Tests for the LLR → OntologyNode M2M relationship."""
+
+    def test_llr_has_empty_nodes_by_default(self, seeded_session):
+        hlr = seeded_session.query(HighLevelRequirement).first()
+        llr = LowLevelRequirement(description="LLR test", high_level_requirement=hlr)
+        seeded_session.add(llr)
+        seeded_session.flush()
+        assert llr.nodes == []
+
+    def test_add_node_to_llr(self, seeded_session):
+        from backend.db.models.ontology import OntologyNode
+        hlr = seeded_session.query(HighLevelRequirement).first()
+        llr = LowLevelRequirement(description="LLR", high_level_requirement=hlr)
+        seeded_session.add(llr)
+        seeded_session.flush()
+
+        node = OntologyNode(kind="method", name="doThing", qualified_name="calc::doThing")
+        seeded_session.add(node)
+        seeded_session.flush()
+        llr.nodes.append(node)
+        seeded_session.flush()
+        assert node in llr.nodes
+        assert llr in node.low_level_requirements
