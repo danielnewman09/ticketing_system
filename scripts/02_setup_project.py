@@ -17,14 +17,13 @@ Requires ANTHROPIC_API_KEY in the environment.
 import os
 import sys
 
-from services.dependencies import get_neo4j
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+from services.dependencies import get_neo4j, init_neo4j, close_neo4j
 from backend.db import init_db, get_session, get_or_create
 from backend.db.models import Component, HighLevelRequirement
 
@@ -153,8 +152,12 @@ def assign_components():
 
 
 if __name__ == "__main__":
-    init_db()
-    load_stdlib()
-    assign_components()
-    print("Setup complete. Review components in the dashboard:")
-    print("  http://127.0.0.1:8081/components")
+    init_neo4j()
+    try:
+        init_db()
+        load_stdlib()
+        assign_components()
+        print("Setup complete. Review components in the dashboard:")
+        print("  http://127.0.0.1:8081/components")
+    finally:
+        close_neo4j()

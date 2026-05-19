@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from services.dependencies import init_neo4j, close_neo4j
 from backend.db import init_db, get_session
 from backend.db.models import HighLevelRequirement, LowLevelRequirement
 from backend.db.models.requirements import format_hlrs_for_prompt
@@ -134,4 +135,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    init_neo4j()
+    try:
+        main()
+    finally:
+        close_neo4j()

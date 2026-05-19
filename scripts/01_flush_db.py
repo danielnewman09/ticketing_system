@@ -15,6 +15,10 @@ import sys
 # Allow running directly from the scripts/ directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
 
@@ -26,11 +30,14 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
         clear_logs: If True, clear and recreate the logs directory.
         clear_project_dir: If non-empty, remove this directory.
     """
+    from services.dependencies import init_neo4j, close_neo4j
     from backend.db import init_db, get_session, get_main_engine
     from backend.db.base import Base
     from backend.db.models import Predicate
     from backend.db.vec import ensure_vec_table
     from backend.db.neo4j.sync import clear_design_graph
+
+    init_neo4j()
 
     init_db()
     engine = get_main_engine()
@@ -43,6 +50,8 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
 
     # Clear Neo4j design graph (preserves cppreference data)
     clear_design_graph()
+
+    close_neo4j()
 
     if clear_logs:
         if os.path.exists(LOGS_DIR):

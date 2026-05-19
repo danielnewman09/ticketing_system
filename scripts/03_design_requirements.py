@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from services.dependencies import init_neo4j, close_neo4j
 from backend.db import init_db, get_session
 from backend.db.models import (
     HighLevelRequirement,
@@ -383,8 +384,12 @@ def step_summary():
 
 
 if __name__ == "__main__":
-    init_db()
-    step_decompose()
-    step_design()
-    step_verify()
-    step_summary()
+    init_neo4j()
+    try:
+        init_db()
+        step_decompose()
+        step_design()
+        step_verify()
+        step_summary()
+    finally:
+        close_neo4j()
