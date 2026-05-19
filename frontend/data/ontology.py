@@ -41,6 +41,27 @@ def fetch_ontology_data():
         }
 
 
+def filter_cross_layer_elements(
+    nodes: list[dict], edges: list[dict]
+) -> tuple[list[dict], list[dict]]:
+    """Remove cross-layer nodes and edges (dependency and as-built).
+
+    Used when include_dependencies=False to return a design-only graph.
+    """
+    cross_layer_ids = {
+        n["data"]["id"]
+        for n in nodes
+        if n["data"].get("layer") in ("dependency", "as-built")
+    }
+    filtered_nodes = [n for n in nodes if n["data"]["id"] not in cross_layer_ids]
+    filtered_edges = [
+        e for e in edges
+        if e["data"].get("source") not in cross_layer_ids
+        and e["data"].get("target") not in cross_layer_ids
+    ]
+    return filtered_nodes, filtered_edges
+
+
 def fetch_ontology_graph_data(
     layer: str = "design",
     kind_filter: str | None = None,
@@ -48,6 +69,7 @@ def fetch_ontology_graph_data(
     component_id: int | None = None,
     source_filter: str | None = None,
     requirement_tags: str = "hlr",
+    include_dependencies: bool = True,
 ) -> dict:
     """Fetch graph data for Cytoscape.js rendering.
 
@@ -57,6 +79,8 @@ def fetch_ontology_graph_data(
     Args:
         layer: "design", "codebase", or "dependency".
         requirement_tags: "none" for bare topology, "hlr" for HLR badges.
+        include_dependencies: If False, remove dependency/as-built nodes and
+            cross-layer edges from the result (design-only graph).
     """
     try:
         from backend.db.neo4j.queries import fetch_design_graph
@@ -77,6 +101,12 @@ def fetch_ontology_graph_data(
         # Enrich with requirement tags (design layer only)
         if layer == "design" and requirement_tags != "none":
             enrich_with_requirement_tags(formatted["nodes"], mode=requirement_tags)
+
+        # Filter out cross-layer nodes when toggle is off
+        if not include_dependencies:
+            formatted["nodes"], formatted["edges"] = filter_cross_layer_elements(
+                formatted["nodes"], formatted["edges"]
+            )
 
         return formatted
     except Exception:
