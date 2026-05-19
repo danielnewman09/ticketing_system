@@ -13,8 +13,8 @@ Architecture
   renders it into the Cytoscape container. Called on initial load and on
   filter/search changes.
 
-Inter-page events (``node_selected``, ``node_dblclick``) are emitted by
-Cytoscape via JavaScript and received through ``ui.on()`` listeners.
+Inter-page events are handled through GraphConfig callbacks
+(on_node_tap, on_node_dblclick) wired up by render_cytoscape_graph().
 """
 
 import asyncio
@@ -23,12 +23,11 @@ from nicegui import ui
 
 from frontend.theme import (
     BACKGROUNDS,
-    add_cytoscape_cdn,
-    cytoscape_base_styles,
     apply_theme,
 )
 from frontend.layout import page_layout
 from frontend.widgets import (
+    GraphConfig,
     GraphState,
     render_cytoscape_graph,
     render_graph_detail_panel,
@@ -54,10 +53,6 @@ async def ontology_graph_page():
 
     # -- Mutable state (passed by reference to @ui.refreshable widgets) --
     state = GraphState()
-
-    # -- Cytoscape setup --
-    add_cytoscape_cdn()
-    base_styles = cytoscape_base_styles(size="large")
 
     # -- Data-loading and event-handling closures --
 
@@ -85,14 +80,16 @@ async def ontology_graph_page():
             search=search or None,
             source_filter=state.source_filter,
             requirement_tags=requirement_tags,
+            include_dependencies=state.show_dependencies,
         )
-        await render_cytoscape_graph(
-            data["nodes"] + data["edges"],
-            base_styles,
-            container_id="cy-container",
-            cy_var="_cy",
+
+        config = GraphConfig(
+            on_node_tap=handle_node_tap,
+            on_node_dblclick=handle_node_dblclick,
         )
-        # Render HLR badges on design nodes
+        await render_cytoscape_graph(data["nodes"] + data["edges"], config)
+
+        # Overlay HLR requirement badges on design nodes
         if layer == "design" and state.show_requirement_tags:
             await ui.run_javascript('''
                 if (window._cy) {
@@ -100,7 +97,9 @@ async def ontology_graph_page():
                         const reqs = node.data('requirements');
                         if (reqs && reqs.length > 0) {
                             const badges = reqs.map(r => '[' + r.type + ' ' + r.id + ']').join(' ');
-                            node.data('label', node.data('name') + '\n' + badges);
+                            // Get current label (may already have source/as-built badge)
+                            const baseName = node.data('name');
+                            node.data('label', baseName + '\\n' + badges);
                             node.addClass('has-requirements');
                         }
                     });
@@ -129,12 +128,17 @@ async def ontology_graph_page():
         state.show_requirement_tags = e.value
         await load_graph()
 
-    async def handle_node_selected(e):
+    async def on_toggle_deps(e):
+        state.show_dependencies = e.value
+        await load_graph()
+
+    async def handle_node_tap(e):
         """On node click/tap: fetch detail and refresh the side panel."""
-        qn = e.args.get("qualified_name", "")
+        args = e.args
+        qn = args.get("qualified_name", "")
         if not qn:
             return
-        layer = e.args.get("layer", "")
+        layer = args.get("layer", "")
         detail = await asyncio.to_thread(fetch_graph_node_detail, qn)
         # Design-layer nodes also carry dependency cross-links
         if detail and layer == "design":
@@ -146,7 +150,8 @@ async def ontology_graph_page():
 
     async def handle_node_dblclick(e):
         """On node double-click: navigate to the full node detail page."""
-        qn = e.args.get("qualified_name", "")
+        args = e.args
+        qn = args.get("qualified_name", "")
         if not qn:
             return
         node_id = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
@@ -170,6 +175,7 @@ async def ontology_graph_page():
         on_layout_change=on_layout_change,
         on_fit=lambda: ui.run_javascript("if(window._cy) window._cy.fit()"),
         on_toggle_req_tags=on_toggle_req_tags,
+        on_toggle_deps=on_toggle_deps,
     )
 
     # Legend
@@ -191,10 +197,6 @@ async def ontology_graph_page():
 
         # Detail sidebar (refreshable — updates on node selection)
         render_graph_detail_panel(state)
-
-    # -- Cytoscape event listeners --
-    ui.on("node_selected", handle_node_selected)
-    ui.on("node_dblclick", handle_node_dblclick)
 
     # -- Initial data load --
     await load_graph()
