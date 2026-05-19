@@ -7,6 +7,7 @@ from nicegui import ui
 
 from frontend.theme import (
     VERIFICATION_COLORS,
+    KIND_COLORS,
     CLS_SECTION_HEADER,
     CLS_SECTION_SUBHEADER,
     CLS_BREADCRUMB_LINK,
@@ -72,6 +73,98 @@ def render_detail_section(
                     ui.badge(badge_text, color=color).classes("text-xs")
             else:
                 ui.label(label_text).classes(label_cls)
+
+
+@ui.refreshable
+def render_graph_detail_panel(selected_node: dict):
+    """Render the ontology-graph node detail panel.
+
+    *selected_node* is a mutable dict with a ``"data"`` key that holds
+    node detail info (or ``None`` when no node is selected). Call
+    ``render_graph_detail_panel.refresh()`` after updating
+    ``selected_node["data"]``.
+    """
+    with ui.card().classes("w-80 ml-2 overflow-auto").style("max-height: 100%"):
+        d = selected_node["data"]
+        if not d:
+            ui.label("Click a node to see details").classes("text-gray-400 text-sm")
+            return
+
+        props = d["properties"]
+        kind = props.get("kind", "")
+        color = KIND_COLORS.get(kind, "#666")
+
+        ui.label(props.get("name", "")).classes("text-lg font-bold")
+        ui.label(props.get("qualified_name", "")).classes("text-xs text-gray-400 break-all")
+        with ui.row().classes("gap-2 mt-1"):
+            ui.badge(kind, color="grey").style(f"background:{color} !important")
+            if props.get("visibility"):
+                ui.badge(props["visibility"], color="grey")
+
+        if props.get("description"):
+            ui.separator().classes("my-2")
+            ui.label(props["description"]).classes("text-sm")
+
+        # Outgoing relationships
+        render_detail_section(
+            "Outgoing", d.get("outgoing") or [],
+            badge_key="rel", label_key="target_name", label_fallback_key="target_qn",
+        )
+
+        # Incoming relationships
+        render_detail_section(
+            "Incoming", d.get("incoming") or [],
+            badge_key="rel", label_key="source_name", label_fallback_key="source_qn",
+            badge_first=False,
+        )
+
+        # Implemented by
+        render_detail_section(
+            "Implemented By", d.get("implemented_by") or [],
+            label_key="qualified_name", label_fallback_key="name",
+            label_cls="text-xs text-blue-300",
+        )
+
+        # Requirements
+        render_detail_section(
+            "Traced Requirements", d.get("requirements") or [],
+            badge_key="type",
+            badge_color_fn=lambda r: "orange" if r["type"] == "HLR" else "amber",
+            label_key="name",
+        )
+
+        # Dependency links (shown for design nodes)
+        dep_links = d.get("dependency_links")
+        if dep_links:
+            deps = [dep.get("data", dep) for dep in dep_links]
+            render_detail_section(
+                "Dependencies", deps,
+                badge_key="source", badge_color="teal",
+                label_key="qualified_name", label_fallback_key="label",
+                label_cls="text-xs text-teal-300",
+            )
+
+        # Design links (shown for dependency nodes)
+        render_detail_section(
+            "Referenced by Design", d.get("design_links") or [],
+            badge_key="rel", label_key="design_name", label_fallback_key="design_qn",
+            label_cls="text-xs text-blue-300",
+        )
+
+        # Members (shown for dependency compound nodes)
+        if d.get("members") and props.get("layer") == "dependency":
+            render_detail_section(
+                "Members", d["members"],
+                badge_key="kind", label_key="name",
+                max_items=20,
+            )
+
+        # Source library (shown for dependency nodes)
+        if props.get("source"):
+            ui.separator().classes("my-2")
+            with ui.row().classes("items-center gap-1"):
+                ui.label("Source:").classes("text-xs text-gray-400")
+                ui.badge(props["source"], color="teal").classes("text-xs")
 
 
 def breadcrumb(*parts: tuple[str, str | None]):
