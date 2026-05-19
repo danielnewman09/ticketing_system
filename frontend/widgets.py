@@ -167,6 +167,53 @@ def render_graph_detail_panel(selected_node: dict):
                 ui.badge(props["source"], color="teal").classes("text-xs")
 
 
+def render_ontology_graph_controls(
+    *,
+    on_layer_change: callable,
+    on_kind_change: callable,
+    on_search: callable,
+    on_layout_change: callable,
+    on_fit: callable,
+):
+    """Render the ontology-graph toolbar: layer, kind, search, layout, and fit.
+
+    All callbacks receive a NiceGUI event object (``e``) except *on_fit*,
+    which is called with no arguments.
+    """
+    with ui.row().classes("w-full gap-4 px-2 mb-2 items-end"):
+        ui.select(
+            {"design": "Design Intent", "codebase": "As-Built Codebase", "dependency": "Dependencies"},
+            value="design",
+            label="Layer",
+            on_change=on_layer_change,
+        ).classes("w-44")
+        kind_options = ["all"] + sorted(KIND_COLORS.keys())
+        ui.select(kind_options, value="all", label="Kind", on_change=on_kind_change).classes("w-36")
+        ui.input("Search", on_change=on_search).classes("w-48")
+        ui.select(
+            ["fcose", "breadthfirst", "circle", "grid", "concentric"],
+            value="fcose",
+            label="Layout",
+            on_change=on_layout_change,
+        ).classes("w-36")
+        ui.button("Fit", on_click=on_fit).props("flat dense")
+
+
+def render_ontology_graph_legend():
+    """Render the ontology-graph legend showing kind colors and special node types."""
+    with ui.row().classes("px-2 mb-2 gap-3 flex-wrap"):
+        for kind, color in sorted(KIND_COLORS.items()):
+            with ui.row().classes("items-center gap-1"):
+                ui.html(f'<div style="width:10px;height:10px;border-radius:50%;background:{color}"></div>')
+                ui.label(kind).classes("text-xs")
+        with ui.row().classes("items-center gap-1"):
+            ui.html('<div style="width:10px;height:10px;transform:rotate(45deg);background:#e67e22"></div>')
+            ui.label("Requirement").classes("text-xs")
+        with ui.row().classes("items-center gap-1"):
+            ui.html('<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>')
+            ui.label("Dependency").classes("text-xs")
+
+
 def breadcrumb(*parts: tuple[str, str | None]):
     """Render a breadcrumb trail.
 

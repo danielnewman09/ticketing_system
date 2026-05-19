@@ -5,14 +5,18 @@ import asyncio
 from nicegui import ui
 
 from frontend.theme import (
-    KIND_COLORS,
     BACKGROUNDS,
     add_cytoscape_cdn,
     cytoscape_base_styles,
     apply_theme,
 )
 from frontend.layout import page_layout
-from frontend.widgets import render_cytoscape_graph, render_graph_detail_panel
+from frontend.widgets import (
+    render_cytoscape_graph,
+    render_graph_detail_panel,
+    render_ontology_graph_controls,
+    render_ontology_graph_legend,
+)
 from frontend.data.ontology import (
     fetch_ontology_graph_data,
     fetch_graph_node_detail,
@@ -113,36 +117,16 @@ async def ontology_graph_page():
         ui.link("← Table View", "/ontology").classes("text-sm")
 
     # Controls
-    with ui.row().classes("w-full gap-4 px-2 mb-2 items-end"):
-        ui.select(
-            {"design": "Design Intent", "codebase": "As-Built Codebase", "dependency": "Dependencies"},
-            value="design",
-            label="Layer",
-            on_change=on_layer_change,
-        ).classes("w-44")
-        kind_options = ["all"] + sorted(KIND_COLORS.keys())
-        ui.select(kind_options, value="all", label="Kind", on_change=on_kind_change).classes("w-36")
-        ui.input("Search", on_change=on_search).classes("w-48")
-        ui.select(
-            ["fcose", "breadthfirst", "circle", "grid", "concentric"],
-            value="fcose",
-            label="Layout",
-            on_change=on_layout_change,
-        ).classes("w-36")
-        ui.button("Fit", on_click=lambda: ui.run_javascript("if(window._cy) window._cy.fit()")).props("flat dense")
+    render_ontology_graph_controls(
+        on_layer_change=on_layer_change,
+        on_kind_change=on_kind_change,
+        on_search=on_search,
+        on_layout_change=on_layout_change,
+        on_fit=lambda: ui.run_javascript("if(window._cy) window._cy.fit()"),
+    )
 
     # Legend
-    with ui.row().classes("px-2 mb-2 gap-3 flex-wrap"):
-        for kind, color in sorted(KIND_COLORS.items()):
-            with ui.row().classes("items-center gap-1"):
-                ui.html(f'<div style="width:10px;height:10px;border-radius:50%;background:{color}"></div>')
-                ui.label(kind).classes("text-xs")
-        with ui.row().classes("items-center gap-1"):
-            ui.html('<div style="width:10px;height:10px;transform:rotate(45deg);background:#e67e22"></div>')
-            ui.label("Requirement").classes("text-xs")
-        with ui.row().classes("items-center gap-1"):
-            ui.html('<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>')
-            ui.label("Dependency").classes("text-xs")
+    render_ontology_graph_legend()
 
     # Main content: graph + detail panel
     with ui.row().classes("w-full gap-0 px-2").style("height: calc(100vh - 240px); min-height: 400px"):
