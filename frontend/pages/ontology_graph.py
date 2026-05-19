@@ -12,6 +12,7 @@ from frontend.theme import (
 )
 from frontend.layout import page_layout
 from frontend.widgets import (
+    GraphState,
     render_cytoscape_graph,
     render_graph_detail_panel,
     render_ontology_graph_controls,
@@ -33,18 +34,14 @@ async def ontology_graph_page():
     page_layout("Ontology Graph")
 
     # -- State --
-    kind_filter = {"value": None}
-    search_text = {"value": ""}
-    selected_node = {"data": None}
-    graph_layer = {"value": "design"}  # "design", "codebase", or "dependency"
-    source_filter = {"value": None}  # dependency source filter (e.g. "eigen")
+    state = GraphState()
 
     add_cytoscape_cdn()
     base_styles = cytoscape_base_styles(size="large")
 
     async def load_graph():
-        layer = graph_layer["value"]
-        search = search_text["value"] or ""
+        layer = state.graph_layer
+        search = state.search_text or ""
 
         if layer == "dependency" and not search.strip():
             # Show placeholder — don't load the entire dependency graph
@@ -60,9 +57,9 @@ async def ontology_graph_page():
         data = await asyncio.to_thread(
             fetch_ontology_graph_data,
             layer=layer,
-            kind_filter=kind_filter["value"],
+            kind_filter=state.kind_filter,
             search=search or None,
-            source_filter=source_filter["value"],
+            source_filter=state.source_filter,
         )
         await render_cytoscape_graph(
             data["nodes"] + data["edges"],
@@ -72,15 +69,15 @@ async def ontology_graph_page():
         )
 
     async def on_layer_change(e):
-        graph_layer["value"] = e.value
+        state.graph_layer = e.value
         await load_graph()
 
     async def on_kind_change(e):
-        kind_filter["value"] = e.value if e.value != "all" else None
+        state.kind_filter = e.value if e.value != "all" else None
         await load_graph()
 
     async def on_search(e):
-        search_text["value"] = e.value
+        state.search_text = e.value
         await load_graph()
 
     async def on_layout_change(e):
@@ -100,7 +97,7 @@ async def ontology_graph_page():
             dep_links = await asyncio.to_thread(fetch_design_dependency_links_data, [qn])
             detail["dependency_links"] = dep_links.get("nodes", [])
         if detail:
-            selected_node["data"] = detail
+            state.selected_node_data = detail
             render_graph_detail_panel.refresh()
 
     async def handle_node_dblclick(e):
@@ -137,7 +134,7 @@ async def ontology_graph_page():
         cy._props["id"] = "cy-container"
 
         # Detail panel
-        render_graph_detail_panel(selected_node)
+        render_graph_detail_panel(state)
 
     # Listen for node selection events from Cytoscape
     ui.on("node_selected", handle_node_selected)

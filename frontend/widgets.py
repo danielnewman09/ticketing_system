@@ -1,6 +1,7 @@
 """Reusable UI rendering helpers. No DB access — work with plain dicts."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from nicegui import ui
@@ -76,16 +77,16 @@ def render_detail_section(
 
 
 @ui.refreshable
-def render_graph_detail_panel(selected_node: dict):
+def render_graph_detail_panel(state: "GraphState"):
     """Render the ontology-graph node detail panel.
 
-    *selected_node* is a mutable dict with a ``"data"`` key that holds
-    node detail info (or ``None`` when no node is selected). Call
+    *state* is a `GraphState` instance whose ``selected_node_data`` attribute
+    holds node detail info (or ``None`` when no node is selected). Call
     ``render_graph_detail_panel.refresh()`` after updating
-    ``selected_node["data"]``.
+    ``state.selected_node_data``.
     """
     with ui.card().classes("w-80 ml-2 overflow-auto").style("max-height: 100%"):
-        d = selected_node["data"]
+        d = state.selected_node_data
         if not d:
             ui.label("Click a node to see details").classes("text-gray-400 text-sm")
             return
@@ -165,6 +166,22 @@ def render_graph_detail_panel(selected_node: dict):
             with ui.row().classes("items-center gap-1"):
                 ui.label("Source:").classes("text-xs text-gray-400")
                 ui.badge(props["source"], color="teal").classes("text-xs")
+
+
+
+@dataclass
+class GraphState:
+    """Mutable state for the ontology-graph page.
+
+    Used as a single object passed by reference so that mutations
+    (e.g. ``state.graph_layer = "codebase"``) are visible to
+    refreshable UI functions like `render_graph_detail_panel`.
+    """
+    kind_filter: str | None = None
+    search_text: str = ""
+    selected_node_data: dict | None = None
+    graph_layer: str = "design"      # "design", "codebase", or "dependency"
+    source_filter: str | None = None  # dependency source filter (e.g. "eigen")
 
 
 def render_ontology_graph_controls(
