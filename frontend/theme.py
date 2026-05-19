@@ -58,6 +58,7 @@ KIND_COLORS = {
 EDGE_COLORS = {
     "INHERITS_FROM": "#9b59b6",
     "IMPLEMENTED_BY": "#3b82f6",
+    "CROSS_LAYER": "#009688",
     "default": "#555",
 }
 
@@ -280,6 +281,30 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'line-style': 'dotted',
                 'line-color': '{ec["IMPLEMENTED_BY"]}',
                 'target-arrow-color': '{ec["IMPLEMENTED_BY"]}',
+            }}
+        }},
+        {{
+            selector: 'node[has_source="true"]',
+            style: {{
+                'border-color': '#009688',
+                'border-style': 'dashed',
+                'border-width': 2,
+            }}
+        }},
+        {{
+            selector: 'node[is_as_built="true"]',
+            style: {{
+                'border-color': '#3b82f6',
+                'border-style': 'dotted',
+                'border-width': 2,
+            }}
+        }},
+        {{
+            selector: 'edge[is_cross_layer="true"]',
+            style: {{
+                'line-style': 'dashed',
+                'line-color': '{ec["CROSS_LAYER"]}',
+                'target-arrow-color': '{ec["CROSS_LAYER"]}',
             }}
         }},
         {{
