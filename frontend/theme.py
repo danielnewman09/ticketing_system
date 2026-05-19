@@ -58,7 +58,6 @@ KIND_COLORS = {
 EDGE_COLORS = {
     "INHERITS_FROM": "#9b59b6",
     "IMPLEMENTED_BY": "#3b82f6",
-    "TRACES_TO": "#e67e22",
     "default": "#555",
 }
 
@@ -67,15 +66,13 @@ STATUS_COLORS = {
     "rejected_stdlib": "#60a5fa",
     "rejected": "#6b7280",
     "selected": "#f1c40f",
-    "requirement": "#e67e22",
-    "requirement_border": "#d35400",
+    "hlr_highlight": "#e67e22",
     "namespace": "#1abc9c",
 }
 
 LAYER_STYLES = {
     "design": {"border_style": "dashed", "opacity": 1.0},
     "as-built": {"border_style": "solid", "opacity": 0.7},
-    "requirement": {"border_style": "solid", "opacity": 1.0, "shape": "diamond"},
 }
 
 # ---------------------------------------------------------------------------
@@ -119,12 +116,10 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
     """
     if size == "large":
         node_w, node_h, font, txt_max, txt_margin, pad_members = 40, 40, 10, 80, 4, 12
-        req_w, req_h = 35, 35
         edge_font = 8
         ns_font, ns_pad = 11, 20
     else:
         node_w, node_h, font, txt_max, txt_margin, pad_members = 30, 30, 9, 70, 3, 10
-        req_w, req_h = 30, 30
         edge_font = 7
         ns_font, ns_pad = 10, 16
 
@@ -243,22 +238,17 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
             }}
         }},
         {{
-            selector: 'node[layer="requirement"]',
+            selector: 'node[is_hlr_highlight = "true"]',
             style: {{
-                'label': 'data(label)',
-                'background-color': '{sc["requirement"]}',
-                'color': '#fff',
-                'text-valign': 'bottom',
-                'text-halign': 'center',
-                'font-size': '{font}px',
-                'shape': 'diamond',
-                'width': {req_w},
-                'height': {req_h},
-                'border-width': 2,
-                'border-color': '{sc["requirement_border"]}',
-                'text-wrap': 'ellipsis',
-                'text-max-width': '{txt_max}px',
-                'text-margin-y': {txt_margin},
+                'border-width': 3,
+                'border-color': '{sc["hlr_highlight"]}',
+                'border-style': 'solid',
+            }}
+        }},
+        {{
+            selector: 'node.has-requirements',
+            style: {{
+                'font-size': '{font + 1}px',
             }}
         }},
         {{
@@ -290,14 +280,6 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'line-style': 'dotted',
                 'line-color': '{ec["IMPLEMENTED_BY"]}',
                 'target-arrow-color': '{ec["IMPLEMENTED_BY"]}',
-            }}
-        }},
-        {{
-            selector: 'edge[label="TRACES_TO"]',
-            style: {{
-                'line-style': 'dashed',
-                'line-color': '{ec["TRACES_TO"]}',
-                'target-arrow-color': '{ec["TRACES_TO"]}',
             }}
         }},
         {{
