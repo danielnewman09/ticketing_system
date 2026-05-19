@@ -129,9 +129,17 @@ def fetch_dependency_compounds(
 
 
 def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
-    """Fetch compounds and their members as raw dicts."""
+    """Fetch compounds and their members as raw dicts.
+
+    *compound_ids* is the seed set from discovery.  The inheritance query
+    may expand it (adding base/derived Compound IDs), and the expanded
+    set is then used to fetch compounds + members.
+    """
     nodes: list[dict] = []
     edges: list[dict] = []
+
+    # Copy so the caller's set is never mutated.
+    expanded_ids: set[str] = set(compound_ids)
 
     # Inheritance edges
     result = session.run(
@@ -142,16 +150,16 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
         OPTIONAL MATCH (derived:Compound)-[r2:INHERITS_FROM]->(c)
         RETURN c, r1, base, r2, derived
     """,
-        {"cids": list(compound_ids)},
+        {"cids": list(expanded_ids)},
     )
 
     for record in result:
-        compound_ids.add(record["c"].element_id)
+        expanded_ids.add(record["c"].element_id)
         for role, rel_key in [("base", "r1"), ("derived", "r2")]:
             n = record[role]
             r = record[rel_key]
             if r is not None:
-                compound_ids.add(n.element_id)
+                expanded_ids.add(n.element_id)
                 edges.append(
                     {
                         "source": (
@@ -168,7 +176,8 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
                     }
                 )
 
-    # Compounds + members
+    # Compounds + members (using the expanded set that now includes
+    # base/derived compounds discovered from inheritance).
     result2 = session.run(
         """
         UNWIND $cids AS cid
@@ -176,7 +185,7 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
         OPTIONAL MATCH (c)-[r:CONTAINS]->(m:Member)
         RETURN c, r, m
     """,
-        {"cids": list(compound_ids)},
+        {"cids": list(expanded_ids)},
     )
 
     seen_node_ids: set[str] = set()
