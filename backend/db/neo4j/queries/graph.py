@@ -6,9 +6,9 @@ Each function returns {"nodes": [...], "edges": [...]} where:
 
 No Cytoscape formatting — that lives in backend/graph/.
 
-Requirement traces (HLR/LLR → Design) are sourced from **SQLite**, not
-Neo4j.  Requirements are relational data and belong in SQLite; only the
-design-intent and codebase layers live in Neo4j.
+Requirement traces are handled by the SQLite enrichment layer
+(backend/requirements/services/graph_tags.py), not by Neo4j queries.
+This module produces bare topology only; the caller enriches with tags.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ def fetch_design_graph(
 ) -> dict:
     """Fetch design-layer nodes and edges as raw dicts.
 
-    Returns {"nodes": [{"qualified_name", "kind", "name", ...}],
-             "edges": [{"source": qn, "target": qn, "type": rel_type}]}
+    Returns bare topology — no requirement data. The caller enriches
+    with HLR tags via enrich_with_requirement_tags().
     """
     log.info(
         "fetch_design_graph(kind=%s, search=%s, component_id=%s)",
@@ -112,156 +112,102 @@ def fetch_design_graph(
                 }
             )
 
-    # Requirement traces come from SQLite, not Neo4j.
-    _attach_traced_requirements(nodes, edges)
-
     return {"nodes": nodes, "edges": edges}
 
 
-def _attach_traced_requirements(nodes: list[dict], edges: list[dict]) -> None:
-    """Attach HLR/LLR requirement nodes to the graph using SQLite data.
-
-    Reads the HLR/LLR → OntologyTriple associations from SQLite, then
-    adds synthetic requirement nodes and TRACES_TO edges for any design
-    nodes already present in the graph.
-    """
-    node_qns = {n.get("qualified_name", "") for n in nodes if n.get("qualified_name")}
-    if not node_qns:
-        return
-
-    from backend.db import get_session
-    from backend.db.models import HighLevelRequirement, LowLevelRequirement
-
-    appended: set[str] = set()  # track (req_type, req_id) already added
-
-    with get_session() as session:
-        for hlr in session.query(HighLevelRequirement).all():
-            req_key = f"hlr:{hlr.id}"
-            linked_qns: set[str] = set()
-            for triple in hlr.triples:
-                subj_qn = triple.subject.qualified_name
-                obj_qn = triple.object.qualified_name
-                if subj_qn in node_qns:
-                    linked_qns.add(subj_qn)
-                if obj_qn in node_qns:
-                    linked_qns.add(obj_qn)
-            if linked_qns and req_key not in appended:
-                appended.add(req_key)
-                nodes.append(
-                    {
-                        "element_id": req_key,
-                        "qualified_name": "",
-                        "name": f"HLR {hlr.id}",
-                        "kind": "HLR",
-                        "title": hlr.description[:200] if hlr.description else "",
-                        "layer": "requirement",
-                    }
-                )
-            for qn in linked_qns:
-                edges.append(
-                    {
-                        "source": req_key,
-                        "target": qn,
-                        "type": "TRACES_TO",
-                    }
-                )
-
-        for llr in session.query(LowLevelRequirement).all():
-            req_key = f"llr:{llr.id}"
-            linked_qns: set[str] = set()
-            for triple in llr.triples:
-                subj_qn = triple.subject.qualified_name
-                obj_qn = triple.object.qualified_name
-                if subj_qn in node_qns:
-                    linked_qns.add(subj_qn)
-                if obj_qn in node_qns:
-                    linked_qns.add(obj_qn)
-            if linked_qns and req_key not in appended:
-                appended.add(req_key)
-                nodes.append(
-                    {
-                        "element_id": req_key,
-                        "qualified_name": "",
-                        "name": f"LLR {llr.id}",
-                        "kind": "LLR",
-                        "title": llr.description[:200] if llr.description else "",
-                        "layer": "requirement",
-                    }
-                )
-            for qn in linked_qns:
-                edges.append(
-                    {
-                        "source": req_key,
-                        "target": qn,
-                        "type": "TRACES_TO",
-                    }
-                )
-
-    traced_count = sum(1 for e in edges if e["type"] == "TRACES_TO")
-    log.debug("_attach_traced_requirements: %d requirement edges from SQLite", traced_count)
-
-
 def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
-    """Fetch the requirement neighbourhood of an HLR as raw dicts.
+    """Fetch design subgraph around an HLR: seed nodes + 1-hop neighbourhood.
 
-    Starts from SQLite to find the HLR's linked triples, then fetches
-    the corresponding Design nodes from Neo4j.
+    Uses SQLite to find seed qualified_names via the
+    high_level_requirements_nodes M2M table, then fetches those nodes
+    and their 1-hop design neighbours from Neo4j.
+
+    Returns bare topology — no synthetic requirement nodes.
+    The caller enriches with requirement tags via tag_direct_nodes_only().
     """
     log.info("fetch_hlr_subgraph(hlr_id=%d, component_id=%s)", hlr_id, component_id)
 
     from backend.db import get_session
     from backend.db.models import HighLevelRequirement
 
-    # Collect qualified_names of all design nodes linked to this HLR
-    design_qns: set[str] = set()
     with get_session() as session:
         hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
         if not hlr:
             log.warning("HLR %d not found in SQLite", hlr_id)
             return {"nodes": [], "edges": []}
-        for triple in hlr.triples:
-            if triple.subject.qualified_name:
-                design_qns.add(triple.subject.qualified_name)
-            if triple.object.qualified_name:
-                design_qns.add(triple.object.qualified_name)
-        # Also include LLR triples
-        for llr in hlr.low_level_requirements:
-            for triple in llr.triples:
-                if triple.subject.qualified_name:
-                    design_qns.add(triple.subject.qualified_name)
-                if triple.object.qualified_name:
-                    design_qns.add(triple.object.qualified_name)
+        seed_qns = {n.qualified_name for n in hlr.nodes}
 
-    if not design_qns:
-        log.warning("HLR %d has no linked triples in SQLite", hlr_id)
+    if not seed_qns:
+        log.warning("HLR %d has no linked nodes in SQLite", hlr_id)
         return {"nodes": [], "edges": []}
 
-    # Fetch the design nodes and their intra-component edges from Neo4j
     with get_neo4j().session() as session:
         nodes: list[dict] = []
         edges: list[dict] = []
         seen_qns: set[str] = set()
 
-        def _add_node(d) -> None:
-            qn = d.get("qualified_name", d.element_id)
+        def _add(d) -> None:
+            qn = d.get("qualified_name", d.element_id if hasattr(d, "element_id") else "")
             if qn not in seen_qns:
                 seen_qns.add(qn)
                 nodes.append(dict(d))
 
-        # Fetch the seed design nodes
-        if design_qns:
-            result = session.run(
-                """
-                UNWIND $qns AS qn
-                MATCH (d:Design {qualified_name: qn})
-                RETURN d
-                """,
-                {"qns": list(design_qns)},
-            )
-            for record in result:
-                _add_node(record["d"])
+        # Seed nodes
+        result = session.run(
+            "UNWIND $qns AS qn MATCH (d:Design {qualified_name: qn}) RETURN d",
+            {"qns": list(seed_qns)},
+        )
+        for record in result:
+            _add(record["d"])
 
-        # If component_id given, also fetch all nodes in that component
+        # Outgoing edges to other Design nodes (excluding IMPLEMENTED_BY)
+        edge_out = session.run(
+            """
+            UNWIND $qns AS qn
+            MATCH (s:Design {qualified_name: qn})-[r]->(t:Design)
+            WHERE type(r) <> 'IMPLEMENTED_BY'
+            RETURN s.qualified_name AS src, t.qualified_name AS tgt, type(r) AS rel_type
+            """,
+            {"qns": list(seed_qns)},
+        )
+        for record in edge_out:
+            src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
+            edges.append({"source": src, "target": tgt, "type": rel})
+            if tgt and tgt not in seen_qns:
+                nb = session.run(
+                    "MATCH (d:Design {qualified_name: $qn}) RETURN d",
+                    {"qn": tgt},
+                ).single()
+                if nb:
+                    _add(nb["d"])
+
+        # Incoming edges from other Design nodes (excluding IMPLEMENTED_BY)
+        edge_in = session.run(
+            """
+            UNWIND $qns AS qn
+            MATCH (s:Design)-[r]->(t:Design {qualified_name: qn})
+            WHERE type(r) <> 'IMPLEMENTED_BY'
+              AND s.qualified_name <> t.qualified_name
+            RETURN s.qualified_name AS src, t.qualified_name AS tgt, type(r) AS rel_type
+            """,
+            {"qns": list(seed_qns)},
+        )
+        incoming_seen: set[tuple] = set()
+        for record in edge_in:
+            src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
+            edge_key = (src, tgt, rel)
+            if edge_key not in incoming_seen:
+                incoming_seen.add(edge_key)
+                edges.append({"source": src, "target": tgt, "type": rel})
+            if src and src not in seen_qns:
+                nb = session.run(
+                    "MATCH (d:Design {qualified_name: $qn}) RETURN d",
+                    {"qn": src},
+                ).single()
+                if nb:
+                    _add(nb["d"])
+
+        # Optional: expand to full component
         if component_id is not None:
             comp_result = session.run(
                 """
@@ -273,20 +219,16 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
                 {"cid": component_id},
             )
             for record in comp_result:
-                _add_node(record["d"])
+                _add(record["d"])
                 for item in record["rels"]:
-                    if item["rel"] is None or not item["target_qn"]:
-                        continue
-                    edges.append(
-                        {
-                            "source": record["d"].get("qualified_name", ""),
-                            "target": item["target_qn"],
-                            "type": item["rel"],
-                        }
-                    )
-
-    # Add requirement nodes from SQLite (same logic as _attach_traced_requirements)
-    _attach_traced_requirements(nodes, edges)
+                    if item["rel"] is not None and item["target_qn"]:
+                        edges.append(
+                            {
+                                "source": record["d"].get("qualified_name", ""),
+                                "target": item["target_qn"],
+                                "type": item["rel"],
+                            }
+                        )
 
     log.debug("fetch_hlr_subgraph: %d nodes, %d edges", len(nodes), len(edges))
     return {"nodes": nodes, "edges": edges}

@@ -10,8 +10,6 @@ log = logging.getLogger(__name__)
 
 
 def _detect_layer(labels: list[str]) -> str:
-    if "HLR" in labels or "LLR" in labels:
-        return "requirement"
     if "Design" in labels:
         return "design"
     return "as-built"
@@ -183,7 +181,12 @@ def fetch_neighbourhood_graph(qualified_name: str) -> dict:
 
 
 def fetch_node_detail(qualified_name: str) -> dict | None:
-    """Fetch full node properties + relationships + requirements + members as raw dicts."""
+    """Fetch full node properties + relationships + members as raw dicts.
+
+    Requirements are sourced from SQLite (via the M2M tables), not from
+    Neo4j.  The caller enriches node detail with requirement data from
+    the high_level_requirements_nodes/low_level_requirements_nodes tables.
+    """
     log.info("fetch_node_detail(qn=%s)", qualified_name)
     with get_neo4j().session() as session:
         result = session.run(
@@ -209,21 +212,9 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
         outgoing = [r for r in record["outgoing"] if r["rel"] is not None]
         incoming = [r for r in record["incoming"] if r["rel"] is not None]
 
-        requirements = []
         relationships_in = []
         for r in incoming:
-            labels = r.get("source_labels", [])
-            if "HLR" in labels or "LLR" in labels:
-                req_type = "HLR" if "HLR" in labels else "LLR"
-                requirements.append(
-                    {
-                        "type": req_type,
-                        "name": r.get("source_name", ""),
-                        "relationship": r["rel"],
-                    }
-                )
-            else:
-                relationships_in.append(r)
+            relationships_in.append(r)
 
         implemented_by = []
         relationships_out = []
@@ -250,7 +241,6 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
             "properties": props,
             "outgoing": relationships_out,
             "incoming": relationships_in,
-            "requirements": requirements,
             "implemented_by": implemented_by,
             "members": members,
             "codebase_members": codebase_members,
