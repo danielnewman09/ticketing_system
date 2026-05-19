@@ -16,8 +16,10 @@ def _is_environment(comp: dict) -> bool:
 
 def _render_component_card(comp: dict):
     """Render a single component card."""
-    with ui.card().classes("w-72 cursor-pointer").on(
-        "click", lambda _, c=comp: ui.navigate.to(f"/component/{c['id']}")
+    with (
+        ui.card()
+        .classes("w-72 cursor-pointer")
+        .on("click", lambda _, c=comp: ui.navigate.to(f"/component/{c['id']}"))
     ):
         with ui.row().classes("items-center justify-between w-full"):
             ui.label(comp["name"]).classes("text-lg font-semibold")

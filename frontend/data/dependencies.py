@@ -13,11 +13,13 @@ from backend.db.models import (
 
 log = logging.getLogger(__name__)
 
+
 def fetch_design_dependency_links_data(design_qnames: list[str]) -> dict:
     """Fetch cross-layer links between Design nodes and dependency Compounds."""
     try:
         from backend.db.neo4j.queries import fetch_design_dependency_links
         from backend.graph import format_cytoscape_graph
+
         raw = fetch_design_dependency_links(design_qnames)
         return format_cytoscape_graph(raw)
     except Exception:
@@ -28,9 +30,14 @@ def fetch_design_dependency_links_data(design_qnames: list[str]) -> dict:
 def fetch_recommendations(component_id: int) -> list[dict]:
     """Fetch all dependency recommendations for a component."""
     with get_session() as session:
-        recs = session.query(DependencyRecommendation).filter_by(
-            component_id=component_id,
-        ).order_by(DependencyRecommendation.status, DependencyRecommendation.name).all()
+        recs = (
+            session.query(DependencyRecommendation)
+            .filter_by(
+                component_id=component_id,
+            )
+            .order_by(DependencyRecommendation.status, DependencyRecommendation.name)
+            .all()
+        )
         return [
             {
                 "id": r.id,
@@ -62,22 +69,24 @@ def save_recommendations(component_id: int, summary: str, recommendations: list[
         session.flush()
 
         for rec in recommendations:
-            session.add(DependencyRecommendation(
-                component_id=component_id,
-                name=rec.get("name", ""),
-                github_url=rec.get("github_url", ""),
-                description=rec.get("description", ""),
-                version=rec.get("version", ""),
-                stars=rec.get("stars", 0),
-                license=rec.get("license", ""),
-                last_updated=rec.get("last_updated", ""),
-                pros=rec.get("pros"),
-                cons=rec.get("cons"),
-                relevant_hlrs=rec.get("relevant_hlrs"),
-                relevant_structures=rec.get("relevant_structures"),
-                summary=summary,
-                status="pending",
-            ))
+            session.add(
+                DependencyRecommendation(
+                    component_id=component_id,
+                    name=rec.get("name", ""),
+                    github_url=rec.get("github_url", ""),
+                    description=rec.get("description", ""),
+                    version=rec.get("version", ""),
+                    stars=rec.get("stars", 0),
+                    license=rec.get("license", ""),
+                    last_updated=rec.get("last_updated", ""),
+                    pros=rec.get("pros"),
+                    cons=rec.get("cons"),
+                    relevant_hlrs=rec.get("relevant_hlrs"),
+                    relevant_structures=rec.get("relevant_structures"),
+                    summary=summary,
+                    status="pending",
+                )
+            )
 
 
 def update_recommendation_status(rec_id: int, status: str) -> bool:
@@ -131,9 +140,14 @@ def accept_recommendation(rec_id: int) -> bool:
             dm = managers[0]
 
         # Add the dependency
-        existing = session.query(Dependency).filter_by(
-            manager_id=dm.id, name=rec.name,
-        ).first()
+        existing = (
+            session.query(Dependency)
+            .filter_by(
+                manager_id=dm.id,
+                name=rec.name,
+            )
+            .first()
+        )
         if not existing:
             dep = Dependency(
                 manager_id=dm.id,

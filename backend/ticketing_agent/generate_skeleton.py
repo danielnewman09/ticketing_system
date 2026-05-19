@@ -43,12 +43,16 @@ def generate_skeleton(
         oo_design = oo_design.model_dump()
 
     results = generate_skeleton_from_design(
-        oo_design, workspace_dir=workspace_dir, source_root=source_root,
+        oo_design,
+        workspace_dir=workspace_dir,
+        source_root=source_root,
     )
 
     # Write to disk
     for result in results:
-        full_path = Path(workspace_dir) / result.file_path if workspace_dir else Path(result.file_path)
+        full_path = (
+            Path(workspace_dir) / result.file_path if workspace_dir else Path(result.file_path)
+        )
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(result.content)
         log.info("Wrote skeleton: %s (%d classes)", full_path, len(result.classes_generated))
@@ -87,7 +91,11 @@ def write_init_files(
             # Top-level file, no package needed
             modules = os.path.splitext(os.path.basename(file_path))[0]
             init_content = generate_init_py(result.classes_generated, modules)
-            full_path = Path(workspace_dir) / os.path.dirname(file_path) / "__init__.py" if workspace_dir else Path("__init__.py")
+            full_path = (
+                Path(workspace_dir) / os.path.dirname(file_path) / "__init__.py"
+                if workspace_dir
+                else Path("__init__.py")
+            )
             if workspace_dir:
                 Path(workspace_dir).mkdir(parents=True, exist_ok=True)
                 # For top-level, the __init__ would be in src/
@@ -100,13 +108,15 @@ def write_init_files(
         # Generate __init__.py for this package
         all_classes = []
         for r in pkg_results:
-            all_classes.extend([
-                {"name": c} for c in r.classes_generated
-            ])
+            all_classes.extend([{"name": c} for c in r.classes_generated])
         module_name = os.path.basename(pkg_path)
         init_content = generate_init_py(all_classes, module_name)
 
-        full_path = Path(workspace_dir) / pkg_path / "__init__.py" if workspace_dir else Path(pkg_path) / "__init__.py"
+        full_path = (
+            Path(workspace_dir) / pkg_path / "__init__.py"
+            if workspace_dir
+            else Path(pkg_path) / "__init__.py"
+        )
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(init_content)
         written.append(str(full_path))

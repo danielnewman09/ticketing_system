@@ -4,9 +4,21 @@ import asyncio
 
 from nicegui import ui
 
-from frontend.theme import CLS_DIALOG_SM, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS, apply_theme
+from frontend.theme import (
+    CLS_DIALOG_SM,
+    CLS_DIALOG_MD,
+    CLS_DIALOG_TITLE,
+    CLS_DIALOG_ACTIONS,
+    apply_theme,
+)
 from frontend.layout import page_layout, stat_card
-from frontend.data.hlr import fetch_requirements_data, create_hlr, delete_hlr, decompose_hlr, design_single_hlr
+from frontend.data.hlr import (
+    fetch_requirements_data,
+    create_hlr,
+    delete_hlr,
+    decompose_hlr,
+    design_single_hlr,
+)
 from frontend.data.llr import create_llr
 from frontend.data.components import fetch_components_options
 
@@ -235,9 +247,11 @@ async def requirements_page():
                         )
 
             if hlr["llrs"]:
-                with ui.expansion("Low-Level Requirements", icon="list").classes(
-                    "w-full mt-2"
-                ).props("dense"):
+                with (
+                    ui.expansion("Low-Level Requirements", icon="list")
+                    .classes("w-full mt-2")
+                    .props("dense")
+                ):
                     _render_llr_table(hlr["llrs"])
 
     # ---------------------------------------------------------------
@@ -246,6 +260,7 @@ async def requirements_page():
 
     def _render_llr_table(llrs):
         from frontend.widgets import render_llr_table
+
         render_llr_table(llrs)
 
     # ---------------------------------------------------------------

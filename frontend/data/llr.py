@@ -52,15 +52,17 @@ def fetch_llr_detail(llr_id):
                 }
                 for a in sorted(v.actions, key=lambda a: a.order)
             ]
-            verifications.append({
-                "id": v.id,
-                "method": v.method,
-                "test_name": v.test_name,
-                "description": v.description,
-                "preconditions": preconditions,
-                "actions": actions,
-                "postconditions": postconditions,
-            })
+            verifications.append(
+                {
+                    "id": v.id,
+                    "method": v.method,
+                    "test_name": v.test_name,
+                    "description": v.description,
+                    "preconditions": preconditions,
+                    "actions": actions,
+                    "postconditions": postconditions,
+                }
+            )
 
         components = [c.name for c in llr.components]
 

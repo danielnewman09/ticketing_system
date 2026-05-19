@@ -22,6 +22,7 @@ from services.dependencies import get_neo4j
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from backend.db import init_db, get_session, get_or_create
@@ -57,9 +58,7 @@ def load_stdlib():
         return
 
     with get_neo4j().session() as session:
-        result = session.run(
-            "MATCH (n) WHERE n.source = 'cppreference' RETURN count(n) AS cnt"
-        )
+        result = session.run("MATCH (n) WHERE n.source = 'cppreference' RETURN count(n) AS cnt")
         count = result.single()["cnt"]
 
     if count > 0:
@@ -118,7 +117,8 @@ def assign_components():
             namespace = a.get("namespace", "")
             desc = a.get("description", "")
             component, _ = get_or_create(
-                session, Component,
+                session,
+                Component,
                 defaults={"namespace": namespace, "description": desc},
                 name=comp_name,
             )

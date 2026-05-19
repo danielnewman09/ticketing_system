@@ -26,6 +26,7 @@ _CodebaseSession: sessionmaker | None = None
 def _load_sqlite_vec(dbapi_conn, connection_record):
     """Load sqlite-vec extension on every new SQLite connection."""
     import sqlite_vec
+
     dbapi_conn.enable_load_extension(True)
     sqlite_vec.load(dbapi_conn)
     dbapi_conn.enable_load_extension(False)

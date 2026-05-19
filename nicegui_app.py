@@ -10,6 +10,7 @@ Then visit http://127.0.0.1:8081
 """
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import logging
@@ -26,10 +27,12 @@ _file_handler = RotatingFileHandler(
     backupCount=3,
     encoding="utf-8",
 )
-_file_handler.setFormatter(logging.Formatter(
-    "%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
+_file_handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
 for _name in ("backend", "frontend", "agents", "__main__"):
     _logger = logging.getLogger(_name)
     _logger.addHandler(_file_handler)
@@ -52,6 +55,7 @@ def on_startup() -> None:
     init_db()
 
     from frontend.agent_log import install_hooks
+
     install_hooks()
     log.info("Starting NiceGUI Application...")
 

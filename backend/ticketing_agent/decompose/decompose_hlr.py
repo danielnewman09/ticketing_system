@@ -11,7 +11,6 @@ from llm_caller import call_tool
 from backend.db.models.requirements import format_hlr_dict
 from backend.requirements.schemas import DecomposedRequirementSchema as DecomposedRequirement
 
-
 SYSTEM_PROMPT = """\
 You are a requirements engineering agent. Your job is to decompose a high-level
 requirement description into low-level requirements.
@@ -81,9 +80,7 @@ def _format_dependency_context(dependency_context: dict) -> str:
     rationale = dependency_context.get("rationale", "")
     if rationale:
         lines.append(f"- Rationale: {rationale}")
-    lines.append(
-        "\nDo not create LLRs for functionality the dependency already handles."
-    )
+    lines.append("\nDo not create LLRs for functionality the dependency already handles.")
     return "\n".join(lines)
 
 

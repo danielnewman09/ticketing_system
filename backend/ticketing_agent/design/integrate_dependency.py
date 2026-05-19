@@ -161,19 +161,19 @@ def integrate_dependency(
     if build_result.get("build_success"):
         log.info("Phase 3 (index): indexing %s headers with doxygen-index", dep_name)
         from backend.codebase.indexing import index_dependency
+
         idx = index_dependency(working_directory, dep_name)
         index_summary = idx["message"]
     else:
         log.info("Skipping phase 3 (index): build failed")
 
     # Merge results
-    all_files = list(dict.fromkeys(
-        files_written + build_result.get("files_modified", [])
-    ))
+    all_files = list(dict.fromkeys(files_written + build_result.get("files_modified", [])))
 
     log.info(
         "Integration complete: %d files, build_success=%s",
-        len(all_files), build_result.get("build_success"),
+        len(all_files),
+        build_result.get("build_success"),
     )
 
     summary_parts = [

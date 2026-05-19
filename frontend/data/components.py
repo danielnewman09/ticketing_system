@@ -14,15 +14,17 @@ def fetch_components_data():
     with get_session() as session:
         result = []
         for comp in session.query(Component).all():
-            result.append({
-                "id": comp.id,
-                "name": comp.name,
-                "namespace": comp.namespace or "",
-                "language": repr(comp.language) if comp.language else None,
-                "parent": comp.parent.name if comp.parent else None,
-                "hlr_count": len(comp.high_level_requirements),
-                "node_count": len(comp.ontology_nodes),
-            })
+            result.append(
+                {
+                    "id": comp.id,
+                    "name": comp.name,
+                    "namespace": comp.namespace or "",
+                    "language": repr(comp.language) if comp.language else None,
+                    "parent": comp.parent.name if comp.parent else None,
+                    "hlr_count": len(comp.high_level_requirements),
+                    "node_count": len(comp.ontology_nodes),
+                }
+            )
         return result
 
 
@@ -35,9 +37,13 @@ def fetch_component_detail(component_id: int) -> dict | None:
 
         # Children
         children = [
-            {"id": c.id, "name": c.name, "namespace": c.namespace,
-             "hlr_count": len(c.high_level_requirements),
-             "node_count": len(c.ontology_nodes)}
+            {
+                "id": c.id,
+                "name": c.name,
+                "namespace": c.namespace,
+                "hlr_count": len(c.high_level_requirements),
+                "node_count": len(c.ontology_nodes),
+            }
             for c in comp.children
         ]
 
@@ -53,8 +59,11 @@ def fetch_component_detail(component_id: int) -> dict | None:
                     for bs in lang.build_systems
                 ],
                 "test_frameworks": [
-                    {"name": tf.name, "config_file": tf.config_file,
-                     "discovery_path": tf.test_discovery_path}
+                    {
+                        "name": tf.name,
+                        "config_file": tf.config_file,
+                        "discovery_path": tf.test_discovery_path,
+                    }
                     for tf in lang.test_frameworks
                 ],
                 "dependency_managers": [
@@ -74,8 +83,7 @@ def fetch_component_detail(component_id: int) -> dict | None:
 
         # HLRs in this component
         hlrs = [
-            {"id": h.id, "description": h.description,
-             "llr_count": len(h.low_level_requirements)}
+            {"id": h.id, "description": h.description, "llr_count": len(h.low_level_requirements)}
             for h in comp.high_level_requirements
         ]
 
@@ -85,11 +93,14 @@ def fetch_component_detail(component_id: int) -> dict | None:
         for n in comp.ontology_nodes:
             node_kinds[n.kind] = node_kinds.get(n.kind, 0) + 1
             if len(nodes_sample) < 20:
-                nodes_sample.append({
-                    "id": n.id, "name": n.name,
-                    "qualified_name": n.qualified_name,
-                    "kind": n.kind,
-                })
+                nodes_sample.append(
+                    {
+                        "id": n.id,
+                        "name": n.name,
+                        "qualified_name": n.qualified_name,
+                        "kind": n.kind,
+                    }
+                )
 
         # Dependencies linked to this component (via M2M)
         comp_deps = [
@@ -133,8 +144,11 @@ def fetch_components_options():
 def ensure_component_language(component_id: int, language_name: str, version: str = "") -> int:
     """Ensure a component has a language set, creating it if needed. Returns language id."""
     from backend.db import get_or_create
+
     with get_session() as session:
-        lang, _ = get_or_create(session, Language, defaults={"version": version}, name=language_name)
+        lang, _ = get_or_create(
+            session, Language, defaults={"version": version}, name=language_name
+        )
         comp = session.query(Component).filter_by(id=component_id).first()
         if comp and comp.language_id != lang.id:
             comp.language_id = lang.id
@@ -142,7 +156,10 @@ def ensure_component_language(component_id: int, language_name: str, version: st
 
 
 def create_dependency_manager(
-    language_id: int, name: str, manifest_file: str, lock_file: str = "",
+    language_id: int,
+    name: str,
+    manifest_file: str,
+    lock_file: str = "",
 ) -> int:
     """Create a dependency manager. Returns the new id."""
     with get_session() as session:
@@ -158,7 +175,10 @@ def create_dependency_manager(
 
 
 def add_dependency(
-    manager_id: int, name: str, version: str = "", is_dev: bool = False,
+    manager_id: int,
+    name: str,
+    version: str = "",
+    is_dev: bool = False,
     component_id: int | None = None,
 ) -> int:
     """Add a dependency to a manager. Returns the new id."""

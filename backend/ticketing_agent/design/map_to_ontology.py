@@ -61,22 +61,26 @@ def map_oo_to_ontology(
         if qualified_name in node_index:
             return
         node_index[qualified_name] = len(nodes)
-        nodes.append(OntologyNodeSchema(
-            kind=kind,
-            name=name,
-            qualified_name=qualified_name,
-            component_id=component_id,
-            is_intercomponent=is_intercomponent,
-            **kwargs,
-        ))
+        nodes.append(
+            OntologyNodeSchema(
+                kind=kind,
+                name=name,
+                qualified_name=qualified_name,
+                component_id=component_id,
+                is_intercomponent=is_intercomponent,
+                **kwargs,
+            )
+        )
 
     def _add_triple(subject_qname, predicate, object_qname):
         idx = len(triples)
-        triples.append(OntologyTripleSchema(
-            subject_qualified_name=subject_qname,
-            predicate=predicate,
-            object_qualified_name=object_qname,
-        ))
+        triples.append(
+            OntologyTripleSchema(
+                subject_qualified_name=subject_qname,
+                predicate=predicate,
+                object_qualified_name=object_qname,
+            )
+        )
         return idx
 
     def _link_reqs(tagged_ids, triple_idx):
@@ -84,11 +88,13 @@ def map_oo_to_ontology(
             parsed = _parse_req_id(tagged)
             if parsed:
                 req_type, req_id = parsed
-                links.append(RequirementTripleLinkSchema(
-                    requirement_type=req_type,
-                    requirement_id=req_id,
-                    triple_index=triple_idx,
-                ))
+                links.append(
+                    RequirementTripleLinkSchema(
+                        requirement_type=req_type,
+                        requirement_id=req_id,
+                        triple_index=triple_idx,
+                    )
+                )
 
     # --- Correct modules to match component namespace ---
     if component_namespace:
@@ -97,7 +103,9 @@ def map_oo_to_ontology(
             if cls.module != component_namespace:
                 log.info(
                     "Correcting class %s module %r -> %r",
-                    cls.name, cls.module, component_namespace,
+                    cls.name,
+                    cls.module,
+                    component_namespace,
                 )
                 cls.module = component_namespace
             corrected_modules.add(cls.module)
@@ -105,7 +113,9 @@ def map_oo_to_ontology(
             if iface.module != component_namespace:
                 log.info(
                     "Correcting interface %s module %r -> %r",
-                    iface.name, iface.module, component_namespace,
+                    iface.name,
+                    iface.module,
+                    component_namespace,
                 )
                 iface.module = component_namespace
             corrected_modules.add(iface.module)
@@ -113,7 +123,9 @@ def map_oo_to_ontology(
             if enum.module != component_namespace:
                 log.info(
                     "Correcting enum %s module %r -> %r",
-                    enum.name, enum.module, component_namespace,
+                    enum.name,
+                    enum.module,
+                    component_namespace,
                 )
                 enum.module = component_namespace
             corrected_modules.add(enum.module)
@@ -156,7 +168,9 @@ def map_oo_to_ontology(
     for iface in oo.interfaces:
         iface_qname = _qualify(iface.module, iface.name)
         _add_node(
-            "interface", iface.name, iface_qname,
+            "interface",
+            iface.name,
+            iface_qname,
             is_intercomponent=iface.is_intercomponent,
             specialization=iface.specialization,
             description=iface.description,
@@ -170,7 +184,9 @@ def map_oo_to_ontology(
             method_qname = f"{iface_qname}::{method.name}"
             argsstring = f"({', '.join(method.parameters)})" if method.parameters else ""
             _add_node(
-                "method", method.name, method_qname,
+                "method",
+                method.name,
+                method_qname,
                 visibility=method.visibility,
                 description=method.description,
                 source_type="member",
@@ -184,7 +200,9 @@ def map_oo_to_ontology(
     for enum in oo.enums:
         enum_qname = _qualify(enum.module, enum.name)
         _add_node(
-            "enum", enum.name, enum_qname,
+            "enum",
+            enum.name,
+            enum_qname,
             description=enum.description,
             source_type="compound",
         )
@@ -208,7 +226,9 @@ def map_oo_to_ontology(
     for cls in oo.classes:
         cls_qname = _qualify(cls.module, cls.name)
         _add_node(
-            "class", cls.name, cls_qname,
+            "class",
+            cls.name,
+            cls_qname,
             is_intercomponent=cls.is_intercomponent,
             specialization=cls.specialization,
             description=cls.description,
@@ -222,7 +242,9 @@ def map_oo_to_ontology(
         for attr in cls.attributes:
             attr_qname = f"{cls_qname}::{attr.name}"
             _add_node(
-                "attribute", attr.name, attr_qname,
+                "attribute",
+                attr.name,
+                attr_qname,
                 visibility=attr.visibility,
                 description=attr.description,
                 source_type="member",
@@ -236,7 +258,9 @@ def map_oo_to_ontology(
             method_qname = f"{cls_qname}::{method.name}"
             argsstring = f"({', '.join(method.parameters)})" if method.parameters else ""
             _add_node(
-                "method", method.name, method_qname,
+                "method",
+                method.name,
+                method_qname,
                 visibility=method.visibility,
                 description=method.description,
                 source_type="member",
@@ -276,9 +300,11 @@ def map_oo_to_ontology(
 # Coverage validation
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CoverageReport:
     """Report on requirement-to-ontology coverage after mapping."""
+
     linked_hlrs: set[int] = field(default_factory=set)
     linked_llrs: set[int] = field(default_factory=set)
     unlinked_hlrs: set[int] = field(default_factory=set)

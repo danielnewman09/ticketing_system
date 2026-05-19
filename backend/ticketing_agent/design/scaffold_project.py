@@ -167,13 +167,12 @@ def scaffold_project(
     )
 
     # Merge results
-    all_files = list(dict.fromkeys(
-        files_written + build_result.get("files_modified", [])
-    ))
+    all_files = list(dict.fromkeys(files_written + build_result.get("files_modified", [])))
 
     log.info(
         "Scaffold complete: %d files, build_success=%s",
-        len(all_files), build_result.get("build_success"),
+        len(all_files),
+        build_result.get("build_success"),
     )
 
     return {

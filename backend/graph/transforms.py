@@ -21,12 +21,9 @@ def _fetch_component_namespaces() -> dict[str, str]:
     try:
         from backend.db import get_session
         from backend.db.models.components import Component
+
         with get_session() as session:
-            return {
-                c.namespace: c.name
-                for c in session.query(Component).all()
-                if c.namespace
-            }
+            return {c.namespace: c.name for c in session.query(Component).all() if c.namespace}
     except Exception:
         return {}
 
@@ -72,13 +69,15 @@ def _collect_collapsible(
             continue
 
         norm_kind = _KIND_NORMALIZE.get(td["kind"], td["kind"])
-        collapsed.setdefault(d["source"], {}).setdefault(norm_kind, []).append({
-            "name": td["label"],
-            "type_signature": td.get("type_signature", ""),
-            "visibility": td.get("visibility", ""),
-            "qualified_name": td.get("qualified_name", ""),
-            "layer": td.get("layer", ""),
-        })
+        collapsed.setdefault(d["source"], {}).setdefault(norm_kind, []).append(
+            {
+                "name": td["label"],
+                "type_signature": td.get("type_signature", ""),
+                "visibility": td.get("visibility", ""),
+                "qualified_name": td.get("qualified_name", ""),
+                "layer": td.get("layer", ""),
+            }
+        )
         remove_node_ids.add(d["target"])
         remove_edge_ids.add(d["id"])
 
@@ -97,7 +96,9 @@ def _format_compartment(members: list[dict], is_dependency: bool, suffix: str = 
     return lines
 
 
-def _build_uml_label(class_name: str, by_kind: dict[str, list[dict]], is_dependency: bool) -> tuple[str, int]:
+def _build_uml_label(
+    class_name: str, by_kind: dict[str, list[dict]], is_dependency: bool
+) -> tuple[str, int]:
     separator = "\u2500" * max(len(class_name), 10)
     lines = [class_name]
 
@@ -154,8 +155,11 @@ _CONTAINABLE = {"class", "interface", "enum", "module", "struct"}
 
 
 def _resolve_parent_ns(
-    nodes: list[dict], synth_ns: dict[str, str], ns_qn: str,
-    label_source: dict[str, str] | None, layer: str,
+    nodes: list[dict],
+    synth_ns: dict[str, str],
+    ns_qn: str,
+    label_source: dict[str, str] | None,
+    layer: str,
 ) -> str | None:
     if "::" not in ns_qn:
         return None
@@ -172,18 +176,18 @@ def _find_existing_module(nodes: list[dict], ns_qn: str) -> dict | None:
 
 
 def _ensure_namespace_node(
-    nodes: list[dict], synth_ns: dict[str, str], ns_qn: str,
-    label_source: dict[str, str] | None, layer: str,
+    nodes: list[dict],
+    synth_ns: dict[str, str],
+    ns_qn: str,
+    label_source: dict[str, str] | None,
+    layer: str,
 ) -> str | None:
     if ns_qn in synth_ns:
         return synth_ns[ns_qn]
     if label_source is not None and ns_qn not in label_source:
         return None
 
-    display_name = (
-        label_source[ns_qn] if label_source is not None
-        else ns_qn.rsplit("::", 1)[-1]
-    )
+    display_name = label_source[ns_qn] if label_source is not None else ns_qn.rsplit("::", 1)[-1]
 
     existing = _find_existing_module(nodes, ns_qn)
     if existing is not None:
@@ -198,10 +202,14 @@ def _ensure_namespace_node(
     node_id = f"ns_{ns_qn}"
     new_node = {
         "data": {
-            "id": node_id, "label": display_name,
-            "qualified_name": ns_qn, "kind": "module",
-            "description": "", "visibility": "",
-            "type_signature": "", "layer": layer,
+            "id": node_id,
+            "label": display_name,
+            "qualified_name": ns_qn,
+            "kind": "module",
+            "description": "",
+            "visibility": "",
+            "type_signature": "",
+            "layer": layer,
             "is_namespace": "true",
         }
     }
@@ -244,7 +252,9 @@ def _match_namespace(qn: str, sorted_ns: list[str]) -> str | None:
     return None
 
 
-def _assign_component_parents(nodes: list[dict], assigned: set[str], synth_ns: dict[str, str]) -> None:
+def _assign_component_parents(
+    nodes: list[dict], assigned: set[str], synth_ns: dict[str, str]
+) -> None:
     component_ns = _fetch_component_namespaces()
     if not component_ns:
         return
@@ -262,7 +272,9 @@ def _assign_component_parents(nodes: list[dict], assigned: set[str], synth_ns: d
             assigned.add(d["id"])
 
 
-def _assign_inferred_parents(nodes: list[dict], assigned: set[str], synth_ns: dict[str, str]) -> None:
+def _assign_inferred_parents(
+    nodes: list[dict], assigned: set[str], synth_ns: dict[str, str]
+) -> None:
     ns_prefixes: dict[str, set[str]] = {}
     node_by_id: dict[str, dict] = {n["data"]["id"]: n for n in nodes}
 

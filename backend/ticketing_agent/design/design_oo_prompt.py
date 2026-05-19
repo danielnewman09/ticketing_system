@@ -5,7 +5,6 @@ Prompt templates and section builders for the design_oo agent.
 from backend.codebase.schemas import OODesignSchema
 from backend.db.models.ontology import LANGUAGE_SPECIALIZATIONS
 
-
 # ---------------------------------------------------------------------------
 # System prompt template
 # ---------------------------------------------------------------------------
@@ -129,6 +128,7 @@ TOOL_DEFINITION = {
 # Section builders
 # ---------------------------------------------------------------------------
 
+
 def build_specializations_section(language):
     """Build the specializations prompt section for a target language."""
     specs = LANGUAGE_SPECIALIZATIONS.get(language)
@@ -182,8 +182,7 @@ def build_dependency_api_section(dependency_classes):
         methods = cls.get("methods", [])
         if methods:
             public_methods = [
-                m["name"] for m in methods
-                if m.get("visibility", "public") == "public"
+                m["name"] for m in methods if m.get("visibility", "public") == "public"
             ]
             if public_methods:
                 lines.append(f"  Public methods: {', '.join(public_methods)}")
@@ -191,8 +190,7 @@ def build_dependency_api_section(dependency_classes):
         attributes = cls.get("attributes", [])
         if attributes:
             public_attrs = [
-                a["name"] for a in attributes
-                if a.get("visibility", "public") == "public"
+                a["name"] for a in attributes if a.get("visibility", "public") == "public"
             ]
             if public_attrs:
                 lines.append(f"  Public attributes: {', '.join(public_attrs)}")
@@ -247,8 +245,7 @@ def build_as_built_section(as_built_classes):
         methods = cls.get("methods", [])
         if methods:
             public_methods = [
-                m["name"] for m in methods
-                if m.get("visibility", "public") == "public"
+                m["name"] for m in methods if m.get("visibility", "public") == "public"
             ]
             if public_methods:
                 lines.append(f"  Public methods: {', '.join(public_methods)}")
@@ -256,8 +253,7 @@ def build_as_built_section(as_built_classes):
         attributes = cls.get("attributes", [])
         if attributes:
             public_attrs = [
-                a["name"] for a in attributes
-                if a.get("visibility", "public") == "public"
+                a["name"] for a in attributes if a.get("visibility", "public") == "public"
             ]
             if public_attrs:
                 lines.append(f"  Public attributes: {', '.join(public_attrs)}")
@@ -419,18 +415,18 @@ def build_dependency_section(dependency_contexts: dict[int, dict]) -> str:
     return "\n".join(lines)
 
 
-def build_namespace_section(component_namespace: str, sibling_namespaces: list[str] | None = None) -> str:
+def build_namespace_section(
+    component_namespace: str, sibling_namespaces: list[str] | None = None
+) -> str:
     """Build the namespace constraint section for the prompt."""
     if not component_namespace:
         return ""
     lines = [
         f"The required namespace for this component is: `{component_namespace}`",
-        f"All classes, interfaces, and enums MUST use module = \"{component_namespace}\".",
+        f'All classes, interfaces, and enums MUST use module = "{component_namespace}".',
     ]
     if sibling_namespaces:
         lines.append("\nOther component namespaces (for reference, do NOT use as module):")
         for ns in sibling_namespaces:
             lines.append(f"  - {ns}")
     return "\n".join(lines)
-
-

@@ -110,17 +110,13 @@ def get_conan_deps(project_dir: str) -> dict[str, str]:
     try:
         with get_neo4j().session() as session:
             result = session.run(
-                "MATCH (n) WHERE n.source IS NOT NULL "
-                "RETURN DISTINCT n.source AS source"
+                "MATCH (n) WHERE n.source IS NOT NULL " "RETURN DISTINCT n.source AS source"
             )
             indexed = {r["source"].lower() for r in result if r["source"]}
     except Exception:
         pass
 
-    return {
-        name: "indexed" if name in indexed else "integrated"
-        for name in deps_with_recipe
-    }
+    return {name: "indexed" if name in indexed else "integrated" for name in deps_with_recipe}
 
 
 def project_exists(working_directory: str, project_name: str) -> bool:
@@ -140,9 +136,15 @@ def render_file_tree(tree: list[dict], project_dir: str, depth: int = 0):
     for entry in tree:
         indent = f"padding-left: {depth * 16 + 4}px;"
         if entry["is_dir"]:
-            with ui.expansion(
-                entry["name"], icon="folder",
-            ).classes("w-full").props("dense").style(indent):
+            with (
+                ui.expansion(
+                    entry["name"],
+                    icon="folder",
+                )
+                .classes("w-full")
+                .props("dense")
+                .style(indent)
+            ):
                 render_file_tree(entry["children"], project_dir, depth + 1)
         else:
             ui.label(entry["name"]).classes(
@@ -150,4 +152,6 @@ def render_file_tree(tree: list[dict], project_dir: str, depth: int = 0):
             ).style(indent).on(
                 "click",
                 lambda _, p=entry["path"]: open_file(project_dir, p),
-            ).tooltip(entry["path"])
+            ).tooltip(
+                entry["path"]
+            )

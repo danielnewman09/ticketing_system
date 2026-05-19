@@ -62,8 +62,7 @@ def design(
             {
                 "role": "user",
                 "content": (
-                    "Derive an ontology design from these requirements:\n\n"
-                    f"{requirements_text}"
+                    "Derive an ontology design from these requirements:\n\n" f"{requirements_text}"
                 ),
             }
         ],
@@ -86,7 +85,10 @@ if __name__ == "__main__":
     init_db()
 
     with get_session() as session:
-        hlrs = [{"id": h.id, "description": h.description} for h in session.query(HighLevelRequirement).all()]
+        hlrs = [
+            {"id": h.id, "description": h.description}
+            for h in session.query(HighLevelRequirement).all()
+        ]
         llrs = [
             {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
             for l in session.query(LowLevelRequirement).all()

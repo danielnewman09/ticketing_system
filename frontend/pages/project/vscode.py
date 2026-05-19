@@ -14,7 +14,8 @@ def open_directory(path: str):
         try:
             subprocess.Popen(
                 ["open", "-a", "Visual Studio Code", path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
         except Exception:
             ui.notify("Could not open VS Code", type="warning")
@@ -26,13 +27,15 @@ def open_file(project_dir: str, file_path: str):
     try:
         subprocess.Popen(
             ["code", "--goto", full_path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
     except FileNotFoundError:
         try:
             subprocess.Popen(
                 ["open", "-a", "Visual Studio Code", full_path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
         except Exception:
             ui.notify("Could not open VS Code", type="warning")

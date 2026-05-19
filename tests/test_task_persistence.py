@@ -39,12 +39,12 @@ class TestPersistTasks:
         from backend.pipeline.services import persist_tasks, build_qname_to_node
 
         # Create an ontology node to link to
-        comp = seeded_session.query(
-            __import__('backend.db.models').db.models.Component
-        ).first()
+        comp = seeded_session.query(__import__("backend.db.models").db.models.Component).first()
 
         node = OntologyNode(
-            kind="class", name="Foo", qualified_name="calc::Foo",
+            kind="class",
+            name="Foo",
+            qualified_name="calc::Foo",
             component_id=comp.id,
             implementation_status="designed",
         )
@@ -69,9 +69,13 @@ class TestPersistTasks:
         assert result.links_to_design == 1
 
         # Verify persistence
-        task = seeded_session.query(Task).filter_by(
-            title="Create Foo class",
-        ).first()
+        task = (
+            seeded_session.query(Task)
+            .filter_by(
+                title="Create Foo class",
+            )
+            .first()
+        )
         assert task is not None
         assert task.description == "Implement the Foo class"
         assert len(task.design_nodes) == 1
@@ -81,7 +85,8 @@ class TestPersistTasks:
             tasks=[
                 TaskSchema(title="Parent", description="root"),
                 TaskSchema(
-                    title="Child", description="depends_on_parent",
+                    title="Child",
+                    description="depends_on_parent",
                     dependencies=["Parent"],
                 ),
             ],
@@ -108,7 +113,8 @@ class TestPersistTasks:
         seeded_session.flush()
 
         llr = LowLevelRequirement(
-            description="test llr", high_level_requirement_id=hlr.id,
+            description="test llr",
+            high_level_requirement_id=hlr.id,
         )
         seeded_session.add(llr)
         seeded_session.flush()
@@ -164,17 +170,19 @@ class TestPersistTasks:
 
 class TestBuildQnameToNode:
     def test_builds_map(self, seeded_session):
-        comp = seeded_session.query(
-            __import__('backend.db.models').db.models.Component
-        ).first()
+        comp = seeded_session.query(__import__("backend.db.models").db.models.Component).first()
 
         node = OntologyNode(
-            kind="class", name="Bar", qualified_name="calc::Bar",
+            kind="class",
+            name="Bar",
+            qualified_name="calc::Bar",
             component_id=comp.id,
         )
         seeded_session.add(node)
         empty_node = OntologyNode(
-            kind="class", name="NoQn", qualified_name="",
+            kind="class",
+            name="NoQn",
+            qualified_name="",
             component_id=comp.id,
         )
         seeded_session.add(empty_node)

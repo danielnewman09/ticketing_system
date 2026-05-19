@@ -41,34 +41,36 @@ def fetch_environment_data() -> list[dict]:
             deps = []
             for dm in lang.dependency_managers:
                 for d in dm.dependencies:
-                    deps.append({
-                        "id": d.id,
-                        "name": d.name,
-                        "version": d.version,
-                        "github_url": d.github_url,
-                        "manager": dm.name,
-                        "is_dev": d.is_dev,
-                        "index_file_patterns": d.index_file_patterns,
-                        "index_subdir": d.index_subdir,
-                        "index_exclude_patterns": d.index_exclude_patterns,
-                        "index_recursive": d.index_recursive,
-                        "components": [
-                            {"id": c.id, "name": c.name} for c in d.components
-                        ],
-                    })
-            result.append({
-                "id": lang.id,
-                "name": lang.name,
-                "version": lang.version,
-                "build_systems": [
-                    {"name": bs.name, "config_file": bs.config_file}
-                    for bs in lang.build_systems
-                ],
-                "test_frameworks": [
-                    {"name": tf.name, "config_file": tf.config_file}
-                    for tf in lang.test_frameworks
-                ],
-                "dependency_managers": [dm.name for dm in lang.dependency_managers],
-                "dependencies": deps,
-            })
+                    deps.append(
+                        {
+                            "id": d.id,
+                            "name": d.name,
+                            "version": d.version,
+                            "github_url": d.github_url,
+                            "manager": dm.name,
+                            "is_dev": d.is_dev,
+                            "index_file_patterns": d.index_file_patterns,
+                            "index_subdir": d.index_subdir,
+                            "index_exclude_patterns": d.index_exclude_patterns,
+                            "index_recursive": d.index_recursive,
+                            "components": [{"id": c.id, "name": c.name} for c in d.components],
+                        }
+                    )
+            result.append(
+                {
+                    "id": lang.id,
+                    "name": lang.name,
+                    "version": lang.version,
+                    "build_systems": [
+                        {"name": bs.name, "config_file": bs.config_file}
+                        for bs in lang.build_systems
+                    ],
+                    "test_frameworks": [
+                        {"name": tf.name, "config_file": tf.config_file}
+                        for tf in lang.test_frameworks
+                    ],
+                    "dependency_managers": [dm.name for dm in lang.dependency_managers],
+                    "dependencies": deps,
+                }
+            )
         return result

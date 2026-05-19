@@ -18,28 +18,38 @@ def fetch_requirements_data():
             llrs = []
             for llr in hlr.low_level_requirements:
                 methods = [v.method for v in llr.verifications]
-                llrs.append({
+                llrs.append(
+                    {
+                        "id": llr.id,
+                        "description": llr.description,
+                        "methods": methods,
+                    }
+                )
+            hlrs.append(
+                {
+                    "id": hlr.id,
+                    "description": hlr.description,
+                    "component": hlr.component.name if hlr.component else None,
+                    "llrs": llrs,
+                }
+            )
+
+        unlinked = []
+        for llr in (
+            session.query(LowLevelRequirement)
+            .filter(
+                LowLevelRequirement.high_level_requirement_id.is_(None),
+            )
+            .all()
+        ):
+            methods = [v.method for v in llr.verifications]
+            unlinked.append(
+                {
                     "id": llr.id,
                     "description": llr.description,
                     "methods": methods,
-                })
-            hlrs.append({
-                "id": hlr.id,
-                "description": hlr.description,
-                "component": hlr.component.name if hlr.component else None,
-                "llrs": llrs,
-            })
-
-        unlinked = []
-        for llr in session.query(LowLevelRequirement).filter(
-            LowLevelRequirement.high_level_requirement_id.is_(None),
-        ).all():
-            methods = [v.method for v in llr.verifications]
-            unlinked.append({
-                "id": llr.id,
-                "description": llr.description,
-                "methods": methods,
-            })
+                }
+            )
 
         return {
             "hlrs": hlrs,
@@ -62,11 +72,13 @@ def fetch_hlr_detail(hlr_id):
         llrs = []
         for llr in hlr.low_level_requirements:
             methods = [v.method for v in llr.verifications]
-            llrs.append({
-                "id": llr.id,
-                "description": llr.description,
-                "methods": methods,
-            })
+            llrs.append(
+                {
+                    "id": llr.id,
+                    "description": llr.description,
+                    "methods": methods,
+                }
+            )
 
         all_triples = set(hlr.triples)
         for llr_obj in hlr.low_level_requirements:
@@ -145,9 +157,13 @@ def decompose_hlr(hlr_id: int) -> dict:
         if not hlr:
             raise ValueError(f"HLR {hlr_id} not found")
 
-        siblings = session.query(HighLevelRequirement).filter(
-            HighLevelRequirement.id != hlr_id,
-        ).all()
+        siblings = (
+            session.query(HighLevelRequirement)
+            .filter(
+                HighLevelRequirement.id != hlr_id,
+            )
+            .all()
+        )
         other_hlrs = [
             {
                 "id": s.id,

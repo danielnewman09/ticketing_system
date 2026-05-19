@@ -58,28 +58,35 @@ def persist_tasks(
 
         for qname in ts.design_node_qualified_names:
             if qname in qname_to_node:
-                session.add(TaskDesignNode(
-                    task=task,
-                    ontology_node=qname_to_node[qname],
-                ))
+                session.add(
+                    TaskDesignNode(
+                        task=task,
+                        ontology_node=qname_to_node[qname],
+                    )
+                )
                 result.links_to_design += 1
             else:
                 log.warning(
                     "Task %s references unknown design node: %s",
-                    ts.title, qname,
+                    ts.title,
+                    qname,
                 )
 
         for test_name in ts.verification_test_names:
             vm = _find_verification_by_test_name(session, test_name)
             if vm:
-                session.add(TaskVerification(
-                    task=task, verification_method=vm,
-                ))
+                session.add(
+                    TaskVerification(
+                        task=task,
+                        verification_method=vm,
+                    )
+                )
                 result.links_to_verification += 1
             else:
                 log.warning(
                     "Task %s references unknown test: %s",
-                    ts.title, test_name,
+                    ts.title,
+                    test_name,
                 )
 
     return result
@@ -108,21 +115,28 @@ def _topological_sort(
 
 
 def _find_verification_by_test_name(
-    session: Session, test_name: str,
+    session: Session,
+    test_name: str,
 ) -> VerificationMethod | None:
     """Find a VerificationMethod by its test_name."""
     if not test_name:
         return None
-    return session.query(VerificationMethod).filter_by(
-        test_name=test_name,
-    ).first()
+    return (
+        session.query(VerificationMethod)
+        .filter_by(
+            test_name=test_name,
+        )
+        .first()
+    )
 
 
 def get_tasks_for_component(
-    session: Session, component_name: str,
+    session: Session,
+    component_name: str,
 ) -> list[Task]:
     """Get all tasks for a component."""
     from backend.db.models.components import Component
+
     comp = session.query(Component).filter_by(name=component_name).first()
     if not comp:
         return []
@@ -136,7 +150,9 @@ def get_tasks_for_component(
 
 
 def mark_task_status(
-    session: Session, task: Task, status: str,
+    session: Session,
+    task: Task,
+    status: str,
 ) -> None:
     """Update a task's status and flush."""
     valid = {"pending", "scaffolded", "tested", "implemented", "verified"}

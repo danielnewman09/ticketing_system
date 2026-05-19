@@ -44,9 +44,7 @@ Produce test files via the available tool. Each file includes:
 
 TOOL_DEFINITION = {
     "name": "produce_test_files",
-    "description": (
-        "Generate pytest test files that implement the verification procedures."
-    ),
+    "description": ("Generate pytest test files that implement the verification procedures."),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -58,7 +56,8 @@ TOOL_DEFINITION = {
                         "file_path": {"type": "string"},
                         "content": {"type": "string"},
                         "test_names": {
-                            "type": "array", "items": {"type": "string"},
+                            "type": "array",
+                            "items": {"type": "string"},
                         },
                     },
                     "required": ["file_path", "content", "test_names"],
@@ -97,17 +96,17 @@ def build_test_context(
         lines.append(f"method: {v.get('method', 'automated')}")
         lines.append(f"description: {v.get('description', '')}")
 
-        if v.get('preconditions'):
+        if v.get("preconditions"):
             lines.append("preconditions:")
-            for pc in v['preconditions']:
+            for pc in v["preconditions"]:
                 lines.append(f"  - {pc}")
-        if v.get('actions'):
+        if v.get("actions"):
             lines.append("actions:")
-            for a in v['actions']:
+            for a in v["actions"]:
                 lines.append(f"  - {a}")
-        if v.get('postconditions'):
+        if v.get("postconditions"):
             lines.append("postconditions:")
-            for pc in v['postconditions']:
+            for pc in v["postconditions"]:
                 lines.append(f"  - {pc}")
         lines.append("")
 

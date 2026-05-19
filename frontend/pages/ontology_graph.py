@@ -155,10 +155,16 @@ async def ontology_graph_page():
     render_ontology_graph_legend()
 
     # Main content: graph canvas + detail sidebar
-    with ui.row().classes("w-full gap-0 px-2").style("height: calc(100vh - 240px); min-height: 400px"):
+    with (
+        ui.row()
+        .classes("w-full gap-0 px-2")
+        .style("height: calc(100vh - 240px); min-height: 400px")
+    ):
         # Graph container — single div with id for Cytoscape to mount into
-        cy = ui.element("div").classes("flex-grow").style(
-            f"height: 100%; background: {BACKGROUNDS['base']}; border-radius: 8px;"
+        cy = (
+            ui.element("div")
+            .classes("flex-grow")
+            .style(f"height: 100%; background: {BACKGROUNDS['base']}; border-radius: 8px;")
         )
         cy._props["id"] = "cy-container"
 

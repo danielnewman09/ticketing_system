@@ -23,10 +23,10 @@ COLORS = {
 # ---------------------------------------------------------------------------
 
 BACKGROUNDS = {
-    "base": "#1a1a2e",      # deepest background (graph canvas, drawer)
-    "panel": "#0f172a",     # agent console, fixed panels
-    "surface": "#1e293b",   # raised cards/alerts
-    "border": "#334155",    # subtle borders
+    "base": "#1a1a2e",  # deepest background (graph canvas, drawer)
+    "panel": "#0f172a",  # agent console, fixed panels
+    "surface": "#1e293b",  # raised cards/alerts
+    "border": "#334155",  # subtle borders
 }
 
 # ---------------------------------------------------------------------------

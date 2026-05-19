@@ -26,12 +26,20 @@ class HighLevelRequirement(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    component_id: Mapped[Optional[int]] = mapped_column(ForeignKey("components.id", ondelete="SET NULL"), nullable=True)
+    component_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("components.id", ondelete="SET NULL"), nullable=True
+    )
     dependency_context: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    component: Mapped[Optional[Component]] = relationship("Component", back_populates="high_level_requirements")
-    low_level_requirements: Mapped[list[LowLevelRequirement]] = relationship("LowLevelRequirement", back_populates="high_level_requirement")
-    triples: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", secondary=high_level_requirements_triples)
+    component: Mapped[Optional[Component]] = relationship(
+        "Component", back_populates="high_level_requirements"
+    )
+    low_level_requirements: Mapped[list[LowLevelRequirement]] = relationship(
+        "LowLevelRequirement", back_populates="high_level_requirement"
+    )
+    triples: Mapped[list[OntologyTriple]] = relationship(
+        "OntologyTriple", secondary=high_level_requirements_triples
+    )
 
     def __repr__(self):
         return self.description[:80] if self.description else f"HLR {self.id}"
@@ -80,13 +88,23 @@ class LowLevelRequirement(Base):
     __tablename__ = "low_level_requirements"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    high_level_requirement_id: Mapped[Optional[int]] = mapped_column(ForeignKey("high_level_requirements.id", ondelete="SET NULL"), nullable=True)
+    high_level_requirement_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("high_level_requirements.id", ondelete="SET NULL"), nullable=True
+    )
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
-    high_level_requirement: Mapped[Optional[HighLevelRequirement]] = relationship("HighLevelRequirement", back_populates="low_level_requirements")
-    verifications: Mapped[list[VerificationMethod]] = relationship("VerificationMethod", back_populates="low_level_requirement", cascade="all, delete-orphan")
-    components: Mapped[list[Component]] = relationship("Component", secondary=low_level_requirements_components)
-    triples: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", secondary=low_level_requirements_triples)
+    high_level_requirement: Mapped[Optional[HighLevelRequirement]] = relationship(
+        "HighLevelRequirement", back_populates="low_level_requirements"
+    )
+    verifications: Mapped[list[VerificationMethod]] = relationship(
+        "VerificationMethod", back_populates="low_level_requirement", cascade="all, delete-orphan"
+    )
+    components: Mapped[list[Component]] = relationship(
+        "Component", secondary=low_level_requirements_components
+    )
+    triples: Mapped[list[OntologyTriple]] = relationship(
+        "OntologyTriple", secondary=low_level_requirements_triples
+    )
 
     def __repr__(self):
         return self.description[:80] if self.description else f"LLR {self.id}"
@@ -109,12 +127,18 @@ def format_llr_dict(llr):
 class TicketRequirement(Base):
     __tablename__ = "ticket_requirements"
     __table_args__ = (
-        UniqueConstraint("ticket_id", "low_level_requirement_id", name="uq_ticket_requirements_ticket_llr"),
+        UniqueConstraint(
+            "ticket_id", "low_level_requirement_id", name="uq_ticket_requirements_ticket_llr"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
-    low_level_requirement_id: Mapped[int] = mapped_column(ForeignKey("low_level_requirements.id", ondelete="CASCADE"), nullable=False)
+    ticket_id: Mapped[int] = mapped_column(
+        ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
+    )
+    low_level_requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("low_level_requirements.id", ondelete="CASCADE"), nullable=False
+    )
 
     def __repr__(self):
         return f"Ticket {self.ticket_id} -> LLR {self.low_level_requirement_id}"

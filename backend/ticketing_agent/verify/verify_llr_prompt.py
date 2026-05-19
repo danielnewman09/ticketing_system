@@ -4,7 +4,6 @@ Prompt templates and formatters for the verify_llr agent.
 
 from backend.requirements.schemas import VerificationSchema
 
-
 SYSTEM_PROMPT = """\
 You are a verification engineer. Given a low-level requirement and the
 ontology design (classes, structs, enums, etc.), your job is to produce

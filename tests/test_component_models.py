@@ -14,10 +14,10 @@ from backend.db.models.components import (
     TestFramework,
 )
 
-
 # ---------------------------------------------------------------------------
 # Language
 # ---------------------------------------------------------------------------
+
 
 class TestLanguage:
     """Tests for Language CRUD and constraints."""
@@ -67,6 +67,7 @@ class TestLanguage:
 # ---------------------------------------------------------------------------
 # Component
 # ---------------------------------------------------------------------------
+
 
 class TestComponent:
     """Tests for Component CRUD, constraints and relationships."""
@@ -234,6 +235,7 @@ class TestComponent:
 # BuildSystem
 # ---------------------------------------------------------------------------
 
+
 class TestBuildSystem:
     """Tests for BuildSystem CRUD and relationships."""
 
@@ -291,6 +293,7 @@ class TestBuildSystem:
 # TestFramework
 # ---------------------------------------------------------------------------
 
+
 class TestTestFramework:
     """Tests for TestFramework CRUD and relationships."""
 
@@ -343,6 +346,7 @@ class TestTestFramework:
 # DependencyManager
 # ---------------------------------------------------------------------------
 
+
 class TestDependencyManager:
     """Tests for DependencyManager CRUD and relationships."""
 
@@ -388,6 +392,7 @@ class TestDependencyManager:
 # ---------------------------------------------------------------------------
 # Dependency
 # ---------------------------------------------------------------------------
+
 
 class TestDependency:
     """Tests for Dependency CRUD and relationships."""
@@ -498,6 +503,7 @@ class TestDependency:
 # ---------------------------------------------------------------------------
 # DependencyRecommendation
 # ---------------------------------------------------------------------------
+
 
 class TestDependencyRecommendation:
     """Tests for DependencyRecommendation CRUD and relationships."""

@@ -41,17 +41,22 @@ async def dependency_review_page(component_id: int):
         ui.label(f"Dependency Research: {comp['name']}").classes("text-2xl font-bold")
         with ui.row().classes("gap-2"):
             ui.button(
-                "Back", icon="arrow_back",
+                "Back",
+                icon="arrow_back",
                 on_click=lambda: ui.navigate.to(f"/component/{component_id}"),
             ).props("flat size=sm")
             ui.button(
-                "Run Research", icon="science",
+                "Run Research",
+                icon="science",
                 on_click=lambda: do_run_research(),
             ).props("color=primary size=sm")
             ui.button(
-                "Add Manually", icon="add",
+                "Add Manually",
+                icon="add",
                 on_click=lambda: add_dialog.open(),
-            ).props("size=sm outline").classes("text-white border-white")
+            ).props(
+                "size=sm outline"
+            ).classes("text-white border-white")
 
     # Add-manually dialog
     with ui.dialog() as add_dialog, ui.card().classes(CLS_DIALOG_MD):
@@ -62,7 +67,8 @@ async def dependency_review_page(component_id: int):
         with ui.row().classes("w-full justify-end gap-2 mt-2"):
             ui.button("Cancel", on_click=add_dialog.close).props("flat size=sm")
             ui.button(
-                "Add", icon="check",
+                "Add",
+                icon="check",
                 on_click=lambda: submit_manual(),
             ).props("color=primary size=sm")
 
@@ -73,11 +79,15 @@ async def dependency_review_page(component_id: int):
         if not name:
             ui.notify("Package name is required", type="warning")
             return
-        await asyncio.to_thread(add_manual_recommendation, component_id, {
-            "name": name,
-            "version": version_input.value.strip(),
-            "github_url": url_input.value.strip(),
-        })
+        await asyncio.to_thread(
+            add_manual_recommendation,
+            component_id,
+            {
+                "name": name,
+                "version": version_input.value.strip(),
+                "github_url": url_input.value.strip(),
+            },
+        )
         add_dialog.close()
         name_input.value = ""
         version_input.value = ""
@@ -90,8 +100,10 @@ async def dependency_review_page(component_id: int):
         try:
             result = await asyncio.to_thread(run_research, component_id)
             await asyncio.to_thread(
-                save_recommendations, component_id,
-                result["summary"], result["recommendations"],
+                save_recommendations,
+                component_id,
+                result["summary"],
+                result["recommendations"],
             )
             ui.notify(
                 f"Found {len(result['recommendations'])} recommendations",

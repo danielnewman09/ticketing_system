@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from backend.db import init_db, get_session
@@ -70,9 +71,14 @@ def main():
                     prompt_log_file=os.path.join(LOGS_DIR, f"decompose_hlr{hlr.id}.md"),
                 )
                 from backend.requirements.services.persistence import persist_decomposition
+
                 persist_decomposition(session, hlr, result.low_level_requirements)
                 llrs = [
-                    {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
+                    {
+                        "id": l.id,
+                        "description": l.description,
+                        "hlr_id": l.high_level_requirement_id,
+                    }
                     for l in hlr.low_level_requirements
                 ]
                 print(f"  Generated {len(llrs)} LLRs")
@@ -99,10 +105,9 @@ def main():
             # Verifications
             verifications = []
             for llr in hlr.low_level_requirements:
-                verifications.extend([
-                    {**v.model_dump(), "llr_id": llr.id}
-                    for v in llr.verifications
-                ])
+                verifications.extend(
+                    [{**v.model_dump(), "llr_id": llr.id} for v in llr.verifications]
+                )
             print(f"  Verifications: {len(verifications)}")
 
             # Tasks
@@ -119,14 +124,13 @@ def main():
 
             # Persist
             qname_map = build_qname_to_node(session)
-            qname_map.update({
-                c.name: component_namespace + "::" + c.name
-                for c in oo.classes
-            })
+            qname_map.update({c.name: component_namespace + "::" + c.name for c in oo.classes})
             result = persist_tasks(session, batch, qname_map)
-            print(f"  Persisted: {result.tasks_created} tasks, "
-                  f"{result.links_to_design} design links, "
-                  f"{result.links_to_verification} verification links")
+            print(
+                f"  Persisted: {result.tasks_created} tasks, "
+                f"{result.links_to_design} design links, "
+                f"{result.links_to_verification} verification links"
+            )
 
 
 if __name__ == "__main__":

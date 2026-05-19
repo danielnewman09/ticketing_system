@@ -35,17 +35,21 @@ def _flatten_class_contexts(class_contexts: list[dict]) -> list[dict]:
     """Flatten structured class contexts into a flat ontology node list for validation."""
     nodes = []
     for cls in class_contexts:
-        nodes.append({
-            "qualified_name": cls["qualified_name"],
-            "kind": cls["kind"],
-            "description": cls.get("description", ""),
-        })
+        nodes.append(
+            {
+                "qualified_name": cls["qualified_name"],
+                "kind": cls["kind"],
+                "description": cls.get("description", ""),
+            }
+        )
         for m in cls.get("attributes", []) + cls.get("methods", []):
-            nodes.append({
-                "qualified_name": m["qualified_name"],
-                "kind": m["kind"],
-                "description": m.get("description", ""),
-            })
+            nodes.append(
+                {
+                    "qualified_name": m["qualified_name"],
+                    "kind": m["kind"],
+                    "description": m.get("description", ""),
+                }
+            )
     return nodes
 
 
@@ -72,8 +76,7 @@ def verify(
     system_prompt = SYSTEM_PROMPT.format(design_context=context_text)
 
     verifications_text = "\n".join(
-        f"  - [{v['method']}] {v['test_name']}: {v['description']}"
-        for v in existing_verifications
+        f"  - [{v['method']}] {v['test_name']}: {v['description']}" for v in existing_verifications
     )
 
     user_message = (
@@ -91,10 +94,7 @@ def verify(
         prompt_log_file=prompt_log_file,
     )
 
-    verifications = [
-        VerificationSchema.model_validate(v)
-        for v in result["verifications"]
-    ]
+    verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]
 
     # Validate references against known nodes
     if ontology_nodes is None:
@@ -138,7 +138,9 @@ if __name__ == "__main__":
             print(f"  - {qname} ({ctx})")
         print()
 
-    print(json.dumps(
-        [v.model_dump() for v in result.verifications],
-        indent=2,
-    ))
+    print(
+        json.dumps(
+            [v.model_dump() for v in result.verifications],
+            indent=2,
+        )
+    )

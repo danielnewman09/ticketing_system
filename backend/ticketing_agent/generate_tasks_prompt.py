@@ -36,9 +36,7 @@ Produce a list of tasks via the available tool. Each task must include:
 
 TOOL_DEFINITION = {
     "name": "generate_tasks",
-    "description": (
-        "Generate implementation tasks from the OO design and verification methods."
-    ),
+    "description": ("Generate implementation tasks from the OO design and verification methods."),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -50,16 +48,19 @@ TOOL_DEFINITION = {
                         "title": {"type": "string"},
                         "description": {"type": "string"},
                         "design_node_qualified_names": {
-                            "type": "array", "items": {"type": "string"},
+                            "type": "array",
+                            "items": {"type": "string"},
                         },
                         "verification_test_names": {
-                            "type": "array", "items": {"type": "string"},
+                            "type": "array",
+                            "items": {"type": "string"},
                         },
                         "source_files": {"type": "array", "items": {"type": "string"}},
                         "test_files": {"type": "array", "items": {"type": "string"}},
                         "dependencies": {"type": "array", "items": {"type": "string"}},
                         "estimated_complexity": {
-                            "type": "string", "enum": ["low", "medium", "high"],
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
                         },
                     },
                     "required": ["title", "description"],
@@ -71,7 +72,8 @@ TOOL_DEFINITION = {
                 "items": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "minItems": 2, "maxItems": 2,
+                    "minItems": 2,
+                    "maxItems": 2,
                 },
             },
         },
@@ -89,53 +91,51 @@ def build_task_context(
     lines = ["## OO Class Design\n"]
     for cls in classes:
         lines.append(f"### {cls['name']}")
-        if cls.get('module'):
+        if cls.get("module"):
             lines.append(f"Module: {cls['module']}")
-        if cls.get('description'):
+        if cls.get("description"):
             lines.append(f"Description: {cls['description']}")
-        if cls.get('attributes'):
+        if cls.get("attributes"):
             lines.append("Attributes:")
-            for a in cls['attributes']:
-                vis = a.get('visibility', 'public')
-                lines.append(
-                    f"  - {a['name']}: {a.get('type_name', 'any')} ({vis})"
-                )
-        if cls.get('methods'):
+            for a in cls["attributes"]:
+                vis = a.get("visibility", "public")
+                lines.append(f"  - {a['name']}: {a.get('type_name', 'any')} ({vis})")
+        if cls.get("methods"):
             lines.append("Methods:")
-            for m in cls['methods']:
-                params = ", ".join(m.get('parameters', []))
-                ret = m.get('return_type', 'void')
-                vis = m.get('visibility', 'public')
+            for m in cls["methods"]:
+                params = ", ".join(m.get("parameters", []))
+                ret = m.get("return_type", "void")
+                vis = m.get("visibility", "public")
                 lines.append(f"  - {m['name']}({params}) -> {ret} ({vis})")
-        if cls.get('inherits_from'):
+        if cls.get("inherits_from"):
             lines.append(f"Inherits: {', '.join(cls['inherits_from'])}")
-        if cls.get('requirement_ids'):
+        if cls.get("requirement_ids"):
             lines.append(f"Requirements: {', '.join(cls['requirement_ids'])}")
         lines.append("")
 
     lines.append("## Verification Methods\n")
     for v in verifications:
-        tn = v.get('test_name', 'unnamed')
-        desc = v.get('description', '')
+        tn = v.get("test_name", "unnamed")
+        desc = v.get("description", "")
         lines.append(f"- [{v['method']}] {tn}: {desc}")
-        if v.get('preconditions'):
+        if v.get("preconditions"):
             lines.append("  Pre-conditions:")
-            for pc in v['preconditions']:
+            for pc in v["preconditions"]:
                 lines.append(f"    - {pc}")
-        if v.get('actions'):
+        if v.get("actions"):
             lines.append("  Actions:")
-            for a in v['actions']:
+            for a in v["actions"]:
                 lines.append(f"    - {a}")
-        if v.get('postconditions'):
+        if v.get("postconditions"):
             lines.append("  Post-conditions:")
-            for pc in v['postconditions']:
+            for pc in v["postconditions"]:
                 lines.append(f"    - {pc}")
         lines.append("")
 
     if existing_classes:
         lines.append("## Existing Classes (do NOT recreate)\n")
         for c in existing_classes:
-            qn = c.get('qualified_name', c.get('name', '?'))
+            qn = c.get("qualified_name", c.get("name", "?"))
             lines.append(f"- {qn}")
         lines.append("")
 

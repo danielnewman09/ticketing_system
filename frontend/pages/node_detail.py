@@ -72,9 +72,7 @@ async def node_detail_page(node_id: int):
                     ui.label("Identity").classes(CLS_SECTION_HEADER)
                     _prop_row("Qualified Name", node["qualified_name"])
                     with ui.row().classes("gap-2 mt-2"):
-                        ui.badge(kind, color="grey").style(
-                            f"background:{color} !important"
-                        )
+                        ui.badge(kind, color="grey").style(f"background:{color} !important")
                         if node["specialization"]:
                             ui.badge(node["specialization"], color="grey")
                         if node["visibility"]:
@@ -109,7 +107,9 @@ async def node_detail_page(node_id: int):
                     if all_members:
                         available_types = neo4j.get("available_types", [])
                         _render_members_card(
-                            all_members, available_types, content,
+                            all_members,
+                            available_types,
+                            content,
                         )
 
                 # Code details
@@ -144,9 +144,13 @@ async def node_detail_page(node_id: int):
                 if neo4j:
                     with ui.card().classes("w-full"):
                         ui.label("Neighbourhood").classes(CLS_SECTION_HEADER)
-                        cy = ui.element("div").style(
-                            f"height: calc(100vh - 280px); min-height: 400px; background: {BACKGROUNDS['base']}; border-radius: 8px;"
-                        ).classes("w-full")
+                        cy = (
+                            ui.element("div")
+                            .style(
+                                f"height: calc(100vh - 280px); min-height: 400px; background: {BACKGROUNDS['base']}; border-radius: 8px;"
+                            )
+                            .classes("w-full")
+                        )
                         cy._props["id"] = "node-cy-container"
 
                 if neo4j:
@@ -154,9 +158,9 @@ async def node_detail_page(node_id: int):
                         with ui.card().classes("w-full"):
                             ui.label("Implemented By").classes(CLS_SECTION_HEADER)
                             for impl in neo4j["implemented_by"]:
-                                ui.label(
-                                    impl.get("qualified_name", impl.get("name", ""))
-                                ).classes("text-sm text-blue-300")
+                                ui.label(impl.get("qualified_name", impl.get("name", ""))).classes(
+                                    "text-sm text-blue-300"
+                                )
 
                     if neo4j.get("requirements"):
                         with ui.card().classes("w-full"):
@@ -177,7 +181,8 @@ async def node_detail_page(node_id: int):
                 f'"style": {{"border-width": 3, "border-color": "{STATUS_COLORS["selected"]}", "border-style": "solid"}}}}'
             )
             graph = await asyncio.to_thread(
-                fetch_neighbourhood_graph_data, node["qualified_name"],
+                fetch_neighbourhood_graph_data,
+                node["qualified_name"],
             )
             if graph["nodes"]:
                 await render_cytoscape_graph(
@@ -214,7 +219,12 @@ def _render_members_card(
     autocomplete from available_types.
     """
     _VIS_ORDER = {"public": 0, "protected": 1, "private": 2, "": 3}
-    _VIS_LABELS = {"public": "Public", "protected": "Protected", "private": "Private", "": "Unspecified"}
+    _VIS_LABELS = {
+        "public": "Public",
+        "protected": "Protected",
+        "private": "Private",
+        "": "Unspecified",
+    }
     _KIND_MAP = {"variable": "attribute", "function": "method"}
 
     # Group: visibility → kind → [members]
@@ -225,41 +235,36 @@ def _render_members_card(
         grouped.setdefault(vis, {}).setdefault(kind, []).append(m)
 
     with ui.card().classes("w-full"):
-        ui.label("Member Documentation").classes(
-            CLS_SECTION_HEADER
-        )
+        ui.label("Member Documentation").classes(CLS_SECTION_HEADER)
 
         for vis in sorted(grouped.keys(), key=lambda v: _VIS_ORDER.get(v, 9)):
             by_kind = grouped[vis]
             vis_label = _VIS_LABELS.get(vis, vis.title())
 
             # Visibility section header
-            ui.label(vis_label).classes(
-                "text-sm font-semibold mt-3 mb-1 text-gray-300"
-            )
+            ui.label(vis_label).classes("text-sm font-semibold mt-3 mb-1 text-gray-300")
             ui.separator().classes("mb-2")
 
             # Attributes
             attrs = by_kind.get("attribute", [])
             if attrs:
-                ui.label("Attributes").classes(
-                    CLS_SECTION_SUBHEADER + " ml-2"
-                )
+                ui.label("Attributes").classes(CLS_SECTION_SUBHEADER + " ml-2")
                 for a in sorted(attrs, key=lambda x: x["name"]):
                     _render_member_row(a, "attribute", available_types, content_refreshable)
 
             # Methods
             methods = by_kind.get("method", [])
             if methods:
-                ui.label("Methods").classes(
-                    CLS_SECTION_SUBHEADER + " ml-2 mt-2"
-                )
+                ui.label("Methods").classes(CLS_SECTION_SUBHEADER + " ml-2 mt-2")
                 for m in sorted(methods, key=lambda x: x["name"]):
                     _render_member_row(m, "method", available_types, content_refreshable)
 
 
 def _render_member_row(
-    member: dict, kind: str, available_types: list[str], content_refreshable,
+    member: dict,
+    kind: str,
+    available_types: list[str],
+    content_refreshable,
 ):
     """Render a single member in Doxygen-style with editable type + autocomplete."""
     name = member["name"]
@@ -272,14 +277,16 @@ def _render_member_row(
         # Signature line
         with ui.row().classes("items-center gap-1 flex-wrap"):
             # Editable type field with autocomplete
-            type_input = ui.input(
-                value=type_sig,
-                placeholder="type" if kind == "attribute" else "return type",
-                autocomplete=available_types,
-            ).classes("w-48").props("dense borderless input-class=text-blue-300")
-            type_input.style(
-                "font-family: monospace; font-size: 13px;"
+            type_input = (
+                ui.input(
+                    value=type_sig,
+                    placeholder="type" if kind == "attribute" else "return type",
+                    autocomplete=available_types,
+                )
+                .classes("w-48")
+                .props("dense borderless input-class=text-blue-300")
             )
+            type_input.style("font-family: monospace; font-size: 13px;")
 
             # Name + args
             if kind == "method":

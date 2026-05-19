@@ -31,7 +31,9 @@ async def ontology_page():
             for kind, count in sorted(data["kind_counts"].items(), key=lambda x: -x[1]):
                 color = KIND_COLORS.get(kind, "#666")
                 with ui.row().classes("items-center gap-1"):
-                    ui.html(f'<div style="width:12px;height:12px;border-radius:50%;background:{color}"></div>')
+                    ui.html(
+                        f'<div style="width:12px;height:12px;border-radius:50%;background:{color}"></div>'
+                    )
                     ui.label(f"{kind}: {count}").classes("text-sm")
 
     with ui.card().classes("w-full mx-2"):
@@ -39,7 +41,12 @@ async def ontology_page():
         columns = [
             {"name": "name", "label": "Name", "field": "name", "align": "left", "sortable": True},
             {"name": "kind", "label": "Kind", "field": "kind", "align": "left", "sortable": True},
-            {"name": "qualified_name", "label": "Qualified Name", "field": "qualified_name", "align": "left"},
+            {
+                "name": "qualified_name",
+                "label": "Qualified Name",
+                "field": "qualified_name",
+                "align": "left",
+            },
             {"name": "component", "label": "Component", "field": "component", "align": "left"},
         ]
         t = ui.table(columns=columns, rows=data["nodes"]).classes("w-full")

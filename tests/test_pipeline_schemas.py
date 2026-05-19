@@ -40,7 +40,9 @@ class TestTaskSchema:
     def test_invalid_complexity(self):
         with pytest.raises(ValidationError):
             TaskSchema(
-                title="t", description="d", estimated_complexity="invalid",
+                title="t",
+                description="d",
+                estimated_complexity="invalid",
             )
 
     def test_serialization(self):

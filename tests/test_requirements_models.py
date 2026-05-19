@@ -16,7 +16,6 @@ from backend.db.models.requirements import (
 from backend.db.models.components import Component, Language
 from backend.db.models.tickets import Ticket
 
-
 # ---------------------------------------------------------------------------
 # HighLevelRequirement
 # ---------------------------------------------------------------------------
@@ -129,9 +128,7 @@ class TestHighLevelRequirement:
         seeded_session.add(hlr)
         seeded_session.flush()
 
-        llr = LowLevelRequirement(
-            description="Child LLR", high_level_requirement=hlr
-        )
+        llr = LowLevelRequirement(description="Child LLR", high_level_requirement=hlr)
         seeded_session.add(llr)
         seeded_session.flush()
 
@@ -238,9 +235,7 @@ class TestLowLevelRequirement:
         seeded_session.flush()
         hlr_id = hlr.id
 
-        llr = LowLevelRequirement(
-            description="Orphaned LLR", high_level_requirement=hlr
-        )
+        llr = LowLevelRequirement(description="Orphaned LLR", high_level_requirement=hlr)
         seeded_session.add(llr)
         seeded_session.flush()
         llr_id = llr.id
@@ -319,9 +314,7 @@ class TestTicketRequirement:
     def test_ticket_requirement_unique_constraint(self, seeded_session):
         """Duplicate ticket_id + low_level_requirement_id must raise IntegrityError."""
         hlr = seeded_session.query(HighLevelRequirement).first()
-        llr = LowLevelRequirement(
-            description="Unique LLR", high_level_requirement=hlr
-        )
+        llr = LowLevelRequirement(description="Unique LLR", high_level_requirement=hlr)
         seeded_session.add(llr)
         seeded_session.flush()
 
@@ -329,15 +322,11 @@ class TestTicketRequirement:
         seeded_session.add(ticket)
         seeded_session.flush()
 
-        tr1 = TicketRequirement(
-            ticket_id=ticket.id, low_level_requirement_id=llr.id
-        )
+        tr1 = TicketRequirement(ticket_id=ticket.id, low_level_requirement_id=llr.id)
         seeded_session.add(tr1)
         seeded_session.flush()
 
-        tr2 = TicketRequirement(
-            ticket_id=ticket.id, low_level_requirement_id=llr.id
-        )
+        tr2 = TicketRequirement(ticket_id=ticket.id, low_level_requirement_id=llr.id)
         seeded_session.add(tr2)
         with pytest.raises(IntegrityError):
             seeded_session.flush()
@@ -467,7 +456,9 @@ class TestFormatHlrsForPrompt:
         assert "HLR 1 [Component: Calc]: HLR one" in result
 
     def test_llrs_only_no_hlrs(self):
-        result = format_hlrs_for_prompt([], llrs=[{"id": 5, "description": "Orphan", "hlr_id": None}])
+        result = format_hlrs_for_prompt(
+            [], llrs=[{"id": 5, "description": "Orphan", "hlr_id": None}]
+        )
         assert "Unlinked LLRs:" in result
         assert "  LLR 5: Orphan" in result
 

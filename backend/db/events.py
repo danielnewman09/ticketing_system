@@ -53,6 +53,7 @@ def update_ticket_embedding(mapper, connection, target):
     """Update ticket embedding on insert/update."""
     try:
         from backend.search.embeddings import upsert_ticket_embedding
+
         upsert_ticket_embedding(target.id, target.title, target.summary)
     except Exception:
         # Don't fail the transaction if embedding update fails

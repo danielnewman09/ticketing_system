@@ -42,6 +42,7 @@ mcp = FastMCP("ticketing-system")
 # Read tools — query current state
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool()
 def list_requirements() -> str:
     """List all HLRs with their LLRs and verification methods."""
@@ -60,7 +61,12 @@ def list_ontology() -> str:
     """List all ontology nodes and triples."""
     with get_session() as session:
         nodes = [
-            {"id": n.id, "qualified_name": n.qualified_name, "kind": n.kind, "description": n.description}
+            {
+                "id": n.id,
+                "qualified_name": n.qualified_name,
+                "kind": n.kind,
+                "description": n.description,
+            }
             for n in session.query(OntologyNode).all()
         ]
         triples = [
@@ -79,27 +85,40 @@ def list_ontology() -> str:
 @mcp.tool()
 def get_graph_metrics() -> str:
     """Compute structural metrics for the requirements-ontology graph."""
-    from backend.ticketing_agent.review.challenge_design import compute_graph_metrics, format_metrics_for_prompt
+    from backend.ticketing_agent.review.challenge_design import (
+        compute_graph_metrics,
+        format_metrics_for_prompt,
+    )
 
     with get_session() as session:
-        hlrs = [{"id": h.id, "description": h.description} for h in session.query(HighLevelRequirement).all()]
+        hlrs = [
+            {"id": h.id, "description": h.description}
+            for h in session.query(HighLevelRequirement).all()
+        ]
         llrs = [
             {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
             for l in session.query(LowLevelRequirement).all()
         ]
         nodes = [
-            {"id": n.id, "qualified_name": n.qualified_name, "kind": n.kind, "description": n.description}
+            {
+                "id": n.id,
+                "qualified_name": n.qualified_name,
+                "kind": n.kind,
+                "description": n.description,
+            }
             for n in session.query(OntologyNode).all()
         ]
 
         triples = []
         for t in session.query(OntologyTriple).all():
-            triples.append({
-                "id": t.id,
-                "subject_qualified_name": t.subject.qualified_name,
-                "predicate": t.predicate.name,
-                "object_qualified_name": t.object.qualified_name,
-            })
+            triples.append(
+                {
+                    "id": t.id,
+                    "subject_qualified_name": t.subject.qualified_name,
+                    "predicate": t.predicate.name,
+                    "object_qualified_name": t.object.qualified_name,
+                }
+            )
 
         hlr_triples = {}
         for hlr in session.query(HighLevelRequirement).all():
@@ -131,21 +150,24 @@ def list_component_dependencies(component_id: int) -> str:
             .all()
         )
 
-        return json.dumps({
-            "component_id": component.id,
-            "component_name": component.name,
-            "language": repr(language),
-            "language_id": language.id,
-            "dependencies": [
-                {
-                    "name": d.name,
-                    "version": d.version,
-                    "is_dev": d.is_dev,
-                    "manager_name": d.manager.name,
-                }
-                for d in deps
-            ],
-        }, indent=2)
+        return json.dumps(
+            {
+                "component_id": component.id,
+                "component_name": component.name,
+                "language": repr(language),
+                "language_id": language.id,
+                "dependencies": [
+                    {
+                        "name": d.name,
+                        "version": d.version,
+                        "is_dev": d.is_dev,
+                        "manager_name": d.manager.name,
+                    }
+                    for d in deps
+                ],
+            },
+            indent=2,
+        )
 
 
 @mcp.tool()
@@ -158,11 +180,13 @@ def save_dependency_assessment(hlr_id: int, assessment: dict) -> str:
 
         hlr.dependency_context = assessment
 
-        return json.dumps({
-            "hlr_id": hlr_id,
-            "message": f"Saved dependency assessment for HLR {hlr_id}",
-            "recommendation": assessment.get("recommendation", ""),
-        })
+        return json.dumps(
+            {
+                "hlr_id": hlr_id,
+                "message": f"Saved dependency assessment for HLR {hlr_id}",
+                "recommendation": assessment.get("recommendation", ""),
+            }
+        )
 
 
 @mcp.tool()
@@ -170,8 +194,7 @@ def list_predicates() -> str:
     """List all available predicates for ontology triples."""
     with get_session() as session:
         predicates = [
-            {"name": p.name, "description": p.description}
-            for p in session.query(Predicate).all()
+            {"name": p.name, "description": p.description} for p in session.query(Predicate).all()
         ]
         return json.dumps(predicates, indent=2)
 
@@ -179,6 +202,7 @@ def list_predicates() -> str:
 # ---------------------------------------------------------------------------
 # Write tools — persist structured results
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool()
 def save_decomposed_requirement(
@@ -193,11 +217,13 @@ def save_decomposed_requirement(
         llrs = [LowLevelRequirementSchema.model_validate(d) for d in low_level_requirements]
         result = persist_decomposition(session, hlr, llrs)
 
-        return json.dumps({
-            "hlr_id": hlr.id,
-            "llr_count": result.llrs_created,
-            "message": f"Created HLR {hlr.id} with {result.llrs_created} LLRs",
-        })
+        return json.dumps(
+            {
+                "hlr_id": hlr.id,
+                "llr_count": result.llrs_created,
+                "message": f"Created HLR {hlr.id} with {result.llrs_created} LLRs",
+            }
+        )
 
 
 @mcp.tool()
@@ -208,19 +234,23 @@ def save_ontology_design(
 ) -> str:
     """Save ontology nodes, triples, and requirement-to-triple links."""
     with get_session() as session:
-        design = DesignSchema.model_validate({
-            "nodes": nodes,
-            "triples": triples,
-            "requirement_links": requirement_links or [],
-        })
+        design = DesignSchema.model_validate(
+            {
+                "nodes": nodes,
+                "triples": triples,
+                "requirement_links": requirement_links or [],
+            }
+        )
         result = persist_design(session, design)
 
-        return json.dumps({
-            "nodes_created": result.nodes_created,
-            "triples_created": result.triples_created,
-            "triples_skipped": result.triples_skipped,
-            "requirement_links_applied": result.links_applied,
-        })
+        return json.dumps(
+            {
+                "nodes_created": result.nodes_created,
+                "triples_created": result.triples_created,
+                "triples_skipped": result.triples_skipped,
+                "requirement_links_applied": result.links_applied,
+            }
+        )
 
 
 @mcp.tool()
@@ -236,12 +266,14 @@ def save_verification(
         schemas = [VerificationSchema.model_validate(v) for v in verifications]
         result = persist_verification(session, llr, schemas)
 
-        return json.dumps({
-            "llr_id": llr_id,
-            "verifications_saved": result.verifications_saved,
-            "conditions_created": result.conditions_created,
-            "actions_created": result.actions_created,
-        })
+        return json.dumps(
+            {
+                "llr_id": llr_id,
+                "verifications_saved": result.verifications_saved,
+                "conditions_created": result.conditions_created,
+                "actions_created": result.actions_created,
+            }
+        )
 
 
 @mcp.tool()
@@ -261,13 +293,15 @@ def apply_remediation(
     with get_session() as session:
         # Remove LLRs
         if remove_llr_ids:
-            count = session.query(LowLevelRequirement).filter(
-                LowLevelRequirement.id.in_(remove_llr_ids)
-            ).delete(synchronize_session="fetch")
+            count = (
+                session.query(LowLevelRequirement)
+                .filter(LowLevelRequirement.id.in_(remove_llr_ids))
+                .delete(synchronize_session="fetch")
+            )
             changes.append(f"Removed {count} LLR(s)")
 
         # Remove triples
-        for rt in (remove_triples or []):
+        for rt in remove_triples or []:
             triples = (
                 session.query(OntologyTriple)
                 .join(OntologyNode, OntologyTriple.subject_id == OntologyNode.id)
@@ -278,18 +312,24 @@ def apply_remediation(
             for t in triples:
                 if t.object.qualified_name == rt["object_qualified_name"]:
                     session.delete(t)
-                    changes.append(f"Removed triple: {rt['subject_qualified_name']} --{rt['predicate']}--> {rt['object_qualified_name']}")
+                    changes.append(
+                        f"Removed triple: {rt['subject_qualified_name']} --{rt['predicate']}--> {rt['object_qualified_name']}"
+                    )
 
         # Remove nodes
         if remove_node_qualified_names:
-            count = session.query(OntologyNode).filter(
-                OntologyNode.qualified_name.in_(remove_node_qualified_names)
-            ).delete(synchronize_session="fetch")
+            count = (
+                session.query(OntologyNode)
+                .filter(OntologyNode.qualified_name.in_(remove_node_qualified_names))
+                .delete(synchronize_session="fetch")
+            )
             changes.append(f"Removed {count} node(s)")
 
         # Split HLRs
-        for split in (split_hlrs or []):
-            old_hlr = session.query(HighLevelRequirement).filter_by(id=split["original_hlr_id"]).first()
+        for split in split_hlrs or []:
+            old_hlr = (
+                session.query(HighLevelRequirement).filter_by(id=split["original_hlr_id"]).first()
+            )
             if not old_hlr:
                 changes.append(f"Split skipped: HLR {split['original_hlr_id']} not found")
                 continue
@@ -303,14 +343,17 @@ def apply_remediation(
                     ).update({"high_level_requirement_id": hlr.id}, synchronize_session="fetch")
                 for llr_data in new_hlr_data.get("new_llrs", []):
                     llr = LowLevelRequirement(
-                        high_level_requirement=hlr, description=llr_data["description"],
+                        high_level_requirement=hlr,
+                        description=llr_data["description"],
                     )
                     session.add(llr)
                     session.flush()
                     for v in llr_data.get("verifications", []):
                         vm = VerificationMethod(
-                            low_level_requirement=llr, method=v["method"],
-                            test_name=v.get("test_name", ""), description=v.get("description", ""),
+                            low_level_requirement=llr,
+                            method=v["method"],
+                            test_name=v.get("test_name", ""),
+                            description=v.get("description", ""),
                         )
                         session.add(vm)
                 changes.append(f"Created HLR {hlr.id}: {hlr.description[:60]}")
@@ -318,49 +361,57 @@ def apply_remediation(
             changes.append(f"Removed original HLR {split['original_hlr_id']}")
 
         # New HLRs
-        for new_hlr_data in (new_hlrs or []):
+        for new_hlr_data in new_hlrs or []:
             hlr = HighLevelRequirement(description=new_hlr_data["description"])
             session.add(hlr)
             session.flush()
             for llr_data in new_hlr_data.get("new_llrs", []):
                 llr = LowLevelRequirement(
-                    high_level_requirement=hlr, description=llr_data["description"],
+                    high_level_requirement=hlr,
+                    description=llr_data["description"],
                 )
                 session.add(llr)
                 session.flush()
                 for v in llr_data.get("verifications", []):
                     vm = VerificationMethod(
-                        low_level_requirement=llr, method=v["method"],
-                        test_name=v.get("test_name", ""), description=v.get("description", ""),
+                        low_level_requirement=llr,
+                        method=v["method"],
+                        test_name=v.get("test_name", ""),
+                        description=v.get("description", ""),
                     )
                     session.add(vm)
             changes.append(f"Created HLR {hlr.id} with LLRs")
 
         # New LLRs under existing HLRs
-        for new_llr in (new_llrs or []):
+        for new_llr in new_llrs or []:
             hlr = session.query(HighLevelRequirement).filter_by(id=new_llr["hlr_id"]).first()
             if not hlr:
                 changes.append(f"New LLR skipped: HLR {new_llr['hlr_id']} not found")
                 continue
             llr = LowLevelRequirement(
-                high_level_requirement=hlr, description=new_llr["description"],
+                high_level_requirement=hlr,
+                description=new_llr["description"],
             )
             session.add(llr)
             session.flush()
             for v in new_llr.get("verifications", []):
                 vm = VerificationMethod(
-                    low_level_requirement=llr, method=v["method"],
-                    test_name=v.get("test_name", ""), description=v.get("description", ""),
+                    low_level_requirement=llr,
+                    method=v["method"],
+                    test_name=v.get("test_name", ""),
+                    description=v.get("description", ""),
                 )
                 session.add(vm)
             changes.append(f"Created LLR {llr.id} under HLR {hlr.id}")
 
         # New nodes
-        for node_data in (new_nodes or []):
+        for node_data in new_nodes or []:
             node, created = get_or_create(
-                session, OntologyNode,
+                session,
+                OntologyNode,
                 defaults={
-                    "kind": node_data["kind"], "name": node_data["name"],
+                    "kind": node_data["kind"],
+                    "name": node_data["name"],
                     "description": node_data.get("description", ""),
                 },
                 qualified_name=node_data["qualified_name"],
@@ -369,14 +420,25 @@ def apply_remediation(
                 changes.append(f"Created node: {node.qualified_name}")
 
         # New triples
-        for t in (new_triples or []):
-            subj = session.query(OntologyNode).filter_by(qualified_name=t["subject_qualified_name"]).first()
-            obj = session.query(OntologyNode).filter_by(qualified_name=t["object_qualified_name"]).first()
+        for t in new_triples or []:
+            subj = (
+                session.query(OntologyNode)
+                .filter_by(qualified_name=t["subject_qualified_name"])
+                .first()
+            )
+            obj = (
+                session.query(OntologyNode)
+                .filter_by(qualified_name=t["object_qualified_name"])
+                .first()
+            )
             pred = session.query(Predicate).filter_by(name=t["predicate"]).first()
             if subj and obj and pred:
                 _, created = get_or_create(
-                    session, OntologyTriple,
-                    subject_id=subj.id, predicate_id=pred.id, object_id=obj.id,
+                    session,
+                    OntologyTriple,
+                    subject_id=subj.id,
+                    predicate_id=pred.id,
+                    object_id=obj.id,
                 )
                 if created:
                     changes.append(f"Created triple: {subj.name} --{pred.name}--> {obj.name}")
@@ -399,8 +461,7 @@ def ensure_predicates() -> str:
     with get_session() as session:
         Predicate.ensure_defaults(session)
         predicates = [
-            {"name": p.name, "description": p.description}
-            for p in session.query(Predicate).all()
+            {"name": p.name, "description": p.description} for p in session.query(Predicate).all()
         ]
         return json.dumps(predicates, indent=2)
 
@@ -418,8 +479,11 @@ def _get_codebase_tools():
     if _codebase_tools is None:
         from doxygen_index.tools import create_toolset
         from backend.db.neo4j.connection import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+
         _codebase_tools = create_toolset(
-            uri=NEO4J_URI, user=NEO4J_USER, password=NEO4J_PASSWORD,
+            uri=NEO4J_URI,
+            user=NEO4J_USER,
+            password=NEO4J_PASSWORD,
         )
     return _codebase_tools
 
@@ -507,7 +571,9 @@ def codebase_find_inheritance(name: str, direction: str = "both", max_depth: int
         max_depth: Maximum traversal depth
     """
     try:
-        results = _get_codebase_tools().find_inheritance(name, direction=direction, max_depth=max_depth)
+        results = _get_codebase_tools().find_inheritance(
+            name, direction=direction, max_depth=max_depth
+        )
         return json.dumps(results, indent=2, default=str)
     except Exception as e:
         return json.dumps({"error": f"Codebase inheritance query failed: {e}"})
@@ -523,7 +589,9 @@ def codebase_find_callers_and_callees(name: str, direction: str = "both", limit:
         limit: Maximum results per direction
     """
     try:
-        results = _get_codebase_tools().find_callers_and_callees(name, direction=direction, limit=limit)
+        results = _get_codebase_tools().find_callers_and_callees(
+            name, direction=direction, limit=limit
+        )
         return json.dumps(results, indent=2, default=str)
     except Exception as e:
         return json.dumps({"error": f"Codebase call graph query failed: {e}"})

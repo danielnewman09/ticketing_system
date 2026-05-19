@@ -23,6 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from backend.db import init_db, get_session
@@ -62,8 +63,14 @@ def step_decompose():
             print(f"  [{i}/{len(hlrs)}] {hlr.description[:65]}...")
 
             other_hlrs = [
-                {"id": h.id, "description": h.description, "component__name": h.component.name if h.component else None}
-                for h in session.query(HighLevelRequirement).filter(HighLevelRequirement.id != hlr.id).all()
+                {
+                    "id": h.id,
+                    "description": h.description,
+                    "component__name": h.component.name if h.component else None,
+                }
+                for h in session.query(HighLevelRequirement)
+                .filter(HighLevelRequirement.id != hlr.id)
+                .all()
             ]
             component_name = hlr.component.name if hlr.component_id else ""
 
@@ -147,6 +154,7 @@ def step_design():
     dep_toolset = None
     try:
         from doxygen_index.tools import create_toolset
+
         dep_toolset = create_toolset()
         print("  Dependency graph connected\n")
     except Exception as e:
@@ -174,7 +182,10 @@ def step_design():
             for prev_id, (prev_oo, prev_comp_id, prev_comp_name) in designed.items():
                 intercomponent_classes.extend(
                     _extract_intercomponent_context(
-                        prev_oo, prev_comp_name, component_id, prev_comp_id,
+                        prev_oo,
+                        prev_comp_name,
+                        component_id,
+                        prev_comp_id,
                     )
                 )
 
@@ -184,7 +195,8 @@ def step_design():
                     "description": h["description"],
                     "status": "designed" if h["id"] in designed else "pending",
                 }
-                for h in hlrs if h["id"] != hlr_id
+                for h in hlrs
+                if h["id"] != hlr_id
             ]
 
             dep_ctx = hlr.get("dependency_context")
@@ -254,7 +266,12 @@ def step_verify():
     with get_session() as session:
         class_contexts = build_verification_context(session)
         ontology_nodes = [
-            {"qualified_name": n.qualified_name, "pk": n.id, "kind": n.kind, "description": n.description}
+            {
+                "qualified_name": n.qualified_name,
+                "pk": n.id,
+                "kind": n.kind,
+                "description": n.description,
+            }
             for n in session.query(OntologyNode).all()
         ]
         llrs = session.query(LowLevelRequirement).all()
@@ -282,7 +299,9 @@ def step_verify():
 
             print(f"  LLR {llr.id}: {llr.description[:60]}...")
             agent_result = verify(
-                llr_dict, existing, class_contexts,
+                llr_dict,
+                existing,
+                class_contexts,
                 ontology_nodes=ontology_nodes,
                 prompt_log_file=os.path.join(LOGS_DIR, f"verify_llr{llr.id}.md"),
             )
@@ -292,28 +311,40 @@ def step_verify():
                 for qname, ctx in agent_result.validation.unresolved:
                     print(f"      - {qname} ({ctx})")
 
-            persisted = persist_verification(session, llr, agent_result.verifications, ontology_nodes)
+            persisted = persist_verification(
+                session, llr, agent_result.verifications, ontology_nodes
+            )
             total_conditions += persisted.conditions_created
             total_actions += persisted.actions_created
 
             if agent_result.validation and not agent_result.validation.all_resolved:
                 augmented = augment_design_for_unresolved(
-                    session, agent_result.validation.unresolved,
+                    session,
+                    agent_result.validation.unresolved,
                 )
                 if augmented.nodes_created:
                     total_augmented += augmented.nodes_created
-                    print(f"    Created {augmented.nodes_created} missing design nodes, "
-                          f"{augmented.triples_created} triples")
+                    print(
+                        f"    Created {augmented.nodes_created} missing design nodes, "
+                        f"{augmented.triples_created} triples"
+                    )
                     ontology_nodes = [
-                        {"qualified_name": n.qualified_name, "pk": n.id, "kind": n.kind, "description": n.description}
+                        {
+                            "qualified_name": n.qualified_name,
+                            "pk": n.id,
+                            "kind": n.kind,
+                            "description": n.description,
+                        }
                         for n in session.query(OntologyNode).all()
                     ]
                     class_contexts = build_verification_context(session)
 
             for v in agent_result.verifications:
-                print(f"    [{v.method}] {v.test_name}: "
-                      f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
-                      f"{len(v.postconditions)} post")
+                print(
+                    f"    [{v.method}] {v.test_name}: "
+                    f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
+                    f"{len(v.postconditions)} post"
+                )
 
         print(f"\n  Verification phase complete:")
         print(f"    {total_conditions} conditions, {total_actions} actions created")

@@ -23,9 +23,11 @@ log = logging.getLogger("pipeline.sync_hooks")
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DesignSyncReport:
     """Report from comparing source code to the design schema."""
+
     missing_classes: list[str] = field(default_factory=list)
     missing_methods: dict[str, list[str]] = field(default_factory=dict)
     # class_name -> [method_name, ...]
@@ -35,18 +37,17 @@ class DesignSyncReport:
     @property
     def clean(self) -> bool:
         return (
-            not self.missing_classes
-            and not self.missing_methods
-            and not self.signature_mismatches
+            not self.missing_classes and not self.missing_methods and not self.signature_mismatches
         )
 
 
 @dataclass
 class TestCoverageReport:
     """Report from comparing test files to verification methods."""
+
     untested_verifications: list[str] = field(default_factory=list)
     # verification test_name values with no matching test
-    
+
     @property
     def clean(self) -> bool:
         return not self.untested_verifications
@@ -55,6 +56,7 @@ class TestCoverageReport:
 # ---------------------------------------------------------------------------
 # Design-Code Sync Hook
 # ---------------------------------------------------------------------------
+
 
 def check_design_against_code(
     oo_design: dict,
@@ -79,7 +81,7 @@ def check_design_against_code(
     # Parse source files and collect actual classes
     actual_classes: dict[str, dict] = {}
     # Maps class_name -> {methods: {method_name: {params, return_type}}}
-    
+
     for src_path in source_files:
         try:
             tree = _parse_file(src_path)
@@ -91,14 +93,14 @@ def check_design_against_code(
                     for item in node.body:
                         if isinstance(item, ast.FunctionDef):
                             params = [
-                                a.arg for a in item.args.args
-                                if a.arg != "self" and a.arg != "cls"
+                                a.arg for a in item.args.args if a.arg != "self" and a.arg != "cls"
                             ]
                             rt = ""
                             if item.returns:
                                 rt = _unparse_annotation(item.returns)
                             methods[item.name] = {
-                                "params": params, "return_type": rt,
+                                "params": params,
+                                "return_type": rt,
                             }
                     actual_classes[node.name] = {"methods": methods}
         except FileNotFoundError:
@@ -116,16 +118,14 @@ def check_design_against_code(
             continue
         actual_methods = actual_classes[cls_name]["methods"]
         expected_methods = {m["name"] for m in cls.get("methods", [])}
-        
+
         for method_name in expected_methods:
             if method_name not in actual_methods:
                 report.missing_methods.setdefault(cls_name, []).append(method_name)
             else:
                 # Check signature (parameter count -- loose check)
                 actual_m = actual_methods[method_name]
-                expected_m = next(
-                    m for m in cls["methods"] if m["name"] == method_name
-                )
+                expected_m = next(m for m in cls["methods"] if m["name"] == method_name)
                 actual_params = [p for p in actual_m["params"]]
                 expected_params = expected_m.get("parameters", [])
                 if len(actual_params) != len(expected_params):
@@ -138,9 +138,11 @@ def check_design_against_code(
     # Check extra public methods (not in design but present in code)
     for cls_name, cls_info in actual_classes.items():
         extra = [
-            m for m in cls_info["methods"]
+            m
+            for m in cls_info["methods"]
             if not m.startswith("_")  # skip private
-            and m not in {
+            and m
+            not in {
                 m["name"]
                 for c in (oo_design.get("classes", []) + oo_design.get("interfaces", []))
                 if c["name"] == cls_name
@@ -156,6 +158,7 @@ def check_design_against_code(
 # ---------------------------------------------------------------------------
 # Test Coverage Hook
 # ---------------------------------------------------------------------------
+
 
 def check_test_coverage(
     verification_test_names: list[str],
@@ -196,6 +199,7 @@ def check_test_coverage(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_file(path: str) -> ast.AST | None:
     """Parse a Python file into an AST, returning None on failure."""

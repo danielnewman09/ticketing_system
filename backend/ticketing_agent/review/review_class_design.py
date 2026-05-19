@@ -12,9 +12,13 @@ from difflib import SequenceMatcher
 
 from sqlalchemy.orm import Session
 
-from backend.db.models import OntologyNode, OntologyTriple, HighLevelRequirement, LowLevelRequirement
+from backend.db.models import (
+    OntologyNode,
+    OntologyTriple,
+    HighLevelRequirement,
+    LowLevelRequirement,
+)
 from backend.db.models.ontology import TYPE_KINDS, VALUE_KINDS
-
 
 # ---------------------------------------------------------------------------
 # Valid relationship rules
@@ -30,49 +34,22 @@ _COMPOSABLE_KINDS = TYPE_KINDS | {"primitive", "attribute", "constant", "method"
 
 VALID_RELATIONSHIPS = {
     # Inheritance: type generalizes type
-    "generalizes": {
-        (s, o) for s in TYPE_KINDS for o in TYPE_KINDS
-    },
-
+    "generalizes": {(s, o) for s in TYPE_KINDS for o in TYPE_KINDS},
     # Composition: type composes type/primitive/attribute/constant/method;
     # enum composes enum_value
-    "composes": {
-        (s, o)
-        for s in TYPE_KINDS
-        for o in _COMPOSABLE_KINDS
-    } | {("enum", "enum_value")},
-
+    "composes": {(s, o) for s in TYPE_KINDS for o in _COMPOSABLE_KINDS} | {("enum", "enum_value")},
     # Aggregation: same as composition but weaker ownership
-    "aggregates": {
-        (s, o)
-        for s in TYPE_KINDS
-        for o in TYPE_KINDS | {"primitive"}
-    },
-
+    "aggregates": {(s, o) for s in TYPE_KINDS for o in TYPE_KINDS | {"primitive"}},
     # Realization: type realizes interface
-    "realizes": {
-        (s, "interface")
-        for s in TYPE_KINDS
-    },
-
+    "realizes": {(s, "interface") for s in TYPE_KINDS},
     # Dependency: type/callable depends on type/primitive
     "depends_on": {
-        (s, o)
-        for s in TYPE_KINDS | _CALLABLE_KINDS
-        for o in TYPE_KINDS | {"primitive"}
+        (s, o) for s in TYPE_KINDS | _CALLABLE_KINDS for o in TYPE_KINDS | {"primitive"}
     },
-
     # Invocation: callable invokes callable
-    "invokes": {
-        (s, o) for s in _CALLABLE_KINDS for o in _CALLABLE_KINDS
-    },
-
+    "invokes": {(s, o) for s in _CALLABLE_KINDS for o in _CALLABLE_KINDS},
     # Association: type associates with type/primitive
-    "associates": {
-        (s, o)
-        for s in TYPE_KINDS
-        for o in TYPE_KINDS | {"primitive"}
-    },
+    "associates": {(s, o) for s in TYPE_KINDS for o in TYPE_KINDS | {"primitive"}},
 }
 
 # Module can contain anything
@@ -136,15 +113,9 @@ def _suggest_fix(subject_kind, predicate, object_kind):
     # Generalizes with non-type kinds
     if predicate == "generalizes":
         if subject_kind not in TYPE_KINDS:
-            return (
-                f"A {subject_kind} cannot generalize. "
-                f"Change its kind to a type.{reversal}"
-            )
+            return f"A {subject_kind} cannot generalize. " f"Change its kind to a type.{reversal}"
         if object_kind not in TYPE_KINDS:
-            return (
-                f"Cannot generalize a {object_kind}. "
-                f"Change its kind to a type.{reversal}"
-            )
+            return f"Cannot generalize a {object_kind}. " f"Change its kind to a type.{reversal}"
 
     return (
         f"'{predicate}' is not valid between {subject_kind} and "
@@ -156,8 +127,12 @@ class ClassDesignViolation:
     """A single invalid triple found during review."""
 
     __slots__ = (
-        "triple_id", "subject_qualified_name", "subject_kind",
-        "predicate", "object_qualified_name", "object_kind",
+        "triple_id",
+        "subject_qualified_name",
+        "subject_kind",
+        "predicate",
+        "object_qualified_name",
+        "object_kind",
         "suggestion",
     )
 
@@ -241,10 +216,7 @@ class EnumHierarchyViolation:
             )
 
     def __str__(self):
-        return (
-            f"Enum hierarchy violation: {self.enum_value_qualified_name} — "
-            f"{self.suggestion}"
-        )
+        return f"Enum hierarchy violation: {self.enum_value_qualified_name} — " f"{self.suggestion}"
 
 
 def _check_enum_hierarchy(session: Session):
@@ -263,18 +235,26 @@ def _check_enum_hierarchy(session: Session):
 
         possible_parent = None
         for enum_qname in enum_nodes:
-            exists = session.query(OntologyTriple).filter(
-                OntologyTriple.subject.has(qualified_name=enum_qname),
-                OntologyTriple.predicate.has(name="composes"),
-                OntologyTriple.object_id == ev.id,
-            ).first() is not None
+            exists = (
+                session.query(OntologyTriple)
+                .filter(
+                    OntologyTriple.subject.has(qualified_name=enum_qname),
+                    OntologyTriple.predicate.has(name="composes"),
+                    OntologyTriple.object_id == ev.id,
+                )
+                .first()
+                is not None
+            )
             if exists:
                 possible_parent = enum_qname
                 break
 
-        violations.append(EnumHierarchyViolation(
-            ev.qualified_name, possible_parent,
-        ))
+        violations.append(
+            EnumHierarchyViolation(
+                ev.qualified_name,
+                possible_parent,
+            )
+        )
 
     return violations
 
@@ -296,8 +276,7 @@ class AttributeSubjectViolation:
 
     def __str__(self):
         return (
-            f"Attribute subject violation: {self.attribute_qualified_name} — "
-            f"{self.suggestion}"
+            f"Attribute subject violation: {self.attribute_qualified_name} — " f"{self.suggestion}"
         )
 
 
@@ -309,17 +288,23 @@ def _check_attribute_usage(session: Session):
 
     violations = []
     for attr in attribute_nodes:
-        subject_triples = session.query(OntologyTriple).filter(
-            OntologyTriple.subject_id == attr.id,
-        ).all()
+        subject_triples = (
+            session.query(OntologyTriple)
+            .filter(
+                OntologyTriple.subject_id == attr.id,
+            )
+            .all()
+        )
         for t in subject_triples:
             triple_str = (
-                f"{t.subject.qualified_name} --{t.predicate.name}--> "
-                f"{t.object.qualified_name}"
+                f"{t.subject.qualified_name} --{t.predicate.name}--> " f"{t.object.qualified_name}"
             )
-            violations.append(AttributeSubjectViolation(
-                attr.qualified_name, triple_str,
-            ))
+            violations.append(
+                AttributeSubjectViolation(
+                    attr.qualified_name,
+                    triple_str,
+                )
+            )
 
     return violations
 
@@ -360,9 +345,7 @@ def review_class_design(session: Session):
                 pred_name == "invokes"
                 and subj_kind in TYPE_KINDS
                 and obj_kind == "function"
-                and triple.object.qualified_name.startswith(
-                    triple.subject.qualified_name + "::"
-                )
+                and triple.object.qualified_name.startswith(triple.subject.qualified_name + "::")
             ):
                 continue
 
@@ -383,65 +366,73 @@ def violations_to_challenges(violations):
     challenges = []
     for v in violations:
         if isinstance(v, ClassDesignViolation):
-            challenges.append(DesignChallenge(
-                category="class_design",
-                severity="major",
-                description=(
-                    f"{v.subject_qualified_name} ({v.subject_kind}) "
-                    f"--{v.predicate}--> "
-                    f"{v.object_qualified_name} ({v.object_kind}) "
-                    f"is not a valid OO relationship."
-                ),
-                affected_node_qualified_names=[
-                    v.subject_qualified_name,
-                    v.object_qualified_name,
-                ],
-                remedy_type="restructure_ontology",
-                suggested_remedy=v.suggestion,
-            ))
+            challenges.append(
+                DesignChallenge(
+                    category="class_design",
+                    severity="major",
+                    description=(
+                        f"{v.subject_qualified_name} ({v.subject_kind}) "
+                        f"--{v.predicate}--> "
+                        f"{v.object_qualified_name} ({v.object_kind}) "
+                        f"is not a valid OO relationship."
+                    ),
+                    affected_node_qualified_names=[
+                        v.subject_qualified_name,
+                        v.object_qualified_name,
+                    ],
+                    remedy_type="restructure_ontology",
+                    suggested_remedy=v.suggestion,
+                )
+            )
         elif isinstance(v, EnumHierarchyViolation):
             affected = [v.enum_value_qualified_name]
             if v.expected_parent:
                 affected.append(v.expected_parent)
-            challenges.append(DesignChallenge(
-                category="class_design",
-                severity="critical",
-                description=(
-                    f"enum_value '{v.enum_value_qualified_name}' is not "
-                    f"nested under its parent enum. Enum values must be "
-                    f"scoped under their defining enum type."
-                ),
-                affected_node_qualified_names=affected,
-                remedy_type="restructure_ontology",
-                suggested_remedy=v.suggestion,
-            ))
+            challenges.append(
+                DesignChallenge(
+                    category="class_design",
+                    severity="critical",
+                    description=(
+                        f"enum_value '{v.enum_value_qualified_name}' is not "
+                        f"nested under its parent enum. Enum values must be "
+                        f"scoped under their defining enum type."
+                    ),
+                    affected_node_qualified_names=affected,
+                    remedy_type="restructure_ontology",
+                    suggested_remedy=v.suggestion,
+                )
+            )
         elif isinstance(v, AttributeSubjectViolation):
-            challenges.append(DesignChallenge(
-                category="class_design",
-                severity="major",
-                description=(
-                    f"Attribute '{v.attribute_qualified_name}' is used as "
-                    f"the subject of a triple. Attributes must only appear "
-                    f"as the object of a 'composes' relationship."
-                ),
-                affected_node_qualified_names=[v.attribute_qualified_name],
-                remedy_type="restructure_ontology",
-                suggested_remedy=v.suggestion,
-            ))
+            challenges.append(
+                DesignChallenge(
+                    category="class_design",
+                    severity="major",
+                    description=(
+                        f"Attribute '{v.attribute_qualified_name}' is used as "
+                        f"the subject of a triple. Attributes must only appear "
+                        f"as the object of a 'composes' relationship."
+                    ),
+                    affected_node_qualified_names=[v.attribute_qualified_name],
+                    remedy_type="restructure_ontology",
+                    suggested_remedy=v.suggestion,
+                )
+            )
         elif isinstance(v, NameCollisionViolation):
-            challenges.append(DesignChallenge(
-                category="class_design",
-                severity="major",
-                description=(
-                    f"Name collision: '{v.name}' is used by multiple nodes: "
-                    f"{', '.join(v.qualified_names)}. Nodes should have "
-                    f"distinct names rather than relying on namespaces to "
-                    f"disambiguate."
-                ),
-                affected_node_qualified_names=list(v.qualified_names),
-                remedy_type="restructure_ontology",
-                suggested_remedy=v.suggestion,
-            ))
+            challenges.append(
+                DesignChallenge(
+                    category="class_design",
+                    severity="major",
+                    description=(
+                        f"Name collision: '{v.name}' is used by multiple nodes: "
+                        f"{', '.join(v.qualified_names)}. Nodes should have "
+                        f"distinct names rather than relying on namespaces to "
+                        f"disambiguate."
+                    ),
+                    affected_node_qualified_names=list(v.qualified_names),
+                    remedy_type="restructure_ontology",
+                    suggested_remedy=v.suggestion,
+                )
+            )
     return challenges
 
 
@@ -460,15 +451,23 @@ def _name_similarity(a, b):
 def _build_conflict_context(session: Session, proposed, existing_qname, existing_node):
     """Build the context dict for one conflict to send to the review agent."""
     existing_triples = []
-    for t in session.query(OntologyTriple).filter(
-        OntologyTriple.subject.has(qualified_name=existing_qname),
-    ).all():
+    for t in (
+        session.query(OntologyTriple)
+        .filter(
+            OntologyTriple.subject.has(qualified_name=existing_qname),
+        )
+        .all()
+    ):
         existing_triples.append(
             f"{t.subject.qualified_name} --{t.predicate.name}--> {t.object.qualified_name}"
         )
-    for t in session.query(OntologyTriple).filter(
-        OntologyTriple.object.has(qualified_name=existing_qname),
-    ).all():
+    for t in (
+        session.query(OntologyTriple)
+        .filter(
+            OntologyTriple.object.has(qualified_name=existing_qname),
+        )
+        .all()
+    ):
         existing_triples.append(
             f"{t.subject.qualified_name} --{t.predicate.name}--> {t.object.qualified_name}"
         )
@@ -500,9 +499,7 @@ def _build_conflict_context(session: Session, proposed, existing_qname, existing
         "proposed_description": proposed.description,
         "existing_qualified_name": existing_qname,
         "existing_kind": existing_node.kind if existing_node else "unknown",
-        "existing_description": (
-            existing_node.description if existing_node else ""
-        ),
+        "existing_description": (existing_node.description if existing_node else ""),
         "existing_triples": existing_triples,
         "proposed_triples": [],
         "hlr_context": hlr_context,
@@ -517,10 +514,15 @@ def _is_nested_enum_value(session: Session, existing_node):
     if "::" not in existing_node.qualified_name:
         return False
     parent_qname = existing_node.qualified_name.rsplit("::", 1)[0]
-    return session.query(OntologyNode).filter(
-        OntologyNode.qualified_name == parent_qname,
-        OntologyNode.kind == "enum",
-    ).first() is not None
+    return (
+        session.query(OntologyNode)
+        .filter(
+            OntologyNode.qualified_name == parent_qname,
+            OntologyNode.kind == "enum",
+        )
+        .first()
+        is not None
+    )
 
 
 def sanitize_new_nodes(session: Session, plan, prompt_log_file=""):
@@ -530,10 +532,7 @@ def sanitize_new_nodes(session: Session, plan, prompt_log_file=""):
     if not plan.new_nodes:
         return []
 
-    existing_nodes = {
-        (n.name, n.qualified_name): n
-        for n in session.query(OntologyNode).all()
-    }
+    existing_nodes = {(n.name, n.qualified_name): n for n in session.query(OntologyNode).all()}
 
     conflicts = []
     no_conflict = []
@@ -586,11 +585,7 @@ def sanitize_new_nodes(session: Session, plan, prompt_log_file=""):
             )
             continue
 
-        if (
-            existing_node
-            and existing_node.kind == "enum"
-            and proposed.kind != "enum"
-        ):
+        if existing_node and existing_node.kind == "enum" and proposed.kind != "enum":
             for triple in plan.new_triples:
                 if triple.subject_qualified_name == proposed.qualified_name:
                     triple.subject_qualified_name = existing_qname
@@ -611,8 +606,10 @@ def sanitize_new_nodes(session: Session, plan, prompt_log_file=""):
             ctx = _build_conflict_context(session, proposed, existing_qname, existing_node)
 
             for t in plan.new_triples:
-                if (t.subject_qualified_name == proposed.qualified_name
-                        or t.object_qualified_name == proposed.qualified_name):
+                if (
+                    t.subject_qualified_name == proposed.qualified_name
+                    or t.object_qualified_name == proposed.qualified_name
+                ):
                     ctx["proposed_triples"].append(
                         f"{t.subject_qualified_name} --{t.predicate}--> "
                         f"{t.object_qualified_name}"
@@ -621,12 +618,11 @@ def sanitize_new_nodes(session: Session, plan, prompt_log_file=""):
             conflict_contexts.append(ctx)
 
         review_result = review_conflicts(
-            conflict_contexts, prompt_log_file=prompt_log_file,
+            conflict_contexts,
+            prompt_log_file=prompt_log_file,
         )
 
-        resolution_map = {
-            r.proposed_qualified_name: r for r in review_result.resolutions
-        }
+        resolution_map = {r.proposed_qualified_name: r for r in review_result.resolutions}
 
         for proposed, existing_qname, existing_node in agent_conflicts:
             resolution = resolution_map.get(proposed.qualified_name)

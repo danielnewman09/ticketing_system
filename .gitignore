@@ -9,6 +9,8 @@ db.sqlite3
 logs/*
 .DS_Store
 codebase.sqlite3
+.ruff_cache
+.mypy_cache
 
 # Pi runtime files (project-local settings committed)
 .pi/sessions/*

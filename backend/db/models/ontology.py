@@ -188,22 +188,33 @@ class OntologyNode(Base):
     is_final: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # --- Project-level context ---
-    component_id: Mapped[Optional[int]] = mapped_column(ForeignKey("components.id", ondelete="SET NULL"), nullable=True)
+    component_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("components.id", ondelete="SET NULL"), nullable=True
+    )
     is_intercomponent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # --- Implementation tracking ---
     implementation_status: Mapped[str] = mapped_column(
-        String(20), default="designed", server_default="designed",
+        String(20),
+        default="designed",
+        server_default="designed",
     )  # "designed" | "scaffolded" | "tested" | "implemented" | "verified"
     source_file: Mapped[str] = mapped_column(String(500), default="", server_default="")
     test_file: Mapped[str] = mapped_column(String(500), default="", server_default="")
 
     # --- Relationships ---
-    component: Mapped[Optional[Component]] = relationship("Component", back_populates="ontology_nodes")
-    triples_as_subject: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", foreign_keys="OntologyTriple.subject_id", back_populates="subject")
-    triples_as_object: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", foreign_keys="OntologyTriple.object_id", back_populates="object")
+    component: Mapped[Optional[Component]] = relationship(
+        "Component", back_populates="ontology_nodes"
+    )
+    triples_as_subject: Mapped[list[OntologyTriple]] = relationship(
+        "OntologyTriple", foreign_keys="OntologyTriple.subject_id", back_populates="subject"
+    )
+    triples_as_object: Mapped[list[OntologyTriple]] = relationship(
+        "OntologyTriple", foreign_keys="OntologyTriple.object_id", back_populates="object"
+    )
     task_links: Mapped[list["TaskDesignNode"]] = relationship(
-        "TaskDesignNode", back_populates="ontology_node",
+        "TaskDesignNode",
+        back_populates="ontology_node",
     )
 
     def __repr__(self):
@@ -217,7 +228,9 @@ class Predicate(Base):
     name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
 
-    triples: Mapped[list[OntologyTriple]] = relationship("OntologyTriple", back_populates="predicate")
+    triples: Mapped[list[OntologyTriple]] = relationship(
+        "OntologyTriple", back_populates="predicate"
+    )
 
     def __repr__(self):
         return self.name
@@ -237,6 +250,7 @@ class Predicate(Base):
     def ensure_defaults(cls, session):
         """Create default predicates if they don't exist."""
         from backend.db import get_or_create
+
         for name, description in cls.DEFAULT_PREDICATES:
             get_or_create(session, cls, defaults={"description": description}, name=name)
 
@@ -244,17 +258,32 @@ class Predicate(Base):
 class OntologyTriple(Base):
     __tablename__ = "ontology_triples"
     __table_args__ = (
-        UniqueConstraint("subject_id", "predicate_id", "object_id", name="uq_ontology_triples_subject_predicate_object"),
+        UniqueConstraint(
+            "subject_id",
+            "predicate_id",
+            "object_id",
+            name="uq_ontology_triples_subject_predicate_object",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    subject_id: Mapped[int] = mapped_column(ForeignKey("ontology_nodes.id", ondelete="CASCADE"), nullable=False)
-    predicate_id: Mapped[int] = mapped_column(ForeignKey("ontology_predicates.id", ondelete="RESTRICT"), nullable=False)
-    object_id: Mapped[int] = mapped_column(ForeignKey("ontology_nodes.id", ondelete="CASCADE"), nullable=False)
+    subject_id: Mapped[int] = mapped_column(
+        ForeignKey("ontology_nodes.id", ondelete="CASCADE"), nullable=False
+    )
+    predicate_id: Mapped[int] = mapped_column(
+        ForeignKey("ontology_predicates.id", ondelete="RESTRICT"), nullable=False
+    )
+    object_id: Mapped[int] = mapped_column(
+        ForeignKey("ontology_nodes.id", ondelete="CASCADE"), nullable=False
+    )
 
-    subject: Mapped[OntologyNode] = relationship("OntologyNode", foreign_keys=[subject_id], back_populates="triples_as_subject")
+    subject: Mapped[OntologyNode] = relationship(
+        "OntologyNode", foreign_keys=[subject_id], back_populates="triples_as_subject"
+    )
     predicate: Mapped[Predicate] = relationship("Predicate", back_populates="triples")
-    object: Mapped[OntologyNode] = relationship("OntologyNode", foreign_keys=[object_id], back_populates="triples_as_object")
+    object: Mapped[OntologyNode] = relationship(
+        "OntologyNode", foreign_keys=[object_id], back_populates="triples_as_object"
+    )
 
     def __repr__(self):
         return f"{self.subject} --{self.predicate}--> {self.object}"

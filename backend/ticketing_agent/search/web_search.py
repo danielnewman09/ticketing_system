@@ -75,7 +75,9 @@ def fetch_github_info(repo_url: str) -> dict | None:
     api_url = f"{_GITHUB_API}/repos/{owner_repo}"
 
     try:
-        resp = requests.get(api_url, timeout=10, headers={"Accept": "application/vnd.github.v3+json"})
+        resp = requests.get(
+            api_url, timeout=10, headers={"Accept": "application/vnd.github.v3+json"}
+        )
         if resp.status_code != 200:
             log.debug("GitHub API %s returned %d", api_url, resp.status_code)
             return None
@@ -113,11 +115,13 @@ def search_and_enrich(query: str, language: str, max_results: int = 5) -> list[d
 
         info = fetch_github_info(gh_url)
         if info:
-            enriched.append({
-                **r,
-                "github_url": gh_url,
-                "github": info,
-            })
+            enriched.append(
+                {
+                    **r,
+                    "github_url": gh_url,
+                    "github": info,
+                }
+            )
             if len(enriched) >= max_results:
                 break
 

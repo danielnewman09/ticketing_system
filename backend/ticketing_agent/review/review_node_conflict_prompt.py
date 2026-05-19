@@ -6,10 +6,10 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Output schemas
 # ---------------------------------------------------------------------------
+
 
 class NodeResolution(BaseModel):
     """Resolution for a single proposed-vs-existing node conflict."""
@@ -23,6 +23,7 @@ class NodeResolution(BaseModel):
 
 class ConflictReviewResult(BaseModel):
     """The complete set of conflict resolutions."""
+
     resolutions: list[NodeResolution]
 
 
@@ -110,6 +111,7 @@ TOOL_DEFINITION = {
 # ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
+
 
 def format_conflicts(conflicts):
     """Format conflicts for the user message.

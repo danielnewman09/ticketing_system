@@ -21,22 +21,40 @@ class Ticket(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     priority: Mapped[str] = mapped_column(String(50), default="", server_default="")
     complexity: Mapped[str] = mapped_column(String(50), default="", server_default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     author: Mapped[str] = mapped_column(String(200), default="", server_default="")
     summary: Mapped[str] = mapped_column(Text, default="", server_default="")
-    ticket_type: Mapped[str] = mapped_column(String(50), default="feature", server_default="feature")
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True)
+    ticket_type: Mapped[str] = mapped_column(
+        String(50), default="feature", server_default="feature"
+    )
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True
+    )
     requires_math: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     generate_tutorial: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
-    parent: Mapped[Optional[Ticket]] = relationship("Ticket", remote_side="Ticket.id", back_populates="children")
+    parent: Mapped[Optional[Ticket]] = relationship(
+        "Ticket", remote_side="Ticket.id", back_populates="children"
+    )
     children: Mapped[list[Ticket]] = relationship("Ticket", back_populates="parent")
     components: Mapped[list[Component]] = relationship("Component", secondary=tickets_components)
     languages: Mapped[list[Language]] = relationship("Language", secondary=tickets_languages)
-    acceptance_criteria: Mapped[list[TicketAcceptanceCriteria]] = relationship("TicketAcceptanceCriteria", back_populates="ticket", cascade="all, delete-orphan")
-    files: Mapped[list[TicketFile]] = relationship("TicketFile", back_populates="ticket", cascade="all, delete-orphan")
-    references: Mapped[list[TicketReference]] = relationship("TicketReference", back_populates="ticket", cascade="all, delete-orphan")
+    acceptance_criteria: Mapped[list[TicketAcceptanceCriteria]] = relationship(
+        "TicketAcceptanceCriteria", back_populates="ticket", cascade="all, delete-orphan"
+    )
+    files: Mapped[list[TicketFile]] = relationship(
+        "TicketFile", back_populates="ticket", cascade="all, delete-orphan"
+    )
+    references: Mapped[list[TicketReference]] = relationship(
+        "TicketReference", back_populates="ticket", cascade="all, delete-orphan"
+    )
     low_level_requirements: Mapped[list[LowLevelRequirement]] = relationship(
         "LowLevelRequirement",
         secondary=TicketRequirement.__table__,
@@ -89,7 +107,9 @@ class TicketAcceptanceCriteria(Base):
     __tablename__ = "ticket_acceptance_criteria"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
+    ticket_id: Mapped[int] = mapped_column(
+        ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
+    )
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     ticket: Mapped[Ticket] = relationship("Ticket", back_populates="acceptance_criteria")
@@ -102,7 +122,9 @@ class TicketFile(Base):
     __tablename__ = "ticket_files"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
+    ticket_id: Mapped[int] = mapped_column(
+        ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
+    )
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     change_type: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -117,7 +139,9 @@ class TicketReference(Base):
     __tablename__ = "ticket_references"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
+    ticket_id: Mapped[int] = mapped_column(
+        ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
+    )
     ref_type: Mapped[str] = mapped_column(String(50), nullable=False)
     ref_target: Mapped[str] = mapped_column(String(200), nullable=False)
 

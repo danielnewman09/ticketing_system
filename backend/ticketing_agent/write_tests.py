@@ -28,6 +28,7 @@ log = logging.getLogger("agents.write_tests")
 @dataclass
 class TestFileOutput:
     """One generated test file."""
+
     file_path: str
     content: str
     test_names: list[str] = field(default_factory=list)
@@ -94,6 +95,7 @@ def write_tests(
 # ---------------------------------------------------------------------------
 # Deterministic test generator (fallback when LLM unavailable)
 # ---------------------------------------------------------------------------
+
 
 def generate_deterministic_tests(
     verifications: list[dict],
@@ -170,10 +172,16 @@ def generate_deterministic_tests(
         header.insert(1, "import pytest")
 
     content = "\n".join(header + test_funcs + [""])
-    file_path = f"tests/{module_path.replace('.', '/').replace('src/', '')}_test.py" if module_path else "tests/test_generated.py"
+    file_path = (
+        f"tests/{module_path.replace('.', '/').replace('src/', '')}_test.py"
+        if module_path
+        else "tests/test_generated.py"
+    )
 
-    return [TestFileOutput(
-        file_path=file_path,
-        content=content,
-        test_names=test_names,
-    )]
+    return [
+        TestFileOutput(
+            file_path=file_path,
+            content=content,
+            test_names=test_names,
+        )
+    ]

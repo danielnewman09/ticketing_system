@@ -14,10 +14,10 @@ from backend.db.models.verification import (
 from backend.db.models.requirements import HighLevelRequirement, LowLevelRequirement
 from backend.db.models.ontology import OntologyNode
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
 
 class TestVerificationConstants:
     """Tests for VERIFICATION_METHODS and CONDITION_OPERATORS."""
@@ -36,6 +36,7 @@ class TestVerificationConstants:
 # ---------------------------------------------------------------------------
 # VerificationMethod
 # ---------------------------------------------------------------------------
+
 
 class TestVerificationMethod:
     """Tests for VerificationMethod CRUD and relationships."""
@@ -207,6 +208,7 @@ class TestVerificationMethod:
 # VerificationCondition
 # ---------------------------------------------------------------------------
 
+
 class TestVerificationCondition:
     """Tests for VerificationCondition CRUD and relationships."""
 
@@ -338,6 +340,7 @@ class TestVerificationCondition:
 # ---------------------------------------------------------------------------
 # VerificationAction
 # ---------------------------------------------------------------------------
+
 
 class TestVerificationAction:
     """Tests for VerificationAction CRUD and relationships."""

@@ -44,6 +44,7 @@ __all__ = [
 # Graph metrics (computed deterministically, fed to the LLM as context)
 # ---------------------------------------------------------------------------
 
+
 def compute_graph_metrics(hlrs, llrs, nodes, triples, hlr_triples, llr_triples):
     """Compute structural metrics about the requirements-ontology graph.
 
@@ -113,27 +114,31 @@ def compute_graph_metrics(hlrs, llrs, nodes, triples, hlr_triples, llr_triples):
                     visited.add(current)
                     queue.extend(adj[current] - visited)
 
-        hlr_metrics.append({
-            "hlr_id": hlr["id"],
-            "description": hlr["description"][:80],
-            "llr_count": len(llr_ids),
-            "triple_count": len(all_triple_ids),
-            "node_count": len(hlr_nodes),
-            "connected_components": components,
-        })
+        hlr_metrics.append(
+            {
+                "hlr_id": hlr["id"],
+                "description": hlr["description"][:80],
+                "llr_count": len(llr_ids),
+                "triple_count": len(all_triple_ids),
+                "node_count": len(hlr_nodes),
+                "connected_components": components,
+            }
+        )
 
     # Per-node metrics
     node_metrics = []
     for n in nodes:
         qn = n["qualified_name"]
-        node_metrics.append({
-            "qualified_name": qn,
-            "kind": n["kind"],
-            "in_degree": in_degree.get(qn, 0),
-            "out_degree": out_degree.get(qn, 0),
-            "total_degree": in_degree.get(qn, 0) + out_degree.get(qn, 0),
-            "is_orphan": qn in orphaned_nodes,
-        })
+        node_metrics.append(
+            {
+                "qualified_name": qn,
+                "kind": n["kind"],
+                "in_degree": in_degree.get(qn, 0),
+                "out_degree": out_degree.get(qn, 0),
+                "total_degree": in_degree.get(qn, 0) + out_degree.get(qn, 0),
+                "is_orphan": qn in orphaned_nodes,
+            }
+        )
 
     # Sort by total degree descending for readability
     node_metrics.sort(key=lambda x: x["total_degree"], reverse=True)
@@ -151,6 +156,7 @@ def compute_graph_metrics(hlrs, llrs, nodes, triples, hlr_triples, llr_triples):
 # ---------------------------------------------------------------------------
 # Agent invocation
 # ---------------------------------------------------------------------------
+
 
 def challenge(
     hlrs: list[dict],
@@ -221,29 +227,44 @@ if __name__ == "__main__":
     import sys
 
     from backend.db import init_db, get_session
-    from backend.db.models import OntologyNode, OntologyTriple, HighLevelRequirement, LowLevelRequirement
+    from backend.db.models import (
+        OntologyNode,
+        OntologyTriple,
+        HighLevelRequirement,
+        LowLevelRequirement,
+    )
 
     init_db()
 
     with get_session() as session:
-        hlrs = [{"id": h.id, "description": h.description} for h in session.query(HighLevelRequirement).all()]
+        hlrs = [
+            {"id": h.id, "description": h.description}
+            for h in session.query(HighLevelRequirement).all()
+        ]
         llrs = [
             {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
             for l in session.query(LowLevelRequirement).all()
         ]
 
         nodes = [
-            {"id": n.id, "qualified_name": n.qualified_name, "kind": n.kind, "description": n.description}
+            {
+                "id": n.id,
+                "qualified_name": n.qualified_name,
+                "kind": n.kind,
+                "description": n.description,
+            }
             for n in session.query(OntologyNode).all()
         ]
         triples = []
         for t in session.query(OntologyTriple).all():
-            triples.append({
-                "id": t.id,
-                "subject_qualified_name": t.subject.qualified_name,
-                "predicate": t.predicate.name,
-                "object_qualified_name": t.object.qualified_name,
-            })
+            triples.append(
+                {
+                    "id": t.id,
+                    "subject_qualified_name": t.subject.qualified_name,
+                    "predicate": t.predicate.name,
+                    "object_qualified_name": t.object.qualified_name,
+                }
+            )
 
         hlr_triples = {}
         for hlr in session.query(HighLevelRequirement).all():

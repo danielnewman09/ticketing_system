@@ -37,6 +37,7 @@ log = logging.getLogger("agents.design")
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def design_oo(
     hlr: dict,
     llrs: list[dict],
@@ -89,8 +90,7 @@ def design_oo(
     if component_name:
         component_desc = hlr.get("component_description", "")
         component_hint = (
-            f"\n\nThis requirement belongs to the architectural "
-            f"component: **{component_name}**"
+            f"\n\nThis requirement belongs to the architectural " f"component: **{component_name}**"
         )
         if component_namespace:
             component_hint += f" (namespace: `{component_namespace}`)"

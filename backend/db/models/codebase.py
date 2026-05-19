@@ -12,6 +12,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 class CodebaseBase(DeclarativeBase):
     """Separate base for the codebase database — not managed by Alembic."""
+
     pass
 
 

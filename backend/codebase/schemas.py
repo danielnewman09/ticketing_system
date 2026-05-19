@@ -23,6 +23,7 @@ SourceType = Literal[tuple(k for k, _ in SOURCE_TYPES)]
 # Stage 1: OO Design schemas (LLM output — no ontology vocabulary)
 # ---------------------------------------------------------------------------
 
+
 class AttributeSchema(BaseModel):
     name: str
     type_name: str = ""
@@ -77,6 +78,7 @@ class AssociationSchema(BaseModel):
 
 class OODesignSchema(BaseModel):
     """Stage 1 output: pure OO class diagram."""
+
     modules: list[str] = []
     classes: list[ClassSchema] = []
     interfaces: list[InterfaceSchema] = []
@@ -87,6 +89,7 @@ class OODesignSchema(BaseModel):
 # ---------------------------------------------------------------------------
 # Stage 2: Ontology schemas (deterministic mapper output)
 # ---------------------------------------------------------------------------
+
 
 class OntologyNodeSchema(BaseModel):
     kind: NodeKind
@@ -126,6 +129,7 @@ class OntologyTripleSchema(BaseModel):
 
 class RequirementTripleLinkSchema(BaseModel):
     """Maps a requirement to an ontology triple by index or by subject/predicate/object."""
+
     requirement_type: Literal["hlr", "llr"]
     requirement_id: int
     triple_index: int = -1

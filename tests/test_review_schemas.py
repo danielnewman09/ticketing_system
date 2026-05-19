@@ -22,10 +22,10 @@ from backend.ticketing_agent.review.review_node_conflict_prompt import (
     NodeResolution,
 )
 
-
 # ---------------------------------------------------------------------------
 # DesignChallenge
 # ---------------------------------------------------------------------------
+
 
 class TestDesignChallenge:
     def test_minimal(self):
@@ -59,52 +59,78 @@ class TestDesignChallenge:
     def test_all_categories(self):
         for cat in ("cohesion", "coupling", "orphan", "testability", "granularity", "class_design"):
             dc = DesignChallenge(
-                category=cat, severity="minor", description="x",
-                remedy_type="no_action", suggested_remedy="none",
+                category=cat,
+                severity="minor",
+                description="x",
+                remedy_type="no_action",
+                suggested_remedy="none",
             )
             assert dc.category == cat
 
     def test_invalid_category(self):
         with pytest.raises(ValidationError):
             DesignChallenge(
-                category="performance", severity="minor", description="x",
-                remedy_type="no_action", suggested_remedy="none",
+                category="performance",
+                severity="minor",
+                description="x",
+                remedy_type="no_action",
+                suggested_remedy="none",
             )
 
     def test_all_severities(self):
         for sev in ("critical", "major", "minor"):
             dc = DesignChallenge(
-                category="cohesion", severity=sev, description="x",
-                remedy_type="no_action", suggested_remedy="none",
+                category="cohesion",
+                severity=sev,
+                description="x",
+                remedy_type="no_action",
+                suggested_remedy="none",
             )
             assert dc.severity == sev
 
     def test_invalid_severity(self):
         with pytest.raises(ValidationError):
             DesignChallenge(
-                category="cohesion", severity="low", description="x",
-                remedy_type="no_action", suggested_remedy="none",
+                category="cohesion",
+                severity="low",
+                description="x",
+                remedy_type="no_action",
+                suggested_remedy="none",
             )
 
     def test_all_remedy_types(self):
-        for rt in ("split_hlr", "merge_llrs", "add_llr", "remove_llr", "restructure_ontology", "no_action"):
+        for rt in (
+            "split_hlr",
+            "merge_llrs",
+            "add_llr",
+            "remove_llr",
+            "restructure_ontology",
+            "no_action",
+        ):
             dc = DesignChallenge(
-                category="orphan", severity="minor", description="x",
-                remedy_type=rt, suggested_remedy="none",
+                category="orphan",
+                severity="minor",
+                description="x",
+                remedy_type=rt,
+                suggested_remedy="none",
             )
             assert dc.remedy_type == rt
 
     def test_invalid_remedy_type(self):
         with pytest.raises(ValidationError):
             DesignChallenge(
-                category="orphan", severity="minor", description="x",
-                remedy_type="refactor_code", suggested_remedy="none",
+                category="orphan",
+                severity="minor",
+                description="x",
+                remedy_type="refactor_code",
+                suggested_remedy="none",
             )
 
 
 # ---------------------------------------------------------------------------
 # DesignChallengeResult
 # ---------------------------------------------------------------------------
+
 
 class TestDesignChallengeResult:
     def test_empty_challenges(self):
@@ -115,12 +141,18 @@ class TestDesignChallengeResult:
         result = DesignChallengeResult(
             challenges=[
                 DesignChallenge(
-                    category="testability", severity="minor", description="Hard to test",
-                    remedy_type="add_llr", suggested_remedy="Add testable LLR",
+                    category="testability",
+                    severity="minor",
+                    description="Hard to test",
+                    remedy_type="add_llr",
+                    suggested_remedy="Add testable LLR",
                 ),
                 DesignChallenge(
-                    category="coupling", severity="major", description="Tightly coupled",
-                    remedy_type="restructure_ontology", suggested_remedy="Decouple A from B",
+                    category="coupling",
+                    severity="major",
+                    description="Tightly coupled",
+                    remedy_type="restructure_ontology",
+                    suggested_remedy="Decouple A from B",
                 ),
             ]
         )
@@ -131,9 +163,12 @@ class TestDesignChallengeResult:
         result = DesignChallengeResult(
             challenges=[
                 DesignChallenge(
-                    category="orphan", severity="critical", description="Unused node",
+                    category="orphan",
+                    severity="critical",
+                    description="Unused node",
                     affected_node_qualified_names=["ns::Ghost"],
-                    remedy_type="remove_llr", suggested_remedy="Remove orphan",
+                    remedy_type="remove_llr",
+                    suggested_remedy="Remove orphan",
                 )
             ]
         )
@@ -146,6 +181,7 @@ class TestDesignChallengeResult:
 # ---------------------------------------------------------------------------
 # NodeResolution
 # ---------------------------------------------------------------------------
+
 
 class TestNodeResolution:
     def test_minimal(self):
@@ -188,6 +224,7 @@ class TestNodeResolution:
 # ---------------------------------------------------------------------------
 # ConflictReviewResult
 # ---------------------------------------------------------------------------
+
 
 class TestConflictReviewResult:
     def test_empty(self):
@@ -237,6 +274,7 @@ class TestConflictReviewResult:
 # ProposedHLR
 # ---------------------------------------------------------------------------
 
+
 class TestProposedHLR:
     def test_keep_action(self):
         ph = ProposedHLR(
@@ -246,16 +284,12 @@ class TestProposedHLR:
         assert ph.original_id == 1
 
     def test_add_action_no_original_id(self):
-        ph = ProposedHLR(
-            action="add", description="New requirement", rationale="Coverage gap"
-        )
+        ph = ProposedHLR(action="add", description="New requirement", rationale="Coverage gap")
         assert ph.original_id is None  # default for new additions
 
     def test_all_actions(self):
         for action in ("keep", "modify", "add", "delete"):
-            ph = ProposedHLR(
-                action=action, description="test", rationale="reason"
-            )
+            ph = ProposedHLR(action=action, description="test", rationale="reason")
             assert ph.action == action
 
     def test_invalid_action(self):
@@ -271,6 +305,7 @@ class TestProposedHLR:
 # HLRReviewResult
 # ---------------------------------------------------------------------------
 
+
 class TestHLRReviewResult:
     def test_empty(self):
         result = HLRReviewResult(proposals=[])
@@ -279,9 +314,21 @@ class TestHLRReviewResult:
     def test_with_proposals(self):
         result = HLRReviewResult(
             proposals=[
-                ProposedHLR(action="keep", original_id=1, description="Fast response", rationale="Well-scoped"),
-                ProposedHLR(action="add", description="New requirement", rationale="Gap in coverage"),
-                ProposedHLR(action="delete", original_id=3, description="Obsolete", rationale="No longer needed"),
+                ProposedHLR(
+                    action="keep",
+                    original_id=1,
+                    description="Fast response",
+                    rationale="Well-scoped",
+                ),
+                ProposedHLR(
+                    action="add", description="New requirement", rationale="Gap in coverage"
+                ),
+                ProposedHLR(
+                    action="delete",
+                    original_id=3,
+                    description="Obsolete",
+                    rationale="No longer needed",
+                ),
             ]
         )
         assert len(result.proposals) == 3
@@ -292,8 +339,10 @@ class TestHLRReviewResult:
         result = HLRReviewResult(
             proposals=[
                 ProposedHLR(
-                    action="modify", original_id=2,
-                    description="Updated text", rationale="Clarify scope"
+                    action="modify",
+                    original_id=2,
+                    description="Updated text",
+                    rationale="Clarify scope",
                 )
             ]
         )

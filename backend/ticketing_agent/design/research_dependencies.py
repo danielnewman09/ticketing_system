@@ -12,7 +12,10 @@ import logging
 from llm_caller import call_tool
 from backend.ticketing_agent.search.web_search import search_and_enrich
 
-from backend.ticketing_agent.design.research_dependencies_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
+from backend.ticketing_agent.design.research_dependencies_prompt import (
+    SYSTEM_PROMPT,
+    TOOL_DEFINITION,
+)
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +77,9 @@ def research_dependencies(
 
     log.info(
         "Found %d candidate libraries for %s from %d queries",
-        len(all_candidates), component_name, len(queries),
+        len(all_candidates),
+        component_name,
+        len(queries),
     )
 
     # Step 2: Format search results for the LLM
@@ -95,14 +100,9 @@ def research_dependencies(
     else:
         search_section = "(No candidates found via web search)"
 
-    hlr_text = "\n".join(
-        f"- HLR {h['id']}: {h['description']}" for h in hlrs
-    )
+    hlr_text = "\n".join(f"- HLR {h['id']}: {h['description']}" for h in hlrs)
 
-    existing_text = (
-        "\n".join(f"- {d}" for d in existing_deps)
-        if existing_deps else "(none)"
-    )
+    existing_text = "\n".join(f"- {d}" for d in existing_deps) if existing_deps else "(none)"
 
     user_message = (
         f"## Component: {component_name}\n\n"

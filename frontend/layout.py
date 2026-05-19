@@ -24,25 +24,31 @@ def page_layout(title: str = ""):
     """Create the shared page shell with a left drawer nav."""
     with ui.header().classes("items-center justify-between px-6"):
         with ui.row().classes("items-center gap-4"):
-            ui.button(
-                icon="menu", on_click=lambda: drawer.toggle()
-            ).props("flat round color=white")
-            ui.link("Ticketing System", "/").classes(
-                "text-white text-lg font-bold no-underline"
-            )
+            ui.button(icon="menu", on_click=lambda: drawer.toggle()).props("flat round color=white")
+            ui.link("Ticketing System", "/").classes("text-white text-lg font-bold no-underline")
 
         with ui.row().classes("gap-2 hidden md:flex"):
             for label, href in _NAV_ITEMS:
-                ui.link(label, href).classes("text-white/80 hover:text-white no-underline text-sm px-2")
+                ui.link(label, href).classes(
+                    "text-white/80 hover:text-white no-underline text-sm px-2"
+                )
 
-    drawer = ui.left_drawer(value=False).classes(f"bg-[{BACKGROUNDS['base']}]").props("width=220 breakpoint=960")
+    drawer = (
+        ui.left_drawer(value=False)
+        .classes(f"bg-[{BACKGROUNDS['base']}]")
+        .props("width=220 breakpoint=960")
+    )
     with drawer:
-        ui.label("Navigation").classes("text-white/60 text-xs uppercase tracking-wider px-4 pt-4 pb-2")
+        ui.label("Navigation").classes(
+            "text-white/60 text-xs uppercase tracking-wider px-4 pt-4 pb-2"
+        )
         for label, href in _NAV_ITEMS:
             with ui.link(target=href).classes("no-underline"):
                 ui.item(label).classes("text-white/90")
         ui.separator().classes("my-2")
-        ui.label("Pipeline").classes("text-white/60 text-xs uppercase tracking-wider px-4 pt-2 pb-2")
+        ui.label("Pipeline").classes(
+            "text-white/60 text-xs uppercase tracking-wider px-4 pt-2 pb-2"
+        )
         for label, href in _PIPELINE_ITEMS:
             with ui.link(target=href).classes("no-underline"):
                 ui.item(label).classes("text-white/90")
@@ -55,15 +61,20 @@ def page_layout(title: str = ""):
 
 def _agent_console():
     """Collapsible bottom panel showing agent request/response log."""
-    with ui.expansion("Agent Console", icon="terminal").classes(
-        "w-full fixed bottom-0 left-0 right-0 z-50"
-    ).style(
-        f"background: {BACKGROUNDS['panel']}; border-top: 1px solid {BACKGROUNDS['border']};"
-    ).props("dense") as panel:
+    with (
+        ui.expansion("Agent Console", icon="terminal")
+        .classes("w-full fixed bottom-0 left-0 right-0 z-50")
+        .style(
+            f"background: {BACKGROUNDS['panel']}; border-top: 1px solid {BACKGROUNDS['border']};"
+        )
+        .props("dense") as panel
+    ):
         panel.classes("text-gray-300")
 
-        with ui.scroll_area().classes("w-full h-48 text-xs font-mono").style(
-            f"background: {BACKGROUNDS['panel']}; color: #94a3b8;"
+        with (
+            ui.scroll_area()
+            .classes("w-full h-48 text-xs font-mono")
+            .style(f"background: {BACKGROUNDS['panel']}; color: #94a3b8;")
         ):
             log_col = ui.column().classes("w-full gap-0 px-2 py-1")
 
@@ -101,9 +112,7 @@ def _agent_console():
             last_version["v"] = agent_log.version
 
         with ui.row().classes("w-full justify-end px-2 py-1"):
-            ui.button("Clear", on_click=clear_log).props(
-                "flat size=xs"
-            ).classes("text-gray-500")
+            ui.button("Clear", on_click=clear_log).props("flat size=xs").classes("text-gray-500")
 
 
 def stat_card(label: str, value, color: str = "primary"):

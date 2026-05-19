@@ -49,12 +49,14 @@ def test_build_task_context_includes_existing():
 
 def test_build_task_context_includes_inheritance():
     context = build_task_context(
-        classes=[{
-            "name": "ScientificCalc",
-            "inherits_from": ["Calculator"],
-            "module": "calc.scientific",
-            "methods": [],
-        }],
+        classes=[
+            {
+                "name": "ScientificCalc",
+                "inherits_from": ["Calculator"],
+                "module": "calc.scientific",
+                "methods": [],
+            }
+        ],
         verifications=[],
         existing_classes=[],
     )
@@ -63,12 +65,14 @@ def test_build_task_context_includes_inheritance():
 
 def test_build_task_context_includes_requirements():
     context = build_task_context(
-        classes=[{
-            "name": "Foo",
-            "module": "m",
-            "methods": [],
-            "requirement_ids": ["hlr:1", "llr:3"],
-        }],
+        classes=[
+            {
+                "name": "Foo",
+                "module": "m",
+                "methods": [],
+                "requirement_ids": ["hlr:1", "llr:3"],
+            }
+        ],
         verifications=[],
         existing_classes=[],
     )
@@ -78,14 +82,16 @@ def test_build_task_context_includes_requirements():
 def test_build_task_context_verification_details():
     context = build_task_context(
         classes=[],
-        verifications=[{
-            "method": "automated",
-            "test_name": "test_div_zero",
-            "description": "Division by zero",
-            "preconditions": ["divisor != 0"],
-            "actions": ["call divide(10, 0)"],
-            "postconditions": ["error raised"],
-        }],
+        verifications=[
+            {
+                "method": "automated",
+                "test_name": "test_div_zero",
+                "description": "Division by zero",
+                "preconditions": ["divisor != 0"],
+                "actions": ["call divide(10, 0)"],
+                "postconditions": ["error raised"],
+            }
+        ],
         existing_classes=[],
     )
     assert "Pre-conditions" in context

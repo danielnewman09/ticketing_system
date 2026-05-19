@@ -49,11 +49,13 @@ async def component_detail_page(component_id: int):
                 ui.label(data["namespace"]).classes("text-sm font-mono text-gray-400")
         with ui.row().classes("gap-2"):
             ui.button(
-                "Research Dependencies", icon="science",
+                "Research Dependencies",
+                icon="science",
                 on_click=lambda: ui.navigate.to(f"/component/{component_id}/dependencies/review"),
             ).props("outline size=sm color=primary")
             ui.button(
-                "All Components", icon="arrow_back",
+                "All Components",
+                icon="arrow_back",
                 on_click=lambda: ui.navigate.to("/components"),
             ).props("flat size=sm")
 
@@ -72,9 +74,13 @@ async def component_detail_page(component_id: int):
                     section_header("Sub-Components")
                     with ui.row().classes("gap-3 flex-wrap"):
                         for child in data["children"]:
-                            with ui.card().classes("w-56 cursor-pointer").on(
-                                "click",
-                                lambda _, c=child: ui.navigate.to(f"/component/{c['id']}"),
+                            with (
+                                ui.card()
+                                .classes("w-56 cursor-pointer")
+                                .on(
+                                    "click",
+                                    lambda _, c=child: ui.navigate.to(f"/component/{c['id']}"),
+                                )
                             ):
                                 ui.label(child["name"]).classes("font-semibold")
                                 if child.get("namespace"):
@@ -101,7 +107,8 @@ async def component_detail_page(component_id: int):
                             ).classes("text-blue-400 text-sm no-underline min-w-[60px]")
                             ui.label(hlr["description"]).classes("text-sm flex-1")
                             ui.badge(
-                                f"{hlr['llr_count']} LLRs", color="grey",
+                                f"{hlr['llr_count']} LLRs",
+                                color="grey",
                             ).classes("text-xs")
                         ui.separator()
 
@@ -113,8 +120,12 @@ async def component_detail_page(component_id: int):
                     ui.notify("Package name is required", type="warning")
                     return
                 await asyncio.to_thread(
-                    add_dependency, manager_id, name, ver_input.value.strip(),
-                    dev_checkbox.value, component_id=comp_id,
+                    add_dependency,
+                    manager_id,
+                    name,
+                    ver_input.value.strip(),
+                    dev_checkbox.value,
+                    component_id=comp_id,
                 )
                 ui.notify(f"Added {name}", type="positive")
                 name_input.value = ""
@@ -139,9 +150,7 @@ async def component_detail_page(component_id: int):
                     section_header("Dependencies")
 
                     if not deps:
-                        ui.label(
-                            "No dependencies configured."
-                        ).classes("text-sm text-gray-500")
+                        ui.label("No dependencies configured.").classes("text-sm text-gray-500")
                     else:
                         for dep in deps:
                             with ui.row().classes("items-center gap-2 py-1 w-full"):
@@ -164,7 +173,9 @@ async def component_detail_page(component_id: int):
                             dep_dev = ui.checkbox("Dev").classes("text-xs")
                             ui.button(
                                 "Add",
-                                on_click=lambda _, mid=mgr_id, cid=component_id, n=dep_name, v=dep_ver, dv=dep_dev: do_add_dep(mid, cid, n, v, dv),
+                                on_click=lambda _, mid=mgr_id, cid=component_id, n=dep_name, v=dep_ver, dv=dep_dev: do_add_dep(
+                                    mid, cid, n, v, dv
+                                ),
                             ).props("flat size=xs color=positive")
 
             await dep_section()
@@ -173,10 +184,14 @@ async def component_detail_page(component_id: int):
         with ui.column().classes("flex-1 gap-4"):
             with ui.card().classes("w-full"):
                 section_header("Design Graph")
-                cy = ui.element("div").style(
-                    f"height: calc(100vh - 280px); min-height: 400px; "
-                    f"background: {BACKGROUNDS['base']}; border-radius: 8px;"
-                ).classes("w-full")
+                cy = (
+                    ui.element("div")
+                    .style(
+                        f"height: calc(100vh - 280px); min-height: 400px; "
+                        f"background: {BACKGROUNDS['base']}; border-radius: 8px;"
+                    )
+                    .classes("w-full")
+                )
                 cy._props["id"] = "comp-cy-container"
 
     async def handle_node_dblclick(e):
@@ -191,7 +206,8 @@ async def component_detail_page(component_id: int):
 
     # Load graph filtered to this component
     graph = await asyncio.to_thread(
-        fetch_ontology_graph_data, component_id=data["id"],
+        fetch_ontology_graph_data,
+        component_id=data["id"],
     )
     if graph["nodes"]:
         await render_cytoscape_graph(

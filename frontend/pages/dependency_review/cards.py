@@ -55,11 +55,13 @@ def _render_actions(rec: dict, pending_recs: list[dict] | None, on_accept, on_re
     if pending_recs is not None:
         with ui.row().classes("gap-1"):
             ui.button(
-                "Accept", icon="check",
+                "Accept",
+                icon="check",
                 on_click=lambda _, r=rec, p=pending_recs: on_accept(r["id"], r["name"], p),
             ).props("color=positive size=sm")
             ui.button(
-                "Reject", icon="close",
+                "Reject",
+                icon="close",
                 on_click=lambda _, r=rec: on_reject(r["id"], r["name"]),
             ).props("color=negative size=sm outline")
     else:
@@ -70,9 +72,7 @@ def _render_actions(rec: dict, pending_recs: list[dict] | None, on_accept, on_re
 def _render_body(rec: dict):
     """GitHub link, description, pros/cons, relevant HLRs/structures."""
     if rec["github_url"]:
-        ui.link(rec["github_url"], rec["github_url"]).classes(
-            "text-xs text-blue-400 no-underline"
-        )
+        ui.link(rec["github_url"], rec["github_url"]).classes("text-xs text-blue-400 no-underline")
 
     if rec["description"]:
         ui.label(rec["description"]).classes("text-sm mt-2")
@@ -96,8 +96,11 @@ def _render_body(rec: dict):
         with ui.row().classes("gap-2 mt-2 flex-wrap"):
             for hlr_id in hlrs:
                 ui.link(
-                    f"HLR {hlr_id}", f"/hlr/{hlr_id}",
-                ).classes("text-xs text-blue-400 no-underline").props("outline")
+                    f"HLR {hlr_id}",
+                    f"/hlr/{hlr_id}",
+                ).classes(
+                    "text-xs text-blue-400 no-underline"
+                ).props("outline")
             for struct in structs:
                 ui.badge(struct, color="grey").classes("text-xs font-mono")
 
@@ -108,7 +111,11 @@ def _render_body(rec: dict):
 
 
 def render_recommendation_card(
-    rec: dict, *, pending_recs: list[dict] | None = None, on_accept=None, on_reject=None,
+    rec: dict,
+    *,
+    pending_recs: list[dict] | None = None,
+    on_accept=None,
+    on_reject=None,
 ):
     """Render a single recommendation card with optional action buttons."""
     with ui.card().classes("w-full mx-2 mb-3").style(_status_border_style(rec["status"])):
@@ -119,7 +126,11 @@ def render_recommendation_card(
 
 
 def render_recs_by_status(
-    recs: list[dict], *, on_accept, on_reject, on_use_stdlib,
+    recs: list[dict],
+    *,
+    on_accept,
+    on_reject,
+    on_use_stdlib,
 ):
     """Group recommendations by status and render each group."""
     grouped = {}
@@ -135,7 +146,8 @@ def render_recs_by_status(
             with ui.row().classes("w-full items-center justify-between px-2 mt-2 mb-2"):
                 ui.label(heading).classes(f"text-sm font-semibold {color_cls}")
                 ui.button(
-                    "Use Standard Library", icon="code",
+                    "Use Standard Library",
+                    icon="code",
                     on_click=lambda p=group: on_use_stdlib(p),
                 ).props("size=sm outline").classes("text-blue-400 border-blue-400").tooltip(
                     "Reject all pending and use standard library instead"

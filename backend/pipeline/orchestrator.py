@@ -21,6 +21,7 @@ log = logging.getLogger("pipeline.orchestrator")
 @dataclass
 class PipelineResult:
     """Aggregated results from a full pipeline run."""
+
     hlrs_created: int = 0
     llrs_created: int = 0
     verifications_created: int = 0
@@ -38,25 +39,30 @@ class PipelineResult:
 def _get_verification_dicts(session: Session) -> list[dict]:
     """Fetch all verification methods as dicts for the pipeline."""
     from backend.db.models import VerificationMethod
+
     verifs = session.query(VerificationMethod).all()
     result = []
     for v in verifs:
-        result.append({
-            "id": v.id,
-            "test_name": v.test_name,
-            "method": v.method,
-            "description": v.description,
-            "llr_id": v.low_level_requirement_id,
-            "preconditions": [
-                f"{c.member_qualified_name} {c.operator} {c.expected_value}"
-                for c in v.conditions if c.phase == "pre"
-            ],
-            "actions": [a.description for a in v.actions],
-            "postconditions": [
-                f"{c.member_qualified_name} {c.operator} {c.expected_value}"
-                for c in v.conditions if c.phase == "post"
-            ],
-        })
+        result.append(
+            {
+                "id": v.id,
+                "test_name": v.test_name,
+                "method": v.method,
+                "description": v.description,
+                "llr_id": v.low_level_requirement_id,
+                "preconditions": [
+                    f"{c.member_qualified_name} {c.operator} {c.expected_value}"
+                    for c in v.conditions
+                    if c.phase == "pre"
+                ],
+                "actions": [a.description for a in v.actions],
+                "postconditions": [
+                    f"{c.member_qualified_name} {c.operator} {c.expected_value}"
+                    for c in v.conditions
+                    if c.phase == "post"
+                ],
+            }
+        )
     return result
 
 
@@ -85,8 +91,11 @@ def run_pipeline(
         PipelineResult with counts and sync status.
     """
     from backend.db.models import (
-        Component, HighLevelRequirement, LowLevelRequirement,
-        OntologyNode, VerificationMethod,
+        Component,
+        HighLevelRequirement,
+        LowLevelRequirement,
+        OntologyNode,
+        VerificationMethod,
     )
     from backend.db.models.tasks import Task
 
@@ -113,7 +122,9 @@ def run_pipeline(
 
         decomp_result = decompose(hlr.description, model=model)
         persisted = persist_decomposition(
-            session, hlr, decomp_result.low_level_requirements,
+            session,
+            hlr,
+            decomp_result.low_level_requirements,
         )
         result.llrs_created += persisted.llrs_created
 
@@ -127,7 +138,8 @@ def run_pipeline(
     log.info("Phase 3: Generating verification methods...")
     from backend.ticketing_agent.verify.verify_llr import verify
     from backend.requirements.services.persistence import (
-        build_verification_context, persist_verification,
+        build_verification_context,
+        persist_verification,
     )
 
     class_contexts = build_verification_context(session)
@@ -157,7 +169,10 @@ def run_pipeline(
             model=model,
         )
         persist_result = persist_verification(
-            session, llr, vv_result.verifications, ontology_nodes_list,
+            session,
+            llr,
+            vv_result.verifications,
+            ontology_nodes_list,
         )
         result.verifications_created += persist_result.conditions_created
 
@@ -188,7 +203,8 @@ def run_pipeline(
         comp_ns = hlr.component.namespace if hlr.component else ""
 
         oo, ontology = design_hlr(
-            hlr=hlr_dict, llrs=llrs_for_hlr,
+            hlr=hlr_dict,
+            llrs=llrs_for_hlr,
             component_namespace=comp_ns,
             component_id=hlr.component_id,
             model=model,
@@ -197,25 +213,28 @@ def run_pipeline(
         result.design_triples += len(ontology.triples)
 
         for cls in oo.classes:
-            all_oo_classes.append({
-                "name": cls.name,
-                "module": cls.module,
-                "attributes": [
-                    {"name": a.name, "type_name": a.type_name}
-                    for a in cls.attributes
-                ],
-                "methods": [
-                    {
-                        "name": m.name,
-                        "parameters": m.parameters,
-                        "return_type": m.return_type,
-                    }
-                    for m in cls.methods
-                ],
-            })
+            all_oo_classes.append(
+                {
+                    "name": cls.name,
+                    "module": cls.module,
+                    "attributes": [
+                        {"name": a.name, "type_name": a.type_name} for a in cls.attributes
+                    ],
+                    "methods": [
+                        {
+                            "name": m.name,
+                            "parameters": m.parameters,
+                            "return_type": m.return_type,
+                        }
+                        for m in cls.methods
+                    ],
+                }
+            )
 
         persist_result = persist_design(
-            session, ontology, qname_to_node=qname_to_node,
+            session,
+            ontology,
+            qname_to_node=qname_to_node,
         )
         log.info(
             "  HLR %d: %d design nodes, %d triples",
@@ -225,9 +244,7 @@ def run_pipeline(
         )
 
     qname_to_node = {
-        n.qualified_name: n
-        for n in session.query(OntologyNode).all()
-        if n.qualified_name
+        n.qualified_name: n for n in session.query(OntologyNode).all() if n.qualified_name
     }
 
     # ------------------------------------------------------------------
@@ -255,12 +272,16 @@ def run_pipeline(
         ]
 
         hlr_classes = [
-            c for c in all_oo_classes
+            c
+            for c in all_oo_classes
             if c.get("module") == (hlr.component.name if hlr.component else "")
-        ] or all_oo_classes[:3]  # fallback
+        ] or all_oo_classes[
+            :3
+        ]  # fallback
 
         batch = generate_tasks(
-            hlr=hlr_dict, llrs=llrs_for_hlr,
+            hlr=hlr_dict,
+            llrs=llrs_for_hlr,
             oo_design={"classes": hlr_classes},
             verifications=all_verifications,
             model=model,
@@ -296,10 +317,7 @@ def run_pipeline(
 
     llrs = session.query(LowLevelRequirement).all()
     for llr in llrs:
-        llr_verifs = [
-            v for v in all_verifications
-            if v.get("llr_id") == llr.id
-        ]
+        llr_verifs = [v for v in all_verifications if v.get("llr_id") == llr.id]
         if not llr_verifs:
             continue
 
@@ -311,35 +329,35 @@ def run_pipeline(
             module_path="src",
             model=model,
         )
-        result.tests_created += sum(
-            len(t.test_names) for t in test_results
+        result.tests_created += sum(len(t.test_names) for t in test_results)
+        log.info(
+            "  LLR %d: %d test files, %d tests",
+            llr.id,
+            len(test_results),
+            sum(len(t.test_names) for t in test_results),
         )
-        log.info("  LLR %d: %d test files, %d tests",
-                 llr.id, len(test_results),
-                 sum(len(t.test_names) for t in test_results))
 
     # ------------------------------------------------------------------
     # Phase 8: Implementation -- agent fills in skeleton
     # ------------------------------------------------------------------
     log.info("Phase 8: Implementing...")
     from backend.ticketing_agent.implement import (
-        implement_task, write_implementation_files,
+        implement_task,
+        write_implementation_files,
     )
 
     tasks = session.query(Task).all()
     skeleton_map: dict[str, str] = {}
     if workspace_dir:
         from pathlib import Path
+
         for sr in skeleton_results:
             p = Path(workspace_dir) / sr.file_path
             if p.exists():
                 skeleton_map[sr.file_path] = p.read_text()
 
     for task in tasks:
-        task_verifs = [
-            v for v in all_verifications
-            if v.get("test_name") in task.verifications
-        ]
+        task_verifs = [v for v in all_verifications if v.get("test_name") in task.verifications]
 
         # Get skeleton code for files this task modifies
         task_skeleton = ""
@@ -356,8 +374,7 @@ def run_pipeline(
         )
         write_implementation_files(impl_results, workspace_dir)
         result.implementations_created += len(impl_results)
-        log.info("  Task '%s': %d files implemented",
-                 task.title, len(impl_results))
+        log.info("  Task '%s': %d files implemented", task.title, len(impl_results))
 
     # ------------------------------------------------------------------
     # Phase 9: Sync hooks
@@ -371,6 +388,7 @@ def run_pipeline(
     source_files = []
     if workspace_dir:
         from pathlib import Path
+
         for p in Path(workspace_dir).rglob("*.py"):
             source_files.append(str(p))
 
@@ -383,22 +401,19 @@ def run_pipeline(
             result.sync_issues.append(f"Missing class: {c}")
         for cls, methods in design_report.missing_methods.items():
             for m in methods:
-                result.sync_issues.append(
-                    f"Missing method: {cls}.{m}")
+                result.sync_issues.append(f"Missing method: {cls}.{m}")
 
-    test_names_expected = [
-        v.get("test_name", "")
-        for v in all_verifications
-        if v.get("test_name")
-    ]
+    test_names_expected = [v.get("test_name", "") for v in all_verifications if v.get("test_name")]
     test_files_actual = []
     if workspace_dir:
         from pathlib import Path
+
         for p in Path(workspace_dir).rglob("tests/**/*.py"):
             test_files_actual.append(str(p))
 
     coverage_report = check_test_coverage(
-        test_names_expected, test_files_actual,
+        test_names_expected,
+        test_files_actual,
     )
     if not coverage_report.clean:
         for name in coverage_report.untested_verifications:
@@ -412,7 +427,8 @@ def run_pipeline(
     log.info("Phase 10: Updating Neo4j...")
     try:
         from backend.db.neo4j.sync import (
-            sync_task, sync_implementation_status,
+            sync_task,
+            sync_implementation_status,
             sync_full_design,
         )
         from backend.db.neo4j.connection import get_standalone_session as get_neo4j_session
@@ -425,27 +441,40 @@ def run_pipeline(
                     sync_task(neo4j_sess, task)
                 except Exception:
                     log.warning(
-                        "Neo4j task sync failed for task %d", task.id,
+                        "Neo4j task sync failed for task %d",
+                        task.id,
                     )
 
-            for node in session.query(OntologyNode).filter_by(
-                implementation_status="implemented",
-            ).all():
+            for node in (
+                session.query(OntologyNode)
+                .filter_by(
+                    implementation_status="implemented",
+                )
+                .all()
+            ):
                 sync_implementation_status(neo4j_sess, node)
 
         result.neo4j_synced = True
-        log.info("  Neo4j sync: %d nodes, %d triples",
-                 full_stats.get("nodes", 0),
-                 full_stats.get("triples", 0))
+        log.info(
+            "  Neo4j sync: %d nodes, %d triples",
+            full_stats.get("nodes", 0),
+            full_stats.get("triples", 0),
+        )
     except Exception as e:
         log.warning("Neo4j sync skipped (unavailable): %s", e)
         result.neo4j_synced = False
 
-    log.info("Pipeline complete: %d HLRs, %d LLRs, %d tasks, "
-             "%d skeleton files, %d tests, %d impl files, "
-             "%d sync issues, Neo4j=%s",
-             result.hlrs_created, result.llrs_created,
-             result.tasks_created, len(result.skeleton_files),
-             result.tests_created, result.implementations_created,
-             len(result.sync_issues), result.neo4j_synced)
+    log.info(
+        "Pipeline complete: %d HLRs, %d LLRs, %d tasks, "
+        "%d skeleton files, %d tests, %d impl files, "
+        "%d sync issues, Neo4j=%s",
+        result.hlrs_created,
+        result.llrs_created,
+        result.tasks_created,
+        len(result.skeleton_files),
+        result.tests_created,
+        result.implementations_created,
+        len(result.sync_issues),
+        result.neo4j_synced,
+    )
     return result

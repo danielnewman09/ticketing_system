@@ -36,8 +36,12 @@ async def section_project_meta():
     @ui.refreshable
     async def card():
         meta = await asyncio.to_thread(fetch_project_meta)
-        with ui.card().classes("w-full mx-2 mt-4").style(
-            f"background: {BACKGROUNDS['surface']}; border-left: 4px solid {COLORS['primary']};"
+        with (
+            ui.card()
+            .classes("w-full mx-2 mt-4")
+            .style(
+                f"background: {BACKGROUNDS['surface']}; border-left: 4px solid {COLORS['primary']};"
+            )
         ):
             with ui.row().classes("w-full items-start justify-between"):
                 with ui.column().classes("flex-1 gap-1"):
@@ -53,7 +57,8 @@ async def section_project_meta():
                                 "click", lambda d=meta["working_directory"]: open_directory(d)
                             )
                 ui.button(
-                    icon="edit", on_click=lambda: _show_edit_dialog(meta, card),
+                    icon="edit",
+                    on_click=lambda: _show_edit_dialog(meta, card),
                 ).props("flat round size=sm")
 
     await card()
@@ -69,7 +74,8 @@ async def _show_edit_dialog(meta: dict, refreshable):
 
         with ui.row().classes("w-full items-end gap-2"):
             dir_input = ui.input(
-                "Working Directory", value=meta["working_directory"],
+                "Working Directory",
+                value=meta["working_directory"],
             ).classes("flex-1 font-mono")
             dir_input.props("readonly")
 
@@ -80,9 +86,9 @@ async def _show_edit_dialog(meta: dict, refreshable):
                 )
                 picker.open()
 
-            ui.button(icon="folder_open", on_click=open_picker).props(
-                "flat round size=sm"
-            ).tooltip("Browse…")
+            ui.button(icon="folder_open", on_click=open_picker).props("flat round size=sm").tooltip(
+                "Browse…"
+            )
 
         with ui.row().classes(CLS_DIALOG_ACTIONS):
             ui.button("Cancel", on_click=dialog.close).props("flat")
@@ -114,9 +120,9 @@ async def section_stats():
     with ui.row().classes("w-full gap-4 flex-wrap px-2 mt-4"):
         stat_card("HLRs", data["total_hlrs"], "blue-5")
         stat_card("LLRs", data["total_llrs"], "green-5")
-        stat_card("Components", len({
-            h["component"] for h in data["hlrs"] if h["component"]
-        }), "teal-5")
+        stat_card(
+            "Components", len({h["component"] for h in data["hlrs"] if h["component"]}), "teal-5"
+        )
         stat_card("Ontology Nodes", data["total_nodes"], "purple-5")
 
 
@@ -139,6 +145,7 @@ async def section_dependencies(project_dir: str):
     async def do_index_dep(dep_name: str):
         ui.notify(f"Indexing {dep_name}...", type="info")
         from backend.codebase.indexing import index_dependency
+
         result = await asyncio.to_thread(index_dependency, project_dir, dep_name)
         if result["success"]:
             ui.notify(result["message"], type="positive")
@@ -173,11 +180,32 @@ async def section_dependencies(project_dir: str):
                 ui.label("No dependencies configured.").classes("text-sm text-gray-500")
             else:
                 columns = [
-                    {"name": "name", "label": "Name", "field": "name", "align": "left", "sortable": True},
-                    {"name": "source_url", "label": "Source URL", "field": "source_url", "align": "left"},
+                    {
+                        "name": "name",
+                        "label": "Name",
+                        "field": "name",
+                        "align": "left",
+                        "sortable": True,
+                    },
+                    {
+                        "name": "source_url",
+                        "label": "Source URL",
+                        "field": "source_url",
+                        "align": "left",
+                    },
                     {"name": "version", "label": "Version", "field": "version", "align": "left"},
-                    {"name": "components", "label": "Used in Components", "field": "components", "align": "left"},
-                    {"name": "status", "label": "Integration Status", "field": "status", "align": "left"},
+                    {
+                        "name": "components",
+                        "label": "Used in Components",
+                        "field": "components",
+                        "align": "left",
+                    },
+                    {
+                        "name": "status",
+                        "label": "Integration Status",
+                        "field": "status",
+                        "align": "left",
+                    },
                     {"name": "language", "label": "Language", "field": "language", "align": "left"},
                     {"name": "actions", "label": "", "field": "actions", "align": "right"},
                 ]
@@ -185,36 +213,49 @@ async def section_dependencies(project_dir: str):
                 for dep in all_deps:
                     comps = dep.get("components", [])
                     comp_names = ", ".join(c["name"] for c in comps) or "—"
-                    rows.append({
-                        "id": dep["id"],
-                        "name": dep["name"],
-                        "source_url": dep.get("github_url") or "—",
-                        "version": dep.get("version") or "—",
-                        "components": comp_names,
-                        "unused": len(comps) == 0,
-                        "status": dep["integration_status"],
-                        "language": dep["language"],
-                        "index_file_patterns": dep.get("index_file_patterns", "*.h *.hpp"),
-                        "index_subdir": dep.get("index_subdir", ""),
-                        "index_exclude_patterns": dep.get("index_exclude_patterns", ""),
-                        "index_recursive": dep.get("index_recursive", True),
-                    })
+                    rows.append(
+                        {
+                            "id": dep["id"],
+                            "name": dep["name"],
+                            "source_url": dep.get("github_url") or "—",
+                            "version": dep.get("version") or "—",
+                            "components": comp_names,
+                            "unused": len(comps) == 0,
+                            "status": dep["integration_status"],
+                            "language": dep["language"],
+                            "index_file_patterns": dep.get("index_file_patterns", "*.h *.hpp"),
+                            "index_subdir": dep.get("index_subdir", ""),
+                            "index_exclude_patterns": dep.get("index_exclude_patterns", ""),
+                            "index_recursive": dep.get("index_recursive", True),
+                        }
+                    )
 
-                table = ui.table(
-                    columns=columns, rows=rows, row_key="id",
-                ).classes("w-full").props("dense flat")
+                table = (
+                    ui.table(
+                        columns=columns,
+                        rows=rows,
+                        row_key="id",
+                    )
+                    .classes("w-full")
+                    .props("dense flat")
+                )
 
                 # Custom cell rendering for status badges and actions
-                table.add_slot("body-cell-status", r'''
+                table.add_slot(
+                    "body-cell-status",
+                    r"""
                     <q-td :props="props">
                         <q-badge
                             :color="props.value === 'indexed' ? 'positive' : props.value === 'integrated' ? 'info' : props.value === 'not in build' ? 'negative' : 'grey'"
                             class="text-xs"
                         >{{ props.value }}</q-badge>
                     </q-td>
-                ''')
+                """,
+                )
 
-                table.add_slot("body-cell-source_url", r'''
+                table.add_slot(
+                    "body-cell-source_url",
+                    r"""
                     <q-td :props="props">
                         <a v-if="props.value !== '—'"
                            :href="props.value" target="_blank"
@@ -223,9 +264,12 @@ async def section_dependencies(project_dir: str):
                         </a>
                         <span v-else class="text-gray-500">—</span>
                     </q-td>
-                ''')
+                """,
+                )
 
-                table.add_slot("body-cell-actions", r'''
+                table.add_slot(
+                    "body-cell-actions",
+                    r"""
                     <q-td :props="props">
                         <q-btn v-if="props.row.status === 'not in build'"
                             flat round dense size="xs" icon="add_circle"
@@ -256,7 +300,8 @@ async def section_dependencies(project_dir: str):
                             <q-tooltip>Remove unused dependency</q-tooltip>
                         </q-btn>
                     </q-td>
-                ''')
+                """,
+                )
                 table.on("integrate", lambda e: _open_integrate(e.args))
                 table.on("reindex", lambda e: do_index_dep(e.args["name"]))
                 table.on("configure", lambda e: _open_index_config(e.args))
@@ -287,7 +332,8 @@ async def section_dependencies(project_dir: str):
         with ui.row().classes("w-full justify-end gap-2 mt-2"):
             ui.button("Cancel", on_click=integrate_dialog.close).props("flat size=sm")
             ui.button(
-                "Integrate", icon="build",
+                "Integrate",
+                icon="build",
                 on_click=lambda: _run_integrate(),
             ).props("color=primary size=sm")
 
@@ -315,6 +361,7 @@ async def section_dependencies(project_dir: str):
 
         try:
             from backend.ticketing_agent.design.integrate_dependency import integrate_dependency
+
             result = await asyncio.to_thread(
                 integrate_dependency,
                 skill_dir=_CONAN_DEP_SKILL,
@@ -387,8 +434,10 @@ async def section_pending_recommendations():
     if not pending:
         return
 
-    with ui.card().classes("w-full mx-2 mt-4").style(
-        f"background: {BACKGROUNDS['surface']}; border-left: 4px solid {COLORS['warning']};"
+    with (
+        ui.card()
+        .classes("w-full mx-2 mt-4")
+        .style(f"background: {BACKGROUNDS['surface']}; border-left: 4px solid {COLORS['warning']};")
     ):
         with ui.row().classes("items-center gap-3"):
             ui.icon("science", color="warning", size="sm")
@@ -397,9 +446,9 @@ async def section_pending_recommendations():
                     "text-sm font-semibold text-amber-400"
                 )
                 for p in pending:
-                    ui.label(
-                        f"{p['component_name']}: {p['pending_count']} pending"
-                    ).classes("text-xs text-gray-400")
+                    ui.label(f"{p['component_name']}: {p['pending_count']} pending").classes(
+                        "text-xs text-gray-400"
+                    )
             for p in pending:
                 ui.button(
                     f"Review {p['component_name']}",
@@ -431,12 +480,14 @@ async def section_scaffold(meta: dict, project_dir: str):
                 with ui.row().classes("gap-2 items-center"):
                     ui.badge("Created", color="positive").classes("text-xs")
                     ui.button(
-                        "Open in VS Code", icon="open_in_new",
+                        "Open in VS Code",
+                        icon="open_in_new",
                         on_click=lambda: open_directory(project_dir),
                     ).props("flat size=sm").classes("text-blue-400")
             else:
                 ui.button(
-                    "Create Scaffold", icon="construction",
+                    "Create Scaffold",
+                    icon="construction",
                     on_click=lambda: _open_scaffold_dialog(),
                 ).props("color=primary size=sm")
 
@@ -464,21 +515,25 @@ async def section_scaffold(meta: dict, project_dir: str):
         ).classes("w-full")
         cpp_select = ui.select(
             {20: "C++20", 23: "C++23", 26: "C++26"},
-            value=20, label="C++ Standard",
+            value=20,
+            label="C++ Standard",
         ).classes("w-full")
 
         with ui.row().classes("w-full justify-end gap-2 mt-2"):
             ui.button("Cancel", on_click=scaffold_dialog.close).props("flat size=sm")
             ui.button(
-                "Scaffold", icon="construction",
+                "Scaffold",
+                icon="construction",
                 on_click=lambda: _run_scaffold(),
             ).props("color=primary size=sm")
 
     async def _open_scaffold_dialog():
         from frontend.data.components import fetch_components_options
+
         components = await asyncio.to_thread(fetch_components_options)
         lib_names = [
-            c["name"] for c in components
+            c["name"]
+            for c in components
             if c["name"] != "Environment" and not c["name"].startswith("Environment:")
         ]
         libs_input.value = ", ".join(lib_names)
@@ -503,6 +558,7 @@ async def section_scaffold(meta: dict, project_dir: str):
 
         try:
             from backend.ticketing_agent.design.scaffold_project import scaffold_project
+
             result = await asyncio.to_thread(
                 scaffold_project,
                 skill_dir=_SCAFFOLD_SKILL,

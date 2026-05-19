@@ -42,9 +42,7 @@ Use the available tool to produce implementation files. Each file includes:
 
 TOOL_DEFINITION = {
     "name": "produce_implementation",
-    "description": (
-        "Produce implementation files filling in the skeleton code."
-    ),
+    "description": ("Produce implementation files filling in the skeleton code."),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -56,7 +54,8 @@ TOOL_DEFINITION = {
                         "file_path": {"type": "string"},
                         "content": {"type": "string"},
                         "classes_modified": {
-                            "type": "array", "items": {"type": "string"},
+                            "type": "array",
+                            "items": {"type": "string"},
                         },
                     },
                     "required": ["file_path", "content"],
@@ -95,18 +94,18 @@ def build_implementation_context(
         lines.append(f"\n## Design Context\n")
         for cls in design_classes:
             lines.append(f"### {cls.get('name', '?')}")
-            if cls.get('description'):
+            if cls.get("description"):
                 lines.append(f"Description: {cls['description']}")
-            if cls.get('attributes'):
+            if cls.get("attributes"):
                 lines.append("Attributes:")
-                for a in cls['attributes']:
+                for a in cls["attributes"]:
                     lines.append(f"  - {a['name']}: {a.get('type_name', 'any')}")
-            if cls.get('methods'):
+            if cls.get("methods"):
                 lines.append("Methods:")
-                for m in cls['methods']:
-                    params = ", ".join(m.get('parameters', []))
+                for m in cls["methods"]:
+                    params = ", ".join(m.get("parameters", []))
                     lines.append(f"  - {m['name']}({params}) -> {m.get('return_type', 'void')}")
-                    if m.get('description'):
+                    if m.get("description"):
                         lines.append(f"    {m['description']}")
             lines.append("")
 
@@ -114,8 +113,8 @@ def build_implementation_context(
         lines.append(f"\n## Verification Methods\n")
         for v in verifications:
             lines.append(f"- {v.get('test_name', '?')}: {v.get('description', '')}")
-            if v.get('postconditions'):
-                for pc in v['postconditions']:
+            if v.get("postconditions"):
+                for pc in v["postconditions"]:
                     lines.append(f"  -> {pc}")
             lines.append("")
 

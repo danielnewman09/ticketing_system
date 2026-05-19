@@ -15,10 +15,10 @@ from backend.db.models.ontology import (
     VALUE_KINDS,
 )
 
-
 # ---------------------------------------------------------------------------
 # OntologyNode
 # ---------------------------------------------------------------------------
+
 
 class TestOntologyNode:
     """Tests for OntologyNode CRUD and constraints."""
@@ -147,6 +147,7 @@ class TestOntologyNode:
 # Predicate
 # ---------------------------------------------------------------------------
 
+
 class TestPredicate:
     """Tests for Predicate CRUD, uniqueness, and ensure_defaults."""
 
@@ -190,8 +191,15 @@ class TestPredicate:
         session.flush()
 
         names = {p.name for p in session.query(Predicate)}
-        expected = {"associates", "aggregates", "composes", "depends_on",
-                    "generalizes", "realizes", "invokes"}
+        expected = {
+            "associates",
+            "aggregates",
+            "composes",
+            "depends_on",
+            "generalizes",
+            "realizes",
+            "invokes",
+        }
         assert expected <= names
 
     def test_ensure_defaults_idempotent(self, session):
@@ -215,6 +223,7 @@ class TestPredicate:
 # ---------------------------------------------------------------------------
 # OntologyTriple
 # ---------------------------------------------------------------------------
+
 
 class TestOntologyTriple:
     """Tests for OntologyTriple CRUD and constraints."""
@@ -367,13 +376,25 @@ class TestOntologyTriple:
 # Module-level constants
 # ---------------------------------------------------------------------------
 
+
 class TestOntologyConstants:
     """Tests for constant values defined in the ontology module."""
 
     def test_node_kind_values(self):
         """NODE_KIND_VALUES contains expected base kinds."""
-        expected = {"attribute", "class", "constant", "enum", "enum_value",
-                    "function", "interface", "method", "module", "primitive", "type_alias"}
+        expected = {
+            "attribute",
+            "class",
+            "constant",
+            "enum",
+            "enum_value",
+            "function",
+            "interface",
+            "method",
+            "module",
+            "primitive",
+            "type_alias",
+        }
         assert NODE_KIND_VALUES == expected
 
     def test_visibility_choices(self):

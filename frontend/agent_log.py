@@ -37,9 +37,14 @@ class AgentLog:
 
     def push(self, kind: str, summary: str, detail: str = ""):
         with self._lock:
-            self._entries.append(LogEntry(
-                timestamp=time.time(), kind=kind, summary=summary, detail=detail,
-            ))
+            self._entries.append(
+                LogEntry(
+                    timestamp=time.time(),
+                    kind=kind,
+                    summary=summary,
+                    detail=detail,
+                )
+            )
             self._version += 1
 
     @property
@@ -150,14 +155,21 @@ def install_hooks():
         agent_log.push("request", "call_text", preview)
         trace.write("call_text_request", system=system, messages=messages)
         result = _orig_call_text(system, messages, **kwargs)
-        agent_log.push("response", "call_text complete", result[:200] if isinstance(result, str) else "")
+        agent_log.push(
+            "response", "call_text complete", result[:200] if isinstance(result, str) else ""
+        )
         trace.write("call_text_response", result=result)
         return result
 
     def patched_call_reasoned_tool(reasoner_system, messages, tools, tool_name, **kwargs):
         preview = _preview_messages(messages)
         agent_log.push("request", f"call_reasoned_tool: {tool_name}", preview)
-        trace.write("call_reasoned_tool_request", tool_name=tool_name, system=reasoner_system, messages=messages)
+        trace.write(
+            "call_reasoned_tool_request",
+            tool_name=tool_name,
+            system=reasoner_system,
+            messages=messages,
+        )
         result = _orig_call_reasoned_tool(reasoner_system, messages, tools, tool_name, **kwargs)
         agent_log.push("response", f"call_reasoned_tool: {tool_name} complete")
         trace.write("call_reasoned_tool_response", tool_name=tool_name, result=result)
@@ -171,6 +183,7 @@ def install_hooks():
     # Also patch the top-level package imports (from llm_caller import call_tool)
     try:
         import llm_caller
+
         llm_caller.call_tool = patched_call_tool
         llm_caller.call_text = patched_call_text
         llm_caller.call_reasoned_tool = patched_call_reasoned_tool
@@ -179,6 +192,7 @@ def install_hooks():
 
     # Patch any already-imported modules that did `from llm_caller import call_tool`
     import sys
+
     for mod in list(sys.modules.values()):
         if mod is None or mod is client:
             continue
@@ -196,6 +210,7 @@ def install_hooks():
     # Must match the exact signature — no **kwargs.
     try:
         import llm_caller.tool_loop as tool_loop
+
         _orig_call_tool_loop = tool_loop.call_tool_loop
         _orig_make_turn_logger = tool_loop.make_turn_logger
 
@@ -258,10 +273,12 @@ def install_hooks():
                     output = str(result)[:300].replace("\n", "\\n")
                     agent_log.push("info", f"tool result: {name}", output)
                 return result
+
             return logging_dispatcher
 
         def _wrap_on_turn(orig_on_turn, final_tool_name):
             """Wrap an on_turn callback to also push to agent_log."""
+
             def logging_on_turn(turn_number, history):
                 # Write full history of last two messages (assistant + tool results) to trace
                 recent = []
@@ -270,7 +287,12 @@ def install_hooks():
                         recent.append(msg)
                     if len(recent) >= 2:
                         break
-                trace.write("turn", turn=turn_number, final_tool=final_tool_name, messages=list(reversed(recent)))
+                trace.write(
+                    "turn",
+                    turn=turn_number,
+                    final_tool=final_tool_name,
+                    messages=list(reversed(recent)),
+                )
 
                 # Summarize the latest assistant message — show ALL tool calls and text
                 details = []
@@ -286,9 +308,12 @@ def install_hooks():
                                 continue
                             if block.get("type") == "tool_use":
                                 inp = block.get("input", {})
-                                details.append(_summarize_tool_input(
-                                    block.get("name", "?"), inp,
-                                ))
+                                details.append(
+                                    _summarize_tool_input(
+                                        block.get("name", "?"),
+                                        inp,
+                                    )
+                                )
                             elif block.get("type") == "text" and block.get("text", "").strip():
                                 details.append(f"text: {block['text'][:150]}")
                     break
@@ -296,6 +321,7 @@ def install_hooks():
                 agent_log.push("turn", f"Turn {turn_number} ({final_tool_name})", detail)
                 if orig_on_turn:
                     return orig_on_turn(turn_number, history)
+
             return logging_on_turn
 
         # Hard ceiling on total LLM calls to prevent runaway loops.
@@ -303,8 +329,15 @@ def install_hooks():
         _HARD_TURN_CEILING = 200
 
         def patched_call_tool_loop(
-            system, messages, tools, final_tool_name, tool_dispatcher,
-            model="", max_tokens=4096, max_turns=10, prompt_log_file="",
+            system,
+            messages,
+            tools,
+            final_tool_name,
+            tool_dispatcher,
+            model="",
+            max_tokens=4096,
+            max_turns=10,
+            prompt_log_file="",
         ):
             agent_log.push(
                 "request",
@@ -320,7 +353,9 @@ def install_hooks():
             )
             # max_turns becomes the edit budget; the backend gets a high ceiling
             wrapped_dispatcher = _wrap_dispatcher(
-                tool_dispatcher, final_tool_name, edit_budget=max_turns,
+                tool_dispatcher,
+                final_tool_name,
+                edit_budget=max_turns,
             )
 
             # Always create an on_turn callback for the agent console,
@@ -333,27 +368,49 @@ def install_hooks():
             # Call the backends directly with our on_turn, bypassing the
             # original call_tool_loop which only creates on_turn for file logging.
             from llm_caller.config import BACKEND, resolve_model
+
             resolved_model = resolve_model(model, BACKEND)
 
             if BACKEND == "openai":
                 from llm_caller.backends.openai import call_openai_loop
+
                 result, history = call_openai_loop(
-                    system, messages, tools, final_tool_name,
-                    wrapped_dispatcher, resolved_model, max_tokens, _HARD_TURN_CEILING,
+                    system,
+                    messages,
+                    tools,
+                    final_tool_name,
+                    wrapped_dispatcher,
+                    resolved_model,
+                    max_tokens,
+                    _HARD_TURN_CEILING,
                     on_turn=logging_on_turn,
                 )
             elif BACKEND == "gemini":
                 from llm_caller.backends.gemini import call_gemini_loop
+
                 result, history = call_gemini_loop(
-                    system, messages, tools, final_tool_name,
-                    wrapped_dispatcher, resolved_model, max_tokens, _HARD_TURN_CEILING,
+                    system,
+                    messages,
+                    tools,
+                    final_tool_name,
+                    wrapped_dispatcher,
+                    resolved_model,
+                    max_tokens,
+                    _HARD_TURN_CEILING,
                     on_turn=logging_on_turn,
                 )
             else:
                 from llm_caller.backends.anthropic import call_anthropic_loop
+
                 result, history = call_anthropic_loop(
-                    system, messages, tools, final_tool_name,
-                    wrapped_dispatcher, resolved_model, max_tokens, _HARD_TURN_CEILING,
+                    system,
+                    messages,
+                    tools,
+                    final_tool_name,
+                    wrapped_dispatcher,
+                    resolved_model,
+                    max_tokens,
+                    _HARD_TURN_CEILING,
                     on_turn=logging_on_turn,
                 )
 
@@ -361,6 +418,7 @@ def install_hooks():
             if prompt_log_file:
                 import json
                 from llm_caller.logging import write_conversation_log
+
                 write_conversation_log(prompt_log_file, system, history, final_tool_name)
                 response_path = os.path.splitext(prompt_log_file)[0] + "_response.json"
                 os.makedirs(os.path.dirname(response_path) or ".", exist_ok=True)
@@ -376,6 +434,7 @@ def install_hooks():
         # Also patch the top-level export
         try:
             import llm_caller
+
             if hasattr(llm_caller, "call_tool_loop"):
                 llm_caller.call_tool_loop = patched_call_tool_loop
         except (ImportError, AttributeError):

@@ -31,9 +31,7 @@ def _fetch_members(session, qualified_names: set[str]) -> list[dict]:
     )
     members = [dict(record["m"]) for record in result]
     members.sort(key=lambda m: (m.get("kind", ""), m.get("name", "")))
-    log.debug(
-        "_fetch_members: %d members for %d qns", len(members), len(qualified_names)
-    )
+    log.debug("_fetch_members: %d members for %d qns", len(members), len(qualified_names))
     return members
 
 
@@ -48,9 +46,7 @@ def _fetch_codebase_members(session, qualified_name: str) -> list[dict]:
     )
     members = [dict(record["m"]) for record in result]
     members.sort(key=lambda m: (m.get("kind", ""), m.get("name", "")))
-    log.debug(
-        "_fetch_codebase_members: %d members for %s", len(members), qualified_name
-    )
+    log.debug("_fetch_codebase_members: %d members for %s", len(members), qualified_name)
     return members
 
 
@@ -248,9 +244,7 @@ def fetch_node_detail(qualified_name: str) -> dict | None:
 
         members = _fetch_members(session, member_qns) if member_qns else []
         codebase_members = _fetch_codebase_members(session, qualified_name)
-        available_types = _fetch_available_types(
-            session, qualified_name, relationships_out
-        )
+        available_types = _fetch_available_types(session, qualified_name, relationships_out)
 
         return {
             "properties": props,

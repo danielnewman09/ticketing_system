@@ -29,6 +29,7 @@ PREDICATE_TO_REL_TYPE = {
 # Clear all design-intent nodes
 # ---------------------------------------------------------------------------
 
+
 def clear_design_graph():
     """Delete all Design, HLR, and LLR nodes (and their relationships) from Neo4j."""
     try:
@@ -44,6 +45,7 @@ def clear_design_graph():
 # ---------------------------------------------------------------------------
 # Design nodes & triples
 # ---------------------------------------------------------------------------
+
 
 def sync_design_node(neo4j_session: Neo4jSession, node) -> None:
     """MERGE a Design node by qualified_name, setting all properties."""
@@ -73,28 +75,31 @@ def sync_design_node(neo4j_session: Neo4jSession, node) -> None:
         n.is_abstract = $is_abstract,
         n.is_final = $is_final
     """
-    neo4j_session.run(cypher, {
-        "qname": node.qualified_name,
-        "name": node.name,
-        "kind": node.kind,
-        "specialization": node.specialization or "",
-        "visibility": node.visibility or "",
-        "description": node.description or "",
-        "refid": node.refid or "",
-        "source_type": node.source_type or "",
-        "component_id": node.component_id,
-        "is_intercomponent": node.is_intercomponent,
-        "file_path": node.file_path or "",
-        "line_number": node.line_number,
-        "type_signature": node.type_signature or "",
-        "argsstring": node.argsstring or "",
-        "definition": node.definition or "",
-        "is_static": node.is_static,
-        "is_const": node.is_const,
-        "is_virtual": node.is_virtual,
-        "is_abstract": node.is_abstract,
-        "is_final": node.is_final,
-    })
+    neo4j_session.run(
+        cypher,
+        {
+            "qname": node.qualified_name,
+            "name": node.name,
+            "kind": node.kind,
+            "specialization": node.specialization or "",
+            "visibility": node.visibility or "",
+            "description": node.description or "",
+            "refid": node.refid or "",
+            "source_type": node.source_type or "",
+            "component_id": node.component_id,
+            "is_intercomponent": node.is_intercomponent,
+            "file_path": node.file_path or "",
+            "line_number": node.line_number,
+            "type_signature": node.type_signature or "",
+            "argsstring": node.argsstring or "",
+            "definition": node.definition or "",
+            "is_static": node.is_static,
+            "is_const": node.is_const,
+            "is_virtual": node.is_virtual,
+            "is_abstract": node.is_abstract,
+            "is_final": node.is_final,
+        },
+    )
 
 
 def sync_design_triple(neo4j_session: Neo4jSession, triple) -> None:
@@ -105,8 +110,14 @@ def sync_design_triple(neo4j_session: Neo4jSession, triple) -> None:
         log.warning("Unknown predicate %r — skipping triple", pred_name)
         return
 
-    subj_qname = triple.subject.qualified_name if hasattr(triple.subject, "qualified_name") else triple.subject
-    obj_qname = triple.object.qualified_name if hasattr(triple.object, "qualified_name") else triple.object
+    subj_qname = (
+        triple.subject.qualified_name
+        if hasattr(triple.subject, "qualified_name")
+        else triple.subject
+    )
+    obj_qname = (
+        triple.object.qualified_name if hasattr(triple.object, "qualified_name") else triple.object
+    )
 
     # Try Design→Design first; fall back to Design→Compound for dependency classes
     cypher = f"""
@@ -125,6 +136,7 @@ def sync_design_triple(neo4j_session: Neo4jSession, triple) -> None:
 # Requirement reference nodes
 # ---------------------------------------------------------------------------
 
+
 def sync_requirement_node(neo4j_session: Neo4jSession, req, label: str) -> None:
     """MERGE a lightweight HLR or LLR reference node by sqlite_id."""
     title = req.description[:200] if req.description else ""
@@ -133,11 +145,14 @@ def sync_requirement_node(neo4j_session: Neo4jSession, req, label: str) -> None:
     SET r.title = $title,
         r.requirement_type = $rtype
     """
-    neo4j_session.run(cypher, {
-        "sid": req.id,
-        "title": title,
-        "rtype": label.lower(),
-    })
+    neo4j_session.run(
+        cypher,
+        {
+            "sid": req.id,
+            "title": title,
+            "rtype": label.lower(),
+        },
+    )
 
 
 def sync_requirement_links(neo4j_session: Neo4jSession, req, label: str) -> None:
@@ -169,6 +184,7 @@ def sync_requirement_hierarchy(neo4j_session: Neo4jSession, hlr) -> None:
 # ---------------------------------------------------------------------------
 # Cross-layer link
 # ---------------------------------------------------------------------------
+
 
 def link_implemented_nodes(neo4j_session: Neo4jSession) -> int:
     """Match Design nodes to as-built Compound/Member/Namespace by qualified_name or refid.
@@ -210,6 +226,7 @@ def link_implemented_nodes(neo4j_session: Neo4jSession) -> int:
 # ---------------------------------------------------------------------------
 # Bulk sync
 # ---------------------------------------------------------------------------
+
 
 def sync_full_design(neo4j_session: Neo4jSession, sql_session: SqlSession) -> dict:
     """Bulk sync all design nodes, triples, requirement refs, and links."""
@@ -261,9 +278,11 @@ def sync_full_design(neo4j_session: Neo4jSession, sql_session: SqlSession) -> di
 # Task and Verification sync
 # ---------------------------------------------------------------------------
 
+
 def sync_task(neo4j_session, task):
     """MERGE a Task node in Neo4j with its design/verification links."""
-    neo4j_session.run("""
+    neo4j_session.run(
+        """
     MERGE (t:Task {sqlite_id: $tid})
     SET t.title = $title,
         t.description = $description,
@@ -271,56 +290,72 @@ def sync_task(neo4j_session, task):
         t.component_id = $component_id,
         t.created_at = $created_at,
         t.updated_at = $updated_at
-    """, {
-        "tid": task.id,
-        "title": task.title[:300],
-        "description": task.description,
-        "status": task.status,
-        "component_id": task.component_id,
-        "created_at": str(task.created_at),
-        "updated_at": str(task.updated_at),
-    })
+    """,
+        {
+            "tid": task.id,
+            "title": task.title[:300],
+            "description": task.description,
+            "status": task.status,
+            "component_id": task.component_id,
+            "created_at": str(task.created_at),
+            "updated_at": str(task.updated_at),
+        },
+    )
 
     for td in task.design_nodes:
         node_qname = td.ontology_node.qualified_name
-        neo4j_session.run("""
+        neo4j_session.run(
+            """
         MATCH (t:Task {sqlite_id: $tid})
         MATCH (d:Design {qualified_name: $qname})
         MERGE (t)-[:IMPLEMENTING]->(d)
-        """, {"tid": task.id, "qname": node_qname})
+        """,
+            {"tid": task.id, "qname": node_qname},
+        )
 
     for tv in task.verifications:
         vm = tv.verification_method
-        neo4j_session.run("""
+        neo4j_session.run(
+            """
         MATCH (t:Task {sqlite_id: $tid})
         MERGE (v:Verification {sqlite_id: $vid})
         SET v.method = $method, v.test_name = $test_name
         MERGE (t)-[:COVERS]->(v)
         MERGE (l:LLR {sqlite_id: $llr_id})
         MERGE (l)-[:VERIFIED_BY]->(v)
-        """, {"tid": task.id, "vid": vm.id,
-              "method": vm.method, "test_name": vm.test_name,
-              "llr_id": vm.low_level_requirement_id})
+        """,
+            {
+                "tid": task.id,
+                "vid": vm.id,
+                "method": vm.method,
+                "test_name": vm.test_name,
+                "llr_id": vm.low_level_requirement_id,
+            },
+        )
 
 
 def sync_implementation_status(neo4j_session, node):
     """Update a Design node's implementation status in Neo4j."""
-    neo4j_session.run("""
+    neo4j_session.run(
+        """
     MATCH (d:Design {qualified_name: $qname})
     SET d.implementation_status = $status,
         d.source_file = $source_file,
         d.test_file = $test_file
-    """, {
-        "qname": node.qualified_name,
-        "status": node.implementation_status,
-        "source_file": node.source_file,
-        "test_file": node.test_file,
-    })
+    """,
+        {
+            "qname": node.qualified_name,
+            "status": node.implementation_status,
+            "source_file": node.source_file,
+            "test_file": node.test_file,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
 # Convenience: sync with graceful degradation
 # ---------------------------------------------------------------------------
+
 
 def try_sync_design_nodes_and_triples(nodes, triples):
     """Sync a batch of design nodes and triples to Neo4j.

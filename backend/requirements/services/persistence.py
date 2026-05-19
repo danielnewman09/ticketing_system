@@ -28,10 +28,10 @@ from backend.db.models import (
 from backend.codebase.schemas import DesignSchema
 from backend.requirements.schemas import LowLevelRequirementSchema, VerificationSchema
 
-
 # ---------------------------------------------------------------------------
 # Result dataclasses
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class DecompositionResult:
@@ -60,7 +60,10 @@ class VerificationResult:
 @dataclass
 class VerificationValidationReport:
     """Report from validating member_qualified_name references against the ontology."""
-    resolved: list[tuple[str, str]] = field(default_factory=list)   # (member_qname, matched_node_qname)
+
+    resolved: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (member_qname, matched_node_qname)
     unresolved: list[tuple[str, str]] = field(default_factory=list)  # (member_qname, context)
 
     @property
@@ -71,6 +74,7 @@ class VerificationValidationReport:
 @dataclass
 class AugmentResult:
     """Result of creating missing design nodes for unresolved verification references."""
+
     nodes_created: int = 0
     triples_created: int = 0
 
@@ -78,6 +82,7 @@ class AugmentResult:
 # ---------------------------------------------------------------------------
 # Ontology node resolution
 # ---------------------------------------------------------------------------
+
 
 def resolve_ontology_node(
     session: Session,
@@ -110,6 +115,7 @@ def resolve_ontology_node(
 # ---------------------------------------------------------------------------
 # Verification context building
 # ---------------------------------------------------------------------------
+
 
 def build_verification_context(session: Session) -> list[dict]:
     """Build structured class-level context for the verification agent.
@@ -160,20 +166,24 @@ def build_verification_context(session: Session) -> list[dict]:
                 else:
                     methods.append(member)
             elif pred.name != "composes":
-                relationships.append({
-                    "predicate": pred.name,
-                    "target": obj.qualified_name,
-                    "target_name": obj.name,
-                })
+                relationships.append(
+                    {
+                        "predicate": pred.name,
+                        "target": obj.qualified_name,
+                        "target_name": obj.name,
+                    }
+                )
 
-        class_contexts.append({
-            "qualified_name": n.qualified_name,
-            "kind": n.kind,
-            "description": n.description or "",
-            "attributes": sorted(attrs, key=lambda a: a["name"]),
-            "methods": sorted(methods, key=lambda m: m["name"]),
-            "relationships": relationships,
-        })
+        class_contexts.append(
+            {
+                "qualified_name": n.qualified_name,
+                "kind": n.kind,
+                "description": n.description or "",
+                "attributes": sorted(attrs, key=lambda a: a["name"]),
+                "methods": sorted(methods, key=lambda m: m["name"]),
+                "relationships": relationships,
+            }
+        )
 
     return sorted(class_contexts, key=lambda c: c["qualified_name"])
 
@@ -181,6 +191,7 @@ def build_verification_context(session: Session) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Verification reference validation
 # ---------------------------------------------------------------------------
+
 
 def validate_verification_references(
     verifications: list[VerificationSchema],
@@ -225,6 +236,7 @@ def validate_verification_references(
 # Closed-loop design augmentation
 # ---------------------------------------------------------------------------
 
+
 def augment_design_for_unresolved(
     session: Session,
     unresolved: list[tuple[str, str]],
@@ -256,13 +268,18 @@ def augment_design_for_unresolved(
 
         # Parse parent and member name
         parent_qname, member_name = member_qname.rsplit("::", 1)
-        parent = session.query(OntologyNode).filter_by(
-            qualified_name=parent_qname,
-        ).first()
+        parent = (
+            session.query(OntologyNode)
+            .filter_by(
+                qualified_name=parent_qname,
+            )
+            .first()
+        )
         if parent is None:
             log.debug(
                 "augment: parent %s not found for %s, skipping",
-                parent_qname, member_qname,
+                parent_qname,
+                member_qname,
             )
             continue
 
@@ -271,7 +288,8 @@ def augment_design_for_unresolved(
 
         # Create the node
         node, created = get_or_create(
-            session, OntologyNode,
+            session,
+            OntologyNode,
             defaults={
                 "kind": kind,
                 "name": member_name,
@@ -290,7 +308,8 @@ def augment_design_for_unresolved(
             session.flush()
             if composes_pred:
                 _, triple_created = get_or_create(
-                    session, OntologyTriple,
+                    session,
+                    OntologyTriple,
                     subject_id=parent.id,
                     predicate_id=composes_pred.id,
                     object_id=node.id,
@@ -302,22 +321,27 @@ def augment_design_for_unresolved(
 
     # Re-link verification records with NULL ontology_node_id
     if created_nodes:
-        qn_to_node = {
-            n.qualified_name: n
-            for n in session.query(OntologyNode).all()
-        }
-        for vc in session.query(VerificationCondition).filter(
-            VerificationCondition.ontology_node_id.is_(None),
-            VerificationCondition.member_qualified_name != "",
-        ).all():
+        qn_to_node = {n.qualified_name: n for n in session.query(OntologyNode).all()}
+        for vc in (
+            session.query(VerificationCondition)
+            .filter(
+                VerificationCondition.ontology_node_id.is_(None),
+                VerificationCondition.member_qualified_name != "",
+            )
+            .all()
+        ):
             node = qn_to_node.get(vc.member_qualified_name)
             if node:
                 vc.ontology_node_id = node.id
 
-        for va in session.query(VerificationAction).filter(
-            VerificationAction.ontology_node_id.is_(None),
-            VerificationAction.member_qualified_name != "",
-        ).all():
+        for va in (
+            session.query(VerificationAction)
+            .filter(
+                VerificationAction.ontology_node_id.is_(None),
+                VerificationAction.member_qualified_name != "",
+            )
+            .all()
+        ):
             node = qn_to_node.get(va.member_qualified_name)
             if node:
                 va.ontology_node_id = node.id
@@ -327,12 +351,16 @@ def augment_design_for_unresolved(
     # Neo4j sync
     if created_nodes:
         try:
-            new_triples = session.query(OntologyTriple).filter(
-                OntologyTriple.object_id.in_([n.id for n in created_nodes.values()])
-            ).all()
+            new_triples = (
+                session.query(OntologyTriple)
+                .filter(OntologyTriple.object_id.in_([n.id for n in created_nodes.values()]))
+                .all()
+            )
             from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
+
             try_sync_design_nodes_and_triples(
-                list(created_nodes.values()), new_triples,
+                list(created_nodes.values()),
+                new_triples,
             )
         except Exception:
             log.warning("Neo4j augment sync failed", exc_info=True)
@@ -343,6 +371,7 @@ def augment_design_for_unresolved(
 # ---------------------------------------------------------------------------
 # 1. Decomposition persistence
 # ---------------------------------------------------------------------------
+
 
 def persist_decomposition(
     session: Session,
@@ -376,10 +405,13 @@ def persist_decomposition(
     # -- Neo4j dual-write (best-effort) --
     try:
         from backend.db.neo4j.sync import try_sync_requirement
+
         for llr_obj in hlr.low_level_requirements:
             try_sync_requirement(llr_obj, "LLR", hlr=hlr)
     except Exception:
-        log.warning("Neo4j decomposition sync failed — will catch up via migration script", exc_info=True)
+        log.warning(
+            "Neo4j decomposition sync failed — will catch up via migration script", exc_info=True
+        )
 
     return result
 
@@ -387,6 +419,7 @@ def persist_decomposition(
 # ---------------------------------------------------------------------------
 # 2. Design persistence (ontology nodes, triples, requirement links)
 # ---------------------------------------------------------------------------
+
 
 def persist_design(
     session: Session,
@@ -406,7 +439,8 @@ def persist_design(
             continue
 
         node, created = get_or_create(
-            session, OntologyNode,
+            session,
+            OntologyNode,
             defaults={
                 "kind": node_data.kind,
                 "specialization": node_data.specialization,
@@ -445,8 +479,11 @@ def persist_design(
 
         if subj and obj and pred:
             triple, _ = get_or_create(
-                session, OntologyTriple,
-                subject_id=subj.id, predicate_id=pred.id, object_id=obj.id,
+                session,
+                OntologyTriple,
+                subject_id=subj.id,
+                predicate_id=pred.id,
+                object_id=obj.id,
             )
             saved_triples.append(triple)
             result.triples_created += 1
@@ -480,6 +517,7 @@ def persist_design(
     # -- Neo4j dual-write (best-effort) --
     try:
         from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
+
         created_nodes = [
             qname_to_node[nd.qualified_name]
             for nd in design.nodes
@@ -496,6 +534,7 @@ def persist_design(
 # ---------------------------------------------------------------------------
 # 3. Verification persistence
 # ---------------------------------------------------------------------------
+
 
 def persist_verification(
     session: Session,
@@ -519,7 +558,9 @@ def persist_verification(
                 phase=phase,
                 order=i,
                 ontology_node=resolve_ontology_node(
-                    session, cond.member_qualified_name, ontology_nodes,
+                    session,
+                    cond.member_qualified_name,
+                    ontology_nodes,
                 ),
                 member_qualified_name=cond.member_qualified_name,
                 operator=cond.operator,
@@ -552,7 +593,9 @@ def persist_verification(
                 order=i,
                 description=action.description,
                 ontology_node=resolve_ontology_node(
-                    session, action.member_qualified_name, ontology_nodes,
+                    session,
+                    action.member_qualified_name,
+                    ontology_nodes,
                 ),
                 member_qualified_name=action.member_qualified_name,
             )

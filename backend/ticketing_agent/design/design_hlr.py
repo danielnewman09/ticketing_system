@@ -66,10 +66,7 @@ def design_hlr(
     as_built_classes = None
 
     if toolset:
-        discovery_log = (
-            os.path.join(log_dir, f"discover_classes_hlr{hlr_id}.md")
-            if log_dir else ""
-        )
+        discovery_log = os.path.join(log_dir, f"discover_classes_hlr{hlr_id}.md") if log_dir else ""
         try:
             discovered = discover_classes(
                 hlr=hlr,
@@ -81,18 +78,21 @@ def design_hlr(
                 prompt_log_file=discovery_log,
             )
             log.info(
-                "  HLR %s: discover_classes returned %d items", hlr_id, len(discovered),
+                "  HLR %s: discover_classes returned %d items",
+                hlr_id,
+                len(discovered),
             )
             for c in discovered:
                 log.info(
-                    "    %s [%s] %s", c.get("category"), c.get("kind"), c.get("qualified_name"),
+                    "    %s [%s] %s",
+                    c.get("category"),
+                    c.get("kind"),
+                    c.get("qualified_name"),
                 )
             dependency_classes = [
                 c for c in discovered if c.get("category") == "dependency"
             ] or None
-            as_built_classes = [
-                c for c in discovered if c.get("category") == "as-built"
-            ] or None
+            as_built_classes = [c for c in discovered if c.get("category") == "as-built"] or None
             log.info(
                 "  HLR %s: %d dependency, %d as-built classes for design_oo",
                 hlr_id,
@@ -103,10 +103,7 @@ def design_hlr(
             log.exception("Class discovery failed for HLR %s", hlr_id)
 
     # --- Step 2: Design OO (single-turn) ---
-    design_log = (
-        os.path.join(log_dir, f"design_oo_hlr{hlr_id}.md")
-        if log_dir else ""
-    )
+    design_log = os.path.join(log_dir, f"design_oo_hlr{hlr_id}.md") if log_dir else ""
     oo = design_oo(
         hlr=hlr,
         llrs=llrs,

@@ -27,10 +27,10 @@ from backend.codebase.schemas import (
     Visibility,
 )
 
-
 # ---------------------------------------------------------------------------
 # AttributeSchema
 # ---------------------------------------------------------------------------
+
 
 class TestAttributeSchema:
     def test_minimal(self):
@@ -65,6 +65,7 @@ class TestAttributeSchema:
 # MethodSchema
 # ---------------------------------------------------------------------------
 
+
 class TestMethodSchema:
     def test_minimal(self):
         m = MethodSchema(name="run", visibility="public")
@@ -91,6 +92,7 @@ class TestMethodSchema:
 # ---------------------------------------------------------------------------
 # ClassSchema
 # ---------------------------------------------------------------------------
+
 
 class TestClassSchema:
     def test_minimal(self):
@@ -131,6 +133,7 @@ class TestClassSchema:
 # EnumSchema
 # ---------------------------------------------------------------------------
 
+
 class TestEnumSchema:
     def test_minimal(self):
         e = EnumSchema(name="Color")
@@ -145,6 +148,7 @@ class TestEnumSchema:
 # ---------------------------------------------------------------------------
 # InterfaceSchema
 # ---------------------------------------------------------------------------
+
 
 class TestInterfaceSchema:
     def test_minimal(self):
@@ -163,6 +167,7 @@ class TestInterfaceSchema:
 # ---------------------------------------------------------------------------
 # AssociationSchema
 # ---------------------------------------------------------------------------
+
 
 class TestAssociationSchema:
     def test_minimal(self):
@@ -183,6 +188,7 @@ class TestAssociationSchema:
 # ---------------------------------------------------------------------------
 # OODesignSchema
 # ---------------------------------------------------------------------------
+
 
 class TestOODesignSchema:
     def test_minimal(self):
@@ -220,9 +226,7 @@ class TestOODesignSchema:
     def test_json_round_trip(self):
         d = OODesignSchema(
             classes=[ClassSchema(name="C")],
-            associations=[
-                AssociationSchema(from_class="C", to_class="D", kind="depends_on")
-            ],
+            associations=[AssociationSchema(from_class="C", to_class="D", kind="depends_on")],
         )
         json_str = d.model_dump_json()
         restored = OODesignSchema.model_validate_json(json_str)
@@ -233,6 +237,7 @@ class TestOODesignSchema:
 # ---------------------------------------------------------------------------
 # OntologyNodeSchema
 # ---------------------------------------------------------------------------
+
 
 class TestOntologyNodeSchema:
     def test_minimal(self):
@@ -280,6 +285,7 @@ class TestOntologyNodeSchema:
 # OntologyTripleSchema
 # ---------------------------------------------------------------------------
 
+
 class TestOntologyTripleSchema:
     def test_minimal(self):
         t = OntologyTripleSchema(
@@ -298,6 +304,7 @@ class TestOntologyTripleSchema:
 # ---------------------------------------------------------------------------
 # RequirementTripleLinkSchema
 # ---------------------------------------------------------------------------
+
 
 class TestRequirementTripleLinkSchema:
     def test_minimal(self):
@@ -325,6 +332,7 @@ class TestRequirementTripleLinkSchema:
 # ---------------------------------------------------------------------------
 # DesignSchema
 # ---------------------------------------------------------------------------
+
 
 class TestDesignSchema:
     def test_minimal(self):
@@ -372,9 +380,11 @@ class TestDesignSchema:
 # Literal types
 # ---------------------------------------------------------------------------
 
+
 class TestNodeKindLiteral:
     def test_all_model_kinds_are_literal_members(self):
         from backend.db.models.ontology import NODE_KINDS
+
         for kind_name, _ in NODE_KINDS:
             assert kind_name in NodeKind.__args__, f"{kind_name} not in NodeKind Literal"
 
@@ -382,6 +392,7 @@ class TestNodeKindLiteral:
 class TestVisibilityLiteral:
     def test_all_model_visibilities_are_literal_members(self):
         from backend.db.models.ontology import VISIBILITY_CHOICES
+
         for vis_name, _ in VISIBILITY_CHOICES:
             assert vis_name in Visibility.__args__, f"{vis_name} not in Visibility Literal"
 
@@ -389,5 +400,6 @@ class TestVisibilityLiteral:
 class TestSourceTypeLiteral:
     def test_all_model_source_types_are_literal_members(self):
         from backend.db.models.ontology import SOURCE_TYPES
+
         for st_name, _ in SOURCE_TYPES:
             assert st_name in SourceType.__args__, f"{st_name} not in SourceType Literal"

@@ -30,6 +30,7 @@ log = logging.getLogger("agents.implement")
 @dataclass
 class ImplementationFile:
     """One implemented source file."""
+
     file_path: str
     content: str
     classes_modified: list[str] = field(default_factory=list)
@@ -72,9 +73,7 @@ def implement_task(
         llr_description=llr_description,
     )
 
-    user_msg = (
-        f"Implement the following task by filling in the skeleton code:\n\n{context}"
-    )
+    user_msg = f"Implement the following task by filling in the skeleton code:\n\n{context}"
 
     from llm_caller import call_tool
 
@@ -101,6 +100,7 @@ def implement_task(
 # Deterministic implementation (bootstrap / fallback)
 # ---------------------------------------------------------------------------
 
+
 def implement_deterministic(
     task_title: str,
     task_description: str,
@@ -113,11 +113,13 @@ def implement_deterministic(
     Adds minimal pass bodies with TODO comments referencing verifications.
     Useful for bootstrapping — the real implementation comes from the LLM.
     """
-    return [ImplementationFile(
-        file_path="src/implemented.py",  # placeholder
-        content=skeleton_code or "# No skeleton provided\npass\n",
-        classes_modified=[],
-    )]
+    return [
+        ImplementationFile(
+            file_path="src/implemented.py",  # placeholder
+            content=skeleton_code or "# No skeleton provided\npass\n",
+            classes_modified=[],
+        )
+    ]
 
 
 def write_implementation_files(

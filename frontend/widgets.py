@@ -112,27 +112,36 @@ def render_graph_detail_panel(state: "GraphState"):
 
         # Outgoing relationships
         render_detail_section(
-            "Outgoing", d.get("outgoing") or [],
-            badge_key="rel", label_key="target_name", label_fallback_key="target_qn",
+            "Outgoing",
+            d.get("outgoing") or [],
+            badge_key="rel",
+            label_key="target_name",
+            label_fallback_key="target_qn",
         )
 
         # Incoming relationships
         render_detail_section(
-            "Incoming", d.get("incoming") or [],
-            badge_key="rel", label_key="source_name", label_fallback_key="source_qn",
+            "Incoming",
+            d.get("incoming") or [],
+            badge_key="rel",
+            label_key="source_name",
+            label_fallback_key="source_qn",
             badge_first=False,
         )
 
         # Implemented by
         render_detail_section(
-            "Implemented By", d.get("implemented_by") or [],
-            label_key="qualified_name", label_fallback_key="name",
+            "Implemented By",
+            d.get("implemented_by") or [],
+            label_key="qualified_name",
+            label_fallback_key="name",
             label_cls="text-xs text-blue-300",
         )
 
         # Requirements
         render_detail_section(
-            "Traced Requirements", d.get("requirements") or [],
+            "Traced Requirements",
+            d.get("requirements") or [],
             badge_key="type",
             badge_color_fn=lambda r: "orange" if r["type"] == "HLR" else "amber",
             label_key="name",
@@ -143,24 +152,32 @@ def render_graph_detail_panel(state: "GraphState"):
         if dep_links:
             deps = [dep.get("data", dep) for dep in dep_links]
             render_detail_section(
-                "Dependencies", deps,
-                badge_key="source", badge_color="teal",
-                label_key="qualified_name", label_fallback_key="label",
+                "Dependencies",
+                deps,
+                badge_key="source",
+                badge_color="teal",
+                label_key="qualified_name",
+                label_fallback_key="label",
                 label_cls="text-xs text-teal-300",
             )
 
         # Design links (shown for dependency nodes)
         render_detail_section(
-            "Referenced by Design", d.get("design_links") or [],
-            badge_key="rel", label_key="design_name", label_fallback_key="design_qn",
+            "Referenced by Design",
+            d.get("design_links") or [],
+            badge_key="rel",
+            label_key="design_name",
+            label_fallback_key="design_qn",
             label_cls="text-xs text-blue-300",
         )
 
         # Members (shown for dependency compound nodes)
         if d.get("members") and props.get("layer") == "dependency":
             render_detail_section(
-                "Members", d["members"],
-                badge_key="kind", label_key="name",
+                "Members",
+                d["members"],
+                badge_key="kind",
+                label_key="name",
                 max_items=20,
             )
 
@@ -172,7 +189,6 @@ def render_graph_detail_panel(state: "GraphState"):
                 ui.badge(props["source"], color="teal").classes("text-xs")
 
 
-
 @dataclass
 class GraphState:
     """Mutable state for the ontology-graph page.
@@ -181,10 +197,11 @@ class GraphState:
     (e.g. ``state.graph_layer = "codebase"``) are visible to
     refreshable UI functions like `render_graph_detail_panel`.
     """
+
     kind_filter: str | None = None
     search_text: str = ""
     selected_node_data: dict | None = None
-    graph_layer: str = "design"      # "design", "codebase", or "dependency"
+    graph_layer: str = "design"  # "design", "codebase", or "dependency"
     source_filter: str | None = None  # dependency source filter (e.g. "eigen")
 
 
@@ -203,7 +220,11 @@ def render_ontology_graph_controls(
     """
     with ui.row().classes("w-full gap-4 px-2 mb-2 items-end"):
         ui.select(
-            {"design": "Design Intent", "codebase": "As-Built Codebase", "dependency": "Dependencies"},
+            {
+                "design": "Design Intent",
+                "codebase": "As-Built Codebase",
+                "dependency": "Dependencies",
+            },
             value="design",
             label="Layer",
             on_change=on_layer_change,
@@ -225,13 +246,19 @@ def render_ontology_graph_legend():
     with ui.row().classes("px-2 mb-2 gap-3 flex-wrap"):
         for kind, color in sorted(KIND_COLORS.items()):
             with ui.row().classes("items-center gap-1"):
-                ui.html(f'<div style="width:10px;height:10px;border-radius:50%;background:{color}"></div>')
+                ui.html(
+                    f'<div style="width:10px;height:10px;border-radius:50%;background:{color}"></div>'
+                )
                 ui.label(kind).classes("text-xs")
         with ui.row().classes("items-center gap-1"):
-            ui.html('<div style="width:10px;height:10px;transform:rotate(45deg);background:#e67e22"></div>')
+            ui.html(
+                '<div style="width:10px;height:10px;transform:rotate(45deg);background:#e67e22"></div>'
+            )
             ui.label("Requirement").classes("text-xs")
         with ui.row().classes("items-center gap-1"):
-            ui.html('<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>')
+            ui.html(
+                '<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>'
+            )
             ui.label("Dependency").classes("text-xs")
 
 
@@ -326,8 +353,10 @@ def directory_picker(
         except PermissionError:
             return []
 
-    with ui.dialog().props("maximized=false") as dialog, \
-         ui.card().classes("w-[540px] max-h-[80vh]"):
+    with (
+        ui.dialog().props("maximized=false") as dialog,
+        ui.card().classes("w-[540px] max-h-[80vh]"),
+    ):
         ui.label("Select Directory").classes("text-lg font-bold mb-2")
 
         # Path breadcrumb / manual entry
@@ -355,7 +384,9 @@ def directory_picker(
             with dir_container:
                 # Parent directory entry
                 if current.parent != current:
-                    with ui.item(on_click=lambda _, p=current.parent: navigate(p)).classes("w-full"):
+                    with ui.item(on_click=lambda _, p=current.parent: navigate(p)).classes(
+                        "w-full"
+                    ):
                         with ui.item_section().props("side"):
                             ui.icon("arrow_upward", size="sm").classes("text-gray-500")
                         with ui.item_section():
@@ -398,7 +429,9 @@ def directory_picker(
         with ui.row().classes("w-full items-center gap-2 mt-2") as new_folder_row:
             new_folder_input = ui.input("New folder name").classes("flex-1").props("dense")
             new_folder_input.on("keydown.enter", create_folder)
-            ui.button(icon="check", on_click=create_folder).props("flat round size=sm color=positive")
+            ui.button(icon="check", on_click=create_folder).props(
+                "flat round size=sm color=positive"
+            )
             ui.button(
                 icon="close",
                 on_click=lambda: new_folder_row.set_visibility(False),
@@ -446,13 +479,21 @@ def render_hlr_card(hlr):
             hlr_id = hlr["id"]
             with ui.button(icon="more_vert").props("flat round size=sm"):
                 with ui.menu():
-                    ui.menu_item("View Details", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
-                    ui.menu_item("Add LLR", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}#add-llr"))
+                    ui.menu_item(
+                        "View Details", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}")
+                    )
+                    ui.menu_item(
+                        "Add LLR", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}#add-llr")
+                    )
                     ui.separator()
                     ui.menu_item("Decompose", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
 
         if hlr["llrs"]:
-            with ui.expansion("Low-Level Requirements", icon="list").classes("w-full mt-2").props("dense"):
+            with (
+                ui.expansion("Low-Level Requirements", icon="list")
+                .classes("w-full mt-2")
+                .props("dense")
+            ):
                 render_llr_table(hlr["llrs"])
 
 
@@ -476,11 +517,13 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
     for llr in llrs:
         desc = llr["description"]
         full_descriptions[llr["id"]] = desc
-        rows.append({
-            "id": llr["id"],
-            "description": desc[:120] + ("..." if len(desc) > 120 else ""),
-            "verification": ", ".join(llr["methods"]) if llr["methods"] else "-",
-        })
+        rows.append(
+            {
+                "id": llr["id"],
+                "description": desc[:120] + ("..." if len(desc) > 120 else ""),
+                "verification": ", ".join(llr["methods"]) if llr["methods"] else "-",
+            }
+        )
 
     table = ui.table(columns=columns, rows=rows, row_key="id").classes("w-full")
     table.props("dense flat")
@@ -507,17 +550,17 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
         if on_edit:
             edit_btn = (
                 '<q-btn flat round dense size="xs" icon="edit" color="primary"'
-                '       @click.stop="$parent.$emit(\'edit\', props.row.id)" />'
+                "       @click.stop=\"$parent.$emit('edit', props.row.id)\" />"
             )
         delete_btn = ""
         if on_delete:
             delete_btn = (
                 '<q-btn flat round dense size="xs" icon="delete" color="negative"'
-                '       @click.stop="$parent.$emit(\'delete\', props.row.id)" />'
+                "       @click.stop=\"$parent.$emit('delete', props.row.id)\" />"
             )
         table.add_slot(
             "body-cell-actions",
-            f"<q-td :props=\"props\">{edit_btn}{delete_btn}</q-td>",
+            f'<q-td :props="props">{edit_btn}{delete_btn}</q-td>',
         )
         if on_edit:
             table.on("edit", lambda e: on_edit(e.args, full_descriptions.get(e.args)))
@@ -556,7 +599,9 @@ def render_verification_card(v):
                     ui.badge(str(i), color="grey").props("rounded").classes("text-xs")
                     ui.label(a["description"]).classes("text-xs")
                     if a["member_qualified_name"]:
-                        ui.label(a["member_qualified_name"]).classes("text-xs font-mono text-gray-500")
+                        ui.label(a["member_qualified_name"]).classes(
+                            "text-xs font-mono text-gray-500"
+                        )
 
         if v["postconditions"]:
             ui.separator().classes("my-2")
@@ -571,9 +616,7 @@ def render_verification_card(v):
 def render_triples_card(triples):
     """Render an ontology triples card from plain dicts."""
     with ui.card().classes("w-full"):
-        ui.label("Ontology Triples").classes(
-            CLS_SECTION_HEADER
-        )
+        ui.label("Ontology Triples").classes(CLS_SECTION_HEADER)
         if triples:
             triple_cols = [
                 {"name": "subject", "label": "Subject", "field": "subject", "align": "left"},

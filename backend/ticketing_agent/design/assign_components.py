@@ -35,9 +35,8 @@ def assign_components(
 
     components_text = ""
     if existing_components:
-        components_text = (
-            "\n\nExisting components (reuse where appropriate):\n"
-            + "\n".join(f"- {name}" for name in existing_components)
+        components_text = "\n\nExisting components (reuse where appropriate):\n" + "\n".join(
+            f"- {name}" for name in existing_components
         )
 
     result = call_tool(
@@ -64,10 +63,12 @@ def assign_components(
     all_ids = {h["id"] for h in hlrs}
     assigned_ids = {a["hlr_id"] for a in assignments}
     for missing_id in all_ids - assigned_ids:
-        assignments.append({
-            "hlr_id": missing_id,
-            "component_name": "Unassigned",
-            "rationale": "not assigned by agent",
-        })
+        assignments.append(
+            {
+                "hlr_id": missing_id,
+                "component_name": "Unassigned",
+                "rationale": "not assigned by agent",
+            }
+        )
 
     return assignments

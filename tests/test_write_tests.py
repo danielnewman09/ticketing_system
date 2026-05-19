@@ -7,11 +7,13 @@ from backend.ticketing_agent.write_tests import generate_deterministic_tests, Te
 class TestBuildTestContext:
     def test_basic_context(self):
         context = build_test_context(
-            verifications=[{
-                "test_name": "test_add",
-                "method": "automated",
-                "description": "Add two numbers",
-            }],
+            verifications=[
+                {
+                    "test_name": "test_add",
+                    "method": "automated",
+                    "description": "Add two numbers",
+                }
+            ],
             llr_id=1,
             llr_description="Calculator performs arithmetic",
             module_path="src.calculator.engine",
@@ -22,14 +24,16 @@ class TestBuildTestContext:
 
     def test_full_verification(self):
         context = build_test_context(
-            verifications=[{
-                "test_name": "test_divide_by_zero",
-                "method": "automated",
-                "description": "Division by zero raises error",
-                "preconditions": ["divisor == 0"],
-                "actions": ["call engine.divide(10, 0)"],
-                "postconditions": ["ZeroDivisionError raised"],
-            }],
+            verifications=[
+                {
+                    "test_name": "test_divide_by_zero",
+                    "method": "automated",
+                    "description": "Division by zero raises error",
+                    "preconditions": ["divisor == 0"],
+                    "actions": ["call engine.divide(10, 0)"],
+                    "postconditions": ["ZeroDivisionError raised"],
+                }
+            ],
             llr_id=2,
             llr_description="Error handling",
         )
@@ -51,14 +55,16 @@ class TestBuildTestContext:
 class TestDeterministicTests:
     def test_generates_valid_test_file(self):
         results = generate_deterministic_tests(
-            verifications=[{
-                "test_name": "test_add_two_integers",
-                "method": "automated",
-                "description": "Add two integers",
-                "preconditions": ["a=1, b=2"],
-                "actions": ["call calc.add(1, 2)"],
-                "postconditions": ["result == 3"],
-            }],
+            verifications=[
+                {
+                    "test_name": "test_add_two_integers",
+                    "method": "automated",
+                    "description": "Add two integers",
+                    "preconditions": ["a=1, b=2"],
+                    "actions": ["call calc.add(1, 2)"],
+                    "postconditions": ["result == 3"],
+                }
+            ],
             module_path="src.calculator.engine",
             llr_id=1,
             llr_description="Performs arithmetic",
@@ -102,14 +108,16 @@ class TestDeterministicTests:
 
     def test_generated_code_is_valid_python(self):
         results = generate_deterministic_tests(
-            verifications=[{
-                "test_name": "test_valid",
-                "method": "automated",
-                "description": "Valid test",
-                "preconditions": [],
-                "actions": [],
-                "postconditions": ["assertTrue"],
-            }],
+            verifications=[
+                {
+                    "test_name": "test_valid",
+                    "method": "automated",
+                    "description": "Valid test",
+                    "preconditions": [],
+                    "actions": [],
+                    "postconditions": ["assertTrue"],
+                }
+            ],
             llr_id=1,
         )
         # Verify the generated code is syntactically valid

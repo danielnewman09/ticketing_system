@@ -6,7 +6,6 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Output schemas
 # ---------------------------------------------------------------------------
@@ -140,6 +139,7 @@ TOOL_DEFINITION = {
 # Formatters
 # ---------------------------------------------------------------------------
 
+
 def format_metrics_for_prompt(metrics):
     """Format computed metrics into a readable text block."""
     lines = []
@@ -156,8 +156,10 @@ def format_metrics_for_prompt(metrics):
     for pred, count in sorted(metrics["predicate_distribution"].items()):
         lines.append(f"- {pred}: {count}")
 
-    lines.append(f"\n## Node Metrics ({metrics['total_nodes']} total, "
-                 f"{len(metrics['orphaned_nodes'])} orphaned)")
+    lines.append(
+        f"\n## Node Metrics ({metrics['total_nodes']} total, "
+        f"{len(metrics['orphaned_nodes'])} orphaned)"
+    )
     for n in metrics["node_metrics"]:
         orphan_tag = " [ORPHAN]" if n["is_orphan"] else ""
         lines.append(
@@ -185,5 +187,7 @@ def format_ontology(nodes, triples):
         lines.append(f"  {n['qualified_name']} ({n['kind']}): {n['description']}")
     lines.append("\nTriples:")
     for t in triples:
-        lines.append(f"  {t['subject_qualified_name']} --{t['predicate']}--> {t['object_qualified_name']}")
+        lines.append(
+            f"  {t['subject_qualified_name']} --{t['predicate']}--> {t['object_qualified_name']}"
+        )
     return "\n".join(lines)

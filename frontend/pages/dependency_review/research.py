@@ -19,10 +19,7 @@ def run_research(component_id: int) -> dict:
         comp_name = comp.name
         comp_description = comp.description or ""
 
-        hlrs = [
-            {"id": h.id, "description": h.description}
-            for h in comp.high_level_requirements
-        ]
+        hlrs = [{"id": h.id, "description": h.description} for h in comp.high_level_requirements]
 
         language = repr(comp.language) if comp.language else "C++"
 
@@ -34,6 +31,7 @@ def run_research(component_id: int) -> dict:
                     existing_deps.append(d.name)
 
     from backend.ticketing_agent.design.research_dependencies import research_dependencies
+
     return research_dependencies(
         component_name=comp_name,
         component_description=comp_description,

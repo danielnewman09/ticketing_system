@@ -54,8 +54,7 @@ def build_user_message(
     )
     lines.append("")
     lines.append(
-        "Create ALL project files.  "
-        "Call write_complete when all files have been generated."
+        "Create ALL project files.  " "Call write_complete when all files have been generated."
     )
 
     return "\n".join(lines)

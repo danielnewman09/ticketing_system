@@ -4,7 +4,6 @@ Prompt templates and section builders for the design_ontology agent.
 
 from backend.db.models.ontology import LANGUAGE_SPECIALIZATIONS
 
-
 SYSTEM_PROMPT = """\
 You are a software design agent. Given a set of decomposed requirements
 (high-level and low-level), your job is to derive an object-oriented ontology

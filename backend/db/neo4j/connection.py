@@ -27,9 +27,7 @@ class Neo4jConnection:
 
     def get_driver(self):
         if self._driver is None:
-            self._driver = GraphDatabase.driver(
-                self._uri, auth=(self._user, self._password)
-            )
+            self._driver = GraphDatabase.driver(self._uri, auth=(self._user, self._password))
             log.info("Neo4j driver created (uri=%s)", self._uri)
         return self._driver
 

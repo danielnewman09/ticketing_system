@@ -29,48 +29,47 @@ def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
     # Build association lookup: from_class -> list of associations
     assoc_lookup: dict[str, list[dict]] = {}
     for assoc in oo.associations:
-        assoc_lookup.setdefault(assoc.from_class, []).append({
-            "target": assoc.to_class,
-            "kind": assoc.kind,
-            "description": assoc.description,
-        })
+        assoc_lookup.setdefault(assoc.from_class, []).append(
+            {
+                "target": assoc.to_class,
+                "kind": assoc.kind,
+                "description": assoc.description,
+            }
+        )
 
     for cls in oo.classes:
         module = cls.module
         qname = f"{module}::{cls.name}" if module else cls.name
-        results.append({
-            "qualified_name": qname,
-            "kind": "class",
-            "description": cls.description,
-            "methods": [
-                {"name": m.name, "visibility": m.visibility}
-                for m in cls.methods
-            ],
-            "attributes": [
-                {"name": a.name, "visibility": a.visibility}
-                for a in cls.attributes
-            ],
-            "inherits_from": cls.inherits_from,
-            "realizes": cls.realizes_interfaces,
-            "associations": assoc_lookup.get(cls.name, []),
-        })
+        results.append(
+            {
+                "qualified_name": qname,
+                "kind": "class",
+                "description": cls.description,
+                "methods": [{"name": m.name, "visibility": m.visibility} for m in cls.methods],
+                "attributes": [
+                    {"name": a.name, "visibility": a.visibility} for a in cls.attributes
+                ],
+                "inherits_from": cls.inherits_from,
+                "realizes": cls.realizes_interfaces,
+                "associations": assoc_lookup.get(cls.name, []),
+            }
+        )
 
     for iface in oo.interfaces:
         module = iface.module
         qname = f"{module}::{iface.name}" if module else iface.name
-        results.append({
-            "qualified_name": qname,
-            "kind": "interface",
-            "description": iface.description,
-            "methods": [
-                {"name": m.name, "visibility": m.visibility}
-                for m in iface.methods
-            ],
-            "attributes": [],
-            "inherits_from": [],
-            "realizes": [],
-            "associations": [],
-        })
+        results.append(
+            {
+                "qualified_name": qname,
+                "kind": "interface",
+                "description": iface.description,
+                "methods": [{"name": m.name, "visibility": m.visibility} for m in iface.methods],
+                "attributes": [],
+                "inherits_from": [],
+                "realizes": [],
+                "associations": [],
+            }
+        )
 
     return results
 
@@ -114,32 +113,30 @@ def _extract_intercomponent_context(
             continue
         module = cls.module
         qname = f"{module}::{cls.name}" if module else cls.name
-        results.append({
-            "qualified_name": qname,
-            "kind": "class",
-            "description": cls.description,
-            "component_name": component_name,
-            "methods": [
-                {"name": m.name, "visibility": m.visibility}
-                for m in cls.methods
-            ],
-        })
+        results.append(
+            {
+                "qualified_name": qname,
+                "kind": "class",
+                "description": cls.description,
+                "component_name": component_name,
+                "methods": [{"name": m.name, "visibility": m.visibility} for m in cls.methods],
+            }
+        )
 
     for iface in oo.interfaces:
         if not iface.is_intercomponent:
             continue
         module = iface.module
         qname = f"{module}::{iface.name}" if module else iface.name
-        results.append({
-            "qualified_name": qname,
-            "kind": "interface",
-            "description": iface.description,
-            "component_name": component_name,
-            "methods": [
-                {"name": m.name, "visibility": m.visibility}
-                for m in iface.methods
-            ],
-        })
+        results.append(
+            {
+                "qualified_name": qname,
+                "kind": "interface",
+                "description": iface.description,
+                "component_name": component_name,
+                "methods": [{"name": m.name, "visibility": m.visibility} for m in iface.methods],
+            }
+        )
 
     return results
 
@@ -190,6 +187,7 @@ def design_all_hlrs(
     if use_dependency_graph:
         try:
             from doxygen_index.tools import create_toolset
+
             dep_toolset = create_toolset()
             log.info("Dependency graph connected")
         except Exception as e:
@@ -208,7 +206,10 @@ def design_all_hlrs(
 
             log.info(
                 "Designing HLR %d (%d/%d): %s",
-                hlr_id, i, len(ordered_ids), hlr["description"][:60],
+                hlr_id,
+                i,
+                len(ordered_ids),
+                hlr["description"][:60],
             )
 
             # Gather in-memory context from prior designs
@@ -221,7 +222,10 @@ def design_all_hlrs(
             for prev_id, (prev_oo, prev_comp_id, prev_comp_name) in designed.items():
                 intercomponent_classes.extend(
                     _extract_intercomponent_context(
-                        prev_oo, prev_comp_name, component_id, prev_comp_id,
+                        prev_oo,
+                        prev_comp_name,
+                        component_id,
+                        prev_comp_id,
                     )
                 )
 
@@ -230,11 +234,13 @@ def design_all_hlrs(
                 if other_hlr["id"] == hlr_id:
                     continue
                 status = "designed" if other_hlr["id"] in designed else "pending"
-                other_hlr_summaries.append({
-                    "id": other_hlr["id"],
-                    "description": other_hlr["description"],
-                    "status": status,
-                })
+                other_hlr_summaries.append(
+                    {
+                        "id": other_hlr["id"],
+                        "description": other_hlr["description"],
+                        "status": status,
+                    }
+                )
 
             dep_ctx = hlr.get("dependency_context")
             dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
@@ -314,15 +320,18 @@ def design_and_persist_hlr(
         all_hlrs = session.query(HighLevelRequirement).all()
         other_hlr_summaries = [
             {"id": h.id, "description": h.description, "status": "unknown"}
-            for h in all_hlrs if h.id != hlr_id
+            for h in all_hlrs
+            if h.id != hlr_id
         ]
 
         component_namespace = hlr_dict["component_namespace"]
-        sibling_namespaces = list({
-            h.component.namespace
-            for h in all_hlrs
-            if h.id != hlr_id and h.component and h.component.namespace
-        })
+        sibling_namespaces = list(
+            {
+                h.component.namespace
+                for h in all_hlrs
+                if h.id != hlr_id and h.component and h.component.namespace
+            }
+        )
 
         dep_ctx = hlr_obj.dependency_context
         dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
@@ -331,6 +340,7 @@ def design_and_persist_hlr(
     dep_toolset = None
     try:
         from doxygen_index.tools import create_toolset
+
         dep_toolset = create_toolset()
         log.info("Dependency graph connected for HLR %d", hlr_id)
     except Exception as exc:

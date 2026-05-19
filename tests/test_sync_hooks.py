@@ -15,9 +15,7 @@ class TestDesignCodeSync:
             src = Path(tmpdir) / "src/calc.py"
             src.parent.mkdir(parents=True, exist_ok=True)
             src.write_text(
-                "class Calculator:\n"
-                "    def add(self, a, b) -> float:\n"
-                "        pass\n"
+                "class Calculator:\n" "    def add(self, a, b) -> float:\n" "        pass\n"
             )
             design = {
                 "classes": [
@@ -52,10 +50,12 @@ class TestDesignCodeSync:
             src.parent.mkdir(parents=True, exist_ok=True)
             src.write_text("class Calculator:\n    pass\n")
             design = {
-                "classes": [{
-                    "name": "Calculator",
-                    "methods": [{"name": "add", "parameters": [], "return_type": ""}],
-                }],
+                "classes": [
+                    {
+                        "name": "Calculator",
+                        "methods": [{"name": "add", "parameters": [], "return_type": ""}],
+                    }
+                ],
             }
             report = check_design_against_code(design, [str(src)])
             assert not report.clean
@@ -74,10 +74,7 @@ class TestTestCoverage:
         with tempfile.TemporaryDirectory() as tmpdir:
             tf = Path(tmpdir) / "tests/test_calc.py"
             tf.parent.mkdir(parents=True, exist_ok=True)
-            tf.write_text(
-                "def test_add():\n    pass\n\n"
-                "def test_subtract():\n    pass\n"
-            )
+            tf.write_text("def test_add():\n    pass\n\n" "def test_subtract():\n    pass\n")
             report = check_test_coverage(
                 ["test_add", "test_subtract"],
                 [str(tf)],

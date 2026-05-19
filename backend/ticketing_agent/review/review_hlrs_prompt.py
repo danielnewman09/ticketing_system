@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 class ProposedHLR(BaseModel):
     """A single proposed high-level requirement."""
+
     action: Literal["keep", "modify", "add", "delete"]
     original_id: int | None = None  # ID of the original HLR (None for new additions)
     description: str

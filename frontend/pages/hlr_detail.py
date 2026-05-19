@@ -96,22 +96,26 @@ async def hlr_detail_page(hlr_id: int):
                                 on_click=lambda: show_add_llr_dialog(),
                             ).props("flat round size=xs color=positive")
                     if hlr["llrs"]:
-                        render_llr_table(hlr["llrs"], on_delete=confirm_delete_llr, on_edit=show_edit_llr_dialog)
+                        render_llr_table(
+                            hlr["llrs"], on_delete=confirm_delete_llr, on_edit=show_edit_llr_dialog
+                        )
                     else:
                         ui.label("No low-level requirements yet.").classes("text-sm text-gray-500")
 
             with ui.column().classes("flex-1 gap-4"):
                 with ui.card().classes("w-full"):
                     section_header("Design Graph")
-                    cy = ui.element("div").style(
-                        f"height: 400px; background: {BACKGROUNDS['base']}; border-radius: 8px;"
-                    ).classes("w-full")
+                    cy = (
+                        ui.element("div")
+                        .style(
+                            f"height: 400px; background: {BACKGROUNDS['base']}; border-radius: 8px;"
+                        )
+                        .classes("w-full")
+                    )
                     cy._props["id"] = "hlr-cy-container"
 
                 # Load graph data and render
-                graph = await asyncio.to_thread(
-                    fetch_hlr_graph_data, hlr_id, hlr["component_id"]
-                )
+                graph = await asyncio.to_thread(fetch_hlr_graph_data, hlr_id, hlr["component_id"])
                 elements_json = json.dumps(graph["nodes"] + graph["edges"])
                 if graph["nodes"]:
                     await ui.run_javascript(f"""
@@ -140,7 +144,9 @@ async def hlr_detail_page(hlr_id: int):
         with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
             ui.label(f"Edit HLR {hlr['id']}").classes(CLS_DIALOG_TITLE)
             desc_input = ui.textarea("Description", value=hlr["description"]).classes("w-full")
-            comp_select = ui.select(comp_names, value=current_comp, label="Component").classes("w-full")
+            comp_select = ui.select(comp_names, value=current_comp, label="Component").classes(
+                "w-full"
+            )
 
             with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
@@ -283,7 +289,9 @@ async def hlr_detail_page(hlr_id: int):
     async def show_edit_llr_dialog(llr_id: int, current_description: str):
         with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
             ui.label(f"Edit LLR {llr_id}").classes(CLS_DIALOG_TITLE)
-            desc_input = ui.textarea("Description", value=current_description or "").classes("w-full")
+            desc_input = ui.textarea("Description", value=current_description or "").classes(
+                "w-full"
+            )
 
             with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=dialog.close).props("flat")

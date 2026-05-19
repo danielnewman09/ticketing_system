@@ -20,10 +20,10 @@ from backend.codebase.schemas import (
     OODesignSchema,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixture: the full hlr2 design as the reasoner described it
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def hlr2_design():
@@ -92,7 +92,16 @@ def hlr2_design():
                 ],
                 inherits_from=[],
                 realizes_interfaces=[],
-                requirement_ids=["hlr:2", "llr:9", "llr:10", "llr:11", "llr:12", "llr:13", "llr:14", "llr:15"],
+                requirement_ids=[
+                    "hlr:2",
+                    "llr:9",
+                    "llr:10",
+                    "llr:11",
+                    "llr:12",
+                    "llr:13",
+                    "llr:14",
+                    "llr:15",
+                ],
             ),
             ClassSchema(
                 name="CalculationResult",
@@ -182,6 +191,7 @@ def hlr2_design():
 # Tests: schema can represent the full design
 # ---------------------------------------------------------------------------
 
+
 class TestOODesignSchemaHLR2:
     """Verify OODesignSchema faithfully holds the hlr2 calculator design."""
 
@@ -255,12 +265,12 @@ class TestOODesignSchemaHLR2:
         restored = OODesignSchema.model_validate(data)
 
         for orig, rest in zip(hlr2_design.classes, restored.classes):
-            assert len(rest.attributes) == len(orig.attributes), (
-                f"Class {orig.name}: attributes lost in round-trip"
-            )
-            assert len(rest.methods) == len(orig.methods), (
-                f"Class {orig.name}: methods lost in round-trip"
-            )
+            assert len(rest.attributes) == len(
+                orig.attributes
+            ), f"Class {orig.name}: attributes lost in round-trip"
+            assert len(rest.methods) == len(
+                orig.methods
+            ), f"Class {orig.name}: methods lost in round-trip"
 
     def test_json_round_trip(self, hlr2_design):
         """Serialize to JSON string and back — nested arrays must survive."""
@@ -290,7 +300,16 @@ class TestOODesignSchemaHLR2:
                     "description": "Core calculation engine performing arithmetic operations with error handling and state maintenance for recovery.",
                     "inherits_from": [],
                     "realizes_interfaces": [],
-                    "requirement_ids": ["hlr:2", "llr:9", "llr:10", "llr:11", "llr:12", "llr:13", "llr:14", "llr:15"],
+                    "requirement_ids": [
+                        "hlr:2",
+                        "llr:9",
+                        "llr:10",
+                        "llr:11",
+                        "llr:12",
+                        "llr:13",
+                        "llr:14",
+                        "llr:15",
+                    ],
                 },
                 {
                     "name": "CalculationResult",
@@ -304,13 +323,41 @@ class TestOODesignSchemaHLR2:
             ],
             "interfaces": [],
             "enums": [
-                {"name": "Status", "module": "calc::engine", "description": "Defines valid calculation outcomes and error indicators.", "values": ["OK", "INVALID_INPUT", "DIVISION_BY_ZERO"]},
-                {"name": "Operation", "module": "calc::engine", "description": "Defines supported arithmetic operations for the engine.", "values": ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"]},
+                {
+                    "name": "Status",
+                    "module": "calc::engine",
+                    "description": "Defines valid calculation outcomes and error indicators.",
+                    "values": ["OK", "INVALID_INPUT", "DIVISION_BY_ZERO"],
+                },
+                {
+                    "name": "Operation",
+                    "module": "calc::engine",
+                    "description": "Defines supported arithmetic operations for the engine.",
+                    "values": ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"],
+                },
             ],
             "associations": [
-                {"from_class": "Calculator", "to_class": "Status", "kind": "depends_on", "description": "Used to maintain internal state and return error indicators", "requirement_ids": ["hlr:2", "llr:13", "llr:14", "llr:15"]},
-                {"from_class": "Calculator", "to_class": "Operation", "kind": "depends_on", "description": "Used internally to select arithmetic logic", "requirement_ids": ["hlr:2", "llr:9", "llr:10", "llr:11", "llr:12"]},
-                {"from_class": "Calculator", "to_class": "CalculationResult", "kind": "associates", "description": "Produces and returns calculation results", "requirement_ids": ["hlr:2", "llr:13", "llr:14", "llr:15"]},
+                {
+                    "from_class": "Calculator",
+                    "to_class": "Status",
+                    "kind": "depends_on",
+                    "description": "Used to maintain internal state and return error indicators",
+                    "requirement_ids": ["hlr:2", "llr:13", "llr:14", "llr:15"],
+                },
+                {
+                    "from_class": "Calculator",
+                    "to_class": "Operation",
+                    "kind": "depends_on",
+                    "description": "Used internally to select arithmetic logic",
+                    "requirement_ids": ["hlr:2", "llr:9", "llr:10", "llr:11", "llr:12"],
+                },
+                {
+                    "from_class": "Calculator",
+                    "to_class": "CalculationResult",
+                    "kind": "associates",
+                    "description": "Produces and returns calculation results",
+                    "requirement_ids": ["hlr:2", "llr:13", "llr:14", "llr:15"],
+                },
             ],
         }
 

@@ -75,12 +75,14 @@ def assess_dependencies(
     all_ids = {h["id"] for h in hlrs}
     assessed_ids = {a["hlr_id"] for a in assessments}
     for missing_id in all_ids - assessed_ids:
-        assessments.append({
-            "hlr_id": missing_id,
-            "recommendation": "none",
-            "dependency_name": "",
-            "relevant_structures": [],
-            "rationale": "not assessed",
-        })
+        assessments.append(
+            {
+                "hlr_id": missing_id,
+                "recommendation": "none",
+                "dependency_name": "",
+                "relevant_structures": [],
+                "rationale": "not assessed",
+            }
+        )
 
     return assessments

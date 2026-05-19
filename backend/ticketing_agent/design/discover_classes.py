@@ -89,10 +89,7 @@ def _build_user_message(
                 continue
             dep_name = ctx.get("dependency_name", "")
             structures = ctx.get("relevant_structures", [])
-            structs_text = (
-                f" (suggested structures: {', '.join(structures)})"
-                if structures else ""
-            )
+            structs_text = f" (suggested structures: {', '.join(structures)})" if structures else ""
             dep_lines.append(f"- {dep_name}{structs_text}")
 
     deps_text = "\n".join(dep_lines) if dep_lines else "(no dependencies identified)"
@@ -144,8 +141,7 @@ def discover_classes(
         (``"dependency"`` or ``"as-built"``).
     """
     has_deps = dependency_contexts and any(
-        ctx.get("recommendation", "none") != "none"
-        for ctx in dependency_contexts.values()
+        ctx.get("recommendation", "none") != "none" for ctx in dependency_contexts.values()
     )
     if not has_deps and not component_namespace:
         log.info(
@@ -155,7 +151,10 @@ def discover_classes(
         return []
 
     user_message = _build_user_message(
-        hlr, llrs, dependency_contexts, component_namespace,
+        hlr,
+        llrs,
+        dependency_contexts,
+        component_namespace,
     )
     all_tools = toolset.schemas() + [TOOL_DEFINITION]
     dispatcher = _make_tool_dispatcher(toolset)
@@ -178,6 +177,8 @@ def discover_classes(
     built_count = sum(1 for c in classes if c.get("category") == "as-built")
     log.info(
         "Discovered %d dependency + %d as-built classes for HLR %s",
-        dep_count, built_count, hlr.get("id"),
+        dep_count,
+        built_count,
+        hlr.get("id"),
     )
     return classes

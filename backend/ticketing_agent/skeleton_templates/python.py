@@ -15,8 +15,9 @@ from typing import Any
 @dataclass
 class SkeletonResult:
     """Result of skeleton generation for one source file."""
-    file_path: str       # Relative path, e.g. src/calculator/engine.py
-    content: str         # Python source code
+
+    file_path: str  # Relative path, e.g. src/calculator/engine.py
+    content: str  # Python source code
     classes_generated: list[str] = ()  # Class names in this file
 
     def __post_init__(self):
@@ -27,6 +28,7 @@ class SkeletonResult:
 # ---------------------------------------------------------------------------
 # Class skeleton
 # ---------------------------------------------------------------------------
+
 
 def generate_class_skeleton(cls: dict) -> str:
     """Generate a Python class definition with method stubs."""
@@ -52,7 +54,7 @@ def generate_class_skeleton(cls: dict) -> str:
         # Attribute-only: use dataclass-like pattern
         lines = [header]
         if desc:
-            lines[-1] += f'  # {desc}'
+            lines[-1] += f"  # {desc}"
         for attr in attrs:
             type_hint = _python_type(attr.get("type_name", "Any"))
             lines.append(f"    {attr['name']}: {type_hint}")
@@ -114,6 +116,7 @@ def generate_method_skeleton(method: dict) -> str:
 # __init__.py generation
 # ---------------------------------------------------------------------------
 
+
 def generate_init_py(classes: list[dict], module_name: str) -> str:
     """Generate __init__.py with imports for the module's classes."""
     lines = [
@@ -135,6 +138,7 @@ def generate_init_py(classes: list[dict], module_name: str) -> str:
 # ---------------------------------------------------------------------------
 # Module skeleton (groups classes into a single file)
 # ---------------------------------------------------------------------------
+
 
 def generate_module_skeleton(
     classes: list[dict],
@@ -178,6 +182,7 @@ def generate_module_skeleton(
 # ---------------------------------------------------------------------------
 # Batch skeleton from OO design
 # ---------------------------------------------------------------------------
+
 
 def generate_skeleton_from_design(
     oo_design: dict,
@@ -225,6 +230,7 @@ def generate_skeleton_from_design(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _init_params(attrs: list[dict], methods: list[dict]) -> str:
     """Build __init__ parameter list from attributes."""

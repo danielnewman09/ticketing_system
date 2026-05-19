@@ -42,9 +42,7 @@ def fetch_design_graph(
         conditions.append("n.component_id = $comp_id")
         params["comp_id"] = component_id
     if search:
-        conditions.append(
-            "(n.name CONTAINS $search OR n.qualified_name CONTAINS $search)"
-        )
+        conditions.append("(n.name CONTAINS $search OR n.qualified_name CONTAINS $search)")
         params["search"] = search
 
     where = " AND ".join(conditions)

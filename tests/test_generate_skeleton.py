@@ -15,79 +15,95 @@ from backend.ticketing_agent.generate_skeleton import generate_skeleton
 
 class TestMethodSkeleton:
     def test_simple_method(self):
-        src = generate_method_skeleton({
-            "name": "add",
-            "parameters": ["a", "b"],
-            "return_type": "float",
-            "visibility": "public",
-        })
+        src = generate_method_skeleton(
+            {
+                "name": "add",
+                "parameters": ["a", "b"],
+                "return_type": "float",
+                "visibility": "public",
+            }
+        )
         assert "def add(self, a, b) -> float:" in src
         assert "pass" in src
 
     def test_method_with_description(self):
-        src = generate_method_skeleton({
-            "name": "divide",
-            "parameters": ["a", "b"],
-            "return_type": "float",
-            "description": "Divide a by b",
-        })
+        src = generate_method_skeleton(
+            {
+                "name": "divide",
+                "parameters": ["a", "b"],
+                "return_type": "float",
+                "description": "Divide a by b",
+            }
+        )
         assert '"""Divide a by b"""' in src
 
     def test_void_return(self):
-        src = generate_method_skeleton({
-            "name": "reset",
-            "parameters": [],
-            "return_type": "void",
-        })
+        src = generate_method_skeleton(
+            {
+                "name": "reset",
+                "parameters": [],
+                "return_type": "void",
+            }
+        )
         assert "def reset(self) -> None:" in src
 
 
 class TestClassSkeleton:
     def test_class_with_methods(self):
-        src = generate_class_skeleton({
-            "name": "Calculator",
-            "description": "A simple calculator",
-            "methods": [
-                {"name": "add", "parameters": ["a", "b"], "return_type": "float"},
-            ],
-        })
+        src = generate_class_skeleton(
+            {
+                "name": "Calculator",
+                "description": "A simple calculator",
+                "methods": [
+                    {"name": "add", "parameters": ["a", "b"], "return_type": "float"},
+                ],
+            }
+        )
         assert "class Calculator:" in src
         assert '"""A simple calculator"""' in src
         assert "def add(self, a, b) -> float:" in src
 
     def test_class_with_inheritance(self):
-        src = generate_class_skeleton({
-            "name": "ScientificCalc",
-            "inherits_from": ["Calculator"],
-            "methods": [],
-        })
+        src = generate_class_skeleton(
+            {
+                "name": "ScientificCalc",
+                "inherits_from": ["Calculator"],
+                "methods": [],
+            }
+        )
         assert "class ScientificCalc(Calculator):" in src
 
     def test_class_with_interface_realization(self):
-        src = generate_class_skeleton({
-            "name": "MyCalc",
-            "realizes_interfaces": ["ICalculator"],
-            "methods": [],
-        })
+        src = generate_class_skeleton(
+            {
+                "name": "MyCalc",
+                "realizes_interfaces": ["ICalculator"],
+                "methods": [],
+            }
+        )
         assert "class MyCalc(ICalculator):" in src
 
     def test_class_with_attributes(self):
-        src = generate_class_skeleton({
-            "name": "Calculator",
-            "attributes": [
-                {"name": "display", "type_name": "str", "visibility": "private"},
-            ],
-            "methods": [
-                {"name": "compute", "parameters": [], "return_type": "float"},
-            ],
-        })
+        src = generate_class_skeleton(
+            {
+                "name": "Calculator",
+                "attributes": [
+                    {"name": "display", "type_name": "str", "visibility": "private"},
+                ],
+                "methods": [
+                    {"name": "compute", "parameters": [], "return_type": "float"},
+                ],
+            }
+        )
         assert "def __init__(self, display: str):" in src
         assert "self._display = display" in src
 
     def test_empty_class_has_pass(self):
-        src = generate_class_skeleton({
-            "name": "Empty",
-        })
+        src = generate_class_skeleton(
+            {
+                "name": "Empty",
+            }
+        )
         assert "class Empty:" in src
         assert "pass" in src
 
@@ -97,9 +113,12 @@ class TestModuleSkeleton:
         result = generate_module_skeleton(
             classes=[
                 {"name": "Foo", "methods": []},
-                {"name": "Bar", "methods": [
-                    {"name": "do_something", "parameters": [], "return_type": "void"},
-                ]},
+                {
+                    "name": "Bar",
+                    "methods": [
+                        {"name": "do_something", "parameters": [], "return_type": "void"},
+                    ],
+                },
             ],
             module_name="example",
         )
@@ -167,6 +186,7 @@ class TestGenerateSkeleton:
 class TestPythonTypeMapping:
     def test_common_types(self):
         from backend.ticketing_agent.skeleton_templates.python import _python_type
+
         assert _python_type("int") == "int"
         assert _python_type("float") == "float"
         assert _python_type("str") == "str"

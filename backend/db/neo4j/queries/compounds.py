@@ -55,9 +55,7 @@ def _discover_dependency_compounds(
         """
         result = session.run(query_str, params)
     except Exception:
-        log.warning(
-            "Full-text index 'doc_search' unavailable, falling back to CONTAINS search"
-        )
+        log.warning("Full-text index 'doc_search' unavailable, falling back to CONTAINS search")
         fallback_where = (
             "n.source IS NOT NULL AND n.source <> '' "
             "AND (n.name CONTAINS $search OR n.qualified_name CONTAINS $search)"
@@ -96,19 +94,13 @@ def _discover_codebase_compounds(session, search: str | None) -> set[str]:
     conditions: list[str] = []
     params: dict = {}
     if search:
-        conditions.append(
-            "(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)"
-        )
+        conditions.append("(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)")
         params["search"] = search
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     result = session.run(f"MATCH (c:Compound) {where_clause} RETURN c", params)
-    ids = {
-        record["c"].element_id for record in result if not record["c"].get("source", "")
-    }
-    log.debug(
-        "_discover_codebase_compounds: %d compounds found for %r", len(ids), search
-    )
+    ids = {record["c"].element_id for record in result if not record["c"].get("source", "")}
+    log.debug("_discover_codebase_compounds: %d compounds found for %r", len(ids), search)
     return ids
 
 
@@ -130,9 +122,7 @@ def fetch_dependency_compounds(
     """Fetch dependency compound graph as raw dicts (with source property)."""
     log.info("fetch_dependency_compounds(search=%s, source=%s)", search, source_filter)
     with get_neo4j().session() as session:
-        compound_ids = _discover_dependency_compounds(
-            session, search, source_filter, limit
-        )
+        compound_ids = _discover_dependency_compounds(session, search, source_filter, limit)
         if not compound_ids:
             return {"nodes": [], "edges": []}
         return _fetch_compound_raw(session, compound_ids, "dependency")
@@ -164,14 +154,16 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
                 compound_ids.add(n.element_id)
                 edges.append(
                     {
-                        "source": record["c"].get(
-                            "qualified_name", record["c"].element_id
-                        )
-                        if role == "base"
-                        else n.get("qualified_name", n.element_id),
-                        "target": n.get("qualified_name", n.element_id)
-                        if role == "base"
-                        else record["c"].get("qualified_name", record["c"].element_id),
+                        "source": (
+                            record["c"].get("qualified_name", record["c"].element_id)
+                            if role == "base"
+                            else n.get("qualified_name", n.element_id)
+                        ),
+                        "target": (
+                            n.get("qualified_name", n.element_id)
+                            if role == "base"
+                            else record["c"].get("qualified_name", record["c"].element_id)
+                        ),
                         "type": "INHERITS_FROM",
                     }
                 )
@@ -211,9 +203,7 @@ def _fetch_compound_raw(session, compound_ids: set[str], layer: str) -> dict:
                 }
             )
 
-    log.debug(
-        "_fetch_compound_raw(%s): %d nodes, %d edges", layer, len(nodes), len(edges)
-    )
+    log.debug("_fetch_compound_raw(%s): %d nodes, %d edges", layer, len(nodes), len(edges))
     return {"nodes": nodes, "edges": edges}
 
 

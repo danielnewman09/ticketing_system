@@ -18,10 +18,10 @@ from backend.requirements.schemas import (
     VerificationSchema,
 )
 
-
 # ---------------------------------------------------------------------------
 # VerificationConditionSchema
 # ---------------------------------------------------------------------------
+
 
 class TestVerificationConditionSchema:
     def test_minimal(self):
@@ -53,6 +53,7 @@ class TestVerificationConditionSchema:
 # VerificationActionSchema
 # ---------------------------------------------------------------------------
 
+
 class TestVerificationActionSchema:
     def test_minimal(self):
         va = VerificationActionSchema(description="Call add(2, 3)")
@@ -74,6 +75,7 @@ class TestVerificationActionSchema:
 # ---------------------------------------------------------------------------
 # VerificationSchema
 # ---------------------------------------------------------------------------
+
 
 class TestVerificationSchema:
     def test_minimal(self):
@@ -138,9 +140,7 @@ class TestVerificationSchema:
             method="inspection",
             test_name="inspect_wiring",
             preconditions=[
-                VerificationConditionSchema(
-                    member_qualified_name="A::ready", expected_value="true"
-                )
+                VerificationConditionSchema(member_qualified_name="A::ready", expected_value="true")
             ],
         )
         json_str = vs.model_dump_json()
@@ -152,6 +152,7 @@ class TestVerificationSchema:
 # ---------------------------------------------------------------------------
 # LowLevelRequirementSchema
 # ---------------------------------------------------------------------------
+
 
 class TestLowLevelRequirementSchema:
     def test_minimal(self):
@@ -174,9 +175,7 @@ class TestLowLevelRequirementSchema:
         assert len(llr.verifications) == 2
 
     def test_empty_verifications(self):
-        llr = LowLevelRequirementSchema(
-            description="No verifications yet", verifications=[]
-        )
+        llr = LowLevelRequirementSchema(description="No verifications yet", verifications=[])
         assert llr.verifications == []
 
     def test_missing_description(self):
@@ -190,9 +189,7 @@ class TestLowLevelRequirementSchema:
                 VerificationSchema(
                     method="automated",
                     test_name="test_subtract",
-                    actions=[
-                        VerificationActionSchema(description="Call subtract(5,3)")
-                    ],
+                    actions=[VerificationActionSchema(description="Call subtract(5,3)")],
                 )
             ],
         )
@@ -206,6 +203,7 @@ class TestLowLevelRequirementSchema:
 # ---------------------------------------------------------------------------
 # DecomposedRequirementSchema
 # ---------------------------------------------------------------------------
+
 
 class TestDecomposedRequirementSchema:
     def test_minimal(self):
@@ -278,10 +276,12 @@ class TestDecomposedRequirementSchema:
 # VerificationMethodType literal
 # ---------------------------------------------------------------------------
 
+
 class TestVerificationMethodTypeLiteral:
     def test_literal_matches_model_constant(self):
         """VerificationMethodType must stay in sync with VERIFICATION_METHODS."""
         from backend.db.models.verification import VERIFICATION_METHODS
+
         literal_methods = set(VerificationMethodType.__args__)
         model_methods = set(VERIFICATION_METHODS)
         assert literal_methods == model_methods, (

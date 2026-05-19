@@ -17,12 +17,14 @@ def fetch_ontology_data():
         kind_counts = {}
         for n in session.query(OntologyNode).all():
             kind_counts[n.kind] = kind_counts.get(n.kind, 0) + 1
-            nodes.append({
-                "name": n.name,
-                "kind": n.kind,
-                "qualified_name": n.qualified_name,
-                "component": n.component.name if n.component else "-",
-            })
+            nodes.append(
+                {
+                    "name": n.name,
+                    "kind": n.kind,
+                    "qualified_name": n.qualified_name,
+                    "component": n.component.name if n.component else "-",
+                }
+            )
 
         return {
             "nodes": nodes[:200],
@@ -69,6 +71,7 @@ def fetch_hlr_graph_data(hlr_id: int, component_id: int | None = None) -> dict:
     try:
         from backend.db.neo4j.queries import fetch_hlr_subgraph
         from backend.graph import format_cytoscape_graph
+
         raw = fetch_hlr_subgraph(hlr_id, component_id)
         return format_cytoscape_graph(raw)
     except Exception:
@@ -81,6 +84,7 @@ def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
     try:
         from backend.db.neo4j.queries import fetch_neighbourhood_graph
         from backend.graph import format_cytoscape_graph
+
         raw = fetch_neighbourhood_graph(qualified_name)
         return format_cytoscape_graph(raw)
     except Exception:
@@ -92,6 +96,7 @@ def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     """Fetch node detail from Neo4j (properties + relationships + requirements)."""
     try:
         from backend.db.neo4j.queries import fetch_node_detail
+
         return fetch_node_detail(qualified_name)
     except Exception:
         log.warning("Neo4j node detail query failed", exc_info=True)
@@ -140,18 +145,14 @@ def fetch_node_detail_full(node_id: int) -> dict | None:
 def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
     """Look up the SQLite id for an ontology node by qualified_name."""
     with get_session() as session:
-        node = session.query(OntologyNode).filter_by(
-            qualified_name=qualified_name
-        ).first()
+        node = session.query(OntologyNode).filter_by(qualified_name=qualified_name).first()
         return node.id if node else None
 
 
 def update_member_type(qualified_name: str, type_signature: str) -> bool:
     """Update type_signature on an ontology node (and sync to Neo4j)."""
     with get_session() as session:
-        node = session.query(OntologyNode).filter_by(
-            qualified_name=qualified_name
-        ).first()
+        node = session.query(OntologyNode).filter_by(qualified_name=qualified_name).first()
         if not node:
             return False
         node.type_signature = type_signature

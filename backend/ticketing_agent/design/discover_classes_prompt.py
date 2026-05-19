@@ -81,9 +81,7 @@ When you have identified the relevant classes, call the
 
 TOOL_DEFINITION = {
     "name": "produce_discovered_classes",
-    "description": (
-        "Return the list of discovered classes relevant to the requirements"
-    ),
+    "description": ("Return the list of discovered classes relevant to the requirements"),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -115,8 +113,7 @@ TOOL_DEFINITION = {
                         "source": {
                             "type": "string",
                             "description": (
-                                "Dependency source name (e.g. 'fltk'), or empty "
-                                "for project code"
+                                "Dependency source name (e.g. 'fltk'), or empty " "for project code"
                             ),
                         },
                         "description": {
@@ -159,9 +156,7 @@ TOOL_DEFINITION = {
                         },
                         "relevance": {
                             "type": "string",
-                            "description": (
-                                "Why this class is relevant to the requirements"
-                            ),
+                            "description": ("Why this class is relevant to the requirements"),
                         },
                     },
                     "required": [
