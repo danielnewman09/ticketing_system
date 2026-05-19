@@ -1,4 +1,21 @@
-"""Ontology graph visualization page using Cytoscape.js."""
+"""Ontology graph page — interactive Cytoscape.js visualization with a
+collapsible detail panel.
+
+Architecture
+------------
+- ``state`` — a ``GraphState`` dataclass holding all mutable page state;
+  mutations are visible to ``@ui.refreshable`` widgets passed the same object.
+- Handlers — async callbacks that mutate ``state`` and trigger data loads
+  or detail-panel refreshes.
+- Widget calls — delegate all rendering to ``frontend.widgets`` helpers
+  (controls, legend, detail panel).
+- ``load_graph()`` — fetches graph data from Neo4j via the data layer and
+  renders it into the Cytoscape container. Called on initial load and on
+  filter/search changes.
+
+Inter-page events (``node_selected``, ``node_dblclick``) are emitted by
+Cytoscape via JavaScript and received through ``ui.on()`` listeners.
+"""
 
 import asyncio
 
@@ -30,21 +47,27 @@ from frontend.data.dependencies import (
 
 @ui.page("/ontology/graph")
 async def ontology_graph_page():
+    """Render the ontology-graph page: graph canvas, filter controls,
+    legend, and a detail sidebar for the selected node."""
     apply_theme()
     page_layout("Ontology Graph")
 
-    # -- State --
+    # -- Mutable state (passed by reference to @ui.refreshable widgets) --
     state = GraphState()
 
+    # -- Cytoscape setup --
     add_cytoscape_cdn()
     base_styles = cytoscape_base_styles(size="large")
 
+    # -- Data-loading and event-handling closures --
+
     async def load_graph():
+        """Fetch graph data for the current layer/filters and render it."""
         layer = state.graph_layer
         search = state.search_text or ""
 
         if layer == "dependency" and not search.strip():
-            # Show placeholder — don't load the entire dependency graph
+            # Dependency layer requires a search term — show placeholder
             await ui.run_javascript("""
                 if (window._cy) window._cy.destroy();
                 const container = document.getElementById('cy-container');
@@ -87,12 +110,13 @@ async def ontology_graph_page():
         """)
 
     async def handle_node_selected(e):
+        """On node click/tap: fetch detail and refresh the side panel."""
         qn = e.args.get("qualified_name", "")
         if not qn:
             return
         layer = e.args.get("layer", "")
         detail = await asyncio.to_thread(fetch_graph_node_detail, qn)
-        # Fetch dependency links for design nodes
+        # Design-layer nodes also carry dependency cross-links
         if detail and layer == "design":
             dep_links = await asyncio.to_thread(fetch_design_dependency_links_data, [qn])
             detail["dependency_links"] = dep_links.get("nodes", [])
@@ -101,6 +125,7 @@ async def ontology_graph_page():
             render_graph_detail_panel.refresh()
 
     async def handle_node_dblclick(e):
+        """On node double-click: navigate to the full node detail page."""
         qn = e.args.get("qualified_name", "")
         if not qn:
             return
@@ -108,12 +133,16 @@ async def ontology_graph_page():
         if node_id:
             ui.navigate.to(f"/node/{node_id}")
 
-    # -- Layout --
+    # ------------------------------------------------------------------
+    # Layout: header, controls, legend, then graph + detail panel
+    # ------------------------------------------------------------------
+
+    # Header row
     with ui.row().classes("w-full items-center justify-between px-2 mt-4 mb-2"):
         ui.label("Ontology Graph").classes("text-xl font-semibold")
         ui.link("← Table View", "/ontology").classes("text-sm")
 
-    # Controls
+    # Filter / layout controls (callbacks close over ``state``)
     render_ontology_graph_controls(
         on_layer_change=on_layer_change,
         on_kind_change=on_kind_change,
@@ -125,7 +154,7 @@ async def ontology_graph_page():
     # Legend
     render_ontology_graph_legend()
 
-    # Main content: graph + detail panel
+    # Main content: graph canvas + detail sidebar
     with ui.row().classes("w-full gap-0 px-2").style("height: calc(100vh - 240px); min-height: 400px"):
         # Graph container — single div with id for Cytoscape to mount into
         cy = ui.element("div").classes("flex-grow").style(
@@ -133,12 +162,12 @@ async def ontology_graph_page():
         )
         cy._props["id"] = "cy-container"
 
-        # Detail panel
+        # Detail sidebar (refreshable — updates on node selection)
         render_graph_detail_panel(state)
 
-    # Listen for node selection events from Cytoscape
+    # -- Cytoscape event listeners --
     ui.on("node_selected", handle_node_selected)
     ui.on("node_dblclick", handle_node_dblclick)
 
-    # Initial load
+    # -- Initial data load --
     await load_graph()

@@ -1,4 +1,8 @@
-"""Reusable UI rendering helpers. No DB access — work with plain dicts."""
+"""Reusable UI rendering helpers and shared state types.
+
+No DB access — functions here work with plain dicts passed in from
+the data layer, or with simple state objects like ``GraphState``.
+"""
 
 import json
 from dataclasses import dataclass
