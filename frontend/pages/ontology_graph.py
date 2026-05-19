@@ -7,13 +7,12 @@ from nicegui import ui
 from frontend.theme import (
     KIND_COLORS,
     BACKGROUNDS,
-    CLS_SECTION_HEADER,
     add_cytoscape_cdn,
     cytoscape_base_styles,
     apply_theme,
 )
 from frontend.layout import page_layout
-from frontend.widgets import render_cytoscape_graph
+from frontend.widgets import render_cytoscape_graph, render_detail_section
 from frontend.data.ontology import (
     fetch_ontology_graph_data,
     fetch_graph_node_detail,
@@ -178,66 +177,58 @@ async def ontology_graph_page():
                     ui.label(props["description"]).classes("text-sm")
 
                 # Outgoing relationships
-                if d.get("outgoing"):
-                    ui.separator().classes("my-2")
-                    ui.label("Outgoing").classes(CLS_SECTION_HEADER)
-                    for r in d["outgoing"]:
-                        with ui.row().classes("items-center gap-1"):
-                            ui.badge(r["rel"], color="grey").classes("text-xs")
-                            ui.label(r.get("target_name") or r.get("target_qn", "")).classes("text-xs")
+                render_detail_section(
+                    "Outgoing", d.get("outgoing") or [],
+                    badge_key="rel", label_key="target_name", label_fallback_key="target_qn",
+                )
 
                 # Incoming relationships
-                if d.get("incoming"):
-                    ui.separator().classes("my-2")
-                    ui.label("Incoming").classes(CLS_SECTION_HEADER)
-                    for r in d["incoming"]:
-                        with ui.row().classes("items-center gap-1"):
-                            ui.label(r.get("source_name") or r.get("source_qn", "")).classes("text-xs")
-                            ui.badge(r["rel"], color="grey").classes("text-xs")
+                render_detail_section(
+                    "Incoming", d.get("incoming") or [],
+                    badge_key="rel", label_key="source_name", label_fallback_key="source_qn",
+                    badge_first=False,
+                )
 
                 # Implemented by
-                if d.get("implemented_by"):
-                    ui.separator().classes("my-2")
-                    ui.label("Implemented By").classes(CLS_SECTION_HEADER)
-                    for impl in d["implemented_by"]:
-                        ui.label(impl.get("qualified_name", impl.get("name", ""))).classes("text-xs text-blue-300")
+                render_detail_section(
+                    "Implemented By", d.get("implemented_by") or [],
+                    label_key="qualified_name", label_fallback_key="name",
+                    label_cls="text-xs text-blue-300",
+                )
 
                 # Requirements
-                if d.get("requirements"):
-                    ui.separator().classes("my-2")
-                    ui.label("Traced Requirements").classes(CLS_SECTION_HEADER)
-                    for req in d["requirements"]:
-                        with ui.row().classes("items-center gap-1"):
-                            ui.badge(req["type"], color="orange" if req["type"] == "HLR" else "amber").classes("text-xs")
-                            ui.label(req.get("name", "")).classes("text-xs")
+                render_detail_section(
+                    "Traced Requirements", d.get("requirements") or [],
+                    badge_key="type",
+                    badge_color_fn=lambda r: "orange" if r["type"] == "HLR" else "amber",
+                    label_key="name",
+                )
 
                 # Dependency links (shown for design nodes)
-                if d.get("dependency_links"):
-                    ui.separator().classes("my-2")
-                    ui.label("Dependencies").classes(CLS_SECTION_HEADER)
-                    for dep in d["dependency_links"]:
-                        dep_data = dep.get("data", dep)
-                        with ui.row().classes("items-center gap-1"):
-                            ui.badge(dep_data.get("source", ""), color="teal").classes("text-xs")
-                            ui.label(dep_data.get("qualified_name", dep_data.get("label", ""))).classes("text-xs text-teal-300")
+                dep_links = d.get("dependency_links")
+                if dep_links:
+                    deps = [dep.get("data", dep) for dep in dep_links]
+                    render_detail_section(
+                        "Dependencies", deps,
+                        badge_key="source", badge_color="teal",
+                        label_key="qualified_name", label_fallback_key="label",
+                        label_cls="text-xs text-teal-300",
+                    )
 
                 # Design links (shown for dependency nodes)
-                if d.get("design_links"):
-                    ui.separator().classes("my-2")
-                    ui.label("Referenced by Design").classes(CLS_SECTION_HEADER)
-                    for link in d["design_links"]:
-                        with ui.row().classes("items-center gap-1"):
-                            ui.badge(link.get("rel", ""), color="grey").classes("text-xs")
-                            ui.label(link.get("design_name", link.get("design_qn", ""))).classes("text-xs text-blue-300")
+                render_detail_section(
+                    "Referenced by Design", d.get("design_links") or [],
+                    badge_key="rel", label_key="design_name", label_fallback_key="design_qn",
+                    label_cls="text-xs text-blue-300",
+                )
 
                 # Members (shown for dependency compound nodes)
                 if d.get("members") and props.get("layer") == "dependency":
-                    ui.separator().classes("my-2")
-                    ui.label("Members").classes(CLS_SECTION_HEADER)
-                    for m in d["members"][:20]:
-                        with ui.row().classes("items-center gap-1"):
-                            ui.badge(m.get("kind", ""), color="grey").classes("text-xs")
-                            ui.label(m.get("name", "")).classes("text-xs")
+                    render_detail_section(
+                        "Members", d["members"],
+                        badge_key="kind", label_key="name",
+                        max_items=20,
+                    )
 
                 # Source library (shown for dependency nodes)
                 if props.get("source"):

@@ -21,6 +21,59 @@ def section_header(text: str):
     ui.label(text).classes(CLS_SECTION_HEADER)
 
 
+def render_detail_section(
+    title: str,
+    items: list[dict],
+    *,
+    badge_key: str | None = None,
+    badge_color: str = "grey",
+    badge_color_fn=None,
+    label_key: str = "name",
+    label_fallback_key: str | None = None,
+    label_cls: str = "text-xs",
+    badge_first: bool = True,
+    max_items: int | None = None,
+):
+    """Render a detail-panel section: separator, header, and item rows.
+
+    Each item row shows an optional badge and a label.
+    If *items* is empty, nothing is rendered.
+
+    - *badge_key*: dict key for badge text, or ``None`` for badge-less rows.
+    - *badge_color*: default badge color (used when *badge_color_fn* is absent).
+    - *badge_color_fn*: optional callable(item) -> color string (overrides *badge_color*).
+    - *label_key*: primary dict key for label text.
+    - *label_fallback_key*: fallback key when *label_key* value is empty/falsy.
+    - *label_cls*: CSS classes applied to each label.
+    - *badge_first*: if ``True``, badge precedes label; if ``False``, label first.
+    - *max_items*: cap on number of items shown.
+    """
+    if not items:
+        return
+
+    ui.separator().classes("my-2")
+    section_header(title)
+
+    shown = items[:max_items] if max_items else items
+    for item in shown:
+        label_text = item.get(label_key, "")
+        if not label_text and label_fallback_key:
+            label_text = item.get(label_fallback_key, "")
+
+        with ui.row().classes("items-center gap-1"):
+            if badge_key is not None:
+                badge_text = str(item.get(badge_key, ""))
+                color = badge_color_fn(item) if badge_color_fn else badge_color
+                if badge_first:
+                    ui.badge(badge_text, color=color).classes("text-xs")
+                    ui.label(label_text).classes(label_cls)
+                else:
+                    ui.label(label_text).classes(label_cls)
+                    ui.badge(badge_text, color=color).classes("text-xs")
+            else:
+                ui.label(label_text).classes(label_cls)
+
+
 def breadcrumb(*parts: tuple[str, str | None]):
     """Render a breadcrumb trail.
 
