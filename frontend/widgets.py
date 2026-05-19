@@ -320,9 +320,11 @@ async def render_cytoscape_graph(
     """Render a Cytoscape.js graph with consistent theme and event handling.
 
     All pages should use this function instead of inline Cytoscape JS.
-    CDN injection, styling, and event wiring are handled centrally.
+    Styling and event wiring are handled centrally.
+
+    IMPORTANT: Pages must call ``add_cytoscape_cdn()`` before calling this
+    function, to ensure the Cytoscape scripts are loaded in the browser.
     """
-    add_cytoscape_cdn()
     base_styles = cytoscape_base_styles(size=config.size)
     elements_json = json.dumps(elements)
     layout_name = f"window._cyLayout || '{config.layout}'" if config.animate else f"'{config.layout}'"

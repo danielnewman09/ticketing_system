@@ -10,6 +10,7 @@ from frontend.theme import (
     CLS_DIALOG_MD,
     CLS_DIALOG_TITLE,
     CLS_DIALOG_ACTIONS,
+    add_cytoscape_cdn,
     apply_theme,
 )
 from frontend.layout import page_layout
@@ -30,6 +31,8 @@ from frontend.data.ontology import fetch_hlr_graph_data, resolve_node_id_by_qual
 async def hlr_detail_page(hlr_id: int):
     apply_theme()
     page_layout(f"HLR {hlr_id}")
+
+    add_cytoscape_cdn()
 
     # ---------------------------------------------------------------
     # Refreshable content

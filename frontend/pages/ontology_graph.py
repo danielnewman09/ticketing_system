@@ -23,6 +23,7 @@ from nicegui import ui
 
 from frontend.theme import (
     BACKGROUNDS,
+    add_cytoscape_cdn,
     apply_theme,
 )
 from frontend.layout import page_layout
@@ -50,6 +51,8 @@ async def ontology_graph_page():
     legend, and a detail sidebar for the selected node."""
     apply_theme()
     page_layout("Ontology Graph")
+
+    add_cytoscape_cdn()
 
     # -- Mutable state (passed by reference to @ui.refreshable widgets) --
     state = GraphState()

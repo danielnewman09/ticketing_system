@@ -10,6 +10,7 @@ from frontend.theme import (
     STATUS_COLORS,
     CLS_SECTION_HEADER,
     CLS_SECTION_SUBHEADER,
+    add_cytoscape_cdn,
     apply_theme,
 )
 from frontend.widgets import breadcrumb, GraphConfig, render_cytoscape_graph
@@ -26,6 +27,8 @@ from frontend.data.ontology import (
 async def node_detail_page(node_id: int):
     apply_theme()
     page_layout("Node Detail")
+
+    add_cytoscape_cdn()
 
     @ui.refreshable
     async def content():

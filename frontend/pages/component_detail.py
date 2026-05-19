@@ -6,6 +6,7 @@ from nicegui import ui
 
 from frontend.theme import (
     BACKGROUNDS,
+    add_cytoscape_cdn,
     apply_theme,
 )
 from frontend.widgets import section_header, breadcrumb, GraphConfig, render_cytoscape_graph
@@ -18,6 +19,8 @@ from frontend.data.ontology import fetch_ontology_graph_data, resolve_node_id_by
 async def component_detail_page(component_id: int):
     apply_theme()
     page_layout("Component Detail")
+
+    add_cytoscape_cdn()
 
     data_ref = {"data": await asyncio.to_thread(fetch_component_detail, component_id)}
 
