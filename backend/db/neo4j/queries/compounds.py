@@ -24,21 +24,21 @@ def _discover_dependency_compounds(
     if not search_term:
         return set()
 
-    source_clause = "AND node.source CONTAINS $source_filter" if source_filter else ""
-    params: dict = {"query": search_term, "limit": limit}
-    if source_filter:
-        params["source_filter"] = source_filter
+    # Normalise so the param is always present (None → no filter).
+    effective_source = source_filter or None
+    params: dict = {"query": search_term, "limit": limit, "source_filter": effective_source}
 
     try:
-        query_str = f"""
+        result = session.run(
+            """
             CALL db.index.fulltext.queryNodes('doc_search', $query)
             YIELD node, score
             WHERE node.source IS NOT NULL AND node.source <> ''
-              {source_clause}
+              AND ($source_filter IS NULL OR node.source CONTAINS $source_filter)
             WITH node, score
             ORDER BY score DESC
             LIMIT $limit
-            WITH collect({{node: node, score: score}}) AS hits,
+            WITH collect({node: node, score: score}) AS hits,
                  max(score) AS top_score
             UNWIND hits AS hit
             WITH hit.node AS node, hit.score AS score, top_score
@@ -52,19 +52,18 @@ def _discover_dependency_compounds(
             WITH coalesce(direct_compound, owner) AS c
             WHERE c IS NOT NULL
             RETURN DISTINCT c
-        """
-        result = session.run(query_str, params)
+        """,
+            params,
+        )
     except Exception:
         log.warning("Full-text index 'doc_search' unavailable, falling back to CONTAINS search")
-        fallback_where = (
-            "n.source IS NOT NULL AND n.source <> '' "
-            "AND (n.name CONTAINS $search OR n.qualified_name CONTAINS $search)"
-        )
-        if source_filter:
-            fallback_where += " AND n.source CONTAINS $source_filter"
         result = session.run(
-            f"""
-            MATCH (n) WHERE ({fallback_where}) AND (n:Compound OR n:Member)
+            """
+            MATCH (n)
+            WHERE n.source IS NOT NULL AND n.source <> ''
+              AND (n.name CONTAINS $search OR n.qualified_name CONTAINS $search)
+              AND ($source_filter IS NULL OR n.source CONTAINS $source_filter)
+              AND (n:Compound OR n:Member)
             WITH n LIMIT $limit
             WITH CASE WHEN n:Compound THEN n ELSE null END AS direct_compound, n
             OPTIONAL MATCH (owner:Compound)-[:CONTAINS]->(n)
@@ -76,7 +75,7 @@ def _discover_dependency_compounds(
             {
                 "search": search_term,
                 "limit": limit,
-                "source_filter": source_filter,
+                "source_filter": effective_source,
             },
         )
 
@@ -91,14 +90,14 @@ def _discover_dependency_compounds(
 
 def _discover_codebase_compounds(session, search: str | None) -> set[str]:
     """Find codebase Compound element-IDs (no ``source`` property)."""
-    conditions: list[str] = []
-    params: dict = {}
-    if search:
-        conditions.append("(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)")
-        params["search"] = search
-
-    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    result = session.run(f"MATCH (c:Compound) {where_clause} RETURN c", params)
+    result = session.run(
+        """
+        MATCH (c:Compound)
+        WHERE $search IS NULL OR c.name CONTAINS $search OR c.qualified_name CONTAINS $search
+        RETURN c
+        """,
+        {"search": search},
+    )
     ids = {record["c"].element_id for record in result if not record["c"].get("source", "")}
     log.debug("_discover_codebase_compounds: %d compounds found for %r", len(ids), search)
     return ids
