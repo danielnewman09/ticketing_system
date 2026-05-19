@@ -8,7 +8,22 @@ from __future__ import annotations
 
 import logging
 
+import re
 from services.dependencies import get_neo4j
+
+
+def _escape_lucene(term: str) -> str:
+    r"""Escape Lucene special characters and wrap in quotes for fulltext search.
+
+    Qualified names with :: are converted to space-separated tokens
+    so that std::string becomes a phrase match on both terms.
+    """
+    # Replace :: with space so tokens are searched independently
+    escaped = term.replace("::", " ")
+    # Escape remaining Lucene special characters
+    escaped = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\/])', r'\\\1', escaped)
+    # Wrap in double quotes for phrase matching
+    return f'"{escaped}"'
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +41,7 @@ def _discover_dependency_compounds(
 
     # Normalise so the param is always present (None → no filter).
     effective_source = source_filter or None
-    params: dict = {"query": search_term, "limit": limit, "source_filter": effective_source}
+    params: dict = {"query": _escape_lucene(search_term), "limit": limit, "source_filter": effective_source}
 
     try:
         result = session.run(
