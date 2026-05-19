@@ -162,18 +162,6 @@ async def node_detail_page(node_id: int):
                                     "text-sm text-blue-300"
                                 )
 
-                    if neo4j.get("requirements"):
-                        with ui.card().classes("w-full"):
-                            ui.label("Traced Requirements").classes(CLS_SECTION_HEADER)
-                            for req in neo4j["requirements"]:
-                                with ui.row().classes("items-center gap-2 py-1"):
-                                    req_type = req["type"]
-                                    ui.badge(
-                                        req_type,
-                                        color="orange" if req_type == "HLR" else "amber",
-                                    ).classes("text-xs")
-                                    ui.label(req.get("name", "")).classes("text-sm")
-
         # Load neighbourhood graph after layout is built
         if neo4j and node["qualified_name"]:
             center_style = (

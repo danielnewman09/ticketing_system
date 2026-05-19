@@ -203,6 +203,7 @@ class GraphState:
     selected_node_data: dict | None = None
     graph_layer: str = "design"  # "design", "codebase", or "dependency"
     source_filter: str | None = None  # dependency source filter (e.g. "eigen")
+    show_requirement_tags: bool = True  # toggle HLR badges on/off
 
 
 def render_ontology_graph_controls(
@@ -212,6 +213,7 @@ def render_ontology_graph_controls(
     on_search: callable,
     on_layout_change: callable,
     on_fit: callable,
+    on_toggle_req_tags: callable | None = None,
 ):
     """Render the ontology-graph toolbar: layer, kind, search, layout, and fit.
 
@@ -239,6 +241,8 @@ def render_ontology_graph_controls(
             on_change=on_layout_change,
         ).classes("w-36")
         ui.button("Fit", on_click=on_fit).props("flat dense")
+        if on_toggle_req_tags:
+            ui.switch("HLR Tags", value=True, on_change=on_toggle_req_tags).props("dense")
 
 
 def render_ontology_graph_legend():
@@ -252,9 +256,9 @@ def render_ontology_graph_legend():
                 ui.label(kind).classes("text-xs")
         with ui.row().classes("items-center gap-1"):
             ui.html(
-                '<div style="width:10px;height:10px;transform:rotate(45deg);background:#e67e22"></div>'
+                '<div style="width:10px;height:10px;border-radius:50%;background:#3498db;border:3px solid #e67e22"></div>'
             )
-            ui.label("Requirement").classes("text-xs")
+            ui.label("HLR Tag").classes("text-xs")
         with ui.row().classes("items-center gap-1"):
             ui.html(
                 '<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>'

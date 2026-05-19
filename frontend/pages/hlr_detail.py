@@ -115,7 +115,7 @@ async def hlr_detail_page(hlr_id: int):
                     cy._props["id"] = "hlr-cy-container"
 
                 # Load graph data and render
-                graph = await asyncio.to_thread(fetch_hlr_graph_data, hlr_id, hlr["component_id"])
+                graph = await asyncio.to_thread(fetch_hlr_graph_data, hlr_id, hlr["component_id"], requirement_tags="hlr")
                 elements_json = json.dumps(graph["nodes"] + graph["edges"])
                 if graph["nodes"]:
                     await ui.run_javascript(f"""
