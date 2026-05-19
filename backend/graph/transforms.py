@@ -191,13 +191,13 @@ def _ensure_namespace_node(
 
     existing = _find_existing_module(nodes, ns_qn)
     if existing is not None:
-        existing["data"]["is_namespace"] = "true"
-        existing["data"]["label"] = display_name
-        synth_ns[ns_qn] = existing["data"]["id"]
+        existing["is_namespace"] = "true"
+        existing["label"] = display_name
+        synth_ns[ns_qn] = existing["id"]
         parent_id = _resolve_parent_ns(nodes, synth_ns, ns_qn, label_source, layer)
         if parent_id:
-            existing["data"]["parent"] = parent_id
-        return existing["data"]["id"]
+            existing["parent"] = parent_id
+        return existing["id"]
 
     node_id = f"ns_{ns_qn}"
     new_node = {
