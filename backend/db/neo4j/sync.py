@@ -1,4 +1,10 @@
-"""Sync design-intent and requirement data from SQLite to Neo4j."""
+"""Sync design-intent data from SQLite to Neo4j.
+
+Only **Design** nodes and triples are synced to Neo4j.  Requirements
+(HLRs, LLRs), verifications, and tasks are relational data that lives
+entirely in SQLite.  The graph views read requirement associations from
+SQLite and join them to Neo4j Design nodes at query time.
+"""
 
 from __future__ import annotations
 
@@ -31,10 +37,10 @@ PREDICATE_TO_REL_TYPE = {
 
 
 def clear_design_graph():
-    """Delete all Design, HLR, and LLR nodes (and their relationships) from Neo4j."""
+    """Delete all Design nodes (and their relationships) from Neo4j."""
     try:
         with get_neo4j().session() as session:
-            session.run("MATCH (n) WHERE n:Design OR n:HLR OR n:LLR DETACH DELETE n")
+            session.run("MATCH (n:Design) DETACH DELETE n")
         log.info("Cleared design graph from Neo4j")
         return True
     except Exception:
@@ -133,55 +139,6 @@ def sync_design_triple(neo4j_session: Neo4jSession, triple) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Requirement reference nodes
-# ---------------------------------------------------------------------------
-
-
-def sync_requirement_node(neo4j_session: Neo4jSession, req, label: str) -> None:
-    """MERGE a lightweight HLR or LLR reference node by sqlite_id."""
-    title = req.description[:200] if req.description else ""
-    cypher = f"""
-    MERGE (r:{label} {{sqlite_id: $sid}})
-    SET r.title = $title,
-        r.requirement_type = $rtype
-    """
-    neo4j_session.run(
-        cypher,
-        {
-            "sid": req.id,
-            "title": title,
-            "rtype": label.lower(),
-        },
-    )
-
-
-def sync_requirement_links(neo4j_session: Neo4jSession, req, label: str) -> None:
-    """Create TRACES_TO relationships from requirement to linked Design nodes."""
-    for triple in req.triples:
-        subj_qname = triple.subject.qualified_name
-        obj_qname = triple.object.qualified_name
-        # Link requirement to both subject and object of the triple
-        cypher = f"""
-        MATCH (r:{label} {{sqlite_id: $sid}})
-        MATCH (d:Design {{qualified_name: $qname}})
-        MERGE (r)-[:TRACES_TO]->(d)
-        """
-        neo4j_session.run(cypher, {"sid": req.id, "qname": subj_qname})
-        neo4j_session.run(cypher, {"sid": req.id, "qname": obj_qname})
-
-
-def sync_requirement_hierarchy(neo4j_session: Neo4jSession, hlr) -> None:
-    """Create DECOMPOSES relationships from LLRs to their parent HLR."""
-    for llr in hlr.low_level_requirements:
-        cypher = """
-        MATCH (l:LLR {sqlite_id: $llr_id})
-        MATCH (h:HLR {sqlite_id: $hlr_id})
-        MERGE (l)-[:DECOMPOSES]->(h)
-        """
-        neo4j_session.run(cypher, {"llr_id": llr.id, "hlr_id": hlr.id})
-
-
-# ---------------------------------------------------------------------------
 # Cross-layer link
 # ---------------------------------------------------------------------------
 
@@ -229,10 +186,8 @@ def link_implemented_nodes(neo4j_session: Neo4jSession) -> int:
 
 
 def sync_full_design(neo4j_session: Neo4jSession, sql_session: SqlSession) -> dict:
-    """Bulk sync all design nodes, triples, requirement refs, and links."""
+    """Bulk sync all design nodes and triples.  Requirements stay in SQLite."""
     from backend.db.models import (
-        HighLevelRequirement,
-        LowLevelRequirement,
         OntologyNode,
         OntologyTriple,
     )
@@ -240,8 +195,6 @@ def sync_full_design(neo4j_session: Neo4jSession, sql_session: SqlSession) -> di
     stats = {
         "nodes": 0,
         "triples": 0,
-        "hlrs": 0,
-        "llrs": 0,
         "implemented_by": 0,
     }
 
@@ -255,19 +208,6 @@ def sync_full_design(neo4j_session: Neo4jSession, sql_session: SqlSession) -> di
         sync_design_triple(neo4j_session, triple)
         stats["triples"] += 1
 
-    # HLR reference nodes + links
-    for hlr in sql_session.query(HighLevelRequirement).all():
-        sync_requirement_node(neo4j_session, hlr, "HLR")
-        sync_requirement_links(neo4j_session, hlr, "HLR")
-        sync_requirement_hierarchy(neo4j_session, hlr)
-        stats["hlrs"] += 1
-
-    # LLR reference nodes + links
-    for llr in sql_session.query(LowLevelRequirement).all():
-        sync_requirement_node(neo4j_session, llr, "LLR")
-        sync_requirement_links(neo4j_session, llr, "LLR")
-        stats["llrs"] += 1
-
     # Cross-layer links
     stats["implemented_by"] = link_implemented_nodes(neo4j_session)
 
@@ -275,12 +215,13 @@ def sync_full_design(neo4j_session: Neo4jSession, sql_session: SqlSession) -> di
 
 
 # ---------------------------------------------------------------------------
-# Task and Verification sync
+# Task sync (Task nodes are lightweight cross-references, not full
+# requirement data)
 # ---------------------------------------------------------------------------
 
 
 def sync_task(neo4j_session, task):
-    """MERGE a Task node in Neo4j with its design/verification links."""
+    """MERGE a Task node in Neo4j with its design links."""
     neo4j_session.run(
         """
     MERGE (t:Task {sqlite_id: $tid})
@@ -311,26 +252,6 @@ def sync_task(neo4j_session, task):
         MERGE (t)-[:IMPLEMENTING]->(d)
         """,
             {"tid": task.id, "qname": node_qname},
-        )
-
-    for tv in task.verifications:
-        vm = tv.verification_method
-        neo4j_session.run(
-            """
-        MATCH (t:Task {sqlite_id: $tid})
-        MERGE (v:Verification {sqlite_id: $vid})
-        SET v.method = $method, v.test_name = $test_name
-        MERGE (t)-[:COVERS]->(v)
-        MERGE (l:LLR {sqlite_id: $llr_id})
-        MERGE (l)-[:VERIFIED_BY]->(v)
-        """,
-            {
-                "tid": task.id,
-                "vid": vm.id,
-                "method": vm.method,
-                "test_name": vm.test_name,
-                "llr_id": vm.low_level_requirement_id,
-            },
         )
 
 
@@ -371,22 +292,4 @@ def try_sync_design_nodes_and_triples(nodes, triples):
         return True
     except Exception:
         log.warning("Neo4j sync failed — design sync deferred", exc_info=True)
-        return False
-
-
-def try_sync_requirement(req, label: str, hlr=None):
-    """Sync a requirement reference node (and hierarchy if hlr given).
-
-    Logs a warning and returns False if Neo4j is unavailable.
-    """
-
-    try:
-        with get_neo4j().session() as session:
-            sync_requirement_node(session, req, label)
-            sync_requirement_links(session, req, label)
-            if hlr is not None:
-                sync_requirement_hierarchy(session, hlr)
-        return True
-    except Exception:
-        log.warning("Neo4j sync failed — requirement sync deferred", exc_info=True)
         return False

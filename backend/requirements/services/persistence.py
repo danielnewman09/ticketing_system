@@ -402,17 +402,6 @@ def persist_decomposition(
 
     session.flush()
 
-    # -- Neo4j dual-write (best-effort) --
-    try:
-        from backend.db.neo4j.sync import try_sync_requirement
-
-        for llr_obj in hlr.low_level_requirements:
-            try_sync_requirement(llr_obj, "LLR", hlr=hlr)
-    except Exception:
-        log.warning(
-            "Neo4j decomposition sync failed — will catch up via migration script", exc_info=True
-        )
-
     return result
 
 
@@ -426,7 +415,18 @@ def persist_design(
     design: DesignSchema,
     qname_to_node: dict[str, OntologyNode] | None = None,
 ) -> DesignResult:
-    """Create ontology nodes, triples, and requirement-to-triple links."""
+    """Create ontology nodes, triples, and requirement-to-triple links.
+
+    Requirement links come exclusively from ``design.requirement_links``,
+    which is populated when the LLM tags design elements with
+    ``requirement_ids`` (e.g. ``"hlr:3"``).  If the LLM omits those
+    tags, ``links_applied`` will be zero — that is a tool-call failure
+    that should be fixed in the prompt or validation, not papered over.
+
+    After SQLite persistence, design nodes and triples are synced to
+    Neo4j.  Requirement links stay in SQLite; the graph view joins them
+    to Neo4j Design nodes at query time.
+    """
     if qname_to_node is None:
         qname_to_node = {}
 
@@ -491,7 +491,7 @@ def persist_design(
             saved_triples.append(None)
             result.triples_skipped += 1
 
-    # --- Requirement links ---
+    # --- Requirement links (explicit from LLM) ---
     for link in design.requirement_links:
         triple = None
         if 0 <= link.triple_index < len(saved_triples):
@@ -514,7 +514,9 @@ def persist_design(
 
     session.flush()
 
-    # -- Neo4j dual-write (best-effort) --
+    # --- Neo4j dual-write (best-effort) ---
+    # Sync design nodes and triples to Neo4j.  Requirement links stay in
+    # SQLite; the graph view reads them from SQLite at query time.
     try:
         from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
 
@@ -529,6 +531,7 @@ def persist_design(
         log.warning("Neo4j design sync failed — will catch up via migration script", exc_info=True)
 
     return result
+
 
 
 # ---------------------------------------------------------------------------

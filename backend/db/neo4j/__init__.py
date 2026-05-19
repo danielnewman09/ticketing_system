@@ -25,12 +25,8 @@ from backend.db.neo4j.sync import (
     sync_design_triple,
     sync_full_design,
     sync_implementation_status,
-    sync_requirement_hierarchy,
-    sync_requirement_links,
-    sync_requirement_node,
     sync_task,
     try_sync_design_nodes_and_triples,
-    try_sync_requirement,
 )
 
 __all__ = [
@@ -48,12 +44,8 @@ __all__ = [
     "sync_design_triple",
     "sync_full_design",
     "sync_implementation_status",
-    "sync_requirement_hierarchy",
-    "sync_requirement_links",
-    "sync_requirement_node",
     "sync_task",
     "try_sync_design_nodes_and_triples",
-    "try_sync_requirement",
     # Queries
     "fetch_codebase_compounds",
     "fetch_dependency_compounds",
