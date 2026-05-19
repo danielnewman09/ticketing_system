@@ -213,7 +213,7 @@ def render_ontology_graph_controls(
     on_search: callable,
     on_layout_change: callable,
     on_fit: callable,
-    on_toggle_req_tags: callable | None = None,
+    on_toggle_req_tags=None,
 ):
     """Render the ontology-graph toolbar: layer, kind, search, layout, and fit.
 
