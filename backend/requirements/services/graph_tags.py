@@ -38,6 +38,12 @@ def enrich_with_requirement_tags(
         return nodes
 
     node_qns = {n["data"].get("qualified_name") for n in nodes if n["data"].get("qualified_name")}
+    # Skip dependency stubs — they are cross-references, not design intent
+    dependency_qns = {
+        n["data"]["qualified_name"]
+        for n in nodes
+        if n["data"].get("qualified_name") and n["data"].get("source_type") == "dependency"
+    }
     if not node_qns:
         return nodes
 

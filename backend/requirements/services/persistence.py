@@ -472,12 +472,40 @@ def persist_design(
         else:
             result.nodes_existing += 1
 
+    # --- Dependency stub nodes ---
+    # Create stub OntologyNode entries for dependency targets that appear
+    # in triples but are not design nodes. These stubs satisfy the FK
+    # constraint and link to real Compound nodes in Neo4j via sync_design_triple.
+    dep_stub_qnames = {
+        nd.qualified_name for nd in design.nodes if nd.source_type == "dependency"
+    }
+
     # --- Triples ---
     saved_triples: list[OntologyTriple | None] = []
     for triple_data in design.triples:
         subj = qname_to_node.get(triple_data.subject_qualified_name)
         obj = qname_to_node.get(triple_data.object_qualified_name)
         pred = session.query(Predicate).filter_by(name=triple_data.predicate).first()
+
+        # If the object is missing but it's a dependency stub, create it now
+        if obj is None and triple_data.object_qualified_name in dep_stub_qnames:
+            stub_data = next(
+                nd for nd in design.nodes
+                if nd.qualified_name == triple_data.object_qualified_name
+            )
+            obj, created = get_or_create(
+                session,
+                OntologyNode,
+                defaults={
+                    "kind": stub_data.kind,
+                    "name": stub_data.name,
+                    "description": stub_data.description,
+                    "source_type": stub_data.source_type,
+                    "is_intercomponent": stub_data.is_intercomponent,
+                },
+                qualified_name=stub_data.qualified_name,
+            )
+            qname_to_node[stub_data.qualified_name] = obj
 
         if subj and obj and pred:
             triple, _ = get_or_create(
@@ -491,6 +519,16 @@ def persist_design(
             result.triples_created += 1
         else:
             saved_triples.append(None)
+            if subj is None:
+                log.warning(
+                    "Triple skipped: subject %r not found",
+                    triple_data.subject_qualified_name,
+                )
+            if obj is None:
+                log.warning(
+                    "Triple skipped: object %r not found",
+                    triple_data.object_qualified_name,
+                )
             result.triples_skipped += 1
 
     # --- Requirement links (explicit from LLM) ---

@@ -54,7 +54,16 @@ def clear_design_graph():
 
 
 def sync_design_node(neo4j_session: Neo4jSession, node) -> None:
-    """MERGE a Design node by qualified_name, setting all properties."""
+    """MERGE a Design node by qualified_name, setting all properties.
+
+    Skips dependency-reference stubs — their real nodes exist as
+    Compound nodes in Neo4j. Edges to them are created via
+    sync_design_triple which routes to Compounds directly.
+    """
+    if getattr(node, 'source_type', None) == 'dependency':
+        log.debug("Skipping dependency stub %s in Neo4j sync", node.qualified_name)
+        return
+
     kind_label = node.kind.capitalize() if node.kind else "Unknown"
     # Cypher doesn't allow parameterized labels, so we interpolate safely
     # (kind is from a known set of values)

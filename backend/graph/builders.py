@@ -26,6 +26,7 @@ def _build_design_node(d: dict) -> dict:
         "visibility": d.get("visibility", ""),
         "type_signature": d.get("type_signature", ""),
         "layer": "design",
+        "source_type": d.get("source_type", ""),
         "requirements": d.get("requirements", []),
         "is_hlr_highlight": d.get("is_hlr_highlight", ""),
     }
