@@ -43,6 +43,7 @@ def map_oo_to_ontology(
     component_id: int | None = None,
     prior_class_lookup: dict[str, str] | None = None,
     component_namespace: str = "",
+    dependency_lookup: dict[str, str] | None = None,
 ) -> DesignSchema:
     """Map an OO design to ontology nodes, triples, and requirement links.
 
@@ -53,6 +54,10 @@ def map_oo_to_ontology(
             designed HLRs, so cross-HLR references resolve correctly.
         component_namespace: Required namespace prefix. If set, modules that
             don't match are corrected to use this namespace.
+        dependency_lookup: Mapping of dependency class bare names (e.g.
+            "Fl_Button") to their qualified_name in the dependency graph
+            (e.g. "Fl_Button"). Used to resolve references to dependency
+            classes so that triples can link to the correct target node.
     """
     nodes: list[OntologyNodeSchema] = []
     triples: list[OntologyTripleSchema] = []
@@ -100,6 +105,59 @@ def map_oo_to_ontology(
                     )
                 )
 
+    # --- Dependency lookup (bare name -> qualified_name) ---
+    dep_lookup: dict[str, str] = dict(dependency_lookup or {})
+    _TYPE_EXTRACT_RE = re.compile(r"\b([A-Z]\w+)\b")
+
+    def _resolve_ref(name: str) -> str | None:
+        """Resolve a class/interface name to a qualified name.
+
+        Checks class_lookup (design-internal) first, then dep_lookup.
+        Returns None if the name is not found in either.
+        Creates a dependency stub node if the name resolves via dep_lookup.
+        """
+        if name in class_lookup:
+            return class_lookup[name]
+        if name in dep_lookup:
+            qname = dep_lookup[name]
+            # Create a dependency stub node if not already present
+            if qname not in node_index:
+                _add_node(
+                    "class",
+                    name,
+                    qname,
+                    is_intercomponent=True,
+                    description=f"External dependency: {qname}",
+                    source_type="dependency",
+                )
+            return qname
+        return None
+
+    def _add_depends_from_type(type_str: str, cls_qname: str, seen: set[str]):
+        """Scan a type string for dependency class names and add depends_on triples."""
+        if not type_str:
+            return
+        for match in _TYPE_EXTRACT_RE.finditer(type_str):
+            name = match.group(1)
+            if name in class_lookup:
+                continue  # design-internal reference, not a dependency
+            if name in dep_lookup:
+                qname = dep_lookup[name]
+                key = f"{cls_qname}->{qname}"
+                if key not in seen:
+                    seen.add(key)
+                    # Ensure the dependency stub node exists
+                    if qname not in node_index:
+                        _add_node(
+                            "class",
+                            name,
+                            qname,
+                            is_intercomponent=True,
+                            description=f"External dependency: {qname}",
+                            source_type="dependency",
+                        )
+                    _add_triple(cls_qname, "depends_on", qname)
+
     # --- Correct modules to match component namespace ---
     if component_namespace:
         corrected_modules = set()
@@ -136,16 +194,12 @@ def map_oo_to_ontology(
         oo.modules = sorted(corrected_modules)
 
         # Correct cross-references that use wrong namespace prefixes.
-        # A reference is "correct" only if its namespace part exactly equals
-        # the component namespace (e.g., "calc_engine::Foo" is correct for
-        # namespace "calc_engine", but "calc_engine::core::Foo" is not).
         def _strip_wrong_ns(val: str) -> str:
             if "::" not in val:
                 return val
             ns_part = val.rsplit("::", 1)[0]
             if ns_part == component_namespace:
                 return val  # Already correct
-            # Strip to just the class name so class_lookup can resolve it
             stripped = val.rsplit("::", 1)[-1]
             log.info("Correcting ref %r -> %r", val, stripped)
             return stripped
@@ -163,7 +217,6 @@ def map_oo_to_ontology(
         for i in range(len(parts)):
             prefix = "::".join(parts[: i + 1])
             _add_node("module", parts[i], prefix, source_type="namespace")
-            # Nested namespace composes child namespace
             if i > 0:
                 parent_prefix = "::".join(parts[:i])
                 _add_triple(parent_prefix, "composes", prefix)
@@ -181,7 +234,6 @@ def map_oo_to_ontology(
             source_type="compound",
             is_abstract=True,
         )
-        # Module composes interface
         if iface.module:
             _add_triple(iface.module, "composes", iface_qname)
         for method in iface.methods:
@@ -210,7 +262,6 @@ def map_oo_to_ontology(
             description=enum.description,
             source_type="compound",
         )
-        # Module composes enum
         if enum.module:
             _add_triple(enum.module, "composes", enum_qname)
         for value in enum.values:
@@ -274,22 +325,33 @@ def map_oo_to_ontology(
             triple_idx = _add_triple(cls_qname, "composes", method_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-        # Inheritance -> generalizes triples
+        # Inheritance -> generalizes triples (with dependency resolution)
         for parent_name in cls.inherits_from:
-            parent_qname = class_lookup.get(parent_name, parent_name)
+            parent_qname = _resolve_ref(parent_name) or class_lookup.get(parent_name, parent_name)
             triple_idx = _add_triple(cls_qname, "generalizes", parent_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-        # Interface realization -> realizes triples
+        # Interface realization -> realizes triples (with dependency resolution)
         for iface_name in cls.realizes_interfaces:
-            iface_qname = class_lookup.get(iface_name, iface_name)
+            iface_qname = _resolve_ref(iface_name) or class_lookup.get(iface_name, iface_name)
             triple_idx = _add_triple(cls_qname, "realizes", iface_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-    # --- Associations ---
+    # --- Dependency type inference from attribute types and return types ---
+    for cls in oo.classes:
+        cls_qname = _qualify(cls.module, cls.name)
+        seen_dep_types: set[str] = set()
+        for attr in cls.attributes:
+            _add_depends_from_type(attr.type_name, cls_qname, seen_dep_types)
+        for method in cls.methods:
+            _add_depends_from_type(method.return_type, cls_qname, seen_dep_types)
+            for param in method.parameters:
+                _add_depends_from_type(param, cls_qname, seen_dep_types)
+
+    # --- Associations (with dependency resolution) ---
     for assoc in oo.associations:
-        from_qname = class_lookup.get(assoc.from_class, assoc.from_class)
-        to_qname = class_lookup.get(assoc.to_class, assoc.to_class)
+        from_qname = _resolve_ref(assoc.from_class) or class_lookup.get(assoc.from_class, assoc.from_class)
+        to_qname = _resolve_ref(assoc.to_class) or class_lookup.get(assoc.to_class, assoc.to_class)
         triple_idx = _add_triple(from_qname, assoc.kind, to_qname)
         _link_reqs(assoc.requirement_ids, triple_idx)
 
