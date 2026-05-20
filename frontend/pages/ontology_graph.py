@@ -101,7 +101,7 @@ async def ontology_graph_page():
                         if (reqs && reqs.length > 0) {
                             const badges = reqs.map(r => '[' + r.type + ' ' + r.id + ']').join(' ');
                             // Get current label (may already have source/as-built badge)
-                            const baseName = node.data('name');
+                            const baseName = node.data('label');
                             node.data('label', baseName + '\\n' + badges);
                             node.addClass('has-requirements');
                         }

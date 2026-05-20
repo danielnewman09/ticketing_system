@@ -360,10 +360,10 @@ async def render_cytoscape_graph(
                 const source = node.data('source');
                 const layer = node.data('layer');
                 if (source && layer === 'dependency') {{
-                    node.data('label', node.data('name') + '\\n[' + source + ']');
+                    node.data('label', node.data('label') + '\\n[' + source + ']');
                 }}
                 if (node.data('is_as_built') === 'true') {{
-                    node.data('label', node.data('name') + '\\n[as-built]');
+                    node.data('label', node.data('label') + '\\n[as-built]');
                 }}
             }});
             window.{config.cy_var}.on('tap', 'node', function(evt) {{
