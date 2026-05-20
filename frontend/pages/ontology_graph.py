@@ -92,23 +92,6 @@ async def ontology_graph_page():
 
         await render_cytoscape_graph(data["nodes"] + data["edges"], config)
 
-        # Overlay HLR requirement badges on design nodes
-        if layer == "design" and state.show_requirement_tags:
-            await ui.run_javascript('''
-                if (window._cy) {
-                    window._cy.nodes().forEach(function(node) {
-                        const reqs = node.data('requirements');
-                        if (reqs && reqs.length > 0) {
-                            const badges = reqs.map(r => '[' + r.type + ' ' + r.id + ']').join(' ');
-                            // Get current label (may already have source/as-built badge)
-                            const baseName = node.data('label');
-                            node.data('label', baseName + '\\n' + badges);
-                            node.addClass('has-requirements');
-                        }
-                    });
-                }
-            ''')
-
     async def on_layer_change(e):
         state.graph_layer = e.value
         await load_graph()

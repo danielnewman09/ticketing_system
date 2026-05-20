@@ -338,7 +338,7 @@ async def hlr_detail_page(hlr_id: int):
             return
         node_id = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
         if node_id:
-            ui.navigate.to(f"/node/{{node_id}}")
+            ui.navigate.to(f"/node/{node_id}")
 
     ui.on(hlr_config.dbltap_event, handle_node_dblclick)
 

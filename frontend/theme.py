@@ -247,6 +247,13 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
             }}
         }},
         {{
+            selector: 'node[has_requirements]',
+            style: {{
+                'border-color': '#e67e22',
+                'border-width': 3,
+            }}
+        }},
+        {{
             selector: 'node.has-requirements',
             style: {{
                 'font-size': '{font + 1}px',

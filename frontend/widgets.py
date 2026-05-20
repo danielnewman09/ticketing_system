@@ -356,16 +356,6 @@ async def render_cytoscape_graph(
                 layout: {{ name: {layout_name}, {animation_opts} }},
             }});
             window.{config.cy_var}.ready(function() {{ window.{config.cy_var}.fit(); }});
-            window.{config.cy_var}.nodes().forEach(function(node) {{
-                const source = node.data('source');
-                const layer = node.data('layer');
-                if (source && layer === 'dependency') {{
-                    node.data('label', node.data('label') + '\\n[' + source + ']');
-                }}
-                if (node.data('is_as_built') === 'true') {{
-                    node.data('label', node.data('label') + '\\n[as-built]');
-                }}
-            }});
             window.{config.cy_var}.on('tap', 'node', function(evt) {{
                 const data = evt.target.data();
                 if (data.qualified_name) {{
@@ -381,6 +371,7 @@ async def render_cytoscape_graph(
         }} else {{
             console.error('{config.container_id} not found');
         }}
+        void 0;  // prevent eval returning the cy instance (circular refs)
     """, timeout=30)
 
 

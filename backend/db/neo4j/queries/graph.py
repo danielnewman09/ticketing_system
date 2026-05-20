@@ -77,9 +77,7 @@ def fetch_design_graph(
         for record in edge_result:
             src = record["src"]
             tgt = record["tgt"]
-            if src and tgt:
-                if tgt not in node_qns:
-                    node_qns.add(tgt)
+            if src and tgt and src in node_qns and tgt in node_qns:
                 edges.append(
                     {
                         "source": src,

@@ -200,7 +200,7 @@ async def node_detail_page(node_id: int):
             return
         nid = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
         if nid:
-            ui.navigate.to(f"/node/{{nid}}")
+            ui.navigate.to(f"/node/{nid}")
 
     ui.on(node_config.dbltap_event, handle_node_dblclick)
 
