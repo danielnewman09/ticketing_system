@@ -20,6 +20,7 @@ async def component_detail_page(component_id: int):
     apply_theme()
     page_layout("Component Detail")
 
+    # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
 
     data_ref = {"data": await asyncio.to_thread(fetch_component_detail, component_id)}

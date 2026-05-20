@@ -20,7 +20,6 @@ from frontend.theme import (
     CLS_BREADCRUMB_SEP,
     CLS_BREADCRUMB_CURRENT,
     KIND_COLORS_JS,
-    add_cytoscape_cdn,
     cytoscape_base_styles,
 )
 

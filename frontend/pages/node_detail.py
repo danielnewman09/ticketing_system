@@ -28,6 +28,7 @@ async def node_detail_page(node_id: int):
     apply_theme()
     page_layout("Node Detail")
 
+    # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
 
     @ui.refreshable

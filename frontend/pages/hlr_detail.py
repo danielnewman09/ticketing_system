@@ -32,6 +32,7 @@ async def hlr_detail_page(hlr_id: int):
     apply_theme()
     page_layout(f"HLR {hlr_id}")
 
+    # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
 
     # ---------------------------------------------------------------

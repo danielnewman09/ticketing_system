@@ -112,6 +112,8 @@ def fetch_design_graph(
                 }
             )
 
+        log.debug("After adding dependencies: %d raw edges, %d raw nodes", len(edges), len(nodes))
+
         # As-built compounds linked via IMPLEMENTED_BY
         as_built_result = session.run(
             f"""
@@ -137,6 +139,10 @@ def fetch_design_graph(
                     "type": record["rel_type"],
                 }
             )
+    
+
+        log.debug("After adding as-built: %d raw edges, %d raw nodes", len(edges), len(nodes))
+
 
     return {"nodes": nodes, "edges": edges}
 
