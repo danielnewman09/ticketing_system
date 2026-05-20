@@ -56,6 +56,7 @@ SOURCE_TYPES = [
     ("namespace", "Namespace"),
     ("compound", "Compound"),
     ("member", "Member"),
+    ("dependency", "Dependency Reference"),
 ]
 
 SOURCE_TYPE_VALUES = {k for k, _ in SOURCE_TYPES}
