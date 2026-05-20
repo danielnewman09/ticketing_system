@@ -121,11 +121,22 @@ def design_hlr(
     )
 
     # --- Step 3: Map to ontology (deterministic) ---
+    # Build dependency_lookup from discovery results
+    dependency_lookup = None
+    if dependency_classes:
+        dependency_lookup = {cls["name"]: cls["qualified_name"] for cls in dependency_classes}
+        log.info(
+            "  HLR %s: dependency_lookup has %d entries",
+            hlr_id,
+            len(dependency_lookup),
+        )
+
     ontology = map_oo_to_ontology(
         oo,
         component_id=component_id,
         prior_class_lookup=prior_class_lookup,
         component_namespace=component_namespace,
+        dependency_lookup=dependency_lookup,
     )
 
     log.info(
