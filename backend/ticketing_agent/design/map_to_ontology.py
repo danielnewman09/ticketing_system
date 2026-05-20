@@ -27,10 +27,14 @@ def _qualify(module: str, name: str) -> str:
 
 
 def _parse_req_id(tagged: str) -> tuple[str, int] | None:
-    """Parse a tagged requirement ID like 'hlr:3' into ('hlr', 3)."""
-    m = re.match(r"^(hlr|llr):(\d+)$", tagged.strip())
+    """Parse a tagged requirement ID into ('hlr'|'llr', int).
+
+    Accepts flexible formats produced by LLMs:
+      'hlr:3', 'HLR 1', 'llr:7', 'LLR 2', 'HLR:3', etc.
+    """
+    m = re.match(r"^(hlr|llr)[\s:]+(\d+)$", tagged.strip(), re.IGNORECASE)
     if m:
-        return m.group(1), int(m.group(2))
+        return m.group(1).lower(), int(m.group(2))
     return None
 
 

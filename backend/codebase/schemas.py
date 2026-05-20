@@ -49,7 +49,7 @@ class ClassSchema(BaseModel):
     methods: list[MethodSchema] = []
     inherits_from: list[str] = []
     realizes_interfaces: list[str] = []
-    requirement_ids: list[str] = []  # tagged: "hlr:3", "llr:7"
+    requirement_ids: list[str] = []  # tagged: "hlr:3", "llr:7" (also accepts "HLR 3", "LLR 7")
 
 
 class EnumSchema(BaseModel):
@@ -73,7 +73,7 @@ class AssociationSchema(BaseModel):
     to_class: str
     kind: Literal["associates", "aggregates", "depends_on", "invokes"]
     description: str = ""
-    requirement_ids: list[str] = []  # tagged: "hlr:3", "llr:7"
+    requirement_ids: list[str] = []  # tagged: "hlr:3", "llr:7" (also accepts "HLR 3", "LLR 7")
 
 
 class OODesignSchema(BaseModel):

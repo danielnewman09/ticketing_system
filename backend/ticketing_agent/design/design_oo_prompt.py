@@ -37,6 +37,11 @@ can only come from child components, which are defined separately.
 Each class needs: name, module, description, attributes, methods,
 inherits_from, realizes_interfaces, and requirement_ids.
 
+### Requirement IDs format
+Tag requirement_ids using the format `"hlr:<ID>"` or `"llr:<ID>"`
+(e.g., `"hlr:1"`, `"llr:3"`). Do NOT use spaces or uppercase
+(e.g., avoid `"HLR 1"`, `"LLR 3"`).
+
 ### Attributes
 Each attribute needs: name, type_name, visibility, description.
 
@@ -95,7 +100,7 @@ interfaces, or event contracts. Internal implementation classes should have
 
 - Use modules to organize related classes
 - Every HLR should be addressed by at least one class
-- Tag requirement_ids on classes and associations where they clearly correspond
+- Tag requirement_ids on classes and associations where they clearly correspond, using the format "hlr:<ID>" or "llr:<ID>" (e.g., "hlr:1", "llr:3")
 - Use inheritance where there is a clear is-a relationship
 - Keep the design minimal — only include entities needed by the requirements
 - Prefer attributes over classes for simple properties. Ask: "Does this entity
