@@ -13,8 +13,9 @@ Architecture
   renders it into the Cytoscape container. Called on initial load and on
   filter/search changes.
 
-Inter-page events are handled through GraphConfig callbacks
-(on_node_tap, on_node_dblclick) wired up by render_cytoscape_graph().
+Inter-page events (``_cy_tap``, ``_cy_dbltap``) are emitted by
+Cytoscape via JavaScript and received through ``ui.on()`` listeners
+registered once at the page level.
 """
 
 import asyncio
@@ -54,6 +55,9 @@ async def ontology_graph_page():
 
     add_cytoscape_cdn()
 
+    # -- Graph config (page-level, used for both rendering and event names) --
+    config = GraphConfig(size="large")
+
     # -- Mutable state (passed by reference to @ui.refreshable widgets) --
     state = GraphState()
 
@@ -86,10 +90,6 @@ async def ontology_graph_page():
             include_dependencies=state.show_dependencies,
         )
 
-        config = GraphConfig(
-            on_node_tap=handle_node_tap,
-            on_node_dblclick=handle_node_dblclick,
-        )
         await render_cytoscape_graph(data["nodes"] + data["edges"], config)
 
         # Overlay HLR requirement badges on design nodes
@@ -200,6 +200,10 @@ async def ontology_graph_page():
 
         # Detail sidebar (refreshable — updates on node selection)
         render_graph_detail_panel(state)
+
+    # -- Register event handlers once (not on every load_graph call) --
+    ui.on(config.tap_event, handle_node_tap)
+    ui.on(config.dbltap_event, handle_node_dblclick)
 
     # -- Initial data load --
     await load_graph()

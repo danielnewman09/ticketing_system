@@ -31,6 +31,14 @@ async def node_detail_page(node_id: int):
     # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
 
+    # Cytoscape graph config (page-level for event name access)
+    node_config = GraphConfig(
+        container_id="node-cy-container",
+        cy_var="_nodeCy",
+        size="small",
+        animate=False,
+    )
+
     @ui.refreshable
     async def content():
         data = await asyncio.to_thread(fetch_node_detail_full, node_id)
@@ -172,17 +180,17 @@ async def node_detail_page(node_id: int):
                 node["qualified_name"],
             )
             if graph["nodes"]:
-                config = GraphConfig(
-                    container_id="node-cy-container",
-                    cy_var="_nodeCy",
-                    size="small",
-                    animate=False,
+                # extra_styles are per-render (center node highlighting)
+                render_config = GraphConfig(
+                    container_id=node_config.container_id,
+                    cy_var=node_config.cy_var,
+                    size=node_config.size,
+                    animate=node_config.animate,
                     extra_styles=center_style,
-                    on_node_dblclick=handle_node_dblclick,
                 )
                 await render_cytoscape_graph(
                     graph["nodes"] + graph["edges"],
-                    config,
+                    render_config,
                 )
 
     async def handle_node_dblclick(e):
@@ -192,7 +200,9 @@ async def node_detail_page(node_id: int):
             return
         nid = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
         if nid:
-            ui.navigate.to(f"/node/{nid}")
+            ui.navigate.to(f"/node/{{nid}}")
+
+    ui.on(node_config.dbltap_event, handle_node_dblclick)
 
     await content()
 

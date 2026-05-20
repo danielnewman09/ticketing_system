@@ -7,7 +7,6 @@ the data layer, or with simple state objects like ``GraphState``.
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 
 from nicegui import ui
 
@@ -219,8 +218,16 @@ class GraphConfig:
     layout: str = "fcose"
     animate: bool = True
     extra_styles: str | None = None
-    on_node_tap: Optional[Callable] = None     # async callback(node_data: dict)
-    on_node_dblclick: Optional[Callable] = None # async callback(qualified_name: str)
+
+    @property
+    def tap_event(self) -> str:
+        """JS event name for node tap (register with ``ui.on()``)."""
+        return f"{self.cy_var}_tap"
+
+    @property
+    def dbltap_event(self) -> str:
+        """JS event name for node double-tap (register with ``ui.on()``)."""
+        return f"{self.cy_var}_dbltap"
 
 
 def render_ontology_graph_controls(
@@ -328,10 +335,11 @@ async def render_cytoscape_graph(
     elements_json = json.dumps(elements)
     layout_name = f"window._cyLayout || '{config.layout}'" if config.animate else f"'{config.layout}'"
     animation_opts = "animate: true, animationDuration: 500" if config.animate else "animate: false"
-    styles_expr = f"[...{base_styles}"
+    # Build style expression — only wrap in spread when extending with extra_styles
     if config.extra_styles:
-        styles_expr += f", {config.extra_styles}"
-    styles_expr += "]"
+        styles_expr = f"[...{base_styles}, {config.extra_styles}]"
+    else:
+        styles_expr = base_styles
     # Ensure unique event names per instance
     tap_event = f"{config.cy_var}_tap"
     dbltap_event = f"{config.cy_var}_dbltap"
@@ -340,43 +348,40 @@ async def render_cytoscape_graph(
         if (window.{config.cy_var}) window.{config.cy_var}.destroy();
         const KIND_COLORS = {KIND_COLORS_JS};
         const container = document.getElementById('{config.container_id}');
-        if (!container) {{ console.error('{config.container_id} not found'); return; }}
-        window.{config.cy_var} = cytoscape({{
-            container: container,
-            elements: {elements_json},
-            style: {styles_expr},
-            layout: {{ name: {layout_name}, {animation_opts} }},
-        }});
-        window.{config.cy_var}.ready(function() {{ window.{config.cy_var}.fit(); }});
-        window.{config.cy_var}.nodes().forEach(function(node) {{
-            const source = node.data('source');
-            const layer = node.data('layer');
-            if (source && layer === 'dependency') {{
-                node.data('label', node.data('name') + '\\n[' + source + ']');
-            }}
-            if (node.data('is_as_built') === 'true') {{
-                node.data('label', node.data('name') + '\\n[as-built]');
-            }}
-        }});
-        window.{config.cy_var}.on('tap', 'node', function(evt) {{
-            const data = evt.target.data();
-            if (data.qualified_name) {{
-                emitEvent('{tap_event}', data);
-            }}
-        }});
-        window.{config.cy_var}.on('dbltap', 'node', function(evt) {{
-            const data = evt.target.data();
-            if (data.qualified_name) {{
-                emitEvent('{dbltap_event}', data);
-            }}
-        }});
-    """)
-
-    # Wire up callbacks
-    if config.on_node_tap:
-        ui.on(tap_event, config.on_node_tap)
-    if config.on_node_dblclick:
-        ui.on(dbltap_event, config.on_node_dblclick)
+        if (container) {{
+            window.{config.cy_var} = cytoscape({{
+                container: container,
+                elements: {elements_json},
+                style: {styles_expr},
+                layout: {{ name: {layout_name}, {animation_opts} }},
+            }});
+            window.{config.cy_var}.ready(function() {{ window.{config.cy_var}.fit(); }});
+            window.{config.cy_var}.nodes().forEach(function(node) {{
+                const source = node.data('source');
+                const layer = node.data('layer');
+                if (source && layer === 'dependency') {{
+                    node.data('label', node.data('name') + '\\n[' + source + ']');
+                }}
+                if (node.data('is_as_built') === 'true') {{
+                    node.data('label', node.data('name') + '\\n[as-built]');
+                }}
+            }});
+            window.{config.cy_var}.on('tap', 'node', function(evt) {{
+                const data = evt.target.data();
+                if (data.qualified_name) {{
+                    emitEvent('{tap_event}', data);
+                }}
+            }});
+            window.{config.cy_var}.on('dbltap', 'node', function(evt) {{
+                const data = evt.target.data();
+                if (data.qualified_name) {{
+                    emitEvent('{dbltap_event}', data);
+                }}
+            }});
+        }} else {{
+            console.error('{config.container_id} not found');
+        }}
+    """, timeout=30)
 
 
 def directory_picker(

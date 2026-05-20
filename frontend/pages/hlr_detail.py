@@ -35,6 +35,14 @@ async def hlr_detail_page(hlr_id: int):
     # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
 
+    # Cytoscape graph config
+    hlr_config = GraphConfig(
+        container_id="hlr-cy-container",
+        cy_var="_hlrCy",
+        size="small",
+        animate=False,
+    )
+
     # ---------------------------------------------------------------
     # Refreshable content
     # ---------------------------------------------------------------
@@ -114,14 +122,7 @@ async def hlr_detail_page(hlr_id: int):
                 # Load graph data and render
                 graph = await asyncio.to_thread(fetch_hlr_graph_data, hlr_id, hlr["component_id"], requirement_tags="hlr")
                 if graph["nodes"]:
-                    config = GraphConfig(
-                        container_id="hlr-cy-container",
-                        cy_var="_hlrCy",
-                        size="small",
-                        animate=False,
-                        on_node_dblclick=handle_node_dblclick,
-                    )
-                    await render_cytoscape_graph(graph["nodes"] + graph["edges"], config)
+                    await render_cytoscape_graph(graph["nodes"] + graph["edges"], hlr_config)
 
     # ---------------------------------------------------------------
     # Edit HLR dialog
@@ -337,6 +338,8 @@ async def hlr_detail_page(hlr_id: int):
             return
         node_id = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
         if node_id:
-            ui.navigate.to(f"/node/{node_id}")
+            ui.navigate.to(f"/node/{{node_id}}")
+
+    ui.on(hlr_config.dbltap_event, handle_node_dblclick)
 
     await content()

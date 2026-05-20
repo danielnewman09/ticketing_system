@@ -193,6 +193,14 @@ async def component_detail_page(component_id: int):
                 )
                 cy._props["id"] = "comp-cy-container"
 
+    # Cytoscape graph config (page-level for event name access)
+    comp_config = GraphConfig(
+        container_id="comp-cy-container",
+        cy_var="_compCy",
+        size="small",
+        animate=False,
+    )
+
     async def handle_node_dblclick(e):
         args = e.args
         qn = args.get("qualified_name", "")
@@ -202,20 +210,15 @@ async def component_detail_page(component_id: int):
         if node_id:
             ui.navigate.to(f"/node/{node_id}")
 
+    ui.on(comp_config.dbltap_event, handle_node_dblclick)
+
     # Load graph filtered to this component
     graph = await asyncio.to_thread(
         fetch_ontology_graph_data,
         component_id=data["id"],
     )
     if graph["nodes"]:
-        config = GraphConfig(
-            container_id="comp-cy-container",
-            cy_var="_compCy",
-            size="small",
-            animate=False,
-            on_node_dblclick=handle_node_dblclick,
-        )
         await render_cytoscape_graph(
             graph["nodes"] + graph["edges"],
-            config,
+            comp_config,
         )
