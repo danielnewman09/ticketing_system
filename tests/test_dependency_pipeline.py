@@ -4,10 +4,14 @@ from backend.codebase.schemas import (
     AssociationSchema,
     AttributeSchema,
     ClassSchema,
+    DesignSchema,
     MethodSchema,
     OODesignSchema,
+    OntologyNodeSchema,
+    OntologyTripleSchema,
 )
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
+from backend.ticketing_agent.design.design_hlr import design_hlr
 from backend.requirements.services.persistence import persist_design
 
 
@@ -126,3 +130,110 @@ class TestDependencyPipeline:
             if t.object.qualified_name == "Fl_Button" and t.predicate.name == "aggregates"
         ]
         assert len(agg_triples) == 1
+
+    def test_dependency_lookup_from_discovery_dicts(self):
+        """Verify that dependency_lookup is correctly built from discovery
+        results that only have 'qualified_name' (no 'name' key)."""
+        # These mimic the dicts returned by discover_classes' LLM tool
+        dependency_classes = [
+            {
+                "qualified_name": "Fl_Window",
+                "kind": "class",
+                "category": "dependency",
+                "source": "fltk",
+                "description": "Base window class",
+                "relevance": "Main window base",
+            },
+            {
+                "qualified_name": "std::vector",
+                "kind": "class",
+                "category": "dependency",
+                "source": "std",
+                "description": "Dynamic array",
+                "relevance": "Container for widgets",
+            },
+        ]
+
+        # Reconstruct the same logic as design_hlr.py
+        dependency_lookup = {}
+        for cls in dependency_classes:
+            qname = cls["qualified_name"]
+            bare = qname.rsplit("::", 1)[-1]
+            dependency_lookup[bare] = qname
+
+        assert dependency_lookup == {
+            "Fl_Window": "Fl_Window",
+            "vector": "std::vector",
+        }
+
+    def test_persist_design_across_sessions(self):
+        """Verify persist_design works when qname_to_node contains
+        ORM objects from a previous (now-closed) session.
+
+        This is the scenario in scripts/03_design_requirements.py where
+        each HLR gets its own session but qname_to_node accumulates.
+        """
+        from backend.db import init_db, get_session
+        from backend.db.models import OntologyNode, OntologyTriple, Predicate
+
+        init_db()
+
+        # Session 1: persist a module + class
+        qname_to_node = {}
+        design1 = DesignSchema(
+            nodes=[
+                OntologyNodeSchema(
+                    kind="module", name="ui", qualified_name="ui",
+                    source_type="namespace", component_id=1,
+                ),
+                OntologyNodeSchema(
+                    kind="class", name="Calculator", qualified_name="ui::Calculator",
+                    source_type="compound", component_id=1,
+                ),
+            ],
+            triples=[
+                OntologyTripleSchema(
+                    subject_qualified_name="ui",
+                    predicate="composes",
+                    object_qualified_name="ui::Calculator",
+                ),
+            ],
+        )
+
+        with get_session() as session1:
+            session1.query(OntologyTriple).delete()
+            session1.query(OntologyNode).delete()
+            Predicate.ensure_defaults(session1)
+            session1.flush()
+            result1 = persist_design(session1, design1, qname_to_node=qname_to_node)
+        # session1 is now CLOSED — ORM objects in qname_to_node are DETACHED
+
+        assert result1.nodes_created == 2
+        assert result1.triples_created == 1
+
+        # Session 2: persist a new node referencing a node from session 1
+        design2 = DesignSchema(
+            nodes=[
+                OntologyNodeSchema(
+                    kind="method", name="calculate",
+                    qualified_name="ui::Calculator::calculate",
+                    source_type="member", visibility="public", component_id=1,
+                ),
+            ],
+            triples=[
+                OntologyTripleSchema(
+                    subject_qualified_name="ui::Calculator",
+                    predicate="composes",
+                    object_qualified_name="ui::Calculator::calculate",
+                ),
+            ],
+        )
+
+        # Without the fix, accessing subj.id on the detached
+        # ui::Calculator node raises DetachedInstanceError
+        with get_session() as session2:
+            result2 = persist_design(session2, design2, qname_to_node=qname_to_node)
+
+        assert result2.nodes_created == 1
+        assert result2.triples_created == 1
+        assert result2.triples_skipped == 0

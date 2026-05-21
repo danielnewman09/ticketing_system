@@ -121,10 +121,18 @@ def design_hlr(
     )
 
     # --- Step 3: Map to ontology (deterministic) ---
-    # Build dependency_lookup from discovery results
+    # Build dependency_lookup from discovery results.
+    # The mapper needs bare_name -> qualified_name so that references
+    # like inherits_from=["Fl_Window"] can be resolved.  Discovery
+    # returns qualified_name but no separate "name" field, so we
+    # derive the bare name from the qualified name.
     dependency_lookup = None
     if dependency_classes:
-        dependency_lookup = {cls["name"]: cls["qualified_name"] for cls in dependency_classes}
+        dependency_lookup = {}
+        for cls in dependency_classes:
+            qname = cls["qualified_name"]
+            bare = qname.rsplit("::", 1)[-1]
+            dependency_lookup[bare] = qname
         log.info(
             "  HLR %s: dependency_lookup has %d entries",
             hlr_id,
