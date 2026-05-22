@@ -1,13 +1,15 @@
 """HLR CRUD, decomposition, and requirements dashboard data."""
 
+import logging
+
 from backend.db import get_session
 from backend.db.models import (
     HighLevelRequirement,
     LowLevelRequirement,
-    OntologyNode,
-    OntologyTriple,
     VerificationMethod,
 )
+
+log = logging.getLogger(__name__)
 
 
 def fetch_requirements_data():
@@ -51,19 +53,38 @@ def fetch_requirements_data():
                 }
             )
 
+        # Design node and triple counts from Neo4j
+        total_nodes = 0
+        total_triples = 0
+        try:
+            from services.dependencies import get_neo4j
+            with get_neo4j().session() as ns:
+                rec = ns.run("MATCH (d:Design) RETURN count(d) AS cnt").single()
+                total_nodes = rec["cnt"] if rec else 0
+                rec2 = ns.run(
+                    "MATCH (:Design)-[r]->(:Design) RETURN count(r) AS cnt"
+                ).single()
+                total_triples = rec2["cnt"] if rec2 else 0
+        except Exception:
+            log.warning("Failed to fetch Neo4j design counts", exc_info=True)
+
         return {
             "hlrs": hlrs,
             "unlinked_llrs": unlinked,
             "total_hlrs": session.query(HighLevelRequirement).count(),
             "total_llrs": session.query(LowLevelRequirement).count(),
             "total_verifications": session.query(VerificationMethod).count(),
-            "total_nodes": session.query(OntologyNode).count(),
-            "total_triples": session.query(OntologyTriple).count(),
+            "total_nodes": total_nodes,
+            "total_triples": total_triples,
         }
 
 
 def fetch_hlr_detail(hlr_id):
-    """Fetch all data needed for HLR detail page."""
+    """Fetch all data needed for HLR detail page.
+
+    Triple data now comes from Neo4j TRACES_TO edges instead of
+    SQLAlchemy M2M tables.
+    """
     with get_session() as session:
         hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
         if not hlr:
@@ -80,17 +101,32 @@ def fetch_hlr_detail(hlr_id):
                 }
             )
 
-        all_triples = set(hlr.triples)
-        for llr_obj in hlr.low_level_requirements:
-            all_triples.update(llr_obj.triples)
-        triples = [
-            {
-                "subject": t.subject.name,
-                "predicate": t.predicate.name,
-                "object": t.object.name,
-            }
-            for t in sorted(all_triples, key=lambda t: t.id)
-        ]
+        # Fetch triples from Neo4j TRACES_TO edges
+        triples = []
+        try:
+            from services.dependencies import get_neo4j
+            with get_neo4j().session() as ns:
+                result = ns.run(
+                    """
+                    MATCH (hlr:HLR {sqlite_id: $hid})-[:TRACES_TO]->(d:Design)
+                    OPTIONAL MATCH (d)-[r]->(d2:Design)
+                    WHERE type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
+                    RETURN d.qualified_name AS subj, type(r) AS pred, d2.qualified_name AS obj
+                    """,
+                    {"hid": hlr_id},
+                )
+                seen = set()
+                for rec in result:
+                    key = (rec["subj"], rec["pred"], rec["obj"])
+                    if key not in seen and all(key):
+                        seen.add(key)
+                        triples.append({
+                            "subject": rec["subj"],
+                            "predicate": rec["pred"],
+                            "object": rec["obj"],
+                        })
+        except Exception:
+            log.warning("Failed to fetch HLR triples from Neo4j", exc_info=True)
 
         return {
             "id": hlr.id,
@@ -103,7 +139,10 @@ def fetch_hlr_detail(hlr_id):
 
 
 def create_hlr(description: str, component_id: int | None = None) -> int:
-    """Create a new HLR. Returns the new HLR id."""
+    """Create a new HLR. Also creates a :HLR stub in Neo4j.
+
+    Returns the new HLR id.
+    """
     with get_session() as session:
         hlr = HighLevelRequirement(
             description=description,
@@ -111,22 +150,52 @@ def create_hlr(description: str, component_id: int | None = None) -> int:
         )
         session.add(hlr)
         session.flush()
-        return hlr.id
+        hlr_id = hlr.id
+
+    # Create HLR stub in Neo4j
+    try:
+        from services.dependencies import get_neo4j
+        from backend.db.neo4j.repositories.design import DesignRepository
+        with get_neo4j().session() as ns:
+            repo = DesignRepository(ns)
+            repo.merge_hlr_stub(sqlite_id=hlr_id, description=description)
+    except Exception:
+        log.warning("Failed to create HLR stub in Neo4j for HLR %d", hlr_id, exc_info=True)
+
+    return hlr_id
 
 
 def update_hlr(hlr_id: int, description: str, component_id: int | None = None) -> bool:
-    """Update an HLR's description and component. Returns True on success."""
+    """Update an HLR's description and component. Also updates the Neo4j stub.
+
+    Returns True on success.
+    """
     with get_session() as session:
         hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
         if not hlr:
             return False
         hlr.description = description
         hlr.component_id = component_id or None
-        return True
+
+    # Update HLR stub in Neo4j
+    try:
+        from services.dependencies import get_neo4j
+        with get_neo4j().session() as ns:
+            ns.run(
+                "MATCH (h:HLR {sqlite_id: $hid}) SET h.description = $desc",
+                {"hid": hlr_id, "desc": description},
+            )
+    except Exception:
+        log.warning("Failed to update HLR stub in Neo4j", exc_info=True)
+
+    return True
 
 
 def delete_hlr(hlr_id: int) -> bool:
-    """Delete an HLR and its child LLRs. Returns True on success."""
+    """Delete an HLR and its child LLRs. Also removes Neo4j stubs.
+
+    Returns True on success.
+    """
     with get_session() as session:
         hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
         if not hlr:
@@ -135,11 +204,25 @@ def delete_hlr(hlr_id: int) -> bool:
         for llr in hlr.low_level_requirements:
             session.delete(llr)
         session.delete(hlr)
-        return True
+
+    # Remove HLR stub and its TRACES_TO edges from Neo4j
+    try:
+        from services.dependencies import get_neo4j
+        with get_neo4j().session() as ns:
+            ns.run(
+                "MATCH (h:HLR {sqlite_id: $hid}) DETACH DELETE h",
+                {"hid": hlr_id},
+            )
+    except Exception:
+        log.warning("Failed to remove HLR stub from Neo4j", exc_info=True)
+
+    return True
 
 
 def decompose_hlr(hlr_id: int) -> dict:
     """Run the decomposition agent on an HLR and persist results.
+
+    Also creates :LLR stubs and DECOMPOSES_INTO edges in Neo4j.
 
     Returns dict with llrs_created and verifications_created.
     """

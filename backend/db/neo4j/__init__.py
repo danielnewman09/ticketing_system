@@ -1,4 +1,4 @@
-"""Neo4j data access — connection, sync, and raw queries."""
+"""Neo4j data access — connection, repositories, and raw queries."""
 
 from backend.db.neo4j.connection import (
     NEO4J_PASSWORD,
@@ -18,16 +18,8 @@ from backend.db.neo4j.queries import (
     fetch_neighbourhood_graph,
     fetch_node_detail,
 )
-from backend.db.neo4j.sync import (
-    clear_design_graph,
-    link_implemented_nodes,
-    sync_design_node,
-    sync_design_triple,
-    sync_full_design,
-    sync_implementation_status,
-    sync_task,
-    try_sync_design_nodes_and_triples,
-)
+from backend.db.neo4j.repositories import DesignRepository
+from backend.db.neo4j.repositories.models import DesignNode, DesignTripleUpdate
 
 __all__ = [
     "Neo4jConnection",
@@ -37,15 +29,10 @@ __all__ = [
     "get_standalone_driver",
     "get_standalone_session",
     "close_standalone_driver",
-    # Sync
-    "clear_design_graph",
-    "link_implemented_nodes",
-    "sync_design_node",
-    "sync_design_triple",
-    "sync_full_design",
-    "sync_implementation_status",
-    "sync_task",
-    "try_sync_design_nodes_and_triples",
+    # Repositories
+    "DesignRepository",
+    "DesignNode",
+    "DesignTripleUpdate",
     # Queries
     "fetch_codebase_compounds",
     "fetch_dependency_compounds",

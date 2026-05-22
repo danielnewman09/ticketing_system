@@ -1,4 +1,9 @@
-"""Single-node detail and neighbourhood queries returning raw dicts."""
+"""Single-node detail and neighbourhood queries returning raw dicts.
+
+Requirements are sourced from Neo4j :HLR/:LLR stubs via TRACES_TO
+edges (Phase 1). The caller enriches node detail with requirement
+data from these graph relationships.
+"""
 
 from __future__ import annotations
 
@@ -183,9 +188,9 @@ def fetch_neighbourhood_graph(qualified_name: str) -> dict:
 def fetch_node_detail(qualified_name: str) -> dict | None:
     """Fetch full node properties + relationships + members as raw dicts.
 
-    Requirements are sourced from SQLite (via the M2M tables), not from
-    Neo4j.  The caller enriches node detail with requirement data from
-    the high_level_requirements_nodes/low_level_requirements_nodes tables.
+    Requirement traces come from TRACES_TO edges on :HLR/:LLR stubs.
+    The caller enriches node detail with requirement data from those
+    graph relationships.
     """
     log.info("fetch_node_detail(qn=%s)", qualified_name)
     with get_neo4j().session() as session:

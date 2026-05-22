@@ -6,8 +6,8 @@ Each function returns {"nodes": [...], "edges": [...]} where:
 
 No Cytoscape formatting — that lives in backend/graph/.
 
-Requirement traces are handled by the SQLite enrichment layer
-(backend/requirements/services/graph_tags.py), not by Neo4j queries.
+Requirement traces are sourced from Neo4j :HLR/:LLR stubs via TRACES_TO
+edges. The enrichment layer (graph_tags.py) adds visual tags.
 This module produces bare topology only; the caller enriches with tags.
 """
 
@@ -137,128 +137,137 @@ def fetch_design_graph(
                     "type": record["rel_type"],
                 }
             )
-    
 
         log.debug("After adding as-built: %d raw edges, %d raw nodes", len(edges), len(nodes))
 
+    return {"nodes": nodes, "edges": edges}
 
+
+def _fetch_neighbourhood_from_seeds(
+    session,
+    seed_qns: list[str],
+    component_id: int | None = None,
+) -> dict:
+    """Fetch seed nodes + 1-hop design neighbourhood from Neo4j.
+
+    Shared by fetch_hlr_subgraph and any future seed-based queries.
+    """
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    seen_qns: set[str] = set()
+
+    def _add(d) -> None:
+        qn = d.get("qualified_name", d.element_id if hasattr(d, "element_id") else "")
+        if qn not in seen_qns:
+            seen_qns.add(qn)
+            nodes.append(dict(d))
+
+    # Seed nodes
+    result = session.run(
+        "UNWIND $qns AS qn MATCH (d:Design {qualified_name: qn}) RETURN d",
+        {"qns": seed_qns},
+    )
+    for record in result:
+        _add(record["d"])
+
+    # Outgoing edges to other Design nodes (excluding IMPLEMENTED_BY)
+    edge_out = session.run(
+        """
+        UNWIND $qns AS qn
+        MATCH (s:Design {qualified_name: qn})-[r]->(t:Design)
+        WHERE type(r) <> 'IMPLEMENTED_BY'
+        RETURN s.qualified_name AS src, t.qualified_name AS tgt, type(r) AS rel_type
+        """,
+        {"qns": seed_qns},
+    )
+    for record in edge_out:
+        src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
+        edges.append({"source": src, "target": tgt, "type": rel})
+        if tgt and tgt not in seen_qns:
+            nb = session.run(
+                "MATCH (d:Design {qualified_name: $qn}) RETURN d",
+                {"qn": tgt},
+            ).single()
+            if nb:
+                _add(nb["d"])
+
+    # Incoming edges from other Design nodes (excluding IMPLEMENTED_BY)
+    edge_in = session.run(
+        """
+        UNWIND $qns AS qn
+        MATCH (s:Design)-[r]->(t:Design {qualified_name: qn})
+        WHERE type(r) <> 'IMPLEMENTED_BY'
+          AND s.qualified_name <> t.qualified_name
+        RETURN s.qualified_name AS src, t.qualified_name AS tgt, type(r) AS rel_type
+        """,
+        {"qns": seed_qns},
+    )
+    incoming_seen: set[tuple] = set()
+    for record in edge_in:
+        src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
+        edge_key = (src, tgt, rel)
+        if edge_key not in incoming_seen:
+            incoming_seen.add(edge_key)
+            edges.append({"source": src, "target": tgt, "type": rel})
+        if src and src not in seen_qns:
+            nb = session.run(
+                "MATCH (d:Design {qualified_name: $qn}) RETURN d",
+                {"qn": src},
+            ).single()
+            if nb:
+                _add(nb["d"])
+
+    # Optional: expand to full component
+    if component_id is not None:
+        comp_result = session.run(
+            """
+            MATCH (d:Design {component_id: $cid})
+            OPTIONAL MATCH (d)-[r]->(d2:Design {component_id: $cid})
+            WHERE type(r) <> 'IMPLEMENTED_BY'
+            RETURN d, collect({rel: type(r), target_qn: d2.qualified_name}) AS rels
+            """,
+            {"cid": component_id},
+        )
+        for record in comp_result:
+            _add(record["d"])
+            for item in record["rels"]:
+                if item["rel"] is not None and item["target_qn"]:
+                    edges.append(
+                        {
+                            "source": record["d"].get("qualified_name", ""),
+                            "target": item["target_qn"],
+                            "type": item["rel"],
+                        }
+                    )
+
+    log.debug("_fetch_neighbourhood_from_seeds: %d nodes, %d edges", len(nodes), len(edges))
     return {"nodes": nodes, "edges": edges}
 
 
 def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
     """Fetch design subgraph around an HLR: seed nodes + 1-hop neighbourhood.
 
-    Uses SQLite to find seed qualified_names via the
-    high_level_requirements_nodes M2M table, then fetches those nodes
-    and their 1-hop design neighbours from Neo4j.
+    Uses Neo4j :HLR stub nodes with TRACES_TO edges to find seed design
+    nodes. In Phase 1, hlr_id is the sqlite_id property on :HLR nodes.
 
     Returns bare topology — no synthetic requirement nodes.
     The caller enriches with requirement tags via tag_direct_nodes_only().
     """
     log.info("fetch_hlr_subgraph(hlr_id=%d, component_id=%s)", hlr_id, component_id)
 
-    from backend.db import get_session
-    from backend.db.models import HighLevelRequirement
-
-    with get_session() as session:
-        hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
-        if not hlr:
-            log.warning("HLR %d not found in SQLite", hlr_id)
-            return {"nodes": [], "edges": []}
-        seed_qns = {n.qualified_name for n in hlr.nodes}
-
-    if not seed_qns:
-        log.warning("HLR %d has no linked nodes in SQLite", hlr_id)
-        return {"nodes": [], "edges": []}
-
     with get_neo4j().session() as session:
-        nodes: list[dict] = []
-        edges: list[dict] = []
-        seen_qns: set[str] = set()
-
-        def _add(d) -> None:
-            qn = d.get("qualified_name", d.element_id if hasattr(d, "element_id") else "")
-            if qn not in seen_qns:
-                seen_qns.add(qn)
-                nodes.append(dict(d))
-
-        # Seed nodes
-        result = session.run(
-            "UNWIND $qns AS qn MATCH (d:Design {qualified_name: qn}) RETURN d",
-            {"qns": list(seed_qns)},
-        )
-        for record in result:
-            _add(record["d"])
-
-        # Outgoing edges to other Design nodes (excluding IMPLEMENTED_BY)
-        edge_out = session.run(
+        # Find seed nodes via TRACES_TO from :HLR stub
+        seed_result = session.run(
             """
-            UNWIND $qns AS qn
-            MATCH (s:Design {qualified_name: qn})-[r]->(t:Design)
-            WHERE type(r) <> 'IMPLEMENTED_BY'
-            RETURN s.qualified_name AS src, t.qualified_name AS tgt, type(r) AS rel_type
+            MATCH (hlr:HLR {sqlite_id: $hid})-[:TRACES_TO]->(d:Design)
+            RETURN d.qualified_name AS qn
             """,
-            {"qns": list(seed_qns)},
+            {"hid": hlr_id},
         )
-        for record in edge_out:
-            src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
-            edges.append({"source": src, "target": tgt, "type": rel})
-            if tgt and tgt not in seen_qns:
-                nb = session.run(
-                    "MATCH (d:Design {qualified_name: $qn}) RETURN d",
-                    {"qn": tgt},
-                ).single()
-                if nb:
-                    _add(nb["d"])
+        seed_qns = [r["qn"] for r in seed_result if r["qn"]]
 
-        # Incoming edges from other Design nodes (excluding IMPLEMENTED_BY)
-        edge_in = session.run(
-            """
-            UNWIND $qns AS qn
-            MATCH (s:Design)-[r]->(t:Design {qualified_name: qn})
-            WHERE type(r) <> 'IMPLEMENTED_BY'
-              AND s.qualified_name <> t.qualified_name
-            RETURN s.qualified_name AS src, t.qualified_name AS tgt, type(r) AS rel_type
-            """,
-            {"qns": list(seed_qns)},
-        )
-        incoming_seen: set[tuple] = set()
-        for record in edge_in:
-            src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
-            edge_key = (src, tgt, rel)
-            if edge_key not in incoming_seen:
-                incoming_seen.add(edge_key)
-                edges.append({"source": src, "target": tgt, "type": rel})
-            if src and src not in seen_qns:
-                nb = session.run(
-                    "MATCH (d:Design {qualified_name: $qn}) RETURN d",
-                    {"qn": src},
-                ).single()
-                if nb:
-                    _add(nb["d"])
+        if not seed_qns:
+            log.warning("HLR %d has no linked nodes via TRACES_TO", hlr_id)
+            return {"nodes": [], "edges": []}
 
-        # Optional: expand to full component
-        if component_id is not None:
-            comp_result = session.run(
-                """
-            MATCH (d:Design {component_id: $cid})
-            OPTIONAL MATCH (d)-[r]->(d2:Design {component_id: $cid})
-            WHERE type(r) <> 'IMPLEMENTED_BY'
-            RETURN d, collect({rel: type(r), target_qn: d2.qualified_name}) AS rels
-            """,
-                {"cid": component_id},
-            )
-            for record in comp_result:
-                _add(record["d"])
-                for item in record["rels"]:
-                    if item["rel"] is not None and item["target_qn"]:
-                        edges.append(
-                            {
-                                "source": record["d"].get("qualified_name", ""),
-                                "target": item["target_qn"],
-                                "type": item["rel"],
-                            }
-                        )
-
-    log.debug("fetch_hlr_subgraph: %d nodes, %d edges", len(nodes), len(edges))
-    return {"nodes": nodes, "edges": edges}
+        return _fetch_neighbourhood_from_seeds(session, seed_qns, component_id)

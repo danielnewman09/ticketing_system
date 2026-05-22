@@ -1,44 +1,85 @@
 """Ontology data, Neo4j graph queries, and node detail.
 
-Architecture:
-- Stage 1: Neo4j queries return bare topology (nodes + edges, no requirement data).
-- Stage 2: SQLite enrichment adds requirement tags to design nodes.
-- The two stages are composed in the data-layer functions below.
+Architecture (Phase 1):
+- Neo4j is the primary store for design nodes and triples.
+- HLR/LLR data still lives in SQLite but is linked via TRACES_TO edges
+  on :HLR/:LLR stub nodes in Neo4j.
+- Node counts and stats come from Cypher MATCH queries.
+- Requirement tags come from graph_tags.py (Cypher TRACES_TO traversal).
 """
 
 import logging
 
 from services.dependencies import get_neo4j
 
-from backend.db import get_session
-from backend.db.models import OntologyNode, OntologyTriple, Predicate
-
 log = logging.getLogger(__name__)
 
 
 def fetch_ontology_data():
-    """Fetch all data needed for ontology page."""
-    with get_session() as session:
-        nodes = []
-        kind_counts = {}
-        for n in session.query(OntologyNode).all():
-            kind_counts[n.kind] = kind_counts.get(n.kind, 0) + 1
-            nodes.append(
-                {
-                    "name": n.name,
-                    "kind": n.kind,
-                    "qualified_name": n.qualified_name,
-                    "component": n.component.name if n.component else "-",
-                }
-            )
+    """Fetch all data needed for ontology page.
 
-        return {
-            "nodes": nodes[:200],
-            "kind_counts": kind_counts,
-            "total_nodes": len(nodes),
-            "total_triples": session.query(OntologyTriple).count(),
-            "total_predicates": session.query(Predicate).count(),
-        }
+    Uses Cypher for design node stats instead of SQLAlchemy queries.
+    HLR/LLR counts still come from SQLite until Phase 2.
+    """
+    with get_neo4j().session() as session:
+        # Design node stats from Neo4j
+        kind_result = session.run(
+            "MATCH (d:Design) RETURN d.kind AS kind, count(d) AS cnt"
+        )
+        kind_counts = {}
+        total_nodes = 0
+        for record in kind_result:
+            kind = record["kind"] or "unknown"
+            cnt = record["cnt"]
+            kind_counts[kind] = cnt
+            total_nodes += cnt
+
+        nodes_result = session.run(
+            "MATCH (d:Design) RETURN d.qualified_name AS qn, d.name AS name, "
+            "d.kind AS kind, d.component_id AS cid ORDER BY d.qualified_name LIMIT 200"
+        )
+        # Resolve component names — still need SQLite for this in Phase 1
+        component_map: dict[int, str] = {}
+        try:
+            from backend.db import get_session
+            from backend.db.models import Component
+            with get_session() as sql_session:
+                for c in sql_session.query(Component).all():
+                    component_map[c.id] = c.name
+        except Exception:
+            pass
+
+        nodes = []
+        for record in nodes_result:
+            cid = record["cid"]
+            nodes.append({
+                "name": record["name"],
+                "kind": record["kind"],
+                "qualified_name": record["qn"],
+                "component": component_map.get(cid, "-") if cid else "-",
+            })
+
+        # Triple and predicate counts from Neo4j
+        triple_result = session.run(
+            "MATCH (:Design)-[r]->(:Design) RETURN count(r) AS cnt"
+        )
+        triple_rec = triple_result.single()
+        total_triples = triple_rec["cnt"] if triple_rec else 0
+
+        # Count distinct relationship types as "predicates"
+        pred_result = session.run(
+            "MATCH (:Design)-[r]->(:Design) RETURN count(DISTINCT type(r)) AS cnt"
+        )
+        pred_rec = pred_result.single()
+        total_predicates = pred_rec["cnt"] if pred_rec else 0
+
+    return {
+        "nodes": nodes,
+        "kind_counts": kind_counts,
+        "total_nodes": total_nodes,
+        "total_triples": total_triples,
+        "total_predicates": total_predicates,
+    }
 
 
 def filter_cross_layer_elements(
@@ -74,7 +115,7 @@ def fetch_ontology_graph_data(
     """Fetch graph data for Cytoscape.js rendering.
 
     Stage 1: Neo4j topology (no requirement data).
-    Stage 2: SQLite enrichment (optional HLR tags on design nodes).
+    Stage 2: Requirement tag enrichment via Cypher TRACES_TO.
 
     Args:
         layer: "design", "codebase", or "dependency".
@@ -121,8 +162,8 @@ def fetch_hlr_graph_data(
 ) -> dict:
     """Fetch the ontology subgraph around an HLR for Cytoscape.js.
 
-    Stage 1: Neo4j fetches seed + 1-hop design nodes.
-    Stage 2: SQLite tags the directly-linked seed nodes.
+    Uses Neo4j :HLR stub nodes and TRACES_TO edges to find seed nodes,
+    then fetches 1-hop neighbourhood and enriches with tags.
 
     Args:
         requirement_tags: "none" for bare topology, "hlr" for HLR highlight + badges.
@@ -160,9 +201,8 @@ def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
 def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     """Fetch node detail from Neo4j (properties + relationships + members).
 
-    Requirements are no longer sourced from Neo4j labels.
     Use fetch_node_detail_full() for the complete picture including
-    requirement tags from SQLite.
+    requirement tags from TRACES_TO edges.
     """
     try:
         from backend.db.neo4j.queries import fetch_node_detail
@@ -173,72 +213,98 @@ def fetch_graph_node_detail(qualified_name: str) -> dict | None:
         return None
 
 
-def fetch_node_detail_full(node_id: int) -> dict | None:
-    """Fetch ontology node by SQLite id with all properties + Neo4j relationships."""
-    with get_session() as session:
-        node = session.query(OntologyNode).filter_by(id=node_id).first()
-        if not node:
-            return None
+def fetch_node_detail_full(qualified_name: str) -> dict | None:
+    """Fetch ontology node by qualified_name with all properties + Neo4j relationships.
 
-        node_data = {
-            "id": node.id,
-            "name": node.name,
-            "qualified_name": node.qualified_name,
-            "kind": node.kind,
-            "specialization": node.specialization or "",
-            "visibility": node.visibility or "",
-            "description": node.description or "",
-            "component": node.component.name if node.component else "",
-            "component_id": node.component_id,
-            "type_signature": node.type_signature or "",
-            "argsstring": node.argsstring or "",
-            "definition": node.definition or "",
-            "file_path": node.file_path or "",
-            "line_number": node.line_number,
-            "refid": node.refid or "",
-            "source_type": node.source_type or "",
-            "is_static": node.is_static,
-            "is_const": node.is_const,
-            "is_virtual": node.is_virtual,
-            "is_abstract": node.is_abstract,
-            "is_final": node.is_final,
-        }
+    In Phase 1, requirement tags come from TRACES_TO edges on :HLR/:LLR stubs
+    instead of SQLite M2M tables.
+    """
+    neo4j_data = fetch_graph_node_detail(qualified_name)
+    if not neo4j_data:
+        return None
 
-        # Fetch requirement tags from SQLite M2M (not from Neo4j)
-        requirements = [
-            {"id": hlr.id, "type": "HLR", "description": hlr.description[:80]}
-            for hlr in node.high_level_requirements
-        ]
+    props = neo4j_data.get("properties", {})
+    node_data = {
+        "name": props.get("name", ""),
+        "qualified_name": props.get("qualified_name", ""),
+        "kind": props.get("kind", ""),
+        "specialization": props.get("specialization", ""),
+        "visibility": props.get("visibility", ""),
+        "description": props.get("description", ""),
+        "component_id": props.get("component_id"),
+        "type_signature": props.get("type_signature", ""),
+        "argsstring": props.get("argsstring", ""),
+        "definition": props.get("definition", ""),
+        "file_path": props.get("file_path", ""),
+        "line_number": props.get("line_number"),
+        "source_type": props.get("source_type", ""),
+        "is_static": props.get("is_static", False),
+        "is_const": props.get("is_const", False),
+        "is_virtual": props.get("is_virtual", False),
+        "is_abstract": props.get("is_abstract", False),
+        "is_final": props.get("is_final", False),
+    }
 
-    # Fetch Neo4j relationships if available
-    neo4j_data = None
-    if node_data["qualified_name"]:
-        neo4j_data = fetch_graph_node_detail(node_data["qualified_name"])
+    # Look up component name if component_id exists
+    component_name = ""
+    if node_data["component_id"]:
+        try:
+            from backend.db import get_session
+            from backend.db.models import Component
+            with get_session() as session:
+                comp = session.query(Component).filter_by(id=node_data["component_id"]).first()
+                if comp:
+                    component_name = comp.name
+        except Exception:
+            pass
+    node_data["component"] = component_name
+
+    # Fetch requirement tags from Neo4j TRACES_TO edges
+    requirements = []
+    try:
+        with get_neo4j().session() as ns:
+            result = ns.run(
+                """
+                MATCH (r)-[:TRACES_TO]->(d:Design {qualified_name: $qn})
+                WHERE r:HLR OR r:LLR
+                RETURN labels(r) AS labels, r.sqlite_id AS id, r.description AS desc
+                """,
+                {"qn": qualified_name},
+            )
+            for record in result:
+                label = "HLR" if "HLR" in record["labels"] else "LLR"
+                requirements.append({
+                    "id": record["id"],
+                    "type": label,
+                    "description": (record["desc"] or "")[:80],
+                })
+    except Exception:
+        log.warning("Failed to fetch requirement traces for %s", qualified_name, exc_info=True)
 
     return {"node": node_data, "neo4j": neo4j_data, "requirements": requirements}
 
 
 def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
-    """Look up the SQLite id for an ontology node by qualified_name."""
-    with get_session() as session:
-        node = session.query(OntologyNode).filter_by(qualified_name=qualified_name).first()
-        return node.id if node else None
+    """Look up an identifier for an ontology node by qualified_name.
+
+    In Phase 1, this returns a stable hash of the qualified_name since
+    the SQLAlchemy id is no longer the primary key for design nodes.
+    """
+    # Design nodes no longer have a SQLAlchemy id — they are identified
+    # by their qualified_name in Neo4j. Return a stable hash as identifier.
+    import hashlib
+    return int(hashlib.md5(qualified_name.encode()).hexdigest()[:8], 16)
 
 
 def update_member_type(qualified_name: str, type_signature: str) -> bool:
-    """Update type_signature on an ontology node (and sync to Neo4j)."""
-    with get_session() as session:
-        node = session.query(OntologyNode).filter_by(qualified_name=qualified_name).first()
-        if not node:
-            return False
-        node.type_signature = type_signature
-    # Also update Neo4j
+    """Update type_signature on a design node in Neo4j (primary store)."""
     try:
         with get_neo4j().session() as ns:
             ns.run(
                 "MATCH (n:Design {qualified_name: $qn}) SET n.type_signature = $ts",
                 {"qn": qualified_name, "ts": type_signature},
             )
+        return True
     except Exception:
-        log.warning("Neo4j type_signature sync failed", exc_info=True)
-    return True
+        log.warning("Neo4j type_signature update failed", exc_info=True)
+        return False
