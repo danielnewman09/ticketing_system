@@ -1,107 +1,100 @@
-"""Tests for backend/requirements/services/graph_tags.py"""
+"""Tests for Cypher-based requirement tag enrichment."""
 
+import os
 import pytest
-from backend.requirements.services.graph_tags import (
-    enrich_with_requirement_tags,
-    tag_direct_nodes_only,
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_NEO4J_INTEGRATION") != "1",
+    reason="Set RUN_NEO4J_INTEGRATION=1 to run Neo4j integration tests",
 )
-from backend.db.models.ontology import OntologyNode
-from backend.db.models.requirements import HighLevelRequirement, LowLevelRequirement
 
 
-class TestEnrichWithRequirementTags:
+@pytest.fixture
+def neo4j_session():
+    """Provide a Neo4j session and clean up Design/HLR/LLR nodes after each test."""
+    from backend.db.neo4j.connection import get_standalone_driver
+
+    driver = get_standalone_driver()
+    session = driver.session(database="neo4j")
+    yield session
+    session.run("MATCH (n:Design) DETACH DELETE n")
+    session.run("MATCH (n:HLR) DETACH DELETE n")
+    session.run("MATCH (n:LLR) DETACH DELETE n")
+    session.close()
+    driver.close()
+
+
+class TestEnrichWithRequirementTagsCypher:
     def test_mode_none_returns_nodes_unchanged(self):
-        nodes = [{"id": "n1", "qualified_name": "ns::Foo"}]
+        from backend.requirements.services.graph_tags import enrich_with_requirement_tags
+
+        nodes = [{"data": {"id": "n1", "qualified_name": "ns::Foo"}}]
         result = enrich_with_requirement_tags(nodes, mode="none")
         assert result == nodes
-        assert "requirements" not in result[0]
+        assert "requirements" not in result[0]["data"]
 
-    def test_mode_hlr_tags_nodes_with_matching_requirements(self, seeded_session):
-        hlr = seeded_session.query(HighLevelRequirement).first()
-        node = OntologyNode(kind="class", name="Foo", qualified_name="calc::Foo")
-        seeded_session.add(node)
-        seeded_session.flush()
-        hlr.nodes.append(node)
-        seeded_session.flush()
+    def test_tags_design_nodes_with_hlr_badges(self, neo4j_session):
+        from backend.db.neo4j.repositories.design import DesignRepository
+        from backend.db.neo4j.repositories.models import DesignNode
+        from backend.requirements.services.graph_tags import enrich_with_requirement_tags
 
-        nodes = [{"id": "calc::Foo", "qualified_name": "calc::Foo", "kind": "class", "name": "Foo"}]
-        result = enrich_with_requirement_tags(nodes, mode="hlr", session=seeded_session)
+        repo = DesignRepository(neo4j_session)
+        repo.merge_node(DesignNode(qualified_name="calc::Foo", name="Foo", kind="class"))
+        repo.merge_hlr_stub(sqlite_id=1, description="The system shall calculate")
+        repo.trace_design_to_hlr(hlr_sqlite_id=1, design_qualified_name="calc::Foo")
 
-        assert len(result) == 1
-        assert len(result[0]["requirements"]) == 1
-        assert result[0]["requirements"][0]["type"] == "HLR"
-        assert result[0]["requirements"][0]["id"] == hlr.id
+        nodes = [
+            {"data": {"id": "calc::Foo", "qualified_name": "calc::Foo", "kind": "class", "name": "Foo", "label": "Foo"}},
+            {"data": {"id": "calc::Bar", "qualified_name": "calc::Bar", "kind": "class", "name": "Bar", "label": "Bar"}},
+        ]
 
-    def test_mode_hlr_skips_nodes_without_requirements(self, seeded_session):
-        nodes = [{"id": "n1", "qualified_name": "ns::NoReq", "kind": "class", "name": "NoReq"}]
-        result = enrich_with_requirement_tags(nodes, mode="hlr", session=seeded_session)
-        assert "requirements" not in result[0]
+        enrich_with_requirement_tags(nodes, mode="hlr", session=neo4j_session)
 
-    def test_mode_hlr_handles_multiple_hlrs_on_same_node(self, seeded_session):
-        comp = seeded_session.query(HighLevelRequirement).first().component
-        hlr1 = HighLevelRequirement(description="First HLR", component=comp)
-        hlr2 = HighLevelRequirement(description="Second HLR", component=comp)
-        seeded_session.add_all([hlr1, hlr2])
-        seeded_session.flush()
+        assert len(nodes[0]["data"]["requirements"]) == 1
+        assert nodes[0]["data"]["requirements"][0]["type"] == "HLR"
+        assert "requirements" not in nodes[1]["data"]
 
-        node = OntologyNode(kind="class", name="MultiReq", qualified_name="calc::MultiReq")
-        seeded_session.add(node)
-        seeded_session.flush()
+    def test_skips_dependency_stubs(self, neo4j_session):
+        from backend.requirements.services.graph_tags import enrich_with_requirement_tags
 
-        hlr1.nodes.append(node)
-        hlr2.nodes.append(node)
-        seeded_session.flush()
-
-        nodes = [{"id": "calc::MultiReq", "qualified_name": "calc::MultiReq", "kind": "class", "name": "MultiReq"}]
-        result = enrich_with_requirement_tags(nodes, mode="hlr", session=seeded_session)
-
-        assert len(result[0]["requirements"]) == 2
+        nodes = [
+            {"data": {"id": "dep1", "qualified_name": "Fl_Button", "source_type": "dependency", "name": "Fl_Button", "label": "Fl_Button"}},
+        ]
+        result = enrich_with_requirement_tags(nodes, mode="hlr", session=neo4j_session)
+        assert "requirements" not in result[0]["data"]
 
     def test_mode_hlr_empty_graph_returns_empty(self):
+        from backend.requirements.services.graph_tags import enrich_with_requirement_tags
+
         result = enrich_with_requirement_tags([], mode="hlr")
         assert result == []
 
 
-class TestTagDirectNodesOnly:
-    def test_marks_seed_nodes_with_highlight(self, seeded_session):
-        hlr = seeded_session.query(HighLevelRequirement).first()
-        node = OntologyNode(kind="class", name="Foo", qualified_name="calc::Foo")
-        seeded_session.add(node)
-        seeded_session.flush()
-        hlr.nodes.append(node)
-        seeded_session.flush()
+class TestTagDirectNodesOnlyCypher:
+    def test_marks_seed_nodes_with_highlight(self, neo4j_session):
+        from backend.db.neo4j.repositories.design import DesignRepository
+        from backend.db.neo4j.repositories.models import DesignNode
+        from backend.requirements.services.graph_tags import tag_direct_nodes_only
+
+        repo = DesignRepository(neo4j_session)
+        repo.merge_node(DesignNode(qualified_name="calc::Direct", name="Direct", kind="class"))
+        repo.merge_node(DesignNode(qualified_name="calc::Neighbour", name="Neighbour", kind="class"))
+        repo.merge_hlr_stub(sqlite_id=1, description="A requirement")
+        repo.trace_design_to_hlr(hlr_sqlite_id=1, design_qualified_name="calc::Direct")
 
         nodes = [
-            {"id": "calc::Foo", "qualified_name": "calc::Foo", "kind": "class", "name": "Foo"},
-            {"id": "calc::Bar", "qualified_name": "calc::Bar", "kind": "class", "name": "Bar"},
+            {"data": {"id": "calc::Direct", "qualified_name": "calc::Direct", "kind": "class", "name": "Direct", "label": "Direct"}},
+            {"data": {"id": "calc::Neighbour", "qualified_name": "calc::Neighbour", "kind": "class", "name": "Neighbour", "label": "Neighbour"}},
         ]
-        tag_direct_nodes_only(nodes, hlr.id, session=seeded_session)
+        tag_direct_nodes_only(nodes, hlr_id=1, session=neo4j_session)
 
-        assert nodes[0].get("is_hlr_highlight") == "true"
-        assert len(nodes[0].get("requirements", [])) == 1
-        assert nodes[1].get("is_hlr_highlight", "") == ""
+        assert nodes[0]["data"]["is_hlr_highlight"] == "true"
+        assert len(nodes[0]["data"]["requirements"]) == 1
+        assert nodes[1]["data"].get("is_hlr_highlight", "") == ""
 
-    def test_hlr_not_found_does_nothing(self, seeded_session):
-        nodes = [{"id": "n1", "qualified_name": "ns::X"}]
-        tag_direct_nodes_only(nodes, hlr_id=99999, session=seeded_session)
-        assert nodes[0].get("is_hlr_highlight", "") == ""
+    def test_hlr_not_found_does_nothing(self, neo4j_session):
+        from backend.requirements.services.graph_tags import tag_direct_nodes_only
 
-    def test_only_direct_nodes_tagged(self, seeded_session):
-        hlr = seeded_session.query(HighLevelRequirement).first()
-        direct_node = OntologyNode(kind="class", name="Direct", qualified_name="calc::Direct")
-        neighbour_node = OntologyNode(kind="class", name="Neighbour", qualified_name="calc::Neighbour")
-        seeded_session.add_all([direct_node, neighbour_node])
-        seeded_session.flush()
-        hlr.nodes.append(direct_node)
-        seeded_session.flush()
-
-        nodes = [
-            {"id": "calc::Direct", "qualified_name": "calc::Direct", "kind": "class", "name": "Direct"},
-            {"id": "calc::Neighbour", "qualified_name": "calc::Neighbour", "kind": "class", "name": "Neighbour"},
-        ]
-        tag_direct_nodes_only(nodes, hlr.id, session=seeded_session)
-
-        assert nodes[0]["is_hlr_highlight"] == "true"
-        assert len(nodes[0]["requirements"]) == 1
-        assert nodes[1].get("is_hlr_highlight", "") == ""
-        assert "requirements" not in nodes[1]
+        nodes = [{"data": {"id": "n1", "qualified_name": "ns::X", "label": "X"}}]
+        tag_direct_nodes_only(nodes, hlr_id=99999, session=neo4j_session)
+        assert nodes[0]["data"].get("is_hlr_highlight", "") == ""

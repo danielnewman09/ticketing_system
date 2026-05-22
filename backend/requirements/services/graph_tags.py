@@ -1,8 +1,8 @@
-"""SQLite enrichment for Cytoscape node dicts — add HLR requirement tags.
+"""Cypher-based enrichment for Cytoscape node dicts — add HLR requirement tags.
 
-This module is Stage 2 of the two-stage graph pipeline:
-Stage 1 (Neo4j) produces bare topology; Stage 2 (SQLite) tags nodes
-with requirement metadata. The two stages never import from each other.
+In Phase 1, :HLR and :LLR stubs carry a sqlite_id property for
+cross-referencing. After Phase 2, they become full Neo4j citizens
+with native IDs and this code simplifies further.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from neo4j import Session as Neo4jSession
 
 log = logging.getLogger(__name__)
 
@@ -19,9 +19,9 @@ log = logging.getLogger(__name__)
 def enrich_with_requirement_tags(
     nodes: list[dict],
     mode: str = "none",
-    session: "Session | None" = None,
+    session: "Neo4jSession | None" = None,
 ) -> list[dict]:
-    """Tag design nodes with HLR badges from SQLite.
+    """Tag design nodes with HLR badges from Neo4j :HLR stub nodes.
 
     Modifies nodes in-place, adding a 'requirements' key to each node
     that is traced by one or more HLRs.
@@ -29,7 +29,7 @@ def enrich_with_requirement_tags(
     Args:
         nodes: Cytoscape-format node dicts (from Stage 1).
         mode: "none" = no tags, "hlr" = add HLR tags.
-        session: Optional SQLAlchemy session. If None, creates one via get_session().
+        session: Neo4j session for Cypher queries. If None, creates one.
 
     Returns:
         The same list (modified in-place).
@@ -37,36 +37,49 @@ def enrich_with_requirement_tags(
     if mode == "none":
         return nodes
 
-    node_qns = {n["data"].get("qualified_name") for n in nodes if n["data"].get("qualified_name")}
-    # Skip dependency stubs — they are cross-references, not design intent
-    dependency_qns = {
-        n["data"]["qualified_name"]
+    node_qns = [
+        n["data"].get("qualified_name")
         for n in nodes
-        if n["data"].get("qualified_name") and n["data"].get("source_type") == "dependency"
-    }
+        if n["data"].get("qualified_name") and n["data"].get("source_type") != "dependency"
+    ]
     if not node_qns:
         return nodes
 
-    from backend.db.models import HighLevelRequirement
-
-    qn_to_reqs: dict[str, list[dict]] = {}
-
-    def _query(session: "Session") -> None:
-        for hlr in session.query(HighLevelRequirement).all():
-            for node in hlr.nodes:
-                if node.qualified_name in node_qns:
-                    qn_to_reqs.setdefault(node.qualified_name, []).append({
-                        "id": hlr.id,
-                        "type": "HLR",
-                        "description": hlr.description[:80],
-                    })
 
     if session is not None:
-        _query(session)
+        _enrich_via_cypher(session, node_qns, nodes)
     else:
-        from backend.db import get_session
-        with get_session() as sess:
-            _query(sess)
+        from backend.db.neo4j.connection import get_neo4j
+        neo4j_conn = get_neo4j()
+        with neo4j_conn.session() as sess:
+            _enrich_via_cypher(sess, node_qns, nodes)
+
+    return nodes
+
+
+def _enrich_via_cypher(
+    session: "Neo4jSession",
+    node_qns: list[str],
+    nodes: list[dict],
+) -> None:
+    """Run Cypher to find HLR→Design traces and tag matching nodes."""
+    qn_to_reqs: dict[str, list[dict]] = {}
+
+    result = session.run(
+        """
+        UNWIND $qns AS qn
+        MATCH (hlr:HLR)-[:TRACES_TO]->(d:Design {qualified_name: qn})
+        RETURN d.qualified_name AS qn, hlr.sqlite_id AS hlr_id, hlr.description AS hlr_desc
+        """,
+        {"qns": node_qns},
+    )
+    for record in result:
+        qn = record["qn"]
+        qn_to_reqs.setdefault(qn, []).append({
+            "id": record["hlr_id"],
+            "type": "HLR",
+            "description": (record["hlr_desc"] or "")[:80],
+        })
 
     for node in nodes:
         d = node["data"]
@@ -74,50 +87,67 @@ def enrich_with_requirement_tags(
         if qn in qn_to_reqs:
             d["requirements"] = qn_to_reqs[qn]
             badges = " ".join(f"[{r['type']} {r['id']}]" for r in qn_to_reqs[qn])
-            d["label"] = d["label"] + "\n" + badges
+            d["label"] = d.get("label", "") + "\n" + badges
             d["has_requirements"] = "true"
-
-    return nodes
 
 
 def tag_direct_nodes_only(
     nodes: list[dict],
     hlr_id: int,
-    session: "Session | None" = None,
+    session: "Neo4jSession | None" = None,
 ) -> None:
     """Mark seed nodes in an HLR subgraph with is_hlr_highlight and requirements tag.
 
-    Only nodes directly linked to the HLR (via the M2M table) get the
+    Only nodes directly linked to the HLR (via TRACES_TO edges) get the
     highlight flag and tag. 1-hop neighbours remain untagged.
 
     Args:
         nodes: Cytoscape-format node dicts.
-        hlr_id: Database ID of the HLR to tag for.
-        session: Optional SQLAlchemy session. If None, creates one via get_session().
+        hlr_id: SQLite ID of the HLR to tag for (Phase 1 bridge).
+        session: Neo4j session. If None, creates one.
     """
-    from backend.db.models import HighLevelRequirement
-
     seed_qns: set[str] = set()
-    hlr_desc: str = ""
 
-    def _query(session: "Session") -> None:
-        nonlocal seed_qns, hlr_desc
-        hlr = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
-        if not hlr:
-            log.warning("tag_direct_nodes_only: HLR %d not found", hlr_id)
-            return
-        seed_qns = {n.qualified_name for n in hlr.nodes}
-        hlr_desc = hlr.description[:80]
+    def _query(sess: "Neo4jSession") -> None:
+        nonlocal seed_qns
+        result = sess.run(
+            """
+            MATCH (hlr:HLR {sqlite_id: $hid})-[:TRACES_TO]->(d:Design)
+            RETURN d.qualified_name AS qn
+            """,
+            {"hid": hlr_id},
+        )
+        for record in result:
+            seed_qns.add(record["qn"])
 
     if session is not None:
         _query(session)
     else:
-        from backend.db import get_session
-        with get_session() as sess:
+        from backend.db.neo4j.connection import get_neo4j
+        with get_neo4j().session() as sess:
             _query(sess)
 
     if not seed_qns:
         return
+
+    # Fetch HLR description for badge
+    hlr_desc = ""
+    if session is not None:
+        rec = session.run(
+            "MATCH (hlr:HLR {sqlite_id: $hid}) RETURN hlr.description AS desc",
+            {"hid": hlr_id},
+        ).single()
+        if rec:
+            hlr_desc = (rec["desc"] or "")[:80]
+    else:
+        from backend.db.neo4j.connection import get_neo4j
+        with get_neo4j().session() as sess:
+            rec = sess.run(
+                "MATCH (hlr:HLR {sqlite_id: $hid}) RETURN hlr.description AS desc",
+                {"hid": hlr_id},
+            ).single()
+            if rec:
+                hlr_desc = (rec["desc"] or "")[:80]
 
     for node in nodes:
         d = node["data"]
