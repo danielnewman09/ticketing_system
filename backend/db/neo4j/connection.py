@@ -72,6 +72,25 @@ class Neo4jConnection:
         log.info("Neo4j constraints and indexes ensured")
         return True
 
+    def ensure_design_constraints(self):
+        """Create additional constraints and indexes for the design layer.
+
+        Called once at application startup. Extends the base constraints
+        with Phase 1 migration indexes for the repository layer.
+        """
+        if not self.verify_connectivity():
+            log.warning("Neo4j not reachable — skipping design constraint setup")
+            return False
+        statements = [
+            "CREATE INDEX design_source_type IF NOT EXISTS FOR (n:Design) ON (n.source_type)",
+            "CREATE INDEX design_implementation_status IF NOT EXISTS FOR (n:Design) ON (n.implementation_status)",
+        ]
+        with self.session() as session:
+            for stmt in statements:
+                session.run(stmt)
+        log.info("Neo4j design constraints and indexes ensured")
+        return True
+
 
 # Standalone driver (not bound to NiceGUI app state)
 _standalone_driver = None
