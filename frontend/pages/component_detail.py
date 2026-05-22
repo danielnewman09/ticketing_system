@@ -7,10 +7,9 @@ from nicegui import ui
 from frontend.theme import (
     BACKGROUNDS,
     add_cytoscape_cdn,
-    cytoscape_base_styles,
     apply_theme,
 )
-from frontend.widgets import section_header, breadcrumb, render_cytoscape_graph
+from frontend.widgets import section_header, breadcrumb, GraphConfig, render_cytoscape_graph
 from frontend.layout import page_layout
 from frontend.data.components import fetch_component_detail, add_dependency, delete_dependency
 from frontend.data.ontology import fetch_ontology_graph_data, resolve_node_id_by_qualified_name
@@ -21,8 +20,8 @@ async def component_detail_page(component_id: int):
     apply_theme()
     page_layout("Component Detail")
 
+    # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
-    base_styles = cytoscape_base_styles(size="small")
 
     data_ref = {"data": await asyncio.to_thread(fetch_component_detail, component_id)}
 
@@ -194,15 +193,24 @@ async def component_detail_page(component_id: int):
                 )
                 cy._props["id"] = "comp-cy-container"
 
+    # Cytoscape graph config (page-level for event name access)
+    comp_config = GraphConfig(
+        container_id="comp-cy-container",
+        cy_var="_compCy",
+        size="small",
+        animate=False,
+    )
+
     async def handle_node_dblclick(e):
-        qn = e.args.get("qualified_name", "")
+        args = e.args
+        qn = args.get("qualified_name", "")
         if not qn:
             return
         node_id = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
         if node_id:
             ui.navigate.to(f"/node/{node_id}")
 
-    ui.on("node_dblclick", handle_node_dblclick)
+    ui.on(comp_config.dbltap_event, handle_node_dblclick)
 
     # Load graph filtered to this component
     graph = await asyncio.to_thread(
@@ -212,8 +220,5 @@ async def component_detail_page(component_id: int):
     if graph["nodes"]:
         await render_cytoscape_graph(
             graph["nodes"] + graph["edges"],
-            base_styles,
-            container_id="comp-cy-container",
-            cy_var="_compCy",
-            animate=False,
+            comp_config,
         )

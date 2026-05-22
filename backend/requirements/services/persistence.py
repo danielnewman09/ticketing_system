@@ -434,9 +434,38 @@ def persist_design(
 
     result = DesignResult(qname_to_node=qname_to_node)
 
+    def _resolve_node(qname: str) -> OntologyNode | None:
+        """Look up a node from qname_to_node, re-fetching if detached.
+
+        When persist_design is called across multiple sessions (e.g.
+        per-HLR in a batch script), ORM objects from a previous session
+        are detached. Accessing their .id triggers DetachedInstanceError.
+        Re-query by qualified_name in the current session instead.
+        """
+        node = qname_to_node.get(qname)
+        if node is not None:
+            try:
+                # Quick check: if the object is still in this session,
+                # we can use it directly.
+                if node in session:
+                    return node
+            except Exception:
+                pass
+            # Detached — re-fetch from the current session
+            fresh = session.query(OntologyNode).filter_by(qualified_name=qname).first()
+            if fresh:
+                qname_to_node[qname] = fresh
+                return fresh
+            # Node was created in a different session but not yet in
+            # the DB (shouldn't happen, but handle gracefully).
+            return node
+        return None
+
     # --- Nodes ---
     for node_data in design.nodes:
         if node_data.qualified_name in qname_to_node:
+            # Ensure the cached node is usable in this session
+            _resolve_node(node_data.qualified_name)
             result.nodes_existing += 1
             continue
 
@@ -472,12 +501,40 @@ def persist_design(
         else:
             result.nodes_existing += 1
 
+    # --- Dependency stub nodes ---
+    # Create stub OntologyNode entries for dependency targets that appear
+    # in triples but are not design nodes. These stubs satisfy the FK
+    # constraint and link to real Compound nodes in Neo4j via sync_design_triple.
+    dep_stub_qnames = {
+        nd.qualified_name for nd in design.nodes if nd.source_type == "dependency"
+    }
+
     # --- Triples ---
     saved_triples: list[OntologyTriple | None] = []
     for triple_data in design.triples:
-        subj = qname_to_node.get(triple_data.subject_qualified_name)
-        obj = qname_to_node.get(triple_data.object_qualified_name)
+        subj = _resolve_node(triple_data.subject_qualified_name)
+        obj = _resolve_node(triple_data.object_qualified_name)
         pred = session.query(Predicate).filter_by(name=triple_data.predicate).first()
+
+        # If the object is missing but it's a dependency stub, create it now
+        if obj is None and triple_data.object_qualified_name in dep_stub_qnames:
+            stub_data = next(
+                nd for nd in design.nodes
+                if nd.qualified_name == triple_data.object_qualified_name
+            )
+            obj, created = get_or_create(
+                session,
+                OntologyNode,
+                defaults={
+                    "kind": stub_data.kind,
+                    "name": stub_data.name,
+                    "description": stub_data.description,
+                    "source_type": stub_data.source_type,
+                    "is_intercomponent": stub_data.is_intercomponent,
+                },
+                qualified_name=stub_data.qualified_name,
+            )
+            qname_to_node[stub_data.qualified_name] = obj
 
         if subj and obj and pred:
             triple, _ = get_or_create(
@@ -491,6 +548,16 @@ def persist_design(
             result.triples_created += 1
         else:
             saved_triples.append(None)
+            if subj is None:
+                log.warning(
+                    "Triple skipped: subject %r not found",
+                    triple_data.subject_qualified_name,
+                )
+            if obj is None:
+                log.warning(
+                    "Triple skipped: object %r not found",
+                    triple_data.object_qualified_name,
+                )
             result.triples_skipped += 1
 
     # --- Requirement links (explicit from LLM) ---
@@ -550,10 +617,11 @@ def persist_design(
         from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
 
         created_nodes = [
-            qname_to_node[nd.qualified_name]
+            _resolve_node(nd.qualified_name)
             for nd in design.nodes
             if nd.qualified_name in qname_to_node
         ]
+        created_nodes = [n for n in created_nodes if n is not None]
         created_triples = [t for t in saved_triples if t is not None]
         try_sync_design_nodes_and_triples(created_nodes, created_triples)
     except Exception:

@@ -11,10 +11,9 @@ from frontend.theme import (
     CLS_SECTION_HEADER,
     CLS_SECTION_SUBHEADER,
     add_cytoscape_cdn,
-    cytoscape_base_styles,
     apply_theme,
 )
-from frontend.widgets import breadcrumb, render_cytoscape_graph
+from frontend.widgets import breadcrumb, GraphConfig, render_cytoscape_graph
 from frontend.layout import page_layout
 from frontend.data.ontology import (
     fetch_neighbourhood_graph_data,
@@ -29,8 +28,16 @@ async def node_detail_page(node_id: int):
     apply_theme()
     page_layout("Node Detail")
 
+    # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
-    base_styles = cytoscape_base_styles(size="small")
+
+    # Cytoscape graph config (page-level for event name access)
+    node_config = GraphConfig(
+        container_id="node-cy-container",
+        cy_var="_nodeCy",
+        size="small",
+        animate=False,
+    )
 
     @ui.refreshable
     async def content():
@@ -173,24 +180,29 @@ async def node_detail_page(node_id: int):
                 node["qualified_name"],
             )
             if graph["nodes"]:
+                # extra_styles are per-render (center node highlighting)
+                render_config = GraphConfig(
+                    container_id=node_config.container_id,
+                    cy_var=node_config.cy_var,
+                    size=node_config.size,
+                    animate=node_config.animate,
+                    extra_styles=center_style,
+                )
                 await render_cytoscape_graph(
                     graph["nodes"] + graph["edges"],
-                    base_styles,
-                    container_id="node-cy-container",
-                    cy_var="_nodeCy",
-                    animate=False,
-                    extra_styles=center_style,
+                    render_config,
                 )
 
     async def handle_node_dblclick(e):
-        qn = e.args.get("qualified_name", "")
+        args = e.args
+        qn = args.get("qualified_name", "")
         if not qn:
             return
         nid = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
         if nid:
             ui.navigate.to(f"/node/{nid}")
 
-    ui.on("node_dblclick", handle_node_dblclick)
+    ui.on(node_config.dbltap_event, handle_node_dblclick)
 
     await content()
 

@@ -77,9 +77,7 @@ def fetch_design_graph(
         for record in edge_result:
             src = record["src"]
             tgt = record["tgt"]
-            if src and tgt:
-                if tgt not in node_qns:
-                    node_qns.add(tgt)
+            if src and tgt and src in node_qns and tgt in node_qns:
                 edges.append(
                     {
                         "source": src,
@@ -111,6 +109,38 @@ def fetch_design_graph(
                     "type": record["rel_type"],
                 }
             )
+
+        log.debug("After adding dependencies: %d raw edges, %d raw nodes", len(edges), len(nodes))
+
+        # As-built compounds linked via IMPLEMENTED_BY
+        as_built_result = session.run(
+            f"""
+            MATCH (s:Design)-[r:IMPLEMENTED_BY]->(c:Compound)
+            WHERE {where.replace("n:", "s:").replace("n.", "s.")}
+              AND (c.source IS NULL OR c.source = '')
+            RETURN s.qualified_name AS src, c, type(r) AS rel_type
+            """,
+            params,
+        )
+        for record in as_built_result:
+            c = record["c"]
+            qn = c.get("qualified_name", "")
+            if qn not in node_qns:
+                node_qns.add(qn)
+                d = dict(c)
+                d["layer"] = "as-built"
+                nodes.append(d)
+            edges.append(
+                {
+                    "source": record["src"],
+                    "target": qn,
+                    "type": record["rel_type"],
+                }
+            )
+    
+
+        log.debug("After adding as-built: %d raw edges, %d raw nodes", len(edges), len(nodes))
+
 
     return {"nodes": nodes, "edges": edges}
 

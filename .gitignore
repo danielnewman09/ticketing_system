@@ -19,3 +19,5 @@ codebase.sqlite3
 .pi/settings.local.json
 llm_caller/
 **/node_modules/
+.superpowers/
+.playwright-mcp/

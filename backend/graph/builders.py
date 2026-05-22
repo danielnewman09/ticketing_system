@@ -26,6 +26,7 @@ def _build_design_node(d: dict) -> dict:
         "visibility": d.get("visibility", ""),
         "type_signature": d.get("type_signature", ""),
         "layer": "design",
+        "source_type": d.get("source_type", ""),
         "requirements": d.get("requirements", []),
         "is_hlr_highlight": d.get("is_hlr_highlight", ""),
     }
@@ -62,10 +63,15 @@ def _build_dependency_node(d: dict) -> dict:
     }
 
 
+_edge_counter = 0
+
+
 def build_cytoscape_edge(e: dict) -> dict:
     """Build a Cytoscape edge-data dict from a raw edge dict."""
+    global _edge_counter
+    _edge_counter += 1
     return {
-        "id": f"e_{e.get('source', '')}_{e.get('target', '')}_{e.get('type', '')}",
+        "id": f"e_{_edge_counter}_{e.get('source', '')}_{e.get('target', '')}_{e.get('type', '')}",
         "source": e.get("source", ""),
         "target": e.get("target", ""),
         "label": e.get("type", ""),

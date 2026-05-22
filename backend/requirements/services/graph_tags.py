@@ -37,7 +37,13 @@ def enrich_with_requirement_tags(
     if mode == "none":
         return nodes
 
-    node_qns = {n.get("qualified_name") for n in nodes if n.get("qualified_name")}
+    node_qns = {n["data"].get("qualified_name") for n in nodes if n["data"].get("qualified_name")}
+    # Skip dependency stubs — they are cross-references, not design intent
+    dependency_qns = {
+        n["data"]["qualified_name"]
+        for n in nodes
+        if n["data"].get("qualified_name") and n["data"].get("source_type") == "dependency"
+    }
     if not node_qns:
         return nodes
 
@@ -63,9 +69,13 @@ def enrich_with_requirement_tags(
             _query(sess)
 
     for node in nodes:
-        qn = node.get("qualified_name", "")
+        d = node["data"]
+        qn = d.get("qualified_name", "")
         if qn in qn_to_reqs:
-            node["requirements"] = qn_to_reqs[qn]
+            d["requirements"] = qn_to_reqs[qn]
+            badges = " ".join(f"[{r['type']} {r['id']}]" for r in qn_to_reqs[qn])
+            d["label"] = d["label"] + "\n" + badges
+            d["has_requirements"] = "true"
 
     return nodes
 
@@ -110,11 +120,15 @@ def tag_direct_nodes_only(
         return
 
     for node in nodes:
-        qn = node.get("qualified_name", "")
+        d = node["data"]
+        qn = d.get("qualified_name", "")
         if qn in seed_qns:
-            node["is_hlr_highlight"] = "true"
-            node.setdefault("requirements", []).append({
+            d["is_hlr_highlight"] = "true"
+            d.setdefault("requirements", []).append({
                 "id": hlr_id,
                 "type": "HLR",
                 "description": hlr_desc,
             })
+            badge = f"[HLR {hlr_id}]"
+            d["label"] = d.get("label", "") + "\n" + badge
+            d["has_requirements"] = "true"

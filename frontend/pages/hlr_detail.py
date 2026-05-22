@@ -1,7 +1,6 @@
 """HLR detail page."""
 
 import asyncio
-import json
 
 from nicegui import ui
 
@@ -11,13 +10,11 @@ from frontend.theme import (
     CLS_DIALOG_MD,
     CLS_DIALOG_TITLE,
     CLS_DIALOG_ACTIONS,
-    KIND_COLORS_JS,
     add_cytoscape_cdn,
-    cytoscape_base_styles,
     apply_theme,
 )
 from frontend.layout import page_layout
-from frontend.widgets import render_llr_table, section_header, breadcrumb
+from frontend.widgets import render_llr_table, section_header, breadcrumb, GraphConfig, render_cytoscape_graph
 from frontend.data.hlr import (
     fetch_hlr_detail,
     update_hlr,
@@ -27,7 +24,7 @@ from frontend.data.hlr import (
 )
 from frontend.data.llr import create_llr, update_llr, delete_llr
 from frontend.data.components import fetch_components_options
-from frontend.data.ontology import fetch_hlr_graph_data
+from frontend.data.ontology import fetch_hlr_graph_data, resolve_node_id_by_qualified_name
 
 
 @ui.page("/hlr/{hlr_id}")
@@ -35,8 +32,16 @@ async def hlr_detail_page(hlr_id: int):
     apply_theme()
     page_layout(f"HLR {hlr_id}")
 
+    # -- CDN scripts must load before any Cytoscape rendering --
     add_cytoscape_cdn()
-    base_styles = cytoscape_base_styles(size="small")
+
+    # Cytoscape graph config
+    hlr_config = GraphConfig(
+        container_id="hlr-cy-container",
+        cy_var="_hlrCy",
+        size="small",
+        animate=False,
+    )
 
     # ---------------------------------------------------------------
     # Refreshable content
@@ -116,20 +121,8 @@ async def hlr_detail_page(hlr_id: int):
 
                 # Load graph data and render
                 graph = await asyncio.to_thread(fetch_hlr_graph_data, hlr_id, hlr["component_id"], requirement_tags="hlr")
-                elements_json = json.dumps(graph["nodes"] + graph["edges"])
                 if graph["nodes"]:
-                    await ui.run_javascript(f"""
-                        if (window._hlrCy) window._hlrCy.destroy();
-                        const KIND_COLORS = {KIND_COLORS_JS};
-                        const container = document.getElementById('hlr-cy-container');
-                        if (!container) return;
-                        window._hlrCy = cytoscape({{
-                            container: container,
-                            elements: {elements_json},
-                            style: {base_styles},
-                            layout: {{ name: 'fcose', animate: false }},
-                        }});
-                    """)
+                    await render_cytoscape_graph(graph["nodes"] + graph["edges"], hlr_config)
 
     # ---------------------------------------------------------------
     # Edit HLR dialog
@@ -336,5 +329,17 @@ async def hlr_detail_page(hlr_id: int):
     # ---------------------------------------------------------------
     # Initial render
     # ---------------------------------------------------------------
+
+    async def handle_node_dblclick(e):
+        """On node double-click: navigate to the full node detail page."""
+        args = e.args
+        qn = args.get("qualified_name", "")
+        if not qn:
+            return
+        node_id = await asyncio.to_thread(resolve_node_id_by_qualified_name, qn)
+        if node_id:
+            ui.navigate.to(f"/node/{node_id}")
+
+    ui.on(hlr_config.dbltap_event, handle_node_dblclick)
 
     await content()
