@@ -1,0 +1,3701 @@
+{
+  "languages": [],
+  "components": [
+    {
+      "id": 1,
+      "name": "User Interface",
+      "description": "Manages the graphical user interface for the calculator application. Responsible for displaying the main application window, rendering the numeric display area, and managing all interactive UI elements including digit buttons (0-9), arithmetic operator buttons (+, -, \u00d7, \u00f7), a clear button, and an equals button. Handles user input events from the UI and updates the display accordingly. Acts as the presentation layer, translating user interactions into commands for the calculation engine.",
+      "language_id": null,
+      "parent_id": null,
+      "namespace": "user_interface"
+    },
+    {
+      "id": 2,
+      "name": "Calculation Engine",
+      "description": "Implements the core mathematical logic of the calculator application. Responsible for performing arithmetic operations (addition, subtraction, multiplication, division) with proper input validation. Handles expression parsing, evaluation, and result computation. Includes error handling mechanisms to recover from invalid operations such as division by zero or malformed input syntax. Provides immediate result feedback to the user interface layer. This component encapsulates all business logic related to numerical computation and ensures mathematical correctness.",
+      "language_id": null,
+      "parent_id": null,
+      "namespace": "calculation_engine"
+    }
+  ],
+  "dependency_managers": [],
+  "dependencies": [],
+  "dependency_components": [],
+  "predicates": [
+    {
+      "id": 1,
+      "name": "associates",
+      "description": "General association between two entities"
+    },
+    {
+      "id": 2,
+      "name": "aggregates",
+      "description": "Whole-part relationship where the part can exist independently"
+    },
+    {
+      "id": 3,
+      "name": "composes",
+      "description": "Strong whole-part relationship where the part is owned by the whole"
+    },
+    {
+      "id": 4,
+      "name": "depends_on",
+      "description": "One entity depends on another"
+    },
+    {
+      "id": 5,
+      "name": "generalizes",
+      "description": "Inheritance / is-a relationship"
+    },
+    {
+      "id": 6,
+      "name": "realizes",
+      "description": "A class implements/realizes an interface or contract"
+    },
+    {
+      "id": 7,
+      "name": "invokes",
+      "description": "Weak association, signififying a caller-callee relationship"
+    }
+  ],
+  "high_level_requirements": [
+    {
+      "id": 1,
+      "description": "The application displays a GUI window with a numeric display area and buttons for digits 0-9, basic arithmetic operators (+, -, \u00d7, \u00f7), a clear button, and an equals button",
+      "component_id": 1
+    },
+    {
+      "id": 2,
+      "description": "The calculator performs addition, subtraction, multiplication, and division operations with proper input validation, returns results immediately, and recovers from errors such as division by zero or invalid syntax",
+      "component_id": 2
+    }
+  ],
+  "low_level_requirements": [
+    {
+      "id": 1,
+      "description": "The application launches and renders a main GUI window.",
+      "high_level_requirement_id": 1
+    },
+    {
+      "id": 2,
+      "description": "The GUI window contains a numeric display area for showing input and results.",
+      "high_level_requirement_id": 1
+    },
+    {
+      "id": 3,
+      "description": "The GUI window contains buttons for digits 0 through 9.",
+      "high_level_requirement_id": 1
+    },
+    {
+      "id": 4,
+      "description": "The GUI window contains buttons for basic arithmetic operators: addition (+), subtraction (-), multiplication (\u00d7), and division (\u00f7).",
+      "high_level_requirement_id": 1
+    },
+    {
+      "id": 5,
+      "description": "The GUI window contains a clear button.",
+      "high_level_requirement_id": 1
+    },
+    {
+      "id": 6,
+      "description": "The GUI window contains an equals button.",
+      "high_level_requirement_id": 1
+    },
+    {
+      "id": 7,
+      "description": "The engine calculates the sum of two valid numeric operands.",
+      "high_level_requirement_id": 2
+    },
+    {
+      "id": 8,
+      "description": "The engine calculates the difference of two valid numeric operands.",
+      "high_level_requirement_id": 2
+    },
+    {
+      "id": 9,
+      "description": "The engine calculates the product of two valid numeric operands.",
+      "high_level_requirement_id": 2
+    },
+    {
+      "id": 10,
+      "description": "The engine calculates the quotient of two valid numeric operands where the divisor is not zero.",
+      "high_level_requirement_id": 2
+    },
+    {
+      "id": 11,
+      "description": "The engine rejects inputs that are not valid numbers or contain invalid syntax.",
+      "high_level_requirement_id": 2
+    },
+    {
+      "id": 12,
+      "description": "The engine handles division by zero by raising an appropriate error instead of crashing.",
+      "high_level_requirement_id": 2
+    },
+    {
+      "id": 13,
+      "description": "The engine returns the result immediately upon receiving a valid operation request.",
+      "high_level_requirement_id": 2
+    }
+  ],
+  "ontology_nodes": [
+    {
+      "id": 1,
+      "qualified_name": "calculation_engine",
+      "name": "calculation_engine",
+      "kind": "module",
+      "specialization": "",
+      "visibility": "",
+      "description": "",
+      "refid": "calculation_engine",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "namespace",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 2,
+      "qualified_name": "calculation_engine::Operation",
+      "name": "Operation",
+      "kind": "enum",
+      "specialization": "",
+      "visibility": "",
+      "description": "An enumeration of supported arithmetic operations: ADD, SUBTRACT, MULTIPLY, and DIVIDE.",
+      "refid": "calculation_engine::Operation",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "compound",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 3,
+      "qualified_name": "calculation_engine::Operation::ADD",
+      "name": "ADD",
+      "kind": "enum_value",
+      "specialization": "",
+      "visibility": "",
+      "description": "",
+      "refid": "calculation_engine::Operation::ADD",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 4,
+      "qualified_name": "calculation_engine::Operation::SUBTRACT",
+      "name": "SUBTRACT",
+      "kind": "enum_value",
+      "specialization": "",
+      "visibility": "",
+      "description": "",
+      "refid": "calculation_engine::Operation::SUBTRACT",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 5,
+      "qualified_name": "calculation_engine::Operation::MULTIPLY",
+      "name": "MULTIPLY",
+      "kind": "enum_value",
+      "specialization": "",
+      "visibility": "",
+      "description": "",
+      "refid": "calculation_engine::Operation::MULTIPLY",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 6,
+      "qualified_name": "calculation_engine::Operation::DIVIDE",
+      "name": "DIVIDE",
+      "kind": "enum_value",
+      "specialization": "",
+      "visibility": "",
+      "description": "",
+      "refid": "calculation_engine::Operation::DIVIDE",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 7,
+      "qualified_name": "calculation_engine::CalculatorEngine",
+      "name": "CalculatorEngine",
+      "kind": "class",
+      "specialization": "",
+      "visibility": "",
+      "description": "The core calculator engine class that performs arithmetic operations (addition, subtraction, multiplication, division) with input validation and error handling.",
+      "refid": "calculation_engine::CalculatorEngine",
+      "component_id": 2,
+      "is_intercomponent": true,
+      "source_type": "compound",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 8,
+      "qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "name": "precision",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "public",
+      "description": "The number of decimal places for result precision.",
+      "refid": "calculation_engine::CalculatorEngine::precision",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "int",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 9,
+      "qualified_name": "calculation_engine::CalculatorEngine::add",
+      "name": "add",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Calculates the sum of two valid numeric operands.",
+      "refid": "calculation_engine::CalculatorEngine::add",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "CalculatorResult",
+      "argsstring": "(double a, double b)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 10,
+      "qualified_name": "calculation_engine::CalculatorEngine::subtract",
+      "name": "subtract",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Calculates the difference of two valid numeric operands.",
+      "refid": "calculation_engine::CalculatorEngine::subtract",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "CalculatorResult",
+      "argsstring": "(double a, double b)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 11,
+      "qualified_name": "calculation_engine::CalculatorEngine::multiply",
+      "name": "multiply",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Calculates the product of two valid numeric operands.",
+      "refid": "calculation_engine::CalculatorEngine::multiply",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "CalculatorResult",
+      "argsstring": "(double a, double b)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 12,
+      "qualified_name": "calculation_engine::CalculatorEngine::divide",
+      "name": "divide",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Calculates the quotient of two valid numeric operands where the divisor is not zero.",
+      "refid": "calculation_engine::CalculatorEngine::divide",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "CalculatorResult",
+      "argsstring": "(double a, double b)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 13,
+      "qualified_name": "calculation_engine::CalculatorEngine::validateInput",
+      "name": "validateInput",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Validates that the inputs are valid numbers and rejects invalid syntax.",
+      "refid": "calculation_engine::CalculatorEngine::validateInput",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "bool",
+      "argsstring": "(string input)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 14,
+      "qualified_name": "calculation_engine::CalculatorResult",
+      "name": "CalculatorResult",
+      "kind": "class",
+      "specialization": "",
+      "visibility": "",
+      "description": "A result wrapper class that holds the outcome of a calculator operation, including success/failure status, the computed value, and error messages.",
+      "refid": "calculation_engine::CalculatorResult",
+      "component_id": 2,
+      "is_intercomponent": true,
+      "source_type": "compound",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 15,
+      "qualified_name": "calculation_engine::CalculatorResult::value",
+      "name": "value",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "public",
+      "description": "The computed numeric result.",
+      "refid": "calculation_engine::CalculatorResult::value",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "double",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 16,
+      "qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "name": "is_success",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Indicates whether the operation succeeded.",
+      "refid": "calculation_engine::CalculatorResult::is_success",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "bool",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 17,
+      "qualified_name": "calculation_engine::CalculatorResult::error_message",
+      "name": "error_message",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Error message if the operation failed.",
+      "refid": "calculation_engine::CalculatorResult::error_message",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "string",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 18,
+      "qualified_name": "calculation_engine::CalculatorResult::get_value",
+      "name": "get_value",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Returns the computed value.",
+      "refid": "calculation_engine::CalculatorResult::get_value",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "double",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 19,
+      "qualified_name": "calculation_engine::CalculatorResult::is_error",
+      "name": "is_error",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Returns true if the operation resulted in an error.",
+      "refid": "calculation_engine::CalculatorResult::is_error",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "bool",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 20,
+      "qualified_name": "calculation_engine::CalculatorResult::get_error",
+      "name": "get_error",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Returns the error message if the operation failed.",
+      "refid": "calculation_engine::CalculatorResult::get_error",
+      "component_id": 2,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "string",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 21,
+      "qualified_name": "user_interface",
+      "name": "user_interface",
+      "kind": "module",
+      "specialization": "",
+      "visibility": "",
+      "description": "",
+      "refid": "user_interface",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "namespace",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 22,
+      "qualified_name": "user_interface::CalculatorWindow",
+      "name": "CalculatorWindow",
+      "kind": "class",
+      "specialization": "Fl_Double_Window",
+      "visibility": "",
+      "description": "The main application window for the calculator. Extends Fl_Double_Window to provide a flicker-free GUI with a numeric display and all required buttons.",
+      "refid": "user_interface::CalculatorWindow",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "compound",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 23,
+      "qualified_name": "user_interface::CalculatorWindow::display",
+      "name": "display",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "The numeric display area showing input and results",
+      "refid": "user_interface::CalculatorWindow::display",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "Fl_Output*",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 24,
+      "qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "name": "clearButton",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "The clear button to reset the calculator state",
+      "refid": "user_interface::CalculatorWindow::clearButton",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "Fl_Button*",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 25,
+      "qualified_name": "user_interface::CalculatorWindow::equalsButton",
+      "name": "equalsButton",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "The equals button that triggers calculation on click or Enter key",
+      "refid": "user_interface::CalculatorWindow::equalsButton",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "Fl_Return_Button*",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 26,
+      "qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "name": "digitButtons",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Buttons for digits 0 through 9",
+      "refid": "user_interface::CalculatorWindow::digitButtons",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "std::vector<Fl_Button*>",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 27,
+      "qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "name": "operatorButtons",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Buttons for arithmetic operators: +, -, \u00d7, \u00f7",
+      "refid": "user_interface::CalculatorWindow::operatorButtons",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "std::vector<Fl_Button*>",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 28,
+      "qualified_name": "user_interface::CalculatorWindow::currentInput",
+      "name": "currentInput",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "The current input string being built by the user",
+      "refid": "user_interface::CalculatorWindow::currentInput",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "std::string",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 29,
+      "qualified_name": "user_interface::CalculatorWindow::lastResult",
+      "name": "lastResult",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "The last computed result to display",
+      "refid": "user_interface::CalculatorWindow::lastResult",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "std::string",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 30,
+      "qualified_name": "user_interface::CalculatorWindow::needsNewInput",
+      "name": "needsNewInput",
+      "kind": "attribute",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Flag indicating whether the next digit starts a new input (after equals or clear)",
+      "refid": "user_interface::CalculatorWindow::needsNewInput",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "bool",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 31,
+      "qualified_name": "user_interface::CalculatorWindow::CalculatorWindow",
+      "name": "CalculatorWindow",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Constructor that initializes the window, display, and all buttons with their callbacks.",
+      "refid": "user_interface::CalculatorWindow::CalculatorWindow",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 32,
+      "qualified_name": "user_interface::CalculatorWindow::~CalculatorWindow",
+      "name": "~CalculatorWindow",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "public",
+      "description": "Destructor for cleanup.",
+      "refid": "user_interface::CalculatorWindow::~CalculatorWindow",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 33,
+      "qualified_name": "user_interface::CalculatorWindow::initializeDisplay",
+      "name": "initializeDisplay",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Creates and configures the Fl_Output display widget.",
+      "refid": "user_interface::CalculatorWindow::initializeDisplay",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 34,
+      "qualified_name": "user_interface::CalculatorWindow::initializeDigitButtons",
+      "name": "initializeDigitButtons",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Creates and configures the digit buttons (0-9) with their callbacks.",
+      "refid": "user_interface::CalculatorWindow::initializeDigitButtons",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 35,
+      "qualified_name": "user_interface::CalculatorWindow::initializeOperatorButtons",
+      "name": "initializeOperatorButtons",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Creates and configures the operator buttons (+, -, \u00d7, \u00f7) with their callbacks.",
+      "refid": "user_interface::CalculatorWindow::initializeOperatorButtons",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 36,
+      "qualified_name": "user_interface::CalculatorWindow::initializeClearButton",
+      "name": "initializeClearButton",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Creates and configures the clear button with its callback.",
+      "refid": "user_interface::CalculatorWindow::initializeClearButton",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 37,
+      "qualified_name": "user_interface::CalculatorWindow::initializeEqualsButton",
+      "name": "initializeEqualsButton",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Creates and configures the equals button with its callback.",
+      "refid": "user_interface::CalculatorWindow::initializeEqualsButton",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 38,
+      "qualified_name": "user_interface::CalculatorWindow::handleDigitInput",
+      "name": "handleDigitInput",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Callback for digit button clicks. Appends the digit to the current input and updates the display.",
+      "refid": "user_interface::CalculatorWindow::handleDigitInput",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "(int digit)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 39,
+      "qualified_name": "user_interface::CalculatorWindow::handleOperatorInput",
+      "name": "handleOperatorInput",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Callback for operator button clicks. Stores the operator and prepares for the next operand.",
+      "refid": "user_interface::CalculatorWindow::handleOperatorInput",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "(std::string operator)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 40,
+      "qualified_name": "user_interface::CalculatorWindow::handleClear",
+      "name": "handleClear",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Callback for the clear button. Resets the calculator state and clears the display.",
+      "refid": "user_interface::CalculatorWindow::handleClear",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 41,
+      "qualified_name": "user_interface::CalculatorWindow::handleEquals",
+      "name": "handleEquals",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Callback for the equals button. Triggers calculation and displays the result.",
+      "refid": "user_interface::CalculatorWindow::handleEquals",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 42,
+      "qualified_name": "user_interface::CalculatorWindow::updateDisplay",
+      "name": "updateDisplay",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Updates the Fl_Output widget with the current input or result string.",
+      "refid": "user_interface::CalculatorWindow::updateDisplay",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "(std::string text)",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 43,
+      "qualified_name": "user_interface::CalculatorWindow::performCalculation",
+      "name": "performCalculation",
+      "kind": "method",
+      "specialization": "",
+      "visibility": "private",
+      "description": "Invokes the calculation engine to compute the result based on the stored operands and operator.",
+      "refid": "user_interface::CalculatorWindow::performCalculation",
+      "component_id": 1,
+      "is_intercomponent": false,
+      "source_type": "member",
+      "type_signature": "void",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 44,
+      "qualified_name": "Fl_Double_Window",
+      "name": "Fl_Double_Window",
+      "kind": "class",
+      "specialization": "",
+      "visibility": "",
+      "description": "External dependency: Fl_Double_Window",
+      "refid": "Fl_Double_Window",
+      "component_id": 1,
+      "is_intercomponent": true,
+      "source_type": "dependency",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 45,
+      "qualified_name": "Fl_Output",
+      "name": "Fl_Output",
+      "kind": "class",
+      "specialization": "",
+      "visibility": "",
+      "description": "External dependency: Fl_Output",
+      "refid": "Fl_Output",
+      "component_id": 1,
+      "is_intercomponent": true,
+      "source_type": "dependency",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 46,
+      "qualified_name": "Fl_Button",
+      "name": "Fl_Button",
+      "kind": "class",
+      "specialization": "",
+      "visibility": "",
+      "description": "External dependency: Fl_Button",
+      "refid": "Fl_Button",
+      "component_id": 1,
+      "is_intercomponent": true,
+      "source_type": "dependency",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    },
+    {
+      "id": 47,
+      "qualified_name": "Fl_Return_Button",
+      "name": "Fl_Return_Button",
+      "kind": "class",
+      "specialization": "",
+      "visibility": "",
+      "description": "External dependency: Fl_Return_Button",
+      "refid": "Fl_Return_Button",
+      "component_id": 1,
+      "is_intercomponent": true,
+      "source_type": "dependency",
+      "type_signature": "",
+      "argsstring": "",
+      "definition": "",
+      "file_path": "",
+      "line_number": null,
+      "is_static": false,
+      "is_const": false,
+      "is_virtual": false,
+      "is_abstract": false,
+      "is_final": false
+    }
+  ],
+  "ontology_triples": [
+    {
+      "id": 1,
+      "subject_id": 1,
+      "predicate_id": 3,
+      "object_id": 2
+    },
+    {
+      "id": 2,
+      "subject_id": 2,
+      "predicate_id": 3,
+      "object_id": 3
+    },
+    {
+      "id": 3,
+      "subject_id": 2,
+      "predicate_id": 3,
+      "object_id": 4
+    },
+    {
+      "id": 4,
+      "subject_id": 2,
+      "predicate_id": 3,
+      "object_id": 5
+    },
+    {
+      "id": 5,
+      "subject_id": 2,
+      "predicate_id": 3,
+      "object_id": 6
+    },
+    {
+      "id": 6,
+      "subject_id": 1,
+      "predicate_id": 3,
+      "object_id": 7
+    },
+    {
+      "id": 7,
+      "subject_id": 7,
+      "predicate_id": 3,
+      "object_id": 8
+    },
+    {
+      "id": 8,
+      "subject_id": 7,
+      "predicate_id": 3,
+      "object_id": 9
+    },
+    {
+      "id": 9,
+      "subject_id": 7,
+      "predicate_id": 3,
+      "object_id": 10
+    },
+    {
+      "id": 10,
+      "subject_id": 7,
+      "predicate_id": 3,
+      "object_id": 11
+    },
+    {
+      "id": 11,
+      "subject_id": 7,
+      "predicate_id": 3,
+      "object_id": 12
+    },
+    {
+      "id": 12,
+      "subject_id": 7,
+      "predicate_id": 3,
+      "object_id": 13
+    },
+    {
+      "id": 13,
+      "subject_id": 1,
+      "predicate_id": 3,
+      "object_id": 14
+    },
+    {
+      "id": 14,
+      "subject_id": 14,
+      "predicate_id": 3,
+      "object_id": 15
+    },
+    {
+      "id": 15,
+      "subject_id": 14,
+      "predicate_id": 3,
+      "object_id": 16
+    },
+    {
+      "id": 16,
+      "subject_id": 14,
+      "predicate_id": 3,
+      "object_id": 17
+    },
+    {
+      "id": 17,
+      "subject_id": 14,
+      "predicate_id": 3,
+      "object_id": 18
+    },
+    {
+      "id": 18,
+      "subject_id": 14,
+      "predicate_id": 3,
+      "object_id": 19
+    },
+    {
+      "id": 19,
+      "subject_id": 14,
+      "predicate_id": 3,
+      "object_id": 20
+    },
+    {
+      "id": 20,
+      "subject_id": 7,
+      "predicate_id": 4,
+      "object_id": 14
+    },
+    {
+      "id": 21,
+      "subject_id": 21,
+      "predicate_id": 3,
+      "object_id": 22
+    },
+    {
+      "id": 22,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 23
+    },
+    {
+      "id": 23,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 24
+    },
+    {
+      "id": 24,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 25
+    },
+    {
+      "id": 25,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 26
+    },
+    {
+      "id": 26,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 27
+    },
+    {
+      "id": 27,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 28
+    },
+    {
+      "id": 28,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 29
+    },
+    {
+      "id": 29,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 30
+    },
+    {
+      "id": 30,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 31
+    },
+    {
+      "id": 31,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 32
+    },
+    {
+      "id": 32,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 33
+    },
+    {
+      "id": 33,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 34
+    },
+    {
+      "id": 34,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 35
+    },
+    {
+      "id": 35,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 36
+    },
+    {
+      "id": 36,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 37
+    },
+    {
+      "id": 37,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 38
+    },
+    {
+      "id": 38,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 39
+    },
+    {
+      "id": 39,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 40
+    },
+    {
+      "id": 40,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 41
+    },
+    {
+      "id": 41,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 42
+    },
+    {
+      "id": 42,
+      "subject_id": 22,
+      "predicate_id": 3,
+      "object_id": 43
+    },
+    {
+      "id": 43,
+      "subject_id": 22,
+      "predicate_id": 5,
+      "object_id": 44
+    },
+    {
+      "id": 44,
+      "subject_id": 22,
+      "predicate_id": 4,
+      "object_id": 45
+    },
+    {
+      "id": 45,
+      "subject_id": 22,
+      "predicate_id": 4,
+      "object_id": 46
+    },
+    {
+      "id": 46,
+      "subject_id": 22,
+      "predicate_id": 4,
+      "object_id": 47
+    },
+    {
+      "id": 47,
+      "subject_id": 22,
+      "predicate_id": 2,
+      "object_id": 22
+    }
+  ],
+  "hlr_triples": [
+    {
+      "hlr_id": 1,
+      "triple_id": 22
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 23
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 24
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 25
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 26
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 27
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 28
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 29
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 30
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 31
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 32
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 33
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 34
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 35
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 36
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 37
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 38
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 39
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 40
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 41
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 42
+    },
+    {
+      "hlr_id": 1,
+      "triple_id": 43
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 7
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 8
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 9
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 10
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 11
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 12
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 14
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 15
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 16
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 17
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 18
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 19
+    },
+    {
+      "hlr_id": 2,
+      "triple_id": 20
+    }
+  ],
+  "hlr_nodes": [
+    {
+      "hlr_id": 1,
+      "node_id": 22
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 23
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 24
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 25
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 26
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 27
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 28
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 29
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 30
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 31
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 32
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 33
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 34
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 35
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 36
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 37
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 38
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 39
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 40
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 41
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 42
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 43
+    },
+    {
+      "hlr_id": 1,
+      "node_id": 44
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 7
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 8
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 9
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 10
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 11
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 12
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 13
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 14
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 15
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 16
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 17
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 18
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 19
+    },
+    {
+      "hlr_id": 2,
+      "node_id": 20
+    }
+  ],
+  "llr_nodes": [
+    {
+      "llr_id": 1,
+      "node_id": 22
+    },
+    {
+      "llr_id": 1,
+      "node_id": 23
+    },
+    {
+      "llr_id": 1,
+      "node_id": 24
+    },
+    {
+      "llr_id": 1,
+      "node_id": 25
+    },
+    {
+      "llr_id": 1,
+      "node_id": 26
+    },
+    {
+      "llr_id": 1,
+      "node_id": 27
+    },
+    {
+      "llr_id": 1,
+      "node_id": 28
+    },
+    {
+      "llr_id": 1,
+      "node_id": 29
+    },
+    {
+      "llr_id": 1,
+      "node_id": 30
+    },
+    {
+      "llr_id": 1,
+      "node_id": 31
+    },
+    {
+      "llr_id": 1,
+      "node_id": 32
+    },
+    {
+      "llr_id": 1,
+      "node_id": 33
+    },
+    {
+      "llr_id": 1,
+      "node_id": 34
+    },
+    {
+      "llr_id": 1,
+      "node_id": 35
+    },
+    {
+      "llr_id": 1,
+      "node_id": 36
+    },
+    {
+      "llr_id": 1,
+      "node_id": 37
+    },
+    {
+      "llr_id": 1,
+      "node_id": 38
+    },
+    {
+      "llr_id": 1,
+      "node_id": 39
+    },
+    {
+      "llr_id": 1,
+      "node_id": 40
+    },
+    {
+      "llr_id": 1,
+      "node_id": 41
+    },
+    {
+      "llr_id": 1,
+      "node_id": 42
+    },
+    {
+      "llr_id": 1,
+      "node_id": 43
+    },
+    {
+      "llr_id": 1,
+      "node_id": 44
+    },
+    {
+      "llr_id": 2,
+      "node_id": 22
+    },
+    {
+      "llr_id": 2,
+      "node_id": 23
+    },
+    {
+      "llr_id": 2,
+      "node_id": 24
+    },
+    {
+      "llr_id": 2,
+      "node_id": 25
+    },
+    {
+      "llr_id": 2,
+      "node_id": 26
+    },
+    {
+      "llr_id": 2,
+      "node_id": 27
+    },
+    {
+      "llr_id": 2,
+      "node_id": 28
+    },
+    {
+      "llr_id": 2,
+      "node_id": 29
+    },
+    {
+      "llr_id": 2,
+      "node_id": 30
+    },
+    {
+      "llr_id": 2,
+      "node_id": 31
+    },
+    {
+      "llr_id": 2,
+      "node_id": 32
+    },
+    {
+      "llr_id": 2,
+      "node_id": 33
+    },
+    {
+      "llr_id": 2,
+      "node_id": 34
+    },
+    {
+      "llr_id": 2,
+      "node_id": 35
+    },
+    {
+      "llr_id": 2,
+      "node_id": 36
+    },
+    {
+      "llr_id": 2,
+      "node_id": 37
+    },
+    {
+      "llr_id": 2,
+      "node_id": 38
+    },
+    {
+      "llr_id": 2,
+      "node_id": 39
+    },
+    {
+      "llr_id": 2,
+      "node_id": 40
+    },
+    {
+      "llr_id": 2,
+      "node_id": 41
+    },
+    {
+      "llr_id": 2,
+      "node_id": 42
+    },
+    {
+      "llr_id": 2,
+      "node_id": 43
+    },
+    {
+      "llr_id": 2,
+      "node_id": 44
+    },
+    {
+      "llr_id": 3,
+      "node_id": 22
+    },
+    {
+      "llr_id": 3,
+      "node_id": 23
+    },
+    {
+      "llr_id": 3,
+      "node_id": 24
+    },
+    {
+      "llr_id": 3,
+      "node_id": 25
+    },
+    {
+      "llr_id": 3,
+      "node_id": 26
+    },
+    {
+      "llr_id": 3,
+      "node_id": 27
+    },
+    {
+      "llr_id": 3,
+      "node_id": 28
+    },
+    {
+      "llr_id": 3,
+      "node_id": 29
+    },
+    {
+      "llr_id": 3,
+      "node_id": 30
+    },
+    {
+      "llr_id": 3,
+      "node_id": 31
+    },
+    {
+      "llr_id": 3,
+      "node_id": 32
+    },
+    {
+      "llr_id": 3,
+      "node_id": 33
+    },
+    {
+      "llr_id": 3,
+      "node_id": 34
+    },
+    {
+      "llr_id": 3,
+      "node_id": 35
+    },
+    {
+      "llr_id": 3,
+      "node_id": 36
+    },
+    {
+      "llr_id": 3,
+      "node_id": 37
+    },
+    {
+      "llr_id": 3,
+      "node_id": 38
+    },
+    {
+      "llr_id": 3,
+      "node_id": 39
+    },
+    {
+      "llr_id": 3,
+      "node_id": 40
+    },
+    {
+      "llr_id": 3,
+      "node_id": 41
+    },
+    {
+      "llr_id": 3,
+      "node_id": 42
+    },
+    {
+      "llr_id": 3,
+      "node_id": 43
+    },
+    {
+      "llr_id": 3,
+      "node_id": 44
+    },
+    {
+      "llr_id": 4,
+      "node_id": 22
+    },
+    {
+      "llr_id": 4,
+      "node_id": 23
+    },
+    {
+      "llr_id": 4,
+      "node_id": 24
+    },
+    {
+      "llr_id": 4,
+      "node_id": 25
+    },
+    {
+      "llr_id": 4,
+      "node_id": 26
+    },
+    {
+      "llr_id": 4,
+      "node_id": 27
+    },
+    {
+      "llr_id": 4,
+      "node_id": 28
+    },
+    {
+      "llr_id": 4,
+      "node_id": 29
+    },
+    {
+      "llr_id": 4,
+      "node_id": 30
+    },
+    {
+      "llr_id": 4,
+      "node_id": 31
+    },
+    {
+      "llr_id": 4,
+      "node_id": 32
+    },
+    {
+      "llr_id": 4,
+      "node_id": 33
+    },
+    {
+      "llr_id": 4,
+      "node_id": 34
+    },
+    {
+      "llr_id": 4,
+      "node_id": 35
+    },
+    {
+      "llr_id": 4,
+      "node_id": 36
+    },
+    {
+      "llr_id": 4,
+      "node_id": 37
+    },
+    {
+      "llr_id": 4,
+      "node_id": 38
+    },
+    {
+      "llr_id": 4,
+      "node_id": 39
+    },
+    {
+      "llr_id": 4,
+      "node_id": 40
+    },
+    {
+      "llr_id": 4,
+      "node_id": 41
+    },
+    {
+      "llr_id": 4,
+      "node_id": 42
+    },
+    {
+      "llr_id": 4,
+      "node_id": 43
+    },
+    {
+      "llr_id": 4,
+      "node_id": 44
+    },
+    {
+      "llr_id": 5,
+      "node_id": 22
+    },
+    {
+      "llr_id": 5,
+      "node_id": 23
+    },
+    {
+      "llr_id": 5,
+      "node_id": 24
+    },
+    {
+      "llr_id": 5,
+      "node_id": 25
+    },
+    {
+      "llr_id": 5,
+      "node_id": 26
+    },
+    {
+      "llr_id": 5,
+      "node_id": 27
+    },
+    {
+      "llr_id": 5,
+      "node_id": 28
+    },
+    {
+      "llr_id": 5,
+      "node_id": 29
+    },
+    {
+      "llr_id": 5,
+      "node_id": 30
+    },
+    {
+      "llr_id": 5,
+      "node_id": 31
+    },
+    {
+      "llr_id": 5,
+      "node_id": 32
+    },
+    {
+      "llr_id": 5,
+      "node_id": 33
+    },
+    {
+      "llr_id": 5,
+      "node_id": 34
+    },
+    {
+      "llr_id": 5,
+      "node_id": 35
+    },
+    {
+      "llr_id": 5,
+      "node_id": 36
+    },
+    {
+      "llr_id": 5,
+      "node_id": 37
+    },
+    {
+      "llr_id": 5,
+      "node_id": 38
+    },
+    {
+      "llr_id": 5,
+      "node_id": 39
+    },
+    {
+      "llr_id": 5,
+      "node_id": 40
+    },
+    {
+      "llr_id": 5,
+      "node_id": 41
+    },
+    {
+      "llr_id": 5,
+      "node_id": 42
+    },
+    {
+      "llr_id": 5,
+      "node_id": 43
+    },
+    {
+      "llr_id": 5,
+      "node_id": 44
+    },
+    {
+      "llr_id": 6,
+      "node_id": 22
+    },
+    {
+      "llr_id": 6,
+      "node_id": 23
+    },
+    {
+      "llr_id": 6,
+      "node_id": 24
+    },
+    {
+      "llr_id": 6,
+      "node_id": 25
+    },
+    {
+      "llr_id": 6,
+      "node_id": 26
+    },
+    {
+      "llr_id": 6,
+      "node_id": 27
+    },
+    {
+      "llr_id": 6,
+      "node_id": 28
+    },
+    {
+      "llr_id": 6,
+      "node_id": 29
+    },
+    {
+      "llr_id": 6,
+      "node_id": 30
+    },
+    {
+      "llr_id": 6,
+      "node_id": 31
+    },
+    {
+      "llr_id": 6,
+      "node_id": 32
+    },
+    {
+      "llr_id": 6,
+      "node_id": 33
+    },
+    {
+      "llr_id": 6,
+      "node_id": 34
+    },
+    {
+      "llr_id": 6,
+      "node_id": 35
+    },
+    {
+      "llr_id": 6,
+      "node_id": 36
+    },
+    {
+      "llr_id": 6,
+      "node_id": 37
+    },
+    {
+      "llr_id": 6,
+      "node_id": 38
+    },
+    {
+      "llr_id": 6,
+      "node_id": 39
+    },
+    {
+      "llr_id": 6,
+      "node_id": 40
+    },
+    {
+      "llr_id": 6,
+      "node_id": 41
+    },
+    {
+      "llr_id": 6,
+      "node_id": 42
+    },
+    {
+      "llr_id": 6,
+      "node_id": 43
+    },
+    {
+      "llr_id": 6,
+      "node_id": 44
+    },
+    {
+      "llr_id": 7,
+      "node_id": 7
+    },
+    {
+      "llr_id": 7,
+      "node_id": 8
+    },
+    {
+      "llr_id": 7,
+      "node_id": 9
+    },
+    {
+      "llr_id": 7,
+      "node_id": 10
+    },
+    {
+      "llr_id": 7,
+      "node_id": 11
+    },
+    {
+      "llr_id": 7,
+      "node_id": 12
+    },
+    {
+      "llr_id": 7,
+      "node_id": 13
+    },
+    {
+      "llr_id": 7,
+      "node_id": 14
+    },
+    {
+      "llr_id": 7,
+      "node_id": 15
+    },
+    {
+      "llr_id": 7,
+      "node_id": 16
+    },
+    {
+      "llr_id": 7,
+      "node_id": 17
+    },
+    {
+      "llr_id": 7,
+      "node_id": 18
+    },
+    {
+      "llr_id": 7,
+      "node_id": 19
+    },
+    {
+      "llr_id": 7,
+      "node_id": 20
+    },
+    {
+      "llr_id": 8,
+      "node_id": 7
+    },
+    {
+      "llr_id": 8,
+      "node_id": 8
+    },
+    {
+      "llr_id": 8,
+      "node_id": 9
+    },
+    {
+      "llr_id": 8,
+      "node_id": 10
+    },
+    {
+      "llr_id": 8,
+      "node_id": 11
+    },
+    {
+      "llr_id": 8,
+      "node_id": 12
+    },
+    {
+      "llr_id": 8,
+      "node_id": 13
+    },
+    {
+      "llr_id": 8,
+      "node_id": 14
+    },
+    {
+      "llr_id": 8,
+      "node_id": 15
+    },
+    {
+      "llr_id": 8,
+      "node_id": 16
+    },
+    {
+      "llr_id": 8,
+      "node_id": 17
+    },
+    {
+      "llr_id": 8,
+      "node_id": 18
+    },
+    {
+      "llr_id": 8,
+      "node_id": 19
+    },
+    {
+      "llr_id": 8,
+      "node_id": 20
+    },
+    {
+      "llr_id": 9,
+      "node_id": 7
+    },
+    {
+      "llr_id": 9,
+      "node_id": 8
+    },
+    {
+      "llr_id": 9,
+      "node_id": 9
+    },
+    {
+      "llr_id": 9,
+      "node_id": 10
+    },
+    {
+      "llr_id": 9,
+      "node_id": 11
+    },
+    {
+      "llr_id": 9,
+      "node_id": 12
+    },
+    {
+      "llr_id": 9,
+      "node_id": 13
+    },
+    {
+      "llr_id": 9,
+      "node_id": 14
+    },
+    {
+      "llr_id": 9,
+      "node_id": 15
+    },
+    {
+      "llr_id": 9,
+      "node_id": 16
+    },
+    {
+      "llr_id": 9,
+      "node_id": 17
+    },
+    {
+      "llr_id": 9,
+      "node_id": 18
+    },
+    {
+      "llr_id": 9,
+      "node_id": 19
+    },
+    {
+      "llr_id": 9,
+      "node_id": 20
+    },
+    {
+      "llr_id": 10,
+      "node_id": 7
+    },
+    {
+      "llr_id": 10,
+      "node_id": 8
+    },
+    {
+      "llr_id": 10,
+      "node_id": 9
+    },
+    {
+      "llr_id": 10,
+      "node_id": 10
+    },
+    {
+      "llr_id": 10,
+      "node_id": 11
+    },
+    {
+      "llr_id": 10,
+      "node_id": 12
+    },
+    {
+      "llr_id": 10,
+      "node_id": 13
+    },
+    {
+      "llr_id": 10,
+      "node_id": 14
+    },
+    {
+      "llr_id": 10,
+      "node_id": 15
+    },
+    {
+      "llr_id": 10,
+      "node_id": 16
+    },
+    {
+      "llr_id": 10,
+      "node_id": 17
+    },
+    {
+      "llr_id": 10,
+      "node_id": 18
+    },
+    {
+      "llr_id": 10,
+      "node_id": 19
+    },
+    {
+      "llr_id": 10,
+      "node_id": 20
+    },
+    {
+      "llr_id": 11,
+      "node_id": 7
+    },
+    {
+      "llr_id": 11,
+      "node_id": 8
+    },
+    {
+      "llr_id": 11,
+      "node_id": 9
+    },
+    {
+      "llr_id": 11,
+      "node_id": 10
+    },
+    {
+      "llr_id": 11,
+      "node_id": 11
+    },
+    {
+      "llr_id": 11,
+      "node_id": 12
+    },
+    {
+      "llr_id": 11,
+      "node_id": 13
+    },
+    {
+      "llr_id": 12,
+      "node_id": 7
+    },
+    {
+      "llr_id": 12,
+      "node_id": 8
+    },
+    {
+      "llr_id": 12,
+      "node_id": 9
+    },
+    {
+      "llr_id": 12,
+      "node_id": 10
+    },
+    {
+      "llr_id": 12,
+      "node_id": 11
+    },
+    {
+      "llr_id": 12,
+      "node_id": 12
+    },
+    {
+      "llr_id": 12,
+      "node_id": 13
+    },
+    {
+      "llr_id": 12,
+      "node_id": 14
+    },
+    {
+      "llr_id": 12,
+      "node_id": 15
+    },
+    {
+      "llr_id": 12,
+      "node_id": 16
+    },
+    {
+      "llr_id": 12,
+      "node_id": 17
+    },
+    {
+      "llr_id": 12,
+      "node_id": 18
+    },
+    {
+      "llr_id": 12,
+      "node_id": 19
+    },
+    {
+      "llr_id": 12,
+      "node_id": 20
+    },
+    {
+      "llr_id": 13,
+      "node_id": 7
+    },
+    {
+      "llr_id": 13,
+      "node_id": 8
+    },
+    {
+      "llr_id": 13,
+      "node_id": 9
+    },
+    {
+      "llr_id": 13,
+      "node_id": 10
+    },
+    {
+      "llr_id": 13,
+      "node_id": 11
+    },
+    {
+      "llr_id": 13,
+      "node_id": 12
+    },
+    {
+      "llr_id": 13,
+      "node_id": 13
+    },
+    {
+      "llr_id": 13,
+      "node_id": 14
+    },
+    {
+      "llr_id": 13,
+      "node_id": 15
+    },
+    {
+      "llr_id": 13,
+      "node_id": 16
+    },
+    {
+      "llr_id": 13,
+      "node_id": 17
+    },
+    {
+      "llr_id": 13,
+      "node_id": 18
+    },
+    {
+      "llr_id": 13,
+      "node_id": 19
+    },
+    {
+      "llr_id": 13,
+      "node_id": 20
+    }
+  ],
+  "verification_methods": [
+    {
+      "id": 14,
+      "method": "inspection",
+      "test_name": "main_window_exists",
+      "description": "Verify that the application starts and a main window frame is created by the GUI toolkit.",
+      "low_level_requirement_id": 1
+    },
+    {
+      "id": 15,
+      "method": "inspection",
+      "test_name": "display_area_present",
+      "description": "Verify that a dedicated UI element (e.g., Label, Textarea, Display) is present in the window layout intended for numeric output.",
+      "low_level_requirement_id": 2
+    },
+    {
+      "id": 16,
+      "method": "inspection",
+      "test_name": "digit_buttons_present",
+      "description": "Verify that ten distinct button elements corresponding to digits '0' through '9' are rendered in the interface.",
+      "low_level_requirement_id": 3
+    },
+    {
+      "id": 17,
+      "method": "inspection",
+      "test_name": "operator_buttons_present",
+      "description": "Verify that four distinct button elements corresponding to operators '+', '-', '\u00d7', and '\u00f7' are rendered in the interface.",
+      "low_level_requirement_id": 4
+    },
+    {
+      "id": 18,
+      "method": "inspection",
+      "test_name": "clear_button_present",
+      "description": "Verify that a button element labeled 'Clear' (or similar standard abbreviation like 'C') is rendered in the interface.",
+      "low_level_requirement_id": 5
+    },
+    {
+      "id": 19,
+      "method": "inspection",
+      "test_name": "equals_button_present",
+      "description": "Verify that a button element labeled 'Equals' (or '=' symbol) is rendered in the interface.",
+      "low_level_requirement_id": 6
+    },
+    {
+      "id": 20,
+      "method": "automated",
+      "test_name": "engine_adds_valid_operands",
+      "description": "Verify that adding two valid numbers returns their correct sum.",
+      "low_level_requirement_id": 7
+    },
+    {
+      "id": 21,
+      "method": "automated",
+      "test_name": "engine_subtracts_valid_operands",
+      "description": "Verify that subtracting the second operand from the first returns the correct difference.",
+      "low_level_requirement_id": 8
+    },
+    {
+      "id": 22,
+      "method": "automated",
+      "test_name": "engine_multiplies_valid_operands",
+      "description": "Verify that multiplying two valid numbers returns their correct product.",
+      "low_level_requirement_id": 9
+    },
+    {
+      "id": 23,
+      "method": "automated",
+      "test_name": "engine_divides_valid_operands",
+      "description": "Verify that dividing the first operand by the second returns the correct quotient.",
+      "low_level_requirement_id": 10
+    },
+    {
+      "id": 24,
+      "method": "automated",
+      "test_name": "engine_rejects_invalid_syntax",
+      "description": "Verify that providing an invalid syntax string raises a syntax error exception.",
+      "low_level_requirement_id": 11
+    },
+    {
+      "id": 25,
+      "method": "automated",
+      "test_name": "engine_handles_division_by_zero",
+      "description": "Verify that dividing by zero raises a division by zero error.",
+      "low_level_requirement_id": 12
+    },
+    {
+      "id": 26,
+      "method": "automated",
+      "test_name": "engine_returns_result_immediately",
+      "description": "Verify that the calculation method returns a result within a defined time threshold (e.g., < 100ms).",
+      "low_level_requirement_id": 13
+    }
+  ],
+  "verification_conditions": [
+    {
+      "id": 1,
+      "verification_id": 14,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::display",
+      "operator": "not_null",
+      "expected_value": "is_true",
+      "ontology_node_id": 23
+    },
+    {
+      "id": 2,
+      "verification_id": 14,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "operator": "not_null",
+      "expected_value": "not_null",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 3,
+      "verification_id": 14,
+      "phase": "pre",
+      "order": 2,
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "operator": "not_null",
+      "expected_value": "not_null",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 4,
+      "verification_id": 14,
+      "phase": "pre",
+      "order": 3,
+      "member_qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "operator": "not_null",
+      "expected_value": "not_null",
+      "ontology_node_id": 24
+    },
+    {
+      "id": 5,
+      "verification_id": 14,
+      "phase": "pre",
+      "order": 4,
+      "member_qualified_name": "user_interface::CalculatorWindow::equalsButton",
+      "operator": "not_null",
+      "expected_value": "not_null",
+      "ontology_node_id": 25
+    },
+    {
+      "id": 6,
+      "verification_id": 14,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::display",
+      "operator": "not_null",
+      "expected_value": "is_true",
+      "ontology_node_id": 23
+    },
+    {
+      "id": 7,
+      "verification_id": 14,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "operator": "contains",
+      "expected_value": "is_true",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 8,
+      "verification_id": 14,
+      "phase": "post",
+      "order": 2,
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "operator": "contains",
+      "expected_value": "is_true",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 9,
+      "verification_id": 14,
+      "phase": "post",
+      "order": 3,
+      "member_qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "operator": "not_null",
+      "expected_value": "is_true",
+      "ontology_node_id": 24
+    },
+    {
+      "id": 10,
+      "verification_id": 14,
+      "phase": "post",
+      "order": 4,
+      "member_qualified_name": "user_interface::CalculatorWindow::equalsButton",
+      "operator": "not_null",
+      "expected_value": "is_true",
+      "ontology_node_id": 25
+    },
+    {
+      "id": 11,
+      "verification_id": 15,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::display",
+      "operator": "not_null",
+      "expected_value": "not_null",
+      "ontology_node_id": 23
+    },
+    {
+      "id": 12,
+      "verification_id": 16,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "operator": "==",
+      "expected_value": "10",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 13,
+      "verification_id": 16,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "operator": "contains",
+      "expected_value": "not_null",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 14,
+      "verification_id": 16,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "operator": "==",
+      "expected_value": "10",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 15,
+      "verification_id": 16,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "operator": "contains",
+      "expected_value": "not_null",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 16,
+      "verification_id": 17,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "operator": "==",
+      "expected_value": "4",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 17,
+      "verification_id": 17,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "operator": "==",
+      "expected_value": "4",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 18,
+      "verification_id": 18,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "operator": "not_null",
+      "expected_value": "not_null",
+      "ontology_node_id": 24
+    },
+    {
+      "id": 19,
+      "verification_id": 18,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "operator": "not_null",
+      "expected_value": "not_null",
+      "ontology_node_id": 24
+    },
+    {
+      "id": 20,
+      "verification_id": 19,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::equalsButton",
+      "operator": "not_null",
+      "expected_value": "",
+      "ontology_node_id": 25
+    },
+    {
+      "id": 21,
+      "verification_id": 19,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "user_interface::CalculatorWindow::equalsButton",
+      "operator": "not_null",
+      "expected_value": "",
+      "ontology_node_id": 25
+    },
+    {
+      "id": 22,
+      "verification_id": 20,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "4",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 23,
+      "verification_id": 20,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 24,
+      "verification_id": 20,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 25,
+      "verification_id": 20,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::value",
+      "operator": "==",
+      "expected_value": "7.8",
+      "ontology_node_id": 15
+    },
+    {
+      "id": 26,
+      "verification_id": 20,
+      "phase": "post",
+      "order": 2,
+      "member_qualified_name": "calculation_engine::CalculatorResult::error_message",
+      "operator": "==",
+      "expected_value": "",
+      "ontology_node_id": 17
+    },
+    {
+      "id": 27,
+      "verification_id": 21,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "2",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 28,
+      "verification_id": 21,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 29,
+      "verification_id": 21,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 30,
+      "verification_id": 21,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::value",
+      "operator": "==",
+      "expected_value": "7.0",
+      "ontology_node_id": 15
+    },
+    {
+      "id": 31,
+      "verification_id": 21,
+      "phase": "post",
+      "order": 2,
+      "member_qualified_name": "calculation_engine::CalculatorResult::error_message",
+      "operator": "==",
+      "expected_value": "",
+      "ontology_node_id": 17
+    },
+    {
+      "id": 32,
+      "verification_id": 21,
+      "phase": "post",
+      "order": 3,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_error",
+      "operator": "is_false",
+      "expected_value": "false",
+      "ontology_node_id": 19
+    },
+    {
+      "id": 33,
+      "verification_id": 22,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "2",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 34,
+      "verification_id": 22,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "!=",
+      "expected_value": "0",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 35,
+      "verification_id": 22,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 36,
+      "verification_id": 22,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::value",
+      "operator": "==",
+      "expected_value": "7.0",
+      "ontology_node_id": 15
+    },
+    {
+      "id": 37,
+      "verification_id": 22,
+      "phase": "post",
+      "order": 2,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_error",
+      "operator": "is_false",
+      "expected_value": "false",
+      "ontology_node_id": 19
+    },
+    {
+      "id": 38,
+      "verification_id": 23,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "4",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 39,
+      "verification_id": 23,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "4",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 40,
+      "verification_id": 23,
+      "phase": "pre",
+      "order": 2,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "4",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 41,
+      "verification_id": 23,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 42,
+      "verification_id": 23,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_error",
+      "operator": "is_false",
+      "expected_value": "false",
+      "ontology_node_id": 19
+    },
+    {
+      "id": 43,
+      "verification_id": 23,
+      "phase": "post",
+      "order": 2,
+      "member_qualified_name": "calculation_engine::CalculatorResult::value",
+      "operator": "==",
+      "expected_value": "5.0",
+      "ontology_node_id": 15
+    },
+    {
+      "id": 44,
+      "verification_id": 23,
+      "phase": "post",
+      "order": 3,
+      "member_qualified_name": "calculation_engine::CalculatorResult::error_message",
+      "operator": "==",
+      "expected_value": "",
+      "ontology_node_id": 17
+    },
+    {
+      "id": 45,
+      "verification_id": 23,
+      "phase": "post",
+      "order": 4,
+      "member_qualified_name": "calculation_engine::CalculatorResult::value",
+      "operator": "==",
+      "expected_value": "5.0",
+      "ontology_node_id": 15
+    },
+    {
+      "id": 46,
+      "verification_id": 24,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "4",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 47,
+      "verification_id": 24,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::validateInput",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 13
+    },
+    {
+      "id": 48,
+      "verification_id": 24,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::validateInput",
+      "operator": "is_false",
+      "expected_value": "false",
+      "ontology_node_id": 13
+    },
+    {
+      "id": 49,
+      "verification_id": 25,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "2",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 50,
+      "verification_id": 25,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::validateInput",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 13
+    },
+    {
+      "id": 51,
+      "verification_id": 25,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "==",
+      "expected_value": "false",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 52,
+      "verification_id": 25,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_error",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 19
+    },
+    {
+      "id": 53,
+      "verification_id": 25,
+      "phase": "post",
+      "order": 2,
+      "member_qualified_name": "calculation_engine::CalculatorResult::error_message",
+      "operator": "contains",
+      "expected_value": "division by zero",
+      "ontology_node_id": 17
+    },
+    {
+      "id": 54,
+      "verification_id": 26,
+      "phase": "pre",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::precision",
+      "operator": "==",
+      "expected_value": "2",
+      "ontology_node_id": 8
+    },
+    {
+      "id": 55,
+      "verification_id": 26,
+      "phase": "pre",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorEngine::validateInput(\"10.5\")",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 13
+    },
+    {
+      "id": 56,
+      "verification_id": 26,
+      "phase": "post",
+      "order": 0,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "operator": "is_true",
+      "expected_value": "true",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 57,
+      "verification_id": 26,
+      "phase": "post",
+      "order": 1,
+      "member_qualified_name": "calculation_engine::CalculatorResult::value",
+      "operator": "==",
+      "expected_value": "30.8",
+      "ontology_node_id": 15
+    },
+    {
+      "id": 58,
+      "verification_id": 26,
+      "phase": "post",
+      "order": 2,
+      "member_qualified_name": "calculation_engine::CalculatorResult::error_message",
+      "operator": "==",
+      "expected_value": "",
+      "ontology_node_id": 17
+    },
+    {
+      "id": 59,
+      "verification_id": 26,
+      "phase": "post",
+      "order": 3,
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_error",
+      "operator": "is_false",
+      "expected_value": "false",
+      "ontology_node_id": 19
+    }
+  ],
+  "verification_actions": [
+    {
+      "id": 1,
+      "verification_id": 14,
+      "order": 0,
+      "description": "Instantiate the CalculatorWindow object",
+      "member_qualified_name": "user_interface::CalculatorWindow::CalculatorWindow",
+      "ontology_node_id": 31
+    },
+    {
+      "id": 2,
+      "verification_id": 14,
+      "order": 1,
+      "description": "Verify the Fl_Output display widget is created and not null",
+      "member_qualified_name": "user_interface::CalculatorWindow::display",
+      "ontology_node_id": 23
+    },
+    {
+      "id": 3,
+      "verification_id": 14,
+      "order": 2,
+      "description": "Verify the digit button vector is initialized and not empty",
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 4,
+      "verification_id": 14,
+      "order": 3,
+      "description": "Verify the operator button vector is initialized and not empty",
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 5,
+      "verification_id": 14,
+      "order": 4,
+      "description": "Verify the clear button is created and not null",
+      "member_qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "ontology_node_id": 24
+    },
+    {
+      "id": 6,
+      "verification_id": 14,
+      "order": 5,
+      "description": "Verify the equals button is created and not null",
+      "member_qualified_name": "user_interface::CalculatorWindow::equalsButton",
+      "ontology_node_id": 25
+    },
+    {
+      "id": 7,
+      "verification_id": 15,
+      "order": 0,
+      "description": "Inspect the CalculatorWindow class definition to locate the display member variable",
+      "member_qualified_name": "user_interface::CalculatorWindow::display",
+      "ontology_node_id": 23
+    },
+    {
+      "id": 8,
+      "verification_id": 15,
+      "order": 1,
+      "description": "Verify that the display member variable is of type Fl_Output*",
+      "member_qualified_name": "user_interface::CalculatorWindow::display",
+      "ontology_node_id": 23
+    },
+    {
+      "id": 9,
+      "verification_id": 15,
+      "order": 2,
+      "description": "Review the initializeDisplay() method to confirm it creates and configures an Fl_Output widget",
+      "member_qualified_name": "user_interface::CalculatorWindow::initializeDisplay",
+      "ontology_node_id": 33
+    },
+    {
+      "id": 10,
+      "verification_id": 16,
+      "order": 0,
+      "description": "Inspect the digitButtons vector of the CalculatorWindow instance",
+      "member_qualified_name": "user_interface::CalculatorWindow::digitButtons",
+      "ontology_node_id": 26
+    },
+    {
+      "id": 11,
+      "verification_id": 17,
+      "order": 0,
+      "description": "Inspect the operatorButtons vector to confirm it contains exactly four Fl_Button pointers",
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 12,
+      "verification_id": 17,
+      "order": 1,
+      "description": "Verify that the first button is associated with the '+' operation",
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 13,
+      "verification_id": 17,
+      "order": 2,
+      "description": "Verify that the second button is associated with the '-' operation",
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 14,
+      "verification_id": 17,
+      "order": 3,
+      "description": "Verify that the third button is associated with the '\u00d7' operation",
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 15,
+      "verification_id": 17,
+      "order": 4,
+      "description": "Verify that the fourth button is associated with the '\u00f7' operation",
+      "member_qualified_name": "user_interface::CalculatorWindow::operatorButtons",
+      "ontology_node_id": 27
+    },
+    {
+      "id": 16,
+      "verification_id": 18,
+      "order": 0,
+      "description": "Inspect the CalculatorWindow instance to verify the clearButton member is initialized.",
+      "member_qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "ontology_node_id": 24
+    },
+    {
+      "id": 17,
+      "verification_id": 18,
+      "order": 1,
+      "description": "Verify the clearButton widget exists and is visible in the window layout.",
+      "member_qualified_name": "user_interface::CalculatorWindow::clearButton",
+      "ontology_node_id": 24
+    },
+    {
+      "id": 18,
+      "verification_id": 19,
+      "order": 0,
+      "description": "Inspect the CalculatorWindow instance to verify the equalsButton member is initialized.",
+      "member_qualified_name": "user_interface::CalculatorWindow::equalsButton",
+      "ontology_node_id": 25
+    },
+    {
+      "id": 19,
+      "verification_id": 20,
+      "order": 0,
+      "description": "Create a new CalculatorEngine instance",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::CalculatorEngine",
+      "ontology_node_id": 7
+    },
+    {
+      "id": 20,
+      "verification_id": 20,
+      "order": 1,
+      "description": "Call the add method with operands 5.5 and 2.3",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::add",
+      "ontology_node_id": 9
+    },
+    {
+      "id": 21,
+      "verification_id": 20,
+      "order": 2,
+      "description": "Verify the result is successful",
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 22,
+      "verification_id": 20,
+      "order": 3,
+      "description": "Retrieve the computed value from the result",
+      "member_qualified_name": "calculation_engine::CalculatorResult::get_value",
+      "ontology_node_id": 18
+    },
+    {
+      "id": 23,
+      "verification_id": 21,
+      "order": 0,
+      "description": "Call the subtract method with operands 10.0 and 3.0",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::subtract",
+      "ontology_node_id": 10
+    },
+    {
+      "id": 24,
+      "verification_id": 21,
+      "order": 1,
+      "description": "Check if the result is a success",
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 25,
+      "verification_id": 21,
+      "order": 2,
+      "description": "Retrieve the computed value from the result",
+      "member_qualified_name": "calculation_engine::CalculatorResult::get_value",
+      "ontology_node_id": 18
+    },
+    {
+      "id": 26,
+      "verification_id": 22,
+      "order": 0,
+      "description": "Call the multiply method with operands 3.5 and 2.0",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::multiply",
+      "ontology_node_id": 11
+    },
+    {
+      "id": 27,
+      "verification_id": 22,
+      "order": 1,
+      "description": "Check that the result is successful",
+      "member_qualified_name": "calculation_engine::CalculatorResult::is_success",
+      "ontology_node_id": 16
+    },
+    {
+      "id": 28,
+      "verification_id": 22,
+      "order": 2,
+      "description": "Get the computed value from the result",
+      "member_qualified_name": "calculation_engine::CalculatorResult::get_value",
+      "ontology_node_id": 18
+    },
+    {
+      "id": 29,
+      "verification_id": 23,
+      "order": 0,
+      "description": "Invoke the divide method with operands 10.0 and 2.0",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::divide",
+      "ontology_node_id": 12
+    },
+    {
+      "id": 30,
+      "verification_id": 23,
+      "order": 1,
+      "description": "Capture the result of the division operation",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::divide",
+      "ontology_node_id": 12
+    },
+    {
+      "id": 31,
+      "verification_id": 23,
+      "order": 2,
+      "description": "Retrieve the computed value from the result",
+      "member_qualified_name": "calculation_engine::CalculatorResult::get_value",
+      "ontology_node_id": 18
+    },
+    {
+      "id": 32,
+      "verification_id": 24,
+      "order": 0,
+      "description": "Create a CalculatorEngine instance with default precision",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::CalculatorEngine",
+      "ontology_node_id": 7
+    },
+    {
+      "id": 33,
+      "verification_id": 24,
+      "order": 1,
+      "description": "Call validateInput with an invalid syntax string like \"12abc\"",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::validateInput",
+      "ontology_node_id": 13
+    },
+    {
+      "id": 34,
+      "verification_id": 24,
+      "order": 2,
+      "description": "Verify that validateInput returns false for invalid syntax",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::validateInput",
+      "ontology_node_id": 13
+    },
+    {
+      "id": 35,
+      "verification_id": 25,
+      "order": 0,
+      "description": "Create a CalculatorEngine instance",
+      "member_qualified_name": "calculation_engine::CalculatorEngine",
+      "ontology_node_id": 7
+    },
+    {
+      "id": 36,
+      "verification_id": 25,
+      "order": 1,
+      "description": "Call the divide method with 10.0 as dividend and 0.0 as divisor",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::divide",
+      "ontology_node_id": 12
+    },
+    {
+      "id": 37,
+      "verification_id": 26,
+      "order": 0,
+      "description": "Invoke the add method with two valid operands",
+      "member_qualified_name": "calculation_engine::CalculatorEngine::add(10.5, 20.3)",
+      "ontology_node_id": 9
+    }
+  ],
+  "hlr_dependency_contexts": []
+}
