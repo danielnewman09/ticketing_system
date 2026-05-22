@@ -3,11 +3,9 @@
 import pytest
 
 from backend.db.models.tasks import Task, TaskDesignNode, TaskVerification
-from backend.db.models.ontology import OntologyNode
 from backend.pipeline.schemas import TaskSchema, TaskBatchSchema
 from backend.pipeline.services import (
     persist_tasks,
-    build_qname_to_node,
     mark_task_status,
     _topological_sort,
 )
@@ -36,22 +34,8 @@ class TestTopologicalSort:
 
 class TestPersistTasks:
     def test_persist_task_with_design_link(self, seeded_session):
-        from backend.pipeline.services import persist_tasks, build_qname_to_node
+        from backend.pipeline.services import persist_tasks
 
-        # Create an ontology node to link to
-        comp = seeded_session.query(__import__("backend.db.models").db.models.Component).first()
-
-        node = OntologyNode(
-            kind="class",
-            name="Foo",
-            qualified_name="calc::Foo",
-            component_id=comp.id,
-            implementation_status="designed",
-        )
-        seeded_session.add(node)
-        seeded_session.flush()
-
-        qname_map = build_qname_to_node(seeded_session)
         batch = TaskBatchSchema(
             component_name="Calculator",
             tasks=[
@@ -64,7 +48,7 @@ class TestPersistTasks:
             ],
         )
 
-        result = persist_tasks(seeded_session, batch, qname_map)
+        result = persist_tasks(seeded_session, batch)
         assert result.tasks_created == 1
         assert result.links_to_design == 1
 
@@ -79,6 +63,8 @@ class TestPersistTasks:
         assert task is not None
         assert task.description == "Implement the Foo class"
         assert len(task.design_nodes) == 1
+        # Phase 1: design_nodes link by qualified_name string
+        assert task.design_nodes[0].ontology_node_qualified_name == "calc::Foo"
 
     def test_persist_task_with_parent(self, seeded_session):
         batch = TaskBatchSchema(
@@ -92,7 +78,7 @@ class TestPersistTasks:
             ],
             dependency_graph=[("Parent", "Child")],
         )
-        result = persist_tasks(seeded_session, batch, {})
+        result = persist_tasks(seeded_session, batch)
         assert result.tasks_created == 2
 
         parent = seeded_session.query(Task).filter_by(title="Parent").first()
@@ -137,7 +123,7 @@ class TestPersistTasks:
             ],
         )
 
-        result = persist_tasks(seeded_session, batch, {})
+        result = persist_tasks(seeded_session, batch)
         assert result.tasks_created == 1
         assert result.links_to_verification == 1
 
@@ -151,43 +137,3 @@ class TestPersistTasks:
 
         with pytest.raises(ValueError):
             mark_task_status(seeded_session, task, "invalid_status")
-
-    def test_unknown_design_node_warning(self, seeded_session, caplog):
-        batch = TaskBatchSchema(
-            tasks=[
-                TaskSchema(
-                    title="Bad ref",
-                    description="references unknown node",
-                    design_node_qualified_names=["nonexistent::Class"],
-                ),
-            ],
-        )
-        result = persist_tasks(seeded_session, batch, {})
-        assert result.tasks_created == 1
-        assert result.links_to_design == 0
-        assert any("unknown design node" in r.message for r in caplog.records)
-
-
-class TestBuildQnameToNode:
-    def test_builds_map(self, seeded_session):
-        comp = seeded_session.query(__import__("backend.db.models").db.models.Component).first()
-
-        node = OntologyNode(
-            kind="class",
-            name="Bar",
-            qualified_name="calc::Bar",
-            component_id=comp.id,
-        )
-        seeded_session.add(node)
-        empty_node = OntologyNode(
-            kind="class",
-            name="NoQn",
-            qualified_name="",
-            component_id=comp.id,
-        )
-        seeded_session.add(empty_node)
-        seeded_session.flush()
-
-        m = build_qname_to_node(seeded_session)
-        assert "calc::Bar" in m
-        assert "" not in m  # empty qualified_name excluded

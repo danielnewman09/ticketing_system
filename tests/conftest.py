@@ -71,11 +71,9 @@ def seeded_session(session):
     - 1 Language (C++)
     - 1 Component (Calculator) with that language
     - 1 HighLevelRequirement ("The system shall perform arithmetic")
-    - 7 default Predicates (associates, composes, depends_on, …)
     """
     from backend.db.models.components import Component, Language
     from backend.db.models.requirements import HighLevelRequirement
-    from backend.db.models.ontology import Predicate
 
     lang = Language(name="C++", version="17")
     session.add(lang)
@@ -90,10 +88,6 @@ def seeded_session(session):
         component=comp,
     )
     session.add(hlr)
-    session.flush()
-
-    # Seed predicates that persistence functions depend on
-    Predicate.ensure_defaults(session)
     session.flush()
 
     yield session

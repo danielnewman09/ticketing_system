@@ -8,7 +8,7 @@ from sqlalchemy import ForeignKey, Integer, String, Text, Boolean, UniqueConstra
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
-from backend.db.models.associations import high_level_requirements_nodes, low_level_requirements_nodes
+from backend.db.base import Base
 
 if TYPE_CHECKING:
     from backend.db.models.components import Component
@@ -219,12 +219,8 @@ class OntologyNode(Base):
         "TaskDesignNode",
         back_populates="ontology_node",
     )
-    high_level_requirements: Mapped[list["HighLevelRequirement"]] = relationship(
-        "HighLevelRequirement", secondary=high_level_requirements_nodes, back_populates="nodes"
-    )
-    low_level_requirements: Mapped[list["LowLevelRequirement"]] = relationship(
-        "LowLevelRequirement", secondary=low_level_requirements_nodes, back_populates="nodes"
-    )
+    # requirement relationships removed in Phase 1
+    # HLR/LLR links now handled via Neo4j TRACES_TO edges
 
     def __repr__(self):
         return self.qualified_name or self.name

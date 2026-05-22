@@ -1,11 +1,7 @@
 """Re-export all models for convenient imports."""
 
 from backend.db.models.associations import (
-    high_level_requirements_nodes,
-    high_level_requirements_triples,
     low_level_requirements_components,
-    low_level_requirements_nodes,
-    low_level_requirements_triples,
     tickets_components,
     tickets_languages,
 )
@@ -74,11 +70,7 @@ from backend.db.models.tasks import (
 
 __all__ = [
     # Associations
-    "high_level_requirements_nodes",
-    "high_level_requirements_triples",
     "low_level_requirements_components",
-    "low_level_requirements_nodes",
-    "low_level_requirements_triples",
     "tickets_components",
     "tickets_languages",
     # Components

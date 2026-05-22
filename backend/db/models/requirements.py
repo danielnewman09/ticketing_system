@@ -10,16 +10,11 @@ from sqlalchemy.types import JSON
 
 from backend.db.base import Base
 from backend.db.models.associations import (
-    high_level_requirements_nodes,
-    high_level_requirements_triples,
     low_level_requirements_components,
-    low_level_requirements_nodes,
-    low_level_requirements_triples,
 )
 
 if TYPE_CHECKING:
     from backend.db.models.components import Component
-    from backend.db.models.ontology import OntologyNode, OntologyTriple
     from backend.db.models.verification import VerificationMethod
 
 
@@ -39,12 +34,8 @@ class HighLevelRequirement(Base):
     low_level_requirements: Mapped[list[LowLevelRequirement]] = relationship(
         "LowLevelRequirement", back_populates="high_level_requirement"
     )
-    triples: Mapped[list[OntologyTriple]] = relationship(
-        "OntologyTriple", secondary=high_level_requirements_triples
-    )
-    nodes: Mapped[list[OntologyNode]] = relationship(
-        "OntologyNode", secondary=high_level_requirements_nodes
-    )
+    # triples and nodes relationships removed — replaced by Neo4j TRACES_TO edges
+    # on :HLR/:LLR stub nodes. See backend/db/neo4j/repositories/design.py
 
     def __repr__(self):
         return self.description[:80] if self.description else f"HLR {self.id}"
@@ -107,12 +98,8 @@ class LowLevelRequirement(Base):
     components: Mapped[list[Component]] = relationship(
         "Component", secondary=low_level_requirements_components
     )
-    triples: Mapped[list[OntologyTriple]] = relationship(
-        "OntologyTriple", secondary=low_level_requirements_triples
-    )
-    nodes: Mapped[list[OntologyNode]] = relationship(
-        "OntologyNode", secondary=low_level_requirements_nodes
-    )
+    # triples and nodes relationships removed — replaced by Neo4j TRACES_TO edges
+    # on :HLR/:LLR stub nodes
 
     def __repr__(self):
         return self.description[:80] if self.description else f"LLR {self.id}"

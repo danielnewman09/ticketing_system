@@ -1,46 +1,13 @@
-"""M2M junction tables — explicit Table objects matching Django's auto-generated names."""
+"""M2M junction tables — explicit Table objects matching Django's auto-generated names.
+
+Phase 1 note: HLR/LLR ↔ OntologyNode and HLR/LLR ↔ OntologyTriple M2M tables
+have been removed. Requirement-to-design links are now handled via TRACES_TO
+edges on :HLR/:LLR stub nodes in Neo4j.
+"""
 
 from sqlalchemy import Column, ForeignKey, Integer, Table
 
 from backend.db.base import Base
-
-# HLR ↔ OntologyTriple
-high_level_requirements_triples = Table(
-    "high_level_requirements_triples",
-    Base.metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column(
-        "highlevelrequirement_id",
-        Integer,
-        ForeignKey("high_level_requirements.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column(
-        "ontologytriple_id",
-        Integer,
-        ForeignKey("ontology_triples.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-)
-
-# LLR ↔ OntologyTriple
-low_level_requirements_triples = Table(
-    "low_level_requirements_triples",
-    Base.metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column(
-        "lowlevelrequirement_id",
-        Integer,
-        ForeignKey("low_level_requirements.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column(
-        "ontologytriple_id",
-        Integer,
-        ForeignKey("ontology_triples.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-)
 
 # LLR ↔ Component
 low_level_requirements_components = Table(
@@ -76,42 +43,4 @@ tickets_languages = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("ticket_id", Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False),
     Column("language_id", Integer, ForeignKey("languages.id", ondelete="CASCADE"), nullable=False),
-)
-
-# HLR ↔ OntologyNode
-high_level_requirements_nodes = Table(
-    "high_level_requirements_nodes",
-    Base.metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column(
-        "highlevelrequirement_id",
-        Integer,
-        ForeignKey("high_level_requirements.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column(
-        "ontologynode_id",
-        Integer,
-        ForeignKey("ontology_nodes.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-)
-
-# LLR ↔ OntologyNode
-low_level_requirements_nodes = Table(
-    "low_level_requirements_nodes",
-    Base.metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column(
-        "lowlevelrequirement_id",
-        Integer,
-        ForeignKey("low_level_requirements.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column(
-        "ontologynode_id",
-        Integer,
-        ForeignKey("ontology_nodes.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
 )

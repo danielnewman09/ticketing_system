@@ -86,6 +86,9 @@ class VerificationCondition(Base):
     ontology_node_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("ontology_nodes.id", ondelete="SET NULL"), nullable=True
     )
+    ontology_node_qualified_name: Mapped[str] = mapped_column(
+        String(500), default="", server_default=""
+    )
     member_qualified_name: Mapped[str] = mapped_column(String(500), nullable=False)
     operator: Mapped[str] = mapped_column(String(20), default="==", server_default="==")
     expected_value: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -110,6 +113,9 @@ class VerificationAction(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     ontology_node_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("ontology_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    ontology_node_qualified_name: Mapped[str] = mapped_column(
+        String(500), default="", server_default=""
     )
     member_qualified_name: Mapped[str] = mapped_column(String(500), default="", server_default="")
 

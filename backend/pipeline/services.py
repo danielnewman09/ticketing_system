@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from backend.db.models.tasks import Task, TaskDesignNode, TaskVerification
-from backend.db.models.ontology import OntologyNode
 from backend.db.models.verification import VerificationMethod
 from backend.pipeline.schemas import TaskBatchSchema, TaskSchema
 
@@ -23,14 +22,15 @@ class TaskPersistResult:
 def persist_tasks(
     session: Session,
     batch: TaskBatchSchema,
-    qname_to_node: dict[str, OntologyNode],
+    qname_to_node: dict | None = None,
 ) -> TaskPersistResult:
     """Persist a batch of tasks to SQLite.
 
     Args:
         session: Active SQLAlchemy session.
         batch: TaskBatchSchema from the generate_tasks agent.
-        qname_to_node: Mapping from qualified_name to OntologyNode.
+        qname_to_node: Optional mapping. Not used in Phase 1 — tasks
+            link to design nodes by qualified_name string.
 
     Returns:
         TaskPersistResult with counts of items created.
@@ -57,20 +57,13 @@ def persist_tasks(
         result.tasks_created += 1
 
         for qname in ts.design_node_qualified_names:
-            if qname in qname_to_node:
-                session.add(
-                    TaskDesignNode(
-                        task=task,
-                        ontology_node=qname_to_node[qname],
-                    )
+            session.add(
+                TaskDesignNode(
+                    task=task,
+                    ontology_node_qualified_name=qname,
                 )
-                result.links_to_design += 1
-            else:
-                log.warning(
-                    "Task %s references unknown design node: %s",
-                    ts.title,
-                    qname,
-                )
+            )
+            result.links_to_design += 1
 
         for test_name in ts.verification_test_names:
             vm = _find_verification_by_test_name(session, test_name)
@@ -162,7 +155,3 @@ def mark_task_status(
     session.flush()
 
 
-def build_qname_to_node(session: Session) -> dict[str, OntologyNode]:
-    """Build a qualified_name -> OntologyNode lookup map."""
-    nodes = session.query(OntologyNode).all()
-    return {n.qualified_name: n for n in nodes if n.qualified_name}

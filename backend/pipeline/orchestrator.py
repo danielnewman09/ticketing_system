@@ -94,6 +94,7 @@ def run_pipeline(
         Component,
         HighLevelRequirement,
         LowLevelRequirement,
+        OntologyNode,
         VerificationMethod,
     )
     from backend.db.models.tasks import Task
@@ -248,9 +249,7 @@ def run_pipeline(
             persist_result.triples_created,
         )
 
-    qname_to_node = {
-        n.qualified_name: n for n in session.query(OntologyNode).all() if n.qualified_name
-    }
+    # qname_to_node no longer needed for task persistence — tasks link by qualified_name string
 
     # ------------------------------------------------------------------
     # Phase 5: Task generation
@@ -292,7 +291,7 @@ def run_pipeline(
             model=model,
         )
 
-        persist_result = persist_tasks(session, batch, qname_to_node)
+        persist_result = persist_tasks(session, batch)
         result.tasks_created += persist_result.tasks_created
         log.info(
             "  %d tasks, %d design links, %d verification links",

@@ -2,7 +2,6 @@
 
 from backend.db.models.requirements import HighLevelRequirement
 from backend.db.models.components import Component, Language
-from backend.db.models.ontology import Predicate
 
 
 def test_session_can_create_hlr(session):
@@ -17,12 +16,10 @@ def test_session_can_create_hlr(session):
 
 
 def test_seeded_session_has_defaults(seeded_session):
-    """The seeded_session fixture populates language, component, HLR, predicates."""
+    """The seeded_session fixture populates language, component, HLR."""
     assert seeded_session.query(Language).count() == 1
     assert seeded_session.query(Component).count() == 1
     assert seeded_session.query(HighLevelRequirement).count() == 1
-    # Ensure_defaults creates at least 7 predicates
-    assert seeded_session.query(Predicate).count() >= 7
 
 
 def test_session_rolls_back_between_tests(session):

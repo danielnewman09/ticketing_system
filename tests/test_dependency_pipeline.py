@@ -1,5 +1,15 @@
-"""Integration test: design pipeline with dependency linkages."""
+"""Integration test: design pipeline with dependency linkages.
+
+Phase 1 note: persist_design now requires a Neo4j session, so these
+tests are skipped unless RUN_NEO4J_INTEGRATION=1.
+"""
+import os
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_NEO4J_INTEGRATION") != "1",
+    reason="Set RUN_NEO4J_INTEGRATION=1 to run Neo4j integration tests",
+)
 from backend.codebase.schemas import (
     AssociationSchema,
     AttributeSchema,

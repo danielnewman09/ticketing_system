@@ -215,7 +215,9 @@ class TestPredicate:
         assert count1 == count2
 
     def test_seeded_session_has_predicates(self, seeded_session):
-        """The seeded_session fixture provides default predicates."""
+        """Predicate.ensure_defaults creates default predicates."""
+        Predicate.ensure_defaults(seeded_session)
+        seeded_session.flush()
         count = seeded_session.query(Predicate).count()
         assert count >= 7
 
@@ -430,39 +432,6 @@ class TestOntologyConstants:
 
 
 # ---------------------------------------------------------------------------
-# OntologyNode requirement reverse relationships
-# ---------------------------------------------------------------------------
-
-
-class TestOntologyNodeRequirementRelationships:
-    """Tests for reverse requirement relationships on OntologyNode."""
-
-    def test_node_high_level_requirements(self, seeded_session):
-        from backend.db.models.requirements import HighLevelRequirement
-        hlr = seeded_session.query(HighLevelRequirement).first()
-        node = OntologyNode(kind="class", name="X", qualified_name="ns::X")
-        seeded_session.add(node)
-        seeded_session.flush()
-        hlr.nodes.append(node)
-        seeded_session.flush()
-        assert hlr in node.high_level_requirements
-
-    def test_node_low_level_requirements(self, seeded_session):
-        from backend.db.models.requirements import LowLevelRequirement, HighLevelRequirement
-        hlr = seeded_session.query(HighLevelRequirement).first()
-        llr = LowLevelRequirement(description="LLR", high_level_requirement=hlr)
-        seeded_session.add(llr)
-        seeded_session.flush()
-        node = OntologyNode(kind="class", name="Y", qualified_name="ns::Y")
-        seeded_session.add(node)
-        seeded_session.flush()
-        llr.nodes.append(node)
-        seeded_session.flush()
-        assert llr in node.low_level_requirements
-
-    def test_node_no_requirements_by_default(self, seeded_session):
-        node = OntologyNode(kind="class", name="Z", qualified_name="ns::Z")
-        seeded_session.add(node)
-        seeded_session.flush()
-        assert node.high_level_requirements == []
-        assert node.low_level_requirements == []
+# OntologyNode requirement reverse relationships removed in Phase 1.
+# HLR/LLR ↔ OntologyNode M2M relationships replaced by Neo4j TRACES_TO edges.
+# See backend/db/neo4j/repositories/design.py for the new approach.

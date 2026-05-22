@@ -1390,12 +1390,56 @@ git commit -m "refactor: update frontend data layer and Neo4j queries to use Des
 ### Task 6: Remove Old SQLAlchemy Design Models and Sync Code
 
 **Files:**
-- Delete: `backend/db/models/ontology.py`
-- Delete: `backend/db/neo4j/sync.py`
 - Modify: `backend/db/models/associations.py` — remove 4 M2M tables
-- Modify: `backend/db/models/__init__.py` — remove OntologyNode/OntologyTriple/Predicate re-exports
-- Modify: `backend/db/events.py` — no changes needed (events are for Language/Ticket, not ontology)
-- Modify: `tests/conftest.py` — remove Predicate.ensure_defaults and OntologyNode from seeded_session
+- Modify: `backend/db/models/requirements.py` — remove M2M relationships
+- Modify: `backend/db/models/ontology.py` — remove M2M reverse relationships and imports
+- Modify: `backend/db/models/tasks.py` — add ontology_node_qualified_name column
+- Modify: `backend/db/models/verification.py` — add ontology_node_qualified_name columns
+- Modify: `backend/db/neo4j/sync.py` — remove design node/triple sync, keep task/implementation sync
+- Modify: `backend/db/models/__init__.py` — remove M2M table exports
+- Modify: `backend/pipeline/services.py` — remove build_qname_to_node, update persist_tasks
+- Modify: `backend/pipeline/orchestrator.py` — remove qname_to_node dict
+- Modify: `tests/` — update tests for new schema
+
+**⚠️ Deviations from original plan — items kept as Phase 1 bridge:**
+
+The original plan called for deleting `ontology.py` and `sync.py` entirely, and removing
+`OntologyNode`/`OntologyTriple`/`Predicate` exports from `__init__.py`. These were kept because
+many consumers still reference them:
+
+1. **`ontology.py` NOT deleted** — Still imported by:
+   - `persistence.py`: `resolve_ontology_node`, `build_verification_context`, `augment_design_for_unresolved`
+   - `pipeline/services.py`: `persist_tasks` (via `TaskDesignNode.ontology_node` FK)
+   - `pipeline/orchestrator.py`: Phase 3 verification context, Phase 10 implementation status sync
+   - `review/review_class_design.py`: heavy usage for review agent
+   - `review/challenge_design.py`: challenge agent
+   - `mcp_server.py`: node/triple list and delete operations
+   - `design_ontology.py`, `design_oo_prompt.py`: constants (`NODE_KIND_VALUES`, `LANGUAGE_SPECIALIZATIONS`)
+   - `codebase/schemas.py`: constant imports (`NODE_KINDS`, `SOURCE_TYPES`, `VISIBILITY_CHOICES`)
+   - `components.py`: `Component.ontology_nodes` relationship
+   - `verification.py`: FK references to `ontology_nodes` table
+   - `tasks.py`: FK reference to `ontology_nodes` table
+   - Various tests and scripts
+
+   Full removal is deferred to Phase 3 (verification migration).
+
+2. **`sync.py` NOT deleted** — Trimmed to only non-design-sync functions:
+   - `clear_design_graph()` — still used by `scripts/01_flush_db.py`
+   - `link_implemented_nodes()` — called by `sync_full_design`
+   - `sync_full_design()` — called by orchestrator Phase 10 (now only does IMPLEMENTED_BY links)
+   - `sync_task()` — called by orchestrator Phase 10 (updated to use `ontology_node_qualified_name`)
+   - `sync_implementation_status()` — called by orchestrator Phase 10
+   - Removed: `sync_design_node`, `sync_design_triple`, `try_sync_design_nodes_and_triples`
+
+3. **`OntologyNode`/`OntologyTriple`/`Predicate` exports kept in `__init__.py`** — Still referenced by
+   consumers listed above. Removal deferred to Phase 3.
+
+4. **`TaskDesignNode.ontology_node_id` FK kept** — Now nullable (was NOT NULL) with a new
+   `ontology_node_qualified_name` column as the preferred reference. The FK will be removed
+   in Phase 3 when `ontology_nodes` table is dropped.
+
+5. **`VerificationCondition.ontology_node_id` and `VerificationAction.ontology_node_id` FKs kept** —
+   New `ontology_node_qualified_name` string columns added alongside. FK removal deferred to Phase 3.
 
 - [ ] **Step 1: Remove OntologyNode, OntologyTriple, and Predicate from `backend/db/models/__init__.py`**
 

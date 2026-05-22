@@ -75,7 +75,12 @@ class Task(Base):
 
 
 class TaskDesignNode(Base):
-    """Links a task to one or more ontology design nodes."""
+    """Links a task to one or more ontology design nodes.
+
+    Phase 1: uses qualified_name string reference instead of FK to
+    ontology_nodes table. The ontology_node_id FK is kept temporarily
+    for backward compatibility but should be migrated.
+    """
 
     __tablename__ = "task_design_nodes"
 
@@ -84,13 +89,16 @@ class TaskDesignNode(Base):
         ForeignKey("tasks.id", ondelete="CASCADE"),
         nullable=False,
     )
-    ontology_node_id: Mapped[int] = mapped_column(
-        ForeignKey("ontology_nodes.id", ondelete="CASCADE"),
-        nullable=False,
+    ontology_node_qualified_name: Mapped[str] = mapped_column(
+        String(500), nullable=False, server_default=""
+    )
+    # FK kept for backward compatibility — Phase 2 will remove it
+    ontology_node_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("ontology_nodes.id", ondelete="SET NULL"), nullable=True
     )
 
     task: Mapped[Task] = relationship("Task", back_populates="design_nodes")
-    ontology_node: Mapped["OntologyNode"] = relationship("OntologyNode")
+    ontology_node: Mapped[Optional["OntologyNode"]] = relationship("OntologyNode")
 
 
 class TaskVerification(Base):
