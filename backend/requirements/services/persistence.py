@@ -1,32 +1,40 @@
-"""
-Service layer for persisting agent outputs to the database.
+"""Service layer for persisting agent outputs to the database.
 
 Consolidates the persistence logic used by demo.py, the MCP server,
 and NiceGUI views into a single place.
+
+Phase 1 note: design nodes and triples are persisted to Neo4j via
+DesignRepository. HLR/LLR and verification data still use SQLAlchemy
+until Phase 2 and Phase 3 respectively.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
-
-log = logging.getLogger(__name__)
 
 from backend.db import get_or_create
 from backend.db.models import (
     HighLevelRequirement,
     LowLevelRequirement,
-    OntologyNode,
-    OntologyTriple,
-    Predicate,
     VerificationAction,
     VerificationCondition,
     VerificationMethod,
 )
 from backend.codebase.schemas import DesignSchema
+from backend.db.neo4j.repositories.design import DesignRepository
+from backend.db.neo4j.repositories.models.design import DesignNode
 from backend.requirements.schemas import LowLevelRequirementSchema, VerificationSchema
+
+if TYPE_CHECKING:
+    from neo4j import Session as Neo4jSession
+    from backend.db.models.ontology import OntologyNode
+
+log = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Result dataclasses
@@ -49,7 +57,7 @@ class DesignResult:
     links_skipped: int = 0
     node_links_applied: int = 0
     node_links_skipped: int = 0
-    qname_to_node: dict[str, OntologyNode] = field(default_factory=dict)
+    qname_to_node: dict[str, "DesignNode"] = field(default_factory=dict)
 
 
 @dataclass
@@ -82,7 +90,7 @@ class AugmentResult:
 
 
 # ---------------------------------------------------------------------------
-# Ontology node resolution
+# Ontology node resolution (still uses SQLAlchemy — Phase 3 will move to Neo4j)
 # ---------------------------------------------------------------------------
 
 
@@ -90,8 +98,14 @@ def resolve_ontology_node(
     session: Session,
     member_qname: str,
     node_list: list[dict] | None = None,
-) -> OntologyNode | None:
-    """Resolve a member qualified name to an OntologyNode via longest prefix match."""
+) -> "OntologyNode | None":
+    """Resolve a member qualified name to an OntologyNode via longest prefix match.
+
+    NOTE: This still uses SQLAlchemy OntologyNode. Phase 3 will replace
+    this with Neo4j-based resolution.
+    """
+    from backend.db.models import OntologyNode
+
     if not member_qname:
         return None
 
@@ -115,22 +129,21 @@ def resolve_ontology_node(
 
 
 # ---------------------------------------------------------------------------
-# Verification context building
+# Verification context building (still uses SQLAlchemy — Phase 3 will move)
 # ---------------------------------------------------------------------------
 
 
 def build_verification_context(session: Session) -> list[dict]:
     """Build structured class-level context for the verification agent.
 
-    Returns a list of class-context dicts with grouped members and relationships,
-    suitable for rendering as a PlantUML-like prompt section.
+    NOTE: This still queries SQLAlchemy OntologyNode/OntologyTriple.
+    Phase 3 will replace this with Neo4j Cypher queries.
     """
-    from backend.db.models.ontology import TYPE_KINDS, VALUE_KINDS
+    from backend.db.models.ontology import TYPE_KINDS, VALUE_KINDS, OntologyNode, OntologyTriple
 
     # Load all nodes
     all_nodes = session.query(OntologyNode).all()
     node_by_id: dict[int, OntologyNode] = {n.id: n for n in all_nodes}
-    node_by_qn: dict[str, OntologyNode] = {n.qualified_name: n for n in all_nodes}
 
     # Load all triples
     all_triples = session.query(OntologyTriple).all()
@@ -235,7 +248,7 @@ def validate_verification_references(
 
 
 # ---------------------------------------------------------------------------
-# Closed-loop design augmentation
+# Closed-loop design augmentation (still uses SQLAlchemy — Phase 3)
 # ---------------------------------------------------------------------------
 
 
@@ -245,13 +258,11 @@ def augment_design_for_unresolved(
 ) -> AugmentResult:
     """Create missing ontology nodes for unresolved verification references.
 
-    For each unresolved member_qualified_name, parse the parent class from the
-    qualified name, look it up, and create the missing member node + COMPOSES
-    triple. Infers kind from context (action → method, condition → attribute).
-
-    After creating nodes, re-links any VerificationCondition/VerificationAction
-    rows that had NULL ontology_node_id.
+    NOTE: This still uses SQLAlchemy OntologyNode. Phase 3 will replace
+    this with Neo4j-based Constraint creation.
     """
+    from backend.db.models import OntologyNode, OntologyTriple, Predicate
+
     result = AugmentResult()
     if not unresolved:
         return result
@@ -350,20 +361,38 @@ def augment_design_for_unresolved(
 
         session.flush()
 
-    # Neo4j sync
+    # Neo4j sync of newly created nodes
     if created_nodes:
         try:
+            from backend.db.neo4j.repositories.design import DesignRepository as DR
+            from backend.db.neo4j.connection import get_neo4j
+
             new_triples = (
                 session.query(OntologyTriple)
                 .filter(OntologyTriple.object_id.in_([n.id for n in created_nodes.values()]))
                 .all()
             )
-            from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
-
-            try_sync_design_nodes_and_triples(
-                list(created_nodes.values()),
-                new_triples,
-            )
+            with get_neo4j().session() as neo4j_session:
+                repo = DR(neo4j_session)
+                for node in created_nodes.values():
+                    dn = DesignNode(
+                        qualified_name=node.qualified_name or node.name,
+                        name=node.name,
+                        kind=node.kind,
+                        specialization=node.specialization or "",
+                        visibility=node.visibility or "",
+                        description=node.description or "",
+                        source_type=node.source_type or "",
+                        component_id=node.component_id,
+                    )
+                    repo.merge_node(dn)
+                for triple in new_triples:
+                    if triple.subject and triple.object and triple.predicate:
+                        repo.merge_triple(
+                            triple.subject.qualified_name,
+                            triple.predicate.name,
+                            triple.object.qualified_name,
+                        )
         except Exception:
             log.warning("Neo4j augment sync failed", exc_info=True)
 
@@ -380,7 +409,11 @@ def persist_decomposition(
     hlr: HighLevelRequirement,
     llrs: list[LowLevelRequirementSchema],
 ) -> DecompositionResult:
-    """Create LLRs (with verification stubs) under an existing HLR."""
+    """Create LLRs (with verification stubs) under an existing HLR.
+
+    Also creates :LLR stub nodes in Neo4j and DECOMPOSES_INTO edges
+    from the HLR stub (Phase 1 bridge).
+    """
     result = DecompositionResult()
 
     for llr_data in llrs:
@@ -391,6 +424,24 @@ def persist_decomposition(
         session.add(llr)
         session.flush()
         result.llrs_created += 1
+
+        # Create LLR stub in Neo4j
+        try:
+            from backend.db.neo4j.connection import get_neo4j
+            with get_neo4j().session() as neo4j_session:
+                repo = DesignRepository(neo4j_session)
+                repo.merge_llr_stub(sqlite_id=llr.id, description=llr.description)
+                # Link HLR → LLR in Neo4j
+                neo4j_session.run(
+                    """
+                    MATCH (h:HLR {sqlite_id: $hid})
+                    MATCH (l:LLR {sqlite_id: $lid})
+                    MERGE (h)-[:DECOMPOSES_INTO]->(l)
+                    """,
+                    {"hid": hlr.id, "lid": llr.id},
+                )
+        except Exception:
+            log.warning("Neo4j LLR stub sync failed for LLR %d", llr.id, exc_info=True)
 
         for v in llr_data.verifications:
             vm = VerificationMethod(
@@ -413,222 +464,141 @@ def persist_decomposition(
 
 
 def persist_design(
-    session: Session,
     design: DesignSchema,
-    qname_to_node: dict[str, OntologyNode] | None = None,
+    neo4j_session: "Neo4jSession",
+    sql_session: Session | None = None,
+    qname_to_node: dict[str, DesignNode] | None = None,
 ) -> DesignResult:
-    """Create ontology nodes, triples, and requirement-to-triple links.
+    """Create ontology nodes, triples, and requirement-to-node links in Neo4j.
 
-    Requirement links come exclusively from ``design.requirement_links``,
-    which is populated when the LLM tags design elements with
-    ``requirement_ids`` (e.g. ``"hlr:3"``).  If the LLM omits those
-    tags, ``links_applied`` will be zero — that is a tool-call failure
-    that should be fixed in the prompt or validation, not papered over.
+    Design nodes and triples are written directly to Neo4j via
+    DesignRepository. Requirement links use TRACES_TO edges from
+    :HLR/:LLR stub nodes to :Design nodes.
 
-    After SQLite persistence, design nodes and triples are synced to
-    Neo4j.  Requirement links stay in SQLite; the graph view joins them
-    to Neo4j Design nodes at query time.
+    Args:
+        design: DesignSchema from the agent.
+        neo4j_session: Active Neo4j session for graph writes.
+        sql_session: Optional SQLAlchemy session for HLR/LLR lookups.
+            Required if design.requirement_links is non-empty.
+        qname_to_node: Optional cache of qualified_name → DesignNode.
     """
     if qname_to_node is None:
         qname_to_node = {}
 
     result = DesignResult(qname_to_node=qname_to_node)
-
-    def _resolve_node(qname: str) -> OntologyNode | None:
-        """Look up a node from qname_to_node, re-fetching if detached.
-
-        When persist_design is called across multiple sessions (e.g.
-        per-HLR in a batch script), ORM objects from a previous session
-        are detached. Accessing their .id triggers DetachedInstanceError.
-        Re-query by qualified_name in the current session instead.
-        """
-        node = qname_to_node.get(qname)
-        if node is not None:
-            try:
-                # Quick check: if the object is still in this session,
-                # we can use it directly.
-                if node in session:
-                    return node
-            except Exception:
-                pass
-            # Detached — re-fetch from the current session
-            fresh = session.query(OntologyNode).filter_by(qualified_name=qname).first()
-            if fresh:
-                qname_to_node[qname] = fresh
-                return fresh
-            # Node was created in a different session but not yet in
-            # the DB (shouldn't happen, but handle gracefully).
-            return node
-        return None
+    repo = DesignRepository(neo4j_session)
 
     # --- Nodes ---
     for node_data in design.nodes:
         if node_data.qualified_name in qname_to_node:
-            # Ensure the cached node is usable in this session
-            _resolve_node(node_data.qualified_name)
             result.nodes_existing += 1
             continue
 
-        node, created = get_or_create(
-            session,
-            OntologyNode,
-            defaults={
-                "kind": node_data.kind,
-                "specialization": node_data.specialization,
-                "visibility": node_data.visibility,
-                "name": node_data.name,
-                "description": node_data.description,
-                "refid": node_data.qualified_name,
-                "component_id": node_data.component_id,
-                "is_intercomponent": node_data.is_intercomponent,
-                "source_type": node_data.source_type,
-                "type_signature": node_data.type_signature,
-                "argsstring": node_data.argsstring,
-                "definition": node_data.definition,
-                "file_path": node_data.file_path,
-                "line_number": node_data.line_number,
-                "is_static": node_data.is_static,
-                "is_const": node_data.is_const,
-                "is_virtual": node_data.is_virtual,
-                "is_abstract": node_data.is_abstract,
-                "is_final": node_data.is_final,
-            },
+        dn = DesignNode(
             qualified_name=node_data.qualified_name,
+            name=node_data.name,
+            kind=node_data.kind,
+            specialization=node_data.specialization or "",
+            visibility=node_data.visibility or "",
+            description=node_data.description or "",
+            refid=node_data.qualified_name,
+            source_type=node_data.source_type or "",
+            type_signature=node_data.type_signature or "",
+            argsstring=node_data.argsstring or "",
+            definition=node_data.definition or "",
+            file_path=node_data.file_path or "",
+            line_number=node_data.line_number,
+            is_static=node_data.is_static or False,
+            is_const=node_data.is_const or False,
+            is_virtual=node_data.is_virtual or False,
+            is_abstract=node_data.is_abstract or False,
+            is_final=node_data.is_final or False,
+            component_id=node_data.component_id,
+            is_intercomponent=node_data.is_intercomponent or False,
         )
-        qname_to_node[node_data.qualified_name] = node
-        if created:
-            result.nodes_created += 1
-        else:
-            result.nodes_existing += 1
-
-    # --- Dependency stub nodes ---
-    # Create stub OntologyNode entries for dependency targets that appear
-    # in triples but are not design nodes. These stubs satisfy the FK
-    # constraint and link to real Compound nodes in Neo4j via sync_design_triple.
-    dep_stub_qnames = {
-        nd.qualified_name for nd in design.nodes if nd.source_type == "dependency"
-    }
+        repo.merge_node(dn)
+        qname_to_node[node_data.qualified_name] = dn
+        result.nodes_created += 1
 
     # --- Triples ---
-    saved_triples: list[OntologyTriple | None] = []
     for triple_data in design.triples:
-        subj = _resolve_node(triple_data.subject_qualified_name)
-        obj = _resolve_node(triple_data.object_qualified_name)
-        pred = session.query(Predicate).filter_by(name=triple_data.predicate).first()
-
-        # If the object is missing but it's a dependency stub, create it now
-        if obj is None and triple_data.object_qualified_name in dep_stub_qnames:
-            stub_data = next(
-                nd for nd in design.nodes
-                if nd.qualified_name == triple_data.object_qualified_name
+        if triple_data.subject_qualified_name not in qname_to_node:
+            log.warning(
+                "Triple skipped: subject %r not found",
+                triple_data.subject_qualified_name,
             )
-            obj, created = get_or_create(
-                session,
-                OntologyNode,
-                defaults={
-                    "kind": stub_data.kind,
-                    "name": stub_data.name,
-                    "description": stub_data.description,
-                    "source_type": stub_data.source_type,
-                    "is_intercomponent": stub_data.is_intercomponent,
-                },
-                qualified_name=stub_data.qualified_name,
-            )
-            qname_to_node[stub_data.qualified_name] = obj
-
-        if subj and obj and pred:
-            triple, _ = get_or_create(
-                session,
-                OntologyTriple,
-                subject_id=subj.id,
-                predicate_id=pred.id,
-                object_id=obj.id,
-            )
-            saved_triples.append(triple)
-            result.triples_created += 1
-        else:
-            saved_triples.append(None)
-            if subj is None:
-                log.warning(
-                    "Triple skipped: subject %r not found",
-                    triple_data.subject_qualified_name,
-                )
-            if obj is None:
+            result.triples_skipped += 1
+            continue
+        if triple_data.object_qualified_name not in qname_to_node:
+            # Check if it's a dependency stub — merge_node skipped it
+            # but the triple may still reference it (it exists as :Compound in Neo4j)
+            dep_stub_qnames = {
+                nd.qualified_name for nd in design.nodes if nd.source_type == "dependency"
+            }
+            if triple_data.object_qualified_name not in dep_stub_qnames:
                 log.warning(
                     "Triple skipped: object %r not found",
                     triple_data.object_qualified_name,
                 )
-            result.triples_skipped += 1
+                result.triples_skipped += 1
+                continue
+
+        repo.merge_triple(
+            triple_data.subject_qualified_name,
+            triple_data.predicate,
+            triple_data.object_qualified_name,
+        )
+        result.triples_created += 1
 
     # --- Requirement links (explicit from LLM) ---
-    for link in design.requirement_links:
-        triple = None
-        if 0 <= link.triple_index < len(saved_triples):
-            triple = saved_triples[link.triple_index]
-
-        if not triple:
-            result.links_skipped += 1
-            continue
-
-        if link.requirement_type == "hlr":
-            req = session.query(HighLevelRequirement).filter_by(id=link.requirement_id).first()
-        else:
-            req = session.query(LowLevelRequirement).filter_by(id=link.requirement_id).first()
-
-        if req:
-            req.triples.append(triple)
-            result.links_applied += 1
-        else:
-            result.links_skipped += 1
-
-    # --- Node links (derived from triple links) ---
-    # Every node that appears in a triple linked to a requirement is also
-    # linked directly to that requirement via the M2M node table.
-    for link in design.requirement_links:
-        triple = None
-        if 0 <= link.triple_index < len(saved_triples):
-            triple = saved_triples[link.triple_index]
-
-        if not triple:
-            continue
-
-        if link.requirement_type == "hlr":
-            req = session.query(HighLevelRequirement).filter_by(id=link.requirement_id).first()
-        else:
-            req = session.query(LowLevelRequirement).filter_by(id=link.requirement_id).first()
-
-        if not req:
-            result.node_links_skipped += 1
-            continue
-
-        existing_node_ids = {n.id for n in req.nodes}
-        for node in [triple.subject, triple.object]:
-            if node.id not in existing_node_ids:
-                req.nodes.append(node)
-                existing_node_ids.add(node.id)
-                result.node_links_applied += 1
-
-    session.flush()
-
-    # --- Neo4j dual-write (best-effort) ---
-    # Sync design nodes and triples to Neo4j.  Requirement links stay in
-    # SQLite; the graph view reads them from SQLite at query time.
-    try:
-        from backend.db.neo4j.sync import try_sync_design_nodes_and_triples
-
-        created_nodes = [
-            _resolve_node(nd.qualified_name)
-            for nd in design.nodes
-            if nd.qualified_name in qname_to_node
-        ]
-        created_nodes = [n for n in created_nodes if n is not None]
-        created_triples = [t for t in saved_triples if t is not None]
-        try_sync_design_nodes_and_triples(created_nodes, created_triples)
-    except Exception:
-        log.warning("Neo4j design sync failed — will catch up via migration script", exc_info=True)
+    if design.requirement_links and sql_session is not None:
+        for link in design.requirement_links:
+            if link.requirement_type == "hlr":
+                design_qn = None
+                # Get the subject or object qualified_name from the triple
+                if 0 <= link.triple_index < len(design.triples):
+                    triple_data = design.triples[link.triple_index]
+                    # Link both subject and object of the triple to the HLR
+                    for qn in [triple_data.subject_qualified_name, triple_data.object_qualified_name]:
+                        if qn in qname_to_node:
+                            try:
+                                repo.trace_design_to_hlr(
+                                    hlr_sqlite_id=link.requirement_id,
+                                    design_qualified_name=qn,
+                                )
+                                result.node_links_applied += 1
+                            except Exception:
+                                log.warning(
+                                    "Failed to trace HLR %d → %s",
+                                    link.requirement_id,
+                                    qn,
+                                    exc_info=True,
+                                )
+                                result.node_links_skipped += 1
+                result.links_applied += 1
+            elif link.requirement_type == "llr":
+                design_qn = None
+                if 0 <= link.triple_index < len(design.triples):
+                    triple_data = design.triples[link.triple_index]
+                    for qn in [triple_data.subject_qualified_name, triple_data.object_qualified_name]:
+                        if qn in qname_to_node:
+                            try:
+                                repo.trace_design_to_llr(
+                                    llr_sqlite_id=link.requirement_id,
+                                    design_qualified_name=qn,
+                                )
+                                result.node_links_applied += 1
+                            except Exception:
+                                log.warning(
+                                    "Failed to trace LLR %d → %s",
+                                    link.requirement_id,
+                                    qn,
+                                    exc_info=True,
+                                )
+                                result.node_links_skipped += 1
+                result.links_applied += 1
 
     return result
-
 
 
 # ---------------------------------------------------------------------------
@@ -642,7 +612,10 @@ def persist_verification(
     verifications: list[VerificationSchema],
     ontology_nodes: list[dict] | None = None,
 ) -> VerificationResult:
-    """Replace an LLR's verification methods with fleshed-out versions."""
+    """Replace an LLR's verification methods with fleshed-out versions.
+
+    NOTE: This still uses SQLAlchemy. Phase 3 will move to Neo4j.
+    """
     if ontology_nodes is None:
         ontology_nodes = [
             {"qualified_name": n.qualified_name, "pk": n.id}

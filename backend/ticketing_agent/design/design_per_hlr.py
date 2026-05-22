@@ -364,10 +364,12 @@ def design_and_persist_hlr(
             log.info("Dependency graph disconnected for HLR %d", hlr_id)
 
     # --- Persist ---
+    from backend.db.neo4j.connection import get_neo4j
     with get_session() as session:
-        result = persist_design(session, ontology)
-        return {
-            "nodes_created": result.nodes_created,
-            "triples_created": result.triples_created,
-            "links_applied": result.links_applied,
-        }
+        with get_neo4j().session() as neo4j_session:
+            result = persist_design(ontology, neo4j_session, sql_session=session)
+            return {
+                "nodes_created": result.nodes_created,
+                "triples_created": result.triples_created,
+                "links_applied": result.links_applied,
+            }

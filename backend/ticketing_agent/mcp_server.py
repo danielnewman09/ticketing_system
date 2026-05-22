@@ -232,25 +232,27 @@ def save_ontology_design(
     triples: list[dict],
     requirement_links: list[dict] | None = None,
 ) -> str:
-    """Save ontology nodes, triples, and requirement-to-triple links."""
+    """Save ontology nodes, triples, and requirement links to Neo4j."""
+    from backend.db.neo4j.connection import get_neo4j
     with get_session() as session:
-        design = DesignSchema.model_validate(
-            {
-                "nodes": nodes,
-                "triples": triples,
-                "requirement_links": requirement_links or [],
-            }
-        )
-        result = persist_design(session, design)
+        with get_neo4j().session() as neo4j_session:
+            design = DesignSchema.model_validate(
+                {
+                    "nodes": nodes,
+                    "triples": triples,
+                    "requirement_links": requirement_links or [],
+                }
+            )
+            result = persist_design(design, neo4j_session, sql_session=session)
 
-        return json.dumps(
-            {
-                "nodes_created": result.nodes_created,
-                "triples_created": result.triples_created,
-                "triples_skipped": result.triples_skipped,
-                "requirement_links_applied": result.links_applied,
-            }
-        )
+            return json.dumps(
+                {
+                    "nodes_created": result.nodes_created,
+                    "triples_created": result.triples_created,
+                    "triples_skipped": result.triples_skipped,
+                    "requirement_links_applied": result.links_applied,
+                }
+            )
 
 
 @mcp.tool()

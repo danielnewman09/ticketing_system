@@ -94,13 +94,16 @@ def run_pipeline(
         Component,
         HighLevelRequirement,
         LowLevelRequirement,
-        OntologyNode,
         VerificationMethod,
     )
     from backend.db.models.tasks import Task
 
     result = PipelineResult()
     log.info("Pipeline started: %s", initial_prompt[:100])
+
+    # Open Neo4j session for design persistence (Phase 4+)
+    from backend.db.neo4j.connection import get_standalone_session as get_neo4j_session
+    neo4j_sess = get_neo4j_session()
 
     # ------------------------------------------------------------------
     # Phase 1-2: Decompose -- existing agent
@@ -182,8 +185,9 @@ def run_pipeline(
     log.info("Phase 4: Generating OO design...")
     from backend.ticketing_agent.design.design_hlr import design_hlr
     from backend.requirements.services.persistence import persist_design
+    from backend.db.neo4j.repositories.models import DesignNode
 
-    qname_to_node: dict[str, OntologyNode] = {}
+    qname_to_node: dict[str, DesignNode] = {}
     all_oo_classes: list[dict] = []
 
     for hlr in hlrs:
@@ -232,8 +236,9 @@ def run_pipeline(
             )
 
         persist_result = persist_design(
-            session,
             ontology,
+            neo4j_session=neo4j_sess,
+            sql_session=session,
             qname_to_node=qname_to_node,
         )
         log.info(
