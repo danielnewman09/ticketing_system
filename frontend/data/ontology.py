@@ -1,9 +1,9 @@
 """Ontology data, Neo4j graph queries, and node detail.
 
-Architecture (Phase 1):
+Architecture (Phase 2):
 - Neo4j is the primary store for design nodes and triples.
-- HLR/LLR data still lives in SQLite but is linked via TRACES_TO edges
-  on :HLR/:LLR stub nodes in Neo4j.
+- HLR/LLR data lives in Neo4j as full citizens with native id properties
+  (no more sqlite_id bridge from Phase 1).
 - Node counts and stats come from Cypher MATCH queries.
 - Requirement tags come from graph_tags.py (Cypher TRACES_TO traversal).
 """
@@ -216,8 +216,8 @@ def fetch_graph_node_detail(qualified_name: str) -> dict | None:
 def fetch_node_detail_full(qualified_name: str) -> dict | None:
     """Fetch ontology node by qualified_name with all properties + Neo4j relationships.
 
-    In Phase 1, requirement tags come from TRACES_TO edges on :HLR/:LLR stubs
-    instead of SQLite M2M tables.
+    In Phase 2, requirement tags come from TRACES_TO edges on :HLR/:LLR nodes
+    with native id properties (no more sqlite_id bridge).
     """
     neo4j_data = fetch_graph_node_detail(qualified_name)
     if not neo4j_data:
@@ -267,7 +267,7 @@ def fetch_node_detail_full(qualified_name: str) -> dict | None:
                 """
                 MATCH (r)-[:TRACES_TO]->(d:Design {qualified_name: $qn})
                 WHERE r:HLR OR r:LLR
-                RETURN labels(r) AS labels, r.sqlite_id AS id, r.description AS desc
+                RETURN labels(r) AS labels, r.id AS id, r.description AS desc
                 """,
                 {"qn": qualified_name},
             )

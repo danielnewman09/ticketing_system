@@ -36,12 +36,15 @@ class TestEnrichWithRequirementTagsCypher:
     def test_tags_design_nodes_with_hlr_badges(self, neo4j_session):
         from backend.db.neo4j.repositories.design import DesignRepository
         from backend.db.neo4j.repositories.models import DesignNode
+        from backend.db.neo4j.repositories.requirement import RequirementRepository
         from backend.requirements.services.graph_tags import enrich_with_requirement_tags
 
-        repo = DesignRepository(neo4j_session)
-        repo.merge_node(DesignNode(qualified_name="calc::Foo", name="Foo", kind="class"))
-        repo.merge_hlr_stub(sqlite_id=1, description="The system shall calculate")
-        repo.trace_design_to_hlr(hlr_sqlite_id=1, design_qualified_name="calc::Foo")
+        design_repo = DesignRepository(neo4j_session)
+        design_repo.merge_node(DesignNode(qualified_name="calc::Foo", name="Foo", kind="class"))
+
+        req_repo = RequirementRepository(neo4j_session)
+        hlr = req_repo.create_hlr(description="The system shall calculate")
+        req_repo.trace_to_design(hlr_id=hlr.id, design_qualified_name="calc::Foo")
 
         nodes = [
             {"data": {"id": "calc::Foo", "qualified_name": "calc::Foo", "kind": "class", "name": "Foo", "label": "Foo"}},
@@ -52,6 +55,7 @@ class TestEnrichWithRequirementTagsCypher:
 
         assert len(nodes[0]["data"]["requirements"]) == 1
         assert nodes[0]["data"]["requirements"][0]["type"] == "HLR"
+        assert nodes[0]["data"]["requirements"][0]["id"] == hlr.id
         assert "requirements" not in nodes[1]["data"]
 
     def test_skips_dependency_stubs(self, neo4j_session):
@@ -74,22 +78,26 @@ class TestTagDirectNodesOnlyCypher:
     def test_marks_seed_nodes_with_highlight(self, neo4j_session):
         from backend.db.neo4j.repositories.design import DesignRepository
         from backend.db.neo4j.repositories.models import DesignNode
+        from backend.db.neo4j.repositories.requirement import RequirementRepository
         from backend.requirements.services.graph_tags import tag_direct_nodes_only
 
-        repo = DesignRepository(neo4j_session)
-        repo.merge_node(DesignNode(qualified_name="calc::Direct", name="Direct", kind="class"))
-        repo.merge_node(DesignNode(qualified_name="calc::Neighbour", name="Neighbour", kind="class"))
-        repo.merge_hlr_stub(sqlite_id=1, description="A requirement")
-        repo.trace_design_to_hlr(hlr_sqlite_id=1, design_qualified_name="calc::Direct")
+        design_repo = DesignRepository(neo4j_session)
+        design_repo.merge_node(DesignNode(qualified_name="calc::Direct", name="Direct", kind="class"))
+        design_repo.merge_node(DesignNode(qualified_name="calc::Neighbour", name="Neighbour", kind="class"))
+
+        req_repo = RequirementRepository(neo4j_session)
+        hlr = req_repo.create_hlr(description="A requirement")
+        req_repo.trace_to_design(hlr_id=hlr.id, design_qualified_name="calc::Direct")
 
         nodes = [
             {"data": {"id": "calc::Direct", "qualified_name": "calc::Direct", "kind": "class", "name": "Direct", "label": "Direct"}},
             {"data": {"id": "calc::Neighbour", "qualified_name": "calc::Neighbour", "kind": "class", "name": "Neighbour", "label": "Neighbour"}},
         ]
-        tag_direct_nodes_only(nodes, hlr_id=1, session=neo4j_session)
+        tag_direct_nodes_only(nodes, hlr_id=hlr.id, session=neo4j_session)
 
         assert nodes[0]["data"]["is_hlr_highlight"] == "true"
         assert len(nodes[0]["data"]["requirements"]) == 1
+        assert nodes[0]["data"]["requirements"][0]["id"] == hlr.id
         assert nodes[1]["data"].get("is_hlr_highlight", "") == ""
 
     def test_hlr_not_found_does_nothing(self, neo4j_session):

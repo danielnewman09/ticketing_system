@@ -247,8 +247,9 @@ def _fetch_neighbourhood_from_seeds(
 def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
     """Fetch design subgraph around an HLR: seed nodes + 1-hop neighbourhood.
 
-    Uses Neo4j :HLR stub nodes with TRACES_TO edges to find seed design
-    nodes. In Phase 1, hlr_id is the sqlite_id property on :HLR nodes.
+    Uses Neo4j :HLR nodes with native id property and TRACES_TO edges to find
+    seed design nodes. In Phase 2, HLR/LLR are full Neo4j citizens with id
+    properties (no more sqlite_id bridge).
 
     Returns bare topology — no synthetic requirement nodes.
     The caller enriches with requirement tags via tag_direct_nodes_only().
@@ -256,10 +257,10 @@ def fetch_hlr_subgraph(hlr_id: int, component_id: int | None = None) -> dict:
     log.info("fetch_hlr_subgraph(hlr_id=%d, component_id=%s)", hlr_id, component_id)
 
     with get_neo4j().session() as session:
-        # Find seed nodes via TRACES_TO from :HLR stub
+        # Find seed nodes via TRACES_TO from :HLR node
         seed_result = session.run(
             """
-            MATCH (hlr:HLR {sqlite_id: $hid})-[:TRACES_TO]->(d:Design)
+            MATCH (hlr:HLR {id: $hid})-[:TRACES_TO]->(d:Design)
             RETURN d.qualified_name AS qn
             """,
             {"hid": hlr_id},

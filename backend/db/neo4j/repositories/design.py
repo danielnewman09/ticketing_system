@@ -165,68 +165,6 @@ class DesignRepository:
         )
 
     # -----------------------------------------------------------------------
-    # HLR/LLR stub operations (temporary bridge — Phase 1 only)
-    # -----------------------------------------------------------------------
-
-    def merge_hlr_stub(self, sqlite_id: int, description: str, component_id: int | None = None) -> None:
-        """Create or update an :HLR stub node. Phase 1 bridge to SQLite HLRs.
-
-        These stubs enable Cypher traversal from HLR→Design for requirement
-        tagging while HLRs still live in SQLite. Phase 2 makes HLRs full
-        Neo4j citizens and removes sqlite_id.
-        """
-        self._session.run(
-            """
-            MERGE (h:HLR {sqlite_id: $sid})
-            SET h.description = $desc,
-                h.component_id = $cid
-            """,
-            {"sid": sqlite_id, "desc": description, "cid": component_id},
-        )
-
-    def merge_llr_stub(self, sqlite_id: int, description: str) -> None:
-        """Create or update an :LLR stub node. Phase 1 bridge."""
-        self._session.run(
-            """
-            MERGE (l:LLR {sqlite_id: $sid})
-            SET l.description = $desc
-            """,
-            {"sid": sqlite_id, "desc": description},
-        )
-
-    def trace_design_to_hlr(self, hlr_sqlite_id: int, design_qualified_name: str) -> None:
-        """Create a TRACES_TO edge from an HLR stub to a Design node."""
-        self._session.run(
-            """
-            MATCH (h:HLR {sqlite_id: $hid})
-            MATCH (d:Design {qualified_name: $qn})
-            MERGE (h)-[:TRACES_TO]->(d)
-            """,
-            {"hid": hlr_sqlite_id, "qn": design_qualified_name},
-        )
-
-    def trace_design_to_llr(self, llr_sqlite_id: int, design_qualified_name: str) -> None:
-        """Create a TRACES_TO edge from an LLR stub to a Design node."""
-        self._session.run(
-            """
-            MATCH (l:LLR {sqlite_id: $lid})
-            MATCH (d:Design {qualified_name: $qn})
-            MERGE (l)-[:TRACES_TO]->(d)
-            """,
-            {"lid": llr_sqlite_id, "qn": design_qualified_name},
-        )
-
-    def untrace_design_from_hlr(self, hlr_sqlite_id: int, design_qualified_name: str) -> None:
-        """Remove a TRACES_TO edge from an HLR stub to a Design node."""
-        self._session.run(
-            """
-            MATCH (h:HLR {sqlite_id: $hid})-[r:TRACES_TO]->(d:Design {qualified_name: $qn})
-            DELETE r
-            """,
-            {"hid": hlr_sqlite_id, "qn": design_qualified_name},
-        )
-
-    # -----------------------------------------------------------------------
     # Bulk operations
     # -----------------------------------------------------------------------
 

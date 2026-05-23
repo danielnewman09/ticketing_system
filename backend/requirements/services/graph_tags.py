@@ -1,8 +1,8 @@
-"""Cypher-based enrichment for Cytoscape node dicts — add HLR requirement tags.
+"""Cypher-based enrichment for Cytoscape node dicts — add HLR/LLR requirement tags.
 
-In Phase 1, :HLR and :LLR stubs carry a sqlite_id property for
-cross-referencing. After Phase 2, they become full Neo4j citizens
-with native IDs and this code simplifies further.
+In Phase 2, HLR and LLR nodes are full Neo4j citizens with native id
+properties (no more sqlite_id bridge). Tags are enriched via TRACES_TO
+edges from :HLR and :LLR nodes to :Design nodes.
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ def enrich_with_requirement_tags(
     mode: str = "none",
     session: "Neo4jSession | None" = None,
 ) -> list[dict]:
-    """Tag design nodes with HLR badges from Neo4j :HLR stub nodes.
+    """Tag design nodes with HLR/LLR badges from Neo4j requirement nodes.
 
     Modifies nodes in-place, adding a 'requirements' key to each node
-    that is traced by one or more HLRs.
+    that is traced by one or more requirements.
 
     Args:
         nodes: Cytoscape-format node dicts (from Stage 1).
@@ -45,7 +45,6 @@ def enrich_with_requirement_tags(
     if not node_qns:
         return nodes
 
-
     if session is not None:
         _enrich_via_cypher(session, node_qns, nodes)
     else:
@@ -62,23 +61,25 @@ def _enrich_via_cypher(
     node_qns: list[str],
     nodes: list[dict],
 ) -> None:
-    """Run Cypher to find HLR→Design traces and tag matching nodes."""
+    """Run Cypher to find HLR/LLR→Design traces and tag matching nodes."""
     qn_to_reqs: dict[str, list[dict]] = {}
 
     result = session.run(
         """
         UNWIND $qns AS qn
-        MATCH (hlr:HLR)-[:TRACES_TO]->(d:Design {qualified_name: qn})
-        RETURN d.qualified_name AS qn, hlr.sqlite_id AS hlr_id, hlr.description AS hlr_desc
+        MATCH (r)-[:TRACES_TO]->(d:Design {qualified_name: qn})
+        WHERE r:HLR OR r:LLR
+        RETURN d.qualified_name AS qn, r.id AS req_id, r.description AS req_desc,
+               CASE WHEN r:HLR THEN 'HLR' ELSE 'LLR' END AS req_type
         """,
         {"qns": node_qns},
     )
     for record in result:
         qn = record["qn"]
         qn_to_reqs.setdefault(qn, []).append({
-            "id": record["hlr_id"],
-            "type": "HLR",
-            "description": (record["hlr_desc"] or "")[:80],
+            "id": record["req_id"],
+            "type": record["req_type"],
+            "description": (record["req_desc"] or "")[:80],
         })
 
     for node in nodes:
@@ -103,7 +104,7 @@ def tag_direct_nodes_only(
 
     Args:
         nodes: Cytoscape-format node dicts.
-        hlr_id: SQLite ID of the HLR to tag for (Phase 1 bridge).
+        hlr_id: Neo4j id of the HLR to tag for.
         session: Neo4j session. If None, creates one.
     """
     seed_qns: set[str] = set()
@@ -112,7 +113,7 @@ def tag_direct_nodes_only(
         nonlocal seed_qns
         result = sess.run(
             """
-            MATCH (hlr:HLR {sqlite_id: $hid})-[:TRACES_TO]->(d:Design)
+            MATCH (hlr:HLR {id: $hid})-[:TRACES_TO]->(d:Design)
             RETURN d.qualified_name AS qn
             """,
             {"hid": hlr_id},
@@ -134,7 +135,7 @@ def tag_direct_nodes_only(
     hlr_desc = ""
     if session is not None:
         rec = session.run(
-            "MATCH (hlr:HLR {sqlite_id: $hid}) RETURN hlr.description AS desc",
+            "MATCH (hlr:HLR {id: $hid}) RETURN hlr.description AS desc",
             {"hid": hlr_id},
         ).single()
         if rec:
@@ -143,7 +144,7 @@ def tag_direct_nodes_only(
         from services.dependencies import get_neo4j
         with get_neo4j().session() as sess:
             rec = sess.run(
-                "MATCH (hlr:HLR {sqlite_id: $hid}) RETURN hlr.description AS desc",
+                "MATCH (hlr:HLR {id: $hid}) RETURN hlr.description AS desc",
                 {"hid": hlr_id},
             ).single()
             if rec:
