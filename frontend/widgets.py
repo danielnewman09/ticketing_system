@@ -634,7 +634,7 @@ def render_verification_card(v):
             ui.label("Pre-conditions").classes(CLS_SECTION_SUBHEADER)
             for c in v["preconditions"]:
                 with ui.row().classes("items-center gap-1"):
-                    ui.label(c["member_qualified_name"]).classes("text-xs font-mono text-blue-300")
+                    ui.label(c["subject_qualified_name"]).classes("text-xs font-mono text-blue-300")
                     ui.label(c["operator"]).classes("text-xs text-gray-500")
                     ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
 
@@ -645,8 +645,8 @@ def render_verification_card(v):
                 with ui.row().classes("items-center gap-2"):
                     ui.badge(str(i), color="grey").props("rounded").classes("text-xs")
                     ui.label(a["description"]).classes("text-xs")
-                    if a["member_qualified_name"]:
-                        ui.label(a["member_qualified_name"]).classes(
+                    if a["callee_qualified_name"]:
+                        ui.label(a["callee_qualified_name"]).classes(
                             "text-xs font-mono text-gray-500"
                         )
 
@@ -655,7 +655,7 @@ def render_verification_card(v):
             ui.label("Post-conditions").classes(CLS_SECTION_SUBHEADER)
             for c in v["postconditions"]:
                 with ui.row().classes("items-center gap-1"):
-                    ui.label(c["member_qualified_name"]).classes("text-xs font-mono text-blue-300")
+                    ui.label(c["subject_qualified_name"]).classes("text-xs font-mono text-blue-300")
                     ui.label(c["operator"]).classes("text-xs text-gray-500")
                     ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
 

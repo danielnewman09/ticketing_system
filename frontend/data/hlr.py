@@ -1,27 +1,23 @@
 """HLR CRUD, decomposition, and requirements dashboard data.
 
-In Phase 2, HLR/LLR data lives in Neo4j as full citizens. VerificationMethod
-data still lives in SQLite (Phase 3 will move it).
+Phase 3: All verification data lives in Neo4j via VerificationRepository.
 """
 
 import logging
 
 from backend.db.neo4j.repositories.requirement import RequirementRepository
-from backend.db.neo4j.repositories.models.requirement import HLRNode, LLRNode
+from backend.db.neo4j.repositories.verification import VerificationRepository
 from services.dependencies import get_neo4j
 from backend.db import get_session
-from backend.db.models import VerificationMethod
 
 log = logging.getLogger(__name__)
 
 
 def fetch_requirements_data():
-    """Fetch all data needed for the requirements dashboard.
-
-    HLR/LLR data comes from Neo4j. Verification counts still come from SQLite.
-    """
+    """Fetch all data needed for the requirements dashboard."""
     with get_neo4j().session() as ns:
         repo = RequirementRepository(ns)
+        ver_repo = VerificationRepository(ns)
         hlrs_neo4j = repo.list_hlrs()
 
         hlrs = []
@@ -29,14 +25,13 @@ def fetch_requirements_data():
             llrs_neo4j = repo.list_llrs(hlr_id=hlr.id)
             llrs = []
             for llr in llrs_neo4j:
-                methods = _get_verification_methods(llr.id)
+                methods = [vm.method for vm in ver_repo.list_verifications(llr.id)]
                 llrs.append({
                     "id": llr.id,
                     "description": llr.description,
                     "methods": methods,
                 })
 
-            # Resolve component name
             component_name = None
             if hlr.component_id:
                 component_name = _get_component_name(hlr.component_id)
@@ -48,33 +43,25 @@ def fetch_requirements_data():
                 "llrs": llrs,
             })
 
-        # Unlinked LLRs (those whose parent HLR doesn't exist)
         all_llrs = repo.list_llrs()
         hlr_ids_in_neo4j = {h.id for h in hlrs_neo4j}
         unlinked = []
         for llr in all_llrs:
             if llr.high_level_requirement_id not in hlr_ids_in_neo4j:
-                methods = _get_verification_methods(llr.id)
+                methods = [vm.method for vm in ver_repo.list_verifications(llr.id)]
                 unlinked.append({
                     "id": llr.id,
                     "description": llr.description,
                     "methods": methods,
                 })
 
-    # Verification and design counts from their respective stores
-    with get_session() as session:
-        total_verifications = session.query(VerificationMethod).count()
-
-    total_nodes = 0
-    total_triples = 0
-    try:
-        with get_neo4j().session() as ns:
-            rec = ns.run("MATCH (d:Design) RETURN count(d) AS cnt").single()
-            total_nodes = rec["cnt"] if rec else 0
-            rec2 = ns.run("MATCH (:Design)-[r]->(:Design) RETURN count(r) AS cnt").single()
-            total_triples = rec2["cnt"] if rec2 else 0
-    except Exception:
-        log.warning("Failed to fetch Neo4j design counts", exc_info=True)
+        total_verifications = ns.run(
+            "MATCH (vm:VerificationMethod) RETURN count(vm) AS cnt"
+        ).single()["cnt"]
+        total_nodes = ns.run("MATCH (d:Design) RETURN count(d) AS cnt").single()["cnt"]
+        total_triples = ns.run(
+            "MATCH (:Design)-[r]->(:Design) RETURN count(r) AS cnt"
+        ).single()["cnt"]
 
     return {
         "hlrs": hlrs,
@@ -91,6 +78,7 @@ def fetch_hlr_detail(hlr_id):
     """Fetch all data needed for HLR detail page."""
     with get_neo4j().session() as ns:
         repo = RequirementRepository(ns)
+        ver_repo = VerificationRepository(ns)
         hlr = repo.get_hlr(hlr_id)
         if not hlr:
             return None
@@ -98,14 +86,13 @@ def fetch_hlr_detail(hlr_id):
         llrs_neo4j = repo.list_llrs(hlr_id=hlr.id)
         llrs = []
         for llr in llrs_neo4j:
-            methods = _get_verification_methods(llr.id)
+            methods = [vm.method for vm in ver_repo.list_verifications(llr.id)]
             llrs.append({
                 "id": llr.id,
                 "description": llr.description,
                 "methods": methods,
             })
 
-        # Fetch triples from TRACES_TO edges
         triples = _fetch_hlr_triples(ns, hlr.id)
 
     component_name = None
@@ -150,10 +137,7 @@ def delete_hlr(hlr_id: int) -> bool:
 
 
 def decompose_hlr(hlr_id: int) -> dict:
-    """Run the decomposition agent on an HLR and persist results to Neo4j.
-
-    Returns dict with llrs_created and verifications_created.
-    """
+    """Run the decomposition agent on an HLR and persist results to Neo4j."""
     import os
 
     from backend.ticketing_agent.decompose.decompose_hlr import decompose
@@ -198,10 +182,7 @@ def decompose_hlr(hlr_id: int) -> dict:
 
 
 def design_single_hlr(hlr_id: int) -> dict:
-    """Run the design agent on an HLR and persist the ontology results.
-
-    Returns dict with nodes_created, triples_created, links_applied.
-    """
+    """Run the design agent on an HLR and persist the ontology results."""
     import os
 
     from backend.ticketing_agent.design.design_per_hlr import design_and_persist_hlr
@@ -217,25 +198,10 @@ def design_single_hlr(hlr_id: int) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _get_verification_methods(llr_id: int) -> list[str]:
-    """Get verification method names for an LLR from SQLite (Phase 3 will move to Neo4j)."""
-    try:
-        with get_session() as session:
-            methods = [
-                v.method
-                for v in session.query(VerificationMethod)
-                .filter_by(low_level_requirement_id=llr_id)
-                .all()
-            ]
-            return methods
-    except Exception:
-        return []
-
-
 def _get_component_name(component_id: int | None) -> str | None:
     """Look up a component name by ID from SQLite."""
     if component_id is None:
-        return None
+            return None
     try:
         from backend.db.models import Component
         with get_session() as session:

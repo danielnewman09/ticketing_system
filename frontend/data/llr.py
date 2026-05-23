@@ -1,15 +1,14 @@
 """LLR CRUD and detail data.
 
-In Phase 2, LLR data lives in Neo4j via RequirementRepository.
-VerificationMethod data still comes from SQLite (Phase 3 will move it).
+Phase 3: All verification data lives in Neo4j via VerificationRepository.
 """
 
 import logging
 
 from backend.db.neo4j.repositories.requirement import RequirementRepository
+from backend.db.neo4j.repositories.verification import VerificationRepository
 from services.dependencies import get_neo4j
 from backend.db import get_session
-from backend.db.models import VerificationMethod, VerificationCondition, VerificationAction
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +17,7 @@ def fetch_llr_detail(llr_id):
     """Fetch all data needed for LLR detail page."""
     with get_neo4j().session() as ns:
         repo = RequirementRepository(ns)
+        ver_repo = VerificationRepository(ns)
         llr = repo.get_llr(llr_id)
         if not llr:
             return None
@@ -31,14 +31,9 @@ def fetch_llr_detail(llr_id):
                 "component": _get_component_name(hlr.component_id) if hlr.component_id else None,
             }
 
-        # Triples from TRACES_TO edges
+        verifications = _get_verification_detail(ver_repo, llr_id)
+        components = _get_llr_components(repo, llr_id)
         triples = _fetch_llr_triples(ns, llr_id)
-
-    # Verification data still from SQLite (Phase 3)
-    verifications = _get_verification_detail(llr_id)
-
-    # Component names from LLR's component links (still in Neo4j property for now)
-    components = _get_llr_components(ns, llr_id)
 
     return {
         "id": llr.id,
@@ -74,65 +69,59 @@ def delete_llr(llr_id: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Helper functions (private, bridging to SQLite for verification data)
+# Helper functions (private)
 # ---------------------------------------------------------------------------
 
 
-def _get_verification_detail(llr_id: int) -> list[dict]:
-    """Get full verification detail for an LLR from SQLite."""
+def _get_verification_detail(ver_repo: VerificationRepository, llr_id: int) -> list[dict]:
+    """Get full verification detail for an LLR from Neo4j."""
+    verifications = []
     try:
-        with get_session() as session:
-            verifications = []
-            for v in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr_id).all():
-                preconditions = [
-                    {
-                        "member_qualified_name": c.member_qualified_name,
-                        "operator": c.operator,
-                        "expected_value": c.expected_value,
-                    }
-                    for c in sorted(
-                        [c for c in v.conditions if c.phase == "pre"],
-                        key=lambda c: c.order,
-                    )
-                ]
-                postconditions = [
-                    {
-                        "member_qualified_name": c.member_qualified_name,
-                        "operator": c.operator,
-                        "expected_value": c.expected_value,
-                    }
-                    for c in sorted(
-                        [c for c in v.conditions if c.phase == "post"],
-                        key=lambda c: c.order,
-                    )
-                ]
-                actions = [
-                    {
-                        "order": a.order,
-                        "description": a.description,
-                        "member_qualified_name": a.member_qualified_name,
-                    }
-                    for a in sorted(v.actions, key=lambda a: a.order)
-                ]
-                verifications.append({
-                    "id": v.id,
-                    "method": v.method,
-                    "test_name": v.test_name,
-                    "description": v.description,
-                    "preconditions": preconditions,
-                    "actions": actions,
-                    "postconditions": postconditions,
-                })
-            return verifications
+        for vm in ver_repo.list_verifications(llr_id):
+            conditions = ver_repo.list_conditions(vm.id)
+            actions = ver_repo.list_actions(vm.id)
+            preconditions = [
+                {
+                    "subject_qualified_name": c.subject_qualified_name,
+                    "operator": c.operator,
+                    "expected_value": c.expected_value,
+                }
+                for c in conditions if c.phase == "pre"
+            ]
+            postconditions = [
+                {
+                    "subject_qualified_name": c.subject_qualified_name,
+                    "operator": c.operator,
+                    "expected_value": c.expected_value,
+                }
+                for c in conditions if c.phase == "post"
+            ]
+            action_list = [
+                {
+                    "order": a.order,
+                    "description": a.description,
+                    "callee_qualified_name": a.callee_qualified_name,
+                    "caller_qualified_name": a.caller_qualified_name,
+                }
+                for a in actions
+            ]
+            verifications.append({
+                "id": vm.id,
+                "method": vm.method,
+                "test_name": vm.test_name,
+                "description": vm.description,
+                "preconditions": preconditions,
+                "actions": action_list,
+                "postconditions": postconditions,
+            })
     except Exception:
         log.warning("Failed to fetch verification detail for LLR %d", llr_id, exc_info=True)
-        return []
+    return verifications
 
 
-def _get_llr_components(neo4j_session, llr_id: int) -> list[str]:
+def _get_llr_components(repo: RequirementRepository, llr_id: int) -> list[str]:
     """Get component names for an LLR from Neo4j component_ids + SQLite name lookup."""
     try:
-        repo = RequirementRepository(neo4j_session)
         comp_ids = repo.get_llr_components(llr_id)
         names = []
         for cid in comp_ids:
