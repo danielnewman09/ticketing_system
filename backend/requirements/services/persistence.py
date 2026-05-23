@@ -1,11 +1,12 @@
 """Service layer for persisting agent outputs to the database.
 
-Consolidates the persistence logic used by demo.py, the MCP server,
-and NiceGUI views into a single place.
+Consolidates the persistence logic used by the MCP server,
+pipeline, and NiceGUI views into a single place.
 
-Phase 2 note: HLR/LLR data is persisted to Neo4j via
-RequirementRepository. VerificationMethod data still uses SQLAlchemy
-until Phase 3.
+Phase 3: All verification data is persisted to Neo4j via
+VerificationRepository. HLR/LLR data uses RequirementRepository.
+Design data uses DesignRepository. SQLAlchemy is not used for
+requirements or verification data.
 """
 
 from __future__ import annotations
@@ -14,23 +15,15 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from sqlalchemy.orm import Session
-
-from backend.db import get_or_create
-from backend.db.models import (
-    VerificationAction,
-    VerificationCondition,
-    VerificationMethod,
-)
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
 from backend.db.neo4j.repositories.models.design import DesignNode
 from backend.db.neo4j.repositories.requirement import RequirementRepository
+from backend.db.neo4j.repositories.verification import VerificationRepository
 from backend.requirements.schemas import LowLevelRequirementSchema, VerificationSchema
 
 if TYPE_CHECKING:
     from neo4j import Session as Neo4jSession
-    from backend.db.models.ontology import OntologyNode
 
 log = logging.getLogger(__name__)
 
@@ -64,397 +57,77 @@ class VerificationResult:
     verifications_saved: int = 0
     conditions_created: int = 0
     actions_created: int = 0
-
-
-@dataclass
-class VerificationValidationReport:
-    """Report from validating member_qualified_name references against the ontology."""
-
-    resolved: list[tuple[str, str]] = field(
-        default_factory=list
-    )  # (member_qname, matched_node_qname)
-    unresolved: list[tuple[str, str]] = field(default_factory=list)  # (member_qname, context)
-
-    @property
-    def all_resolved(self) -> bool:
-        return len(self.unresolved) == 0
-
-
-@dataclass
-class AugmentResult:
-    """Result of creating missing design nodes for unresolved verification references."""
-
-    nodes_created: int = 0
-    triples_created: int = 0
+    nodes_augmented: int = 0
 
 
 # ---------------------------------------------------------------------------
-# Ontology node resolution (still uses SQLAlchemy — Phase 3 will move to Neo4j)
+# Verification context building (Neo4j only)
 # ---------------------------------------------------------------------------
 
 
-def resolve_ontology_node(
-    session: Session,
-    member_qname: str,
-    node_list: list[dict] | None = None,
-) -> "OntologyNode | None":
-    """Resolve a member qualified name to an OntologyNode via longest prefix match.
-
-    NOTE: This still uses SQLAlchemy OntologyNode. Phase 3 will replace
-    this with Neo4j-based resolution.
-    """
-    from backend.db.models import OntologyNode
-
-    if not member_qname:
-        return None
-
-    if node_list is None:
-        node_list = [
-            {"qualified_name": n.qualified_name, "pk": n.id}
-            for n in session.query(OntologyNode.qualified_name, OntologyNode.id).all()
-        ]
-
-    best_match = None
-    best_len = 0
-    for node in node_list:
-        qn = node["qualified_name"]
-        if member_qname.startswith(qn) and len(qn) > best_len:
-            best_match = node
-            best_len = len(qn)
-
-    if best_match is None:
-        return None
-    return session.query(OntologyNode).filter_by(id=best_match["pk"]).first()
-
-
-# ---------------------------------------------------------------------------
-# Verification context building (still uses SQLAlchemy — Phase 3 will move)
-# ---------------------------------------------------------------------------
-
-
-def build_verification_context(session: Session) -> list[dict]:
+def build_verification_context(neo4j_session: "Neo4jSession") -> list[dict]:
     """Build structured class-level context for the verification agent.
 
-    Queries both Neo4j (primary source for design nodes) and SQLAlchemy
-    (bridge for any nodes not yet migrated). Falls back to SQLAlchemy-only
-    if Neo4j is unavailable.
+    Queries Neo4j :Design nodes only. Returns a list of class/interface
+    dicts with attributes, methods, and relationships.
     """
-    from backend.db.models.ontology import TYPE_KINDS, VALUE_KINDS, OntologyNode, OntologyTriple
+    contexts: dict[str, dict] = {}
 
-    contexts: dict[str, dict] = {}  # qualified_name -> context dict
-
-    # --- Neo4j design nodes (primary source) ---
-    try:
-        from services.dependencies import get_neo4j
-        with get_neo4j().session() as ns:
-            result = ns.run("""
-                MATCH (parent:Design)
-                WHERE parent.kind IN ['class', 'interface', 'struct', 'type_alias']
-                OPTIONAL MATCH (parent)-[:COMPOSES]->(member:Design)
-                OPTIONAL MATCH (parent)-[r]->(target:Design)
-                WHERE type(r) <> 'COMPOSES' AND type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
-                RETURN parent, collect(DISTINCT member) AS members,
-                       collect(DISTINCT {pred: type(r), tgt_qn: target.qualified_name, tgt_name: target.name}) AS rels
-            """)
-            for record in result:
-                p = dict(record["parent"])
-                qn = p.get("qualified_name", "")
-                if not qn:
-                    continue
-
-                attrs = []
-                methods = []
-                for m in (record["members"] or []):
-                    if m is None:
-                        continue
-                    md = dict(m)
-                    member = {
-                        "name": md.get("name", ""),
-                        "qualified_name": md.get("qualified_name", ""),
-                        "kind": md.get("kind", ""),
-                        "visibility": md.get("visibility", ""),
-                        "type_signature": md.get("type_signature", ""),
-                        "argsstring": md.get("argsstring", ""),
-                        "description": md.get("description", ""),
-                    }
-                    if md.get("kind") in ("attribute", "constant"):
-                        attrs.append(member)
-                    else:
-                        methods.append(member)
-
-                relationships = []
-                for rel in (record["rels"] or []):
-                    if rel is None or rel.get("pred") is None:
-                        continue
-                    relationships.append({
-                        "predicate": rel["pred"],
-                        "target": rel.get("tgt_qn", ""),
-                        "target_name": rel.get("tgt_name", ""),
-                    })
-
-                contexts[qn] = {
-                    "qualified_name": qn,
-                    "kind": p.get("kind", ""),
-                    "description": p.get("description", ""),
-                    "attributes": sorted(attrs, key=lambda a: a["name"]),
-                    "methods": sorted(methods, key=lambda m: m["name"]),
-                    "relationships": relationships,
-                }
-    except Exception:
-        log.warning("Neo4j verification context query failed", exc_info=True)
-
-    # --- SQLAlchemy bridge nodes (augment with anything missing from Neo4j) ---
-    all_nodes = session.query(OntologyNode).all()
-    node_by_id: dict[int, OntologyNode] = {n.id: n for n in all_nodes}
-    all_triples = session.query(OntologyTriple).all()
-
-    for n in all_nodes:
-        if n.kind not in TYPE_KINDS:
+    result = neo4j_session.run("""
+        MATCH (parent:Design)
+        WHERE parent.kind IN ['class', 'interface', 'struct', 'type_alias']
+        OPTIONAL MATCH (parent)-[:COMPOSES]->(member:Design)
+        OPTIONAL MATCH (parent)-[r]->(target:Design)
+        WHERE type(r) <> 'COMPOSES' AND type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
+        RETURN parent, collect(DISTINCT member) AS members,
+               collect(DISTINCT {pred: type(r), tgt_qn: target.qualified_name, tgt_name: target.name}) AS rels
+    """)
+    for record in result:
+        p = dict(record["parent"])
+        qn = p.get("qualified_name", "")
+        if not qn:
             continue
-        if n.qualified_name in contexts:
-            continue  # Already have it from Neo4j
 
         attrs = []
         methods = []
+        for m in (record["members"] or []):
+            if m is None:
+                continue
+            md = dict(m)
+            member = {
+                "name": md.get("name", ""),
+                "qualified_name": md.get("qualified_name", ""),
+                "kind": md.get("kind", ""),
+                "visibility": md.get("visibility", ""),
+                "type_signature": md.get("type_signature", ""),
+                "argsstring": md.get("argsstring", ""),
+                "description": md.get("description", ""),
+            }
+            if md.get("kind") in ("attribute", "constant"):
+                attrs.append(member)
+            else:
+                methods.append(member)
+
         relationships = []
-
-        for t in all_triples:
-            if t.subject_id != n.id:
+        for rel in (record["rels"] or []):
+            if rel is None or rel.get("pred") is None:
                 continue
-            obj = node_by_id.get(t.object_id)
-            pred = t.predicate
-            if obj is None or pred is None:
-                continue
+            relationships.append({
+                "predicate": rel["pred"],
+                "target": rel.get("tgt_qn", ""),
+                "target_name": rel.get("tgt_name", ""),
+            })
 
-            if pred.name == "composes" and obj.kind in VALUE_KINDS:
-                member = {
-                    "name": obj.name,
-                    "qualified_name": obj.qualified_name,
-                    "kind": obj.kind,
-                    "visibility": obj.visibility or "",
-                    "type_signature": obj.type_signature or "",
-                    "argsstring": obj.argsstring or "",
-                    "description": obj.description or "",
-                }
-                if obj.kind in ("attribute", "constant"):
-                    attrs.append(member)
-                else:
-                    methods.append(member)
-            elif pred.name != "composes":
-                relationships.append(
-                    {
-                        "predicate": pred.name,
-                        "target": obj.qualified_name,
-                        "target_name": obj.name,
-                    }
-                )
-
-        contexts[n.qualified_name] = {
-            "qualified_name": n.qualified_name,
-            "kind": n.kind,
-            "description": n.description or "",
+        contexts[qn] = {
+            "qualified_name": qn,
+            "kind": p.get("kind", ""),
+            "description": p.get("description", ""),
             "attributes": sorted(attrs, key=lambda a: a["name"]),
             "methods": sorted(methods, key=lambda m: m["name"]),
             "relationships": relationships,
         }
 
     return sorted(contexts.values(), key=lambda c: c["qualified_name"])
-
-
-# ---------------------------------------------------------------------------
-# Verification reference validation
-# ---------------------------------------------------------------------------
-
-
-def validate_verification_references(
-    verifications: list[VerificationSchema],
-    ontology_nodes: list[dict],
-) -> VerificationValidationReport:
-    """Validate all member_qualified_name values against existing ontology nodes.
-
-    Returns a report of resolved and unresolved references.
-    """
-    known_qnames = {n["qualified_name"] for n in ontology_nodes}
-    report = VerificationValidationReport()
-
-    def _check(member_qname: str, context: str):
-        if not member_qname:
-            return
-        # Exact match
-        if member_qname in known_qnames:
-            report.resolved.append((member_qname, member_qname))
-            return
-        # Longest-prefix match
-        best = ""
-        for qn in known_qnames:
-            if member_qname.startswith(qn) and len(qn) > len(best):
-                best = qn
-        if best:
-            report.resolved.append((member_qname, best))
-        else:
-            report.unresolved.append((member_qname, context))
-
-    for v in verifications:
-        for cond in v.preconditions:
-            _check(cond.member_qualified_name, "precondition")
-        for action in v.actions:
-            _check(action.member_qualified_name, "action")
-        for cond in v.postconditions:
-            _check(cond.member_qualified_name, "postcondition")
-
-    return report
-
-
-# ---------------------------------------------------------------------------
-# Closed-loop design augmentation (still uses SQLAlchemy — Phase 3)
-# ---------------------------------------------------------------------------
-
-
-def augment_design_for_unresolved(
-    session: Session,
-    unresolved: list[tuple[str, str]],
-) -> AugmentResult:
-    """Create missing ontology nodes for unresolved verification references.
-
-    NOTE: This still uses SQLAlchemy OntologyNode. Phase 3 will replace
-    this with Neo4j-based Constraint creation.
-    """
-    from backend.db.models import OntologyNode, OntologyTriple, Predicate
-
-    result = AugmentResult()
-    if not unresolved:
-        return result
-
-    # Ensure the "composes" predicate exists
-    Predicate.ensure_defaults(session)
-    composes_pred = session.query(Predicate).filter_by(name="composes").first()
-
-    created_nodes: dict[str, OntologyNode] = {}
-
-    for member_qname, context in unresolved:
-        if "::" not in member_qname:
-            continue
-        if member_qname in created_nodes:
-            continue
-
-        # Parse parent and member name
-        parent_qname, member_name = member_qname.rsplit("::", 1)
-        parent = (
-            session.query(OntologyNode)
-            .filter_by(
-                qualified_name=parent_qname,
-            )
-            .first()
-        )
-        if parent is None:
-            log.debug(
-                "augment: parent %s not found for %s, skipping",
-                parent_qname,
-                member_qname,
-            )
-            continue
-
-        # Infer kind from context
-        kind = "method" if context == "action" else "attribute"
-
-        # Create the node
-        node, created = get_or_create(
-            session,
-            OntologyNode,
-            defaults={
-                "kind": kind,
-                "name": member_name,
-                "source_type": "member",
-                "visibility": "public",
-                "component_id": parent.component_id,
-            },
-            qualified_name=member_qname,
-        )
-        if created:
-            result.nodes_created += 1
-            created_nodes[member_qname] = node
-            log.info("augment: created %s node %s", kind, member_qname)
-
-            # Create COMPOSES triple
-            session.flush()
-            if composes_pred:
-                _, triple_created = get_or_create(
-                    session,
-                    OntologyTriple,
-                    subject_id=parent.id,
-                    predicate_id=composes_pred.id,
-                    object_id=node.id,
-                )
-                if triple_created:
-                    result.triples_created += 1
-
-    session.flush()
-
-    # Re-link verification records with NULL ontology_node_id
-    if created_nodes:
-        qn_to_node = {n.qualified_name: n for n in session.query(OntologyNode).all()}
-        for vc in (
-            session.query(VerificationCondition)
-            .filter(
-                VerificationCondition.ontology_node_id.is_(None),
-                VerificationCondition.member_qualified_name != "",
-            )
-            .all()
-        ):
-            node = qn_to_node.get(vc.member_qualified_name)
-            if node:
-                vc.ontology_node_id = node.id
-
-        for va in (
-            session.query(VerificationAction)
-            .filter(
-                VerificationAction.ontology_node_id.is_(None),
-                VerificationAction.member_qualified_name != "",
-            )
-            .all()
-        ):
-            node = qn_to_node.get(va.member_qualified_name)
-            if node:
-                va.ontology_node_id = node.id
-
-        session.flush()
-
-    # Neo4j sync of newly created nodes
-    if created_nodes:
-        try:
-            from backend.db.neo4j.repositories.design import DesignRepository as DR
-            from services.dependencies import get_neo4j
-
-            new_triples = (
-                session.query(OntologyTriple)
-                .filter(OntologyTriple.object_id.in_([n.id for n in created_nodes.values()]))
-                .all()
-            )
-            with get_neo4j().session() as neo4j_session:
-                repo = DR(neo4j_session)
-                for node in created_nodes.values():
-                    dn = DesignNode(
-                        qualified_name=node.qualified_name or node.name,
-                        name=node.name,
-                        kind=node.kind,
-                        specialization=node.specialization or "",
-                        visibility=node.visibility or "",
-                        description=node.description or "",
-                        source_type=node.source_type or "",
-                        component_id=node.component_id,
-                    )
-                    repo.merge_node(dn)
-                for triple in new_triples:
-                    if triple.subject and triple.object and triple.predicate:
-                        repo.merge_triple(
-                            triple.subject.qualified_name,
-                            triple.predicate.name,
-                            triple.object.qualified_name,
-                        )
-        except Exception:
-            log.warning("Neo4j augment sync failed", exc_info=True)
-
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -466,35 +139,28 @@ def persist_decomposition(
     neo4j_session: "Neo4jSession",
     hlr_id: int,
     llrs: list[LowLevelRequirementSchema],
-    sql_session: Session | None = None,
 ) -> DecompositionResult:
-    """Create LLRs under an existing HLR in Neo4j. Also persist verification
-    stubs to SQLite if sql_session is provided.
+    """Create LLRs under an existing HLR in Neo4j, with verification stubs.
 
-    Phase 2: HLR/LLR data lives in Neo4j. VerificationMethod stays in SQLite
-    but references LLR by id (not FK).
+    Phase 3: Both LLRs and verification stubs go to Neo4j.
     """
     result = DecompositionResult()
-    repo = RequirementRepository(neo4j_session)
+    req_repo = RequirementRepository(neo4j_session)
+    ver_repo = VerificationRepository(neo4j_session)
 
     for llr_data in llrs:
-        llr = repo.create_llr(hlr_id=hlr_id, description=llr_data.description)
+        llr = req_repo.create_llr(hlr_id=hlr_id, description=llr_data.description)
         result.llrs_created += 1
 
-        # Persist verification stubs in SQLite
-        if sql_session is not None:
-            for v in llr_data.verifications:
-                vm = VerificationMethod(
-                    low_level_requirement_id=llr.id,
-                    method=v.method,
-                    test_name=v.test_name,
-                    description=v.description,
-                )
-                sql_session.add(vm)
-                result.verifications_created += 1
-
-    if sql_session is not None:
-        sql_session.flush()
+        # Persist verification stubs in Neo4j
+        for v in llr_data.verifications:
+            ver_repo.create_verification(
+                llr_id=llr.id,
+                method=v.method,
+                test_name=v.test_name,
+                description=v.description,
+            )
+            result.verifications_created += 1
 
     return result
 
@@ -507,20 +173,17 @@ def persist_decomposition(
 def persist_design(
     design: DesignSchema,
     neo4j_session: "Neo4jSession",
-    sql_session: Session | None = None,
     qname_to_node: dict[str, DesignNode] | None = None,
 ) -> DesignResult:
     """Create ontology nodes, triples, and requirement-to-node links in Neo4j.
 
     Design nodes and triples are written directly to Neo4j via
     DesignRepository. Requirement links use TRACES_TO edges from
-    :HLR/:LLR stub nodes to :Design nodes.
+    :HLR/:LLR nodes to :Design nodes.
 
     Args:
         design: DesignSchema from the agent.
         neo4j_session: Active Neo4j session for graph writes.
-        sql_session: Optional SQLAlchemy session for HLR/LLR lookups.
-            Required if design.requirement_links is non-empty.
         qname_to_node: Optional cache of qualified_name → DesignNode.
     """
     if qname_to_node is None:
@@ -571,8 +234,6 @@ def persist_design(
             result.triples_skipped += 1
             continue
         if triple_data.object_qualified_name not in qname_to_node:
-            # Check if it's a dependency stub — merge_node skipped it
-            # but the triple may still reference it (it exists as :Compound in Neo4j)
             dep_stub_qnames = {
                 nd.qualified_name for nd in design.nodes if nd.source_type == "dependency"
             }
@@ -645,79 +306,92 @@ def persist_design(
 
 
 def persist_verification(
-    session: Session,
+    neo4j_session: "Neo4jSession",
     llr_id: int,
     verifications: list[VerificationSchema],
-    ontology_nodes: list[dict] | None = None,
 ) -> VerificationResult:
-    """Replace an LLR's verification methods with fleshed-out versions.
+    """Replace an LLR's verification methods with fleshed-out versions in Neo4j.
 
-    Takes llr_id (Neo4j LLR node id) instead of SQLAlchemy object.
-    VerificationMethod.low_level_requirement_id is a plain integer
-    reference, not a FK.
+    Creates :VerificationMethod nodes linked via (:LLR)-[:VERIFIES], with
+    :Condition nodes (via :HAS_CONDITION with :LEFT_OPERAND/:RIGHT_OPERAND
+    edges to :Design) and :Action nodes (via :HAS_ACTION with :CALLER/:CALLEE
+    edges to :Design).
 
-    NOTE: This still uses SQLAlchemy. Phase 3 will move to Neo4j.
+    Any referenced qualified names that don't have a corresponding :Design
+    node are auto-created as stubs via augment_missing_design_nodes().
     """
-    if ontology_nodes is None:
-        ontology_nodes = [
-            {"qualified_name": n.qualified_name, "pk": n.id}
-            for n in session.query(OntologyNode.qualified_name, OntologyNode.id).all()
-        ]
-
     result = VerificationResult()
+    repo = VerificationRepository(neo4j_session)
 
-    def _save_conditions(vm, conditions, phase):
-        for i, cond in enumerate(conditions):
-            vc = VerificationCondition(
-                verification=vm,
-                phase=phase,
-                order=i,
-                ontology_node=resolve_ontology_node(
-                    session,
-                    cond.member_qualified_name,
-                    ontology_nodes,
-                ),
-                member_qualified_name=cond.member_qualified_name,
-                operator=cond.operator,
-                expected_value=cond.expected_value,
-            )
-            session.add(vc)
-            result.conditions_created += 1
+    # Collect all qualified names referenced in conditions and actions
+    all_qnames: list[str] = []
+    for v in verifications:
+        for cond in v.preconditions + v.postconditions:
+            if cond.subject_qualified_name:
+                all_qnames.append(cond.subject_qualified_name)
+            if cond.object_qualified_name:
+                all_qnames.append(cond.object_qualified_name)
+        for action in v.actions:
+            if action.caller_qualified_name:
+                all_qnames.append(action.caller_qualified_name)
+            if action.callee_qualified_name:
+                all_qnames.append(action.callee_qualified_name)
+
+    # Auto-create missing :Design stubs for unresolved references
+    if all_qnames:
+        created = repo.augment_missing_design_nodes(all_qnames)
+        result.nodes_augmented = len(created)
 
     # Delete existing verifications for this LLR
-    for vm in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr_id).all():
-        session.delete(vm)
-    session.flush()
+    existing_vms = repo.list_verifications(llr_id)
+    for vm in existing_vms:
+        repo.delete_verification(vm.id)
 
+    # Create new verifications
     for v in verifications:
-        vm = VerificationMethod(
-            low_level_requirement_id=llr_id,
+        vm = repo.create_verification(
+            llr_id=llr_id,
             method=v.method,
             test_name=v.test_name,
             description=v.description,
         )
-        session.add(vm)
-        session.flush()
         result.verifications_saved += 1
 
-        _save_conditions(vm, v.preconditions, "pre")
+        # Preconditions
+        for i, cond in enumerate(v.preconditions):
+            repo.add_condition(
+                vm_id=vm.id,
+                phase="pre",
+                order=i,
+                operator=cond.operator,
+                expected_value=cond.expected_value,
+                subject_qualified_name=cond.subject_qualified_name,
+                object_qualified_name=cond.object_qualified_name,
+            )
+            result.conditions_created += 1
 
+        # Actions
         for i, action in enumerate(v.actions):
-            va = VerificationAction(
-                verification=vm,
+            repo.add_action(
+                vm_id=vm.id,
                 order=i,
                 description=action.description,
-                ontology_node=resolve_ontology_node(
-                    session,
-                    action.member_qualified_name,
-                    ontology_nodes,
-                ),
-                member_qualified_name=action.member_qualified_name,
+                caller_qualified_name=action.caller_qualified_name,
+                callee_qualified_name=action.callee_qualified_name,
             )
-            session.add(va)
             result.actions_created += 1
 
-        _save_conditions(vm, v.postconditions, "post")
+        # Postconditions
+        for i, cond in enumerate(v.postconditions):
+            repo.add_condition(
+                vm_id=vm.id,
+                phase="post",
+                order=i,
+                operator=cond.operator,
+                expected_value=cond.expected_value,
+                subject_qualified_name=cond.subject_qualified_name,
+                object_qualified_name=cond.object_qualified_name,
+            )
+            result.conditions_created += 1
 
-    session.flush()
     return result

@@ -101,7 +101,7 @@ def main():
                     prompt_log_file=os.path.join(LOGS_DIR, f"decompose_hlr{hlr.id}.md"),
                 )
                 with get_neo4j().session() as ns2:
-                    persisted = persist_decomposition(ns2, hlr.id, result.low_level_requirements, sql_session=None)
+                    persisted = persist_decomposition(ns2, hlr.id, result.low_level_requirements)
                 llrs_neo4j = repo.list_llrs(hlr_id=hlr.id)
                 llrs = [
                     {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}

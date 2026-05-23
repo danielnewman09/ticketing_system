@@ -7,8 +7,7 @@ Claude Code acts as the LLM (the reasoning engine). These tools provide:
 
 No Anthropic API calls are made here — Claude Code IS the model.
 
-Run with:
-    python -m agents.mcp_server
+Phase 3: All verification data lives in Neo4j via VerificationRepository.
 """
 
 import json
@@ -22,10 +21,10 @@ from backend.db.models import (
     OntologyNode,
     OntologyTriple,
     Predicate,
-    VerificationMethod,
 )
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.requirement import RequirementRepository
+from backend.db.neo4j.repositories.verification import VerificationRepository
 from backend.requirements.schemas import LowLevelRequirementSchema, VerificationSchema
 from backend.requirements.services.persistence import (
     persist_decomposition,
@@ -61,15 +60,14 @@ def list_requirements() -> str:
     """List all HLRs with their LLRs and verification methods."""
     with get_neo4j().session() as ns:
         repo = RequirementRepository(ns)
+        ver_repo = VerificationRepository(ns)
         hlrs_neo4j = repo.list_hlrs()
         all_llrs = repo.list_llrs()
 
-    # Verification methods still from SQLite
-    with get_session() as session:
-        all_verifications = session.query(VerificationMethod).all()
-        ver_by_llr: dict[int, list] = {}
-        for v in all_verifications:
-            ver_by_llr.setdefault(v.low_level_requirement_id, []).append(v.method)
+        ver_by_llr: dict[int, list[str]] = {}
+        for llr in all_llrs:
+            vms = ver_repo.list_verifications(llr.id)
+            ver_by_llr[llr.id] = [vm.method for vm in vms]
 
     lines = []
     for hlr in hlrs_neo4j:
@@ -240,7 +238,7 @@ def save_decomposed_requirement(
         repo = RequirementRepository(ns)
         hlr = repo.create_hlr(description=hlr_description)
         llrs = [LowLevelRequirementSchema.model_validate(d) for d in low_level_requirements]
-        result = persist_decomposition(ns, hlr.id, llrs, sql_session=None)
+        result = persist_decomposition(ns, hlr.id, llrs)
 
     return json.dumps(
         {
@@ -258,26 +256,24 @@ def save_ontology_design(
     requirement_links: list[dict] | None = None,
 ) -> str:
     """Save ontology nodes, triples, and requirement links to Neo4j."""
-    from services.dependencies import get_neo4j
-    with get_session() as session:
-        with get_neo4j().session() as neo4j_session:
-            design = DesignSchema.model_validate(
-                {
-                    "nodes": nodes,
-                    "triples": triples,
-                    "requirement_links": requirement_links or [],
-                }
-            )
-            result = persist_design(design, neo4j_session, sql_session=session)
+    with get_neo4j().session() as neo4j_session:
+        design = DesignSchema.model_validate(
+            {
+                "nodes": nodes,
+                "triples": triples,
+                "requirement_links": requirement_links or [],
+            }
+        )
+        result = persist_design(design, neo4j_session)
 
-            return json.dumps(
-                {
-                    "nodes_created": result.nodes_created,
-                    "triples_created": result.triples_created,
-                    "triples_skipped": result.triples_skipped,
-                    "requirement_links_applied": result.links_applied,
-                }
-            )
+        return json.dumps(
+            {
+                "nodes_created": result.nodes_created,
+                "triples_created": result.triples_created,
+                "triples_skipped": result.triples_skipped,
+                "requirement_links_applied": result.links_applied,
+            }
+        )
 
 
 @mcp.tool()
@@ -286,9 +282,9 @@ def save_verification(
     verifications: list[dict],
 ) -> str:
     """Save fleshed-out verification procedures for an LLR, replacing any existing ones."""
-    with get_session() as session:
+    with get_neo4j().session() as ns:
         schemas = [VerificationSchema.model_validate(v) for v in verifications]
-        result = persist_verification(session, llr_id, schemas)
+        result = persist_verification(ns, llr_id, schemas)
 
         return json.dumps(
             {
@@ -296,6 +292,7 @@ def save_verification(
                 "verifications_saved": result.verifications_saved,
                 "conditions_created": result.conditions_created,
                 "actions_created": result.actions_created,
+                "nodes_augmented": result.nodes_augmented,
             }
         )
 
@@ -314,12 +311,8 @@ def apply_remediation(
     """Apply a remediation plan to fix design suitability issues."""
     changes = []
 
-    # Remove LLRs from Neo4j (and verification methods from SQLite)
+    # Remove LLRs from Neo4j (cascade-deletes verification methods)
     if remove_llr_ids:
-        with get_session() as session:
-            count = session.query(VerificationMethod).filter(
-                VerificationMethod.low_level_requirement_id.in_(remove_llr_ids)
-            ).delete(synchronize_session="fetch")
         with get_neo4j().session() as ns:
             repo = RequirementRepository(ns)
             for llr_id in remove_llr_ids:
@@ -365,12 +358,16 @@ def apply_remediation(
                     for llr_id in new_hlr_data["reassign_llr_ids"]:
                         repo.update_llr(llr_id, high_level_requirement_id=new_hlr.id)
                 for llr_data in new_hlr_data.get("new_llrs", []):
-                    repo.create_llr(hlr_id=new_hlr.id, description=llr_data["description"])
-                    # Verification methods still in SQLite
-                    with get_session() as session:
-                        for v in llr_data.get("verifications", []):
-                            # Note: llr.id not available here without extra lookup
-                            pass  # TODO: create verification methods after LLR id is known
+                    llr = repo.create_llr(hlr_id=new_hlr.id, description=llr_data["description"])
+                    # Verification stubs in Neo4j
+                    ver_repo = VerificationRepository(ns)
+                    for v in llr_data.get("verifications", []):
+                        ver_repo.create_verification(
+                            llr_id=llr.id,
+                            method=v["method"],
+                            test_name=v.get("test_name", ""),
+                            description=v.get("description", ""),
+                        )
                 changes.append(f"Created HLR {new_hlr.id}: {new_hlr.description[:60]}")
             repo.delete_hlr(split["original_hlr_id"])
             changes.append(f"Removed original HLR {split['original_hlr_id']}")
@@ -379,42 +376,36 @@ def apply_remediation(
     for new_hlr_data in new_hlrs or []:
         with get_neo4j().session() as ns:
             repo = RequirementRepository(ns)
+            ver_repo = VerificationRepository(ns)
             hlr = repo.create_hlr(description=new_hlr_data["description"])
             for llr_data in new_hlr_data.get("new_llrs", []):
                 llr = repo.create_llr(hlr_id=hlr.id, description=llr_data["description"])
-                # Verification methods still in SQLite
-                with get_session() as session:
-                    for v in llr_data.get("verifications", []):
-                        vm = VerificationMethod(
-                            low_level_requirement_id=llr.id,
-                            method=v["method"],
-                            test_name=v.get("test_name", ""),
-                            description=v.get("description", ""),
-                        )
-                        session.add(vm)
-                    session.flush()
+                for v in llr_data.get("verifications", []):
+                    ver_repo.create_verification(
+                        llr_id=llr.id,
+                        method=v["method"],
+                        test_name=v.get("test_name", ""),
+                        description=v.get("description", ""),
+                    )
             changes.append(f"Created HLR {hlr.id} with LLRs")
 
     # New LLRs under existing HLRs in Neo4j
     for new_llr in new_llrs or []:
         with get_neo4j().session() as ns:
             repo = RequirementRepository(ns)
+            ver_repo = VerificationRepository(ns)
             hlr = repo.get_hlr(new_llr["hlr_id"])
             if not hlr:
                 changes.append(f"New LLR skipped: HLR {new_llr['hlr_id']} not found")
                 continue
             llr = repo.create_llr(hlr_id=hlr.id, description=new_llr["description"])
-            # Verification methods still in SQLite
-            with get_session() as session:
-                for v in new_llr.get("verifications", []):
-                    vm = VerificationMethod(
-                        low_level_requirement_id=llr.id,
-                        method=v["method"],
-                        test_name=v.get("test_name", ""),
-                        description=v.get("description", ""),
-                    )
-                    session.add(vm)
-                session.flush()
+            for v in new_llr.get("verifications", []):
+                ver_repo.create_verification(
+                    llr_id=llr.id,
+                    method=v["method"],
+                    test_name=v.get("test_name", ""),
+                    description=v.get("description", ""),
+                )
             changes.append(f"Created LLR {llr.id} under HLR {hlr.id}")
 
     # New nodes and triples still via SQLAlchemy

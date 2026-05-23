@@ -31,9 +31,6 @@ from backend.db import init_db, get_session
 from backend.db.models import (
     OntologyNode,
     OntologyTriple,
-    VerificationAction,
-    VerificationCondition,
-    VerificationMethod,
 )
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 
@@ -84,7 +81,7 @@ def step_decompose():
             )
 
             with get_neo4j().session() as ns2:
-                persisted = persist_decomposition(ns2, hlr.id, result.low_level_requirements, sql_session=None)
+                persisted = persist_decomposition(ns2, hlr.id, result.low_level_requirements)
             print(f"    -> HLR {hlr.id}: {hlr.description[:60]}")
             print(f"       {persisted.llrs_created} LLRs generated\n")
 
@@ -242,7 +239,7 @@ def step_design():
                         print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
 
                 with get_neo4j().session() as neo4j_session:
-                    persisted = persist_design(ontology, neo4j_session, sql_session=session, qname_to_node=qname_to_node)
+                    persisted = persist_design(ontology, neo4j_session, qname_to_node=qname_to_node)
                 total_nodes += persisted.nodes_created
                 total_triples += persisted.triples_created
                 total_linked += persisted.links_applied
@@ -266,47 +263,15 @@ def step_verify():
     from backend.requirements.services.persistence import (
         build_verification_context,
         persist_verification,
-        augment_design_for_unresolved,
     )
+    from backend.db.neo4j.repositories.verification import VerificationRepository
 
-    # Build ontology_nodes from both Neo4j (primary) and SQLAlchemy (bridge)
     with get_neo4j().session() as ns:
-        repo = RequirementRepository(ns)
-        all_llrs = repo.list_llrs()
+        req_repo = RequirementRepository(ns)
+        ver_repo = VerificationRepository(ns)
+        all_llrs = req_repo.list_llrs()
 
-    with get_session() as session:
-        class_contexts = build_verification_context(session)
-
-        # Design nodes from Neo4j + SQLAlchemy bridge
-        ontology_nodes = []
-        seen_qns: set[str] = set()
-        try:
-            with get_neo4j().session() as ns:
-                result = ns.run(
-                    "MATCH (d:Design) RETURN d.qualified_name AS qn, d.kind AS kind, d.name AS name, d.description AS desc"
-                )
-                for record in result:
-                    qn = record["qn"]
-                    if qn and qn not in seen_qns:
-                        seen_qns.add(qn)
-                        ontology_nodes.append({
-                            "qualified_name": qn,
-                            "pk": None,
-                            "kind": record["kind"],
-                            "description": record["desc"] or "",
-                        })
-        except Exception:
-            print("  WARNING: Could not fetch design nodes from Neo4j")
-
-        for n in session.query(OntologyNode).all():
-            if n.qualified_name and n.qualified_name not in seen_qns:
-                seen_qns.add(n.qualified_name)
-                ontology_nodes.append({
-                    "qualified_name": n.qualified_name,
-                    "pk": n.id,
-                    "kind": n.kind,
-                    "description": n.description or "",
-                })
+        class_contexts = build_verification_context(ns)
 
         if not all_llrs:
             print("  No LLRs found.\n")
@@ -320,9 +285,10 @@ def step_verify():
 
         for llr in all_llrs:
             llr_dict = {"id": llr.id, "description": llr.description}
+            existing_vms = ver_repo.list_verifications(llr.id)
             existing = [
-                {"method": v.method, "test_name": v.test_name, "description": v.description}
-                for v in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr.id).all()
+                {"method": vm.method, "test_name": vm.test_name, "description": vm.description}
+                for vm in existing_vms
             ]
 
             if not existing:
@@ -334,62 +300,22 @@ def step_verify():
                 llr_dict,
                 existing,
                 class_contexts,
-                ontology_nodes=ontology_nodes,
+                neo4j_session=ns,
                 prompt_log_file=os.path.join(LOGS_DIR, f"verify_llr{llr.id}.md"),
             )
 
-            if agent_result.validation and not agent_result.validation.all_resolved:
-                print(f"    WARN: {len(agent_result.validation.unresolved)} unresolved references")
-                for qname, ctx in agent_result.validation.unresolved:
-                    print(f"      - {qname} ({ctx})")
+            if not agent_result.all_resolved:
+                print(f"    WARN: {len(agent_result.unresolved)} unresolved references")
+                for qname in agent_result.unresolved:
+                    print(f"      - {qname}")
 
-            persisted = persist_verification(
-                session, llr.id, agent_result.verifications, ontology_nodes
-            )
+            persisted = persist_verification(ns, llr.id, agent_result.verifications)
             total_conditions += persisted.conditions_created
             total_actions += persisted.actions_created
 
-            if agent_result.validation and not agent_result.validation.all_resolved:
-                augmented = augment_design_for_unresolved(
-                    session,
-                    agent_result.validation.unresolved,
-                )
-                if augmented.nodes_created:
-                    total_augmented += augmented.nodes_created
-                    print(
-                        f"    Created {augmented.nodes_created} missing design nodes, "
-                        f"{augmented.triples_created} triples"
-                    )
-                    # Refresh node list
-                    ontology_nodes = []
-                    seen_qns_refresh: set[str] = set()
-                    try:
-                        with get_neo4j().session() as ns:
-                            result = ns.run(
-                                "MATCH (d:Design) RETURN d.qualified_name AS qn, d.kind AS kind, d.name AS name, d.description AS desc"
-                            )
-                            for record in result:
-                                qn = record["qn"]
-                                if qn and qn not in seen_qns_refresh:
-                                    seen_qns_refresh.add(qn)
-                                    ontology_nodes.append({
-                                        "qualified_name": qn,
-                                        "pk": None,
-                                        "kind": record["kind"],
-                                        "description": record["desc"] or "",
-                                    })
-                    except Exception:
-                        pass
-                    for n in session.query(OntologyNode).all():
-                        if n.qualified_name and n.qualified_name not in seen_qns_refresh:
-                            seen_qns_refresh.add(n.qualified_name)
-                            ontology_nodes.append({
-                                "qualified_name": n.qualified_name,
-                                "pk": n.id,
-                                "kind": n.kind,
-                                "description": n.description or "",
-                            })
-                    class_contexts = build_verification_context(session)
+            if persisted.nodes_augmented:
+                total_augmented += persisted.nodes_augmented
+                print(f"    Created {persisted.nodes_augmented} missing design node stubs")
 
             for v in agent_result.verifications:
                 print(
@@ -401,10 +327,9 @@ def step_verify():
         print(f"\n  Verification phase complete:")
         print(f"    {total_conditions} conditions, {total_actions} actions created")
         if total_augmented:
-            print(f"    {total_augmented} design nodes created via closed loop\n")
+            print(f"    {total_augmented} design node stubs created via augmentation\n")
         else:
             print()
-
 
 def step_summary():
     print("=" * 60)
@@ -412,6 +337,7 @@ def step_summary():
     print("=" * 60)
 
     from backend.db.neo4j.connection import Neo4jConnection
+    from backend.db.neo4j.repositories.verification import VerificationRepository
     neo4j = Neo4jConnection()
 
     with get_neo4j().session() as ns:
@@ -421,11 +347,9 @@ def step_summary():
 
         node_count = ns.run("MATCH (d:Design) RETURN count(d) AS cnt").single()["cnt"]
         triple_count = ns.run("MATCH (d:Design)-[r]->(:Design) RETURN count(r) AS cnt").single()["cnt"]
-
-    with get_session() as session:
-        verif_count = session.query(VerificationMethod).count()
-        cond_count = session.query(VerificationCondition).count()
-        action_count = session.query(VerificationAction).count()
+        verif_count = ns.run("MATCH (vm:VerificationMethod) RETURN count(vm) AS cnt").single()["cnt"]
+        cond_count = ns.run("MATCH (c:Condition) RETURN count(c) AS cnt").single()["cnt"]
+        action_count = ns.run("MATCH (a:Action) RETURN count(a) AS cnt").single()["cnt"]
 
         print(f"  HLRs:             {hlr_count}")
         print(f"  LLRs:             {llr_count}")
@@ -436,29 +360,20 @@ def step_summary():
         print(f"  Design triples:   {triple_count}")
 
         # Show HLR → Design traces from Neo4j
-        with get_neo4j().session() as ns:
-            repo = RequirementRepository(ns)
-            for hlr in repo.list_hlrs():
-                print(f"\n  HLR {hlr.id}: {hlr.description[:60]}")
-                traces = ns.run(
-                    """
-                    MATCH (h:HLR {id: $hid})-[:TRACES_TO]->(d:Design)
-                    RETURN d.qualified_name AS qn
-                    """,
-                    {"hid": hlr.id},
-                ).data()
-                if traces:
-                    for t in traces:
-                        print(f"    -> {t['qn']}")
-                else:
-                    print(f"    (no design traces)")
-
-    print("\n" + "=" * 60)
-    print("Explore in the dashboard:")
-    print("  python nicegui_app.py")
-    print("  http://127.0.0.1:8081/")
-    print("=" * 60)
-
+        for hlr in repo.list_hlrs():
+            print(f"\n  HLR {hlr.id}: {hlr.description[:60]}")
+            traces = ns.run(
+                """
+                MATCH (h:HLR {id: $hid})-[:TRACES_TO]->(d:Design)
+                RETURN d.qualified_name AS qn
+                """,
+                {"hid": hlr.id},
+            ).data()
+            if traces:
+                for t in traces:
+                    print(f"    -> {t['qn']}")
+            else:
+                print(f"    (no design traces)")
 
 def _get_component_name(component_id: int | None) -> str | None:
     """Look up a component name by ID from SQLite."""
