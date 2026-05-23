@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 """Export current database state to JSON fixtures for integration tests.
 
-Phase 2 note: HLR/LLR data is now in Neo4j, not SQLite. The SQLite
-fixture includes verification data (with plain low_level_requirement_id)
-but not HLR/LLR tables. HLR/LLR data should be created via scripts or
-the dashboard and then exported from Neo4j separately if needed.
+Phase 3 notes:
+  - HLR/LLR data is in Neo4j (Phase 2)
+  - Verification data is in Neo4j (Phase 3)
+  - SQLite fixture excludes HLR/LLR and verification tables
+  - Neo4j fixture includes design nodes, verification methods, conditions, and actions
 
 Usage:
     source .venv/bin/activate
     python scripts/export_fixtures.py
 
 Outputs:
-    tests/integration/sqlite_fixtures.json   — components, ontology, verifications
-    tests/integration/neo4j_fixtures.json    — design nodes & relationships
+    tests/integration/sqlite_fixtures.json   — components, ontology
+    tests/integration/neo4j_fixtures.json    — design nodes, relationships, verifications
 """
 
 import json
@@ -31,12 +32,12 @@ NEO4J_FIXTURE = os.path.join(FIXTURES_DIR, "neo4j_fixtures.json")
 
 
 # ---------------------------------------------------------------------------
-# SQLite export (no HLR/LLR — those are in Neo4j)
+# SQLite export (no HLR/LLR or verification — those are in Neo4j)
 # ---------------------------------------------------------------------------
 
 
 def export_sqlite():
-    """Dump domain tables from db.sqlite3 to a JSON fixture (excluding HLR/LLR)."""
+    """Dump domain tables from db.sqlite3 to a JSON fixture (excluding HLR/LLR and verification)."""
     from backend.db import init_db, get_session
     from backend.db.models import (
         Component,
@@ -46,9 +47,6 @@ def export_sqlite():
         OntologyNode,
         OntologyTriple,
         Predicate,
-        VerificationAction,
-        VerificationCondition,
-        VerificationMethod,
     )
     from backend.db.models.components import dependency_components
 
@@ -95,8 +93,6 @@ def export_sqlite():
             for p in session.query(Predicate).order_by(Predicate.id).all()
         ]
 
-        # HLR/LLR data is in Neo4j (Phase 2) — not exported from SQLite
-
         data["ontology_nodes"] = [
             {
                 "id": n.id, "qualified_name": n.qualified_name, "name": n.name or "",
@@ -127,56 +123,24 @@ def export_sqlite():
             for t in session.query(OntologyTriple).order_by(OntologyTriple.id).all()
         ]
 
-        # HLR/LLR M2M relationships removed (Phase 2: data in Neo4j via TRACES_TO)
-
-        data["verification_methods"] = [
-            {
-                "id": v.id, "method": v.method, "test_name": v.test_name or "",
-                "description": v.description or "",
-                "low_level_requirement_id": v.low_level_requirement_id,
-            }
-            for v in session.query(VerificationMethod).order_by(VerificationMethod.id).all()
-        ]
-
-        data["verification_conditions"] = [
-            {
-                "id": c.id, "verification_id": c.verification_id, "phase": c.phase or "pre",
-                "order": c.order or 0, "member_qualified_name": c.member_qualified_name or "",
-                "operator": c.operator or "", "expected_value": c.expected_value or "",
-                "ontology_node_id": c.ontology_node_id,
-            }
-            for c in session.query(VerificationCondition).order_by(VerificationCondition.id).all()
-        ]
-
-        data["verification_actions"] = [
-            {
-                "id": a.id, "verification_id": a.verification_id,
-                "order": a.order or 0, "description": a.description or "",
-                "member_qualified_name": a.member_qualified_name or "",
-                "ontology_node_id": a.ontology_node_id,
-            }
-            for a in session.query(VerificationAction).order_by(VerificationAction.id).all()
-        ]
-
     with open(SQLITE_FIXTURE, "w") as f:
         json.dump(data, f, indent=2)
 
-    hlr_count = len(data.get("high_level_requirements", []))
-    llr_count = len(data.get("low_level_requirements", []))
     print(f"SQLite fixture written to {SQLITE_FIXTURE}")
     print(f"  {len(data['ontology_nodes'])} nodes, {len(data['ontology_triples'])} triples")
-    print(f"  HLR/LLR data not included (Phase 2: in Neo4j)")
-    print(f"  {len(data['verification_methods'])} verifications")
+    print(f"  HLR/LLR not included (Phase 2: in Neo4j)")
+    print(f"  Verification data not included (Phase 3: in Neo4j)")
 
 
 # ---------------------------------------------------------------------------
-# Neo4j export
+# Neo4j export (design nodes + verification data)
 # ---------------------------------------------------------------------------
 
 
 def export_neo4j():
-    """Dump Design nodes and their relationships from Neo4j to JSON."""
+    """Dump Design nodes, relationships, and verification data from Neo4j to JSON."""
     from backend.db.neo4j.connection import Neo4jConnection
+    from backend.db.neo4j.repositories.verification import VerificationRepository
 
     neo4j = Neo4jConnection()
     os.makedirs(FIXTURES_DIR, exist_ok=True)
@@ -245,6 +209,53 @@ def export_neo4j():
             )
             compound_nodes = [dict(r) for r in compound_result]
 
+        # Export verification data from Neo4j
+        ver_repo = VerificationRepository(session)
+        verification_methods = []
+        verification_conditions = []
+        verification_actions = []
+
+        # Get all verification methods
+        vm_result = session.run(
+            "MATCH (l:LLR)-[:VERIFIES]->(vm:VerificationMethod) "
+            "RETURN vm.id AS id, vm.method AS method, vm.test_name AS test_name, "
+            "vm.description AS description, l.id AS llr_id "
+            "ORDER BY vm.id"
+        )
+        for rec in vm_result:
+            vm_id = rec["id"]
+            verification_methods.append({
+                "id": vm_id,
+                "method": rec["method"],
+                "test_name": rec["test_name"] or "",
+                "description": rec["description"] or "",
+                "low_level_requirement_id": rec["llr_id"],
+            })
+
+            # Get conditions for this VM
+            for c in ver_repo.list_conditions(vm_id):
+                verification_conditions.append({
+                    "id": c.id,
+                    "verification_id": vm_id,
+                    "phase": c.phase,
+                    "order": c.order,
+                    "subject_qualified_name": c.subject_qualified_name,
+                    "operator": c.operator,
+                    "expected_value": c.expected_value,
+                    "object_qualified_name": c.object_qualified_name,
+                })
+
+            # Get actions for this VM
+            for a in ver_repo.list_actions(vm_id):
+                verification_actions.append({
+                    "id": a.id,
+                    "verification_id": vm_id,
+                    "order": a.order,
+                    "description": a.description,
+                    "caller_qualified_name": a.caller_qualified_name,
+                    "callee_qualified_name": a.callee_qualified_name,
+                })
+
     neo4j.close()
 
     fixture = {
@@ -253,6 +264,9 @@ def export_neo4j():
         "dependency_relationships": dep_rels,
         "dependency_compound_nodes": compound_nodes,
         "implemented_by_links": impl_links,
+        "verification_methods": verification_methods,
+        "verification_conditions": verification_conditions,
+        "verification_actions": verification_actions,
     }
 
     with open(NEO4J_FIXTURE, "w") as f:
@@ -264,6 +278,7 @@ def export_neo4j():
     print(f"  {len(dep_rels)} Design→Compound dependency relationships")
     print(f"  {len(compound_nodes)} referenced Compound nodes")
     print(f"  {len(impl_links)} IMPLEMENTED_BY links")
+    print(f"  {len(verification_methods)} VerificationMethods, {len(verification_conditions)} Conditions, {len(verification_actions)} Actions")
 
 
 if __name__ == "__main__":

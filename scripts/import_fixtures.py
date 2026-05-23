@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """Import JSON fixtures into a fresh database, recreating the full state.
 
-Phase 2 note: HLR/LLR data lives in Neo4j, not SQLite. The SQLite
-fixture loader skips HLR/LLR and their M2M relationships. HLR/LLR
-data should be created via the dashboard or scripts (02_setup_project.py).
+Phase 3 notes:
+  - HLR/LLR data lives in Neo4j (Phase 2)
+  - Verification data lives in Neo4j (Phase 3)
+  - SQLite fixture loader skips HLR/LLR and verification tables
 
 Usage:
     source .venv/bin/activate
@@ -11,8 +12,9 @@ Usage:
 
 This will:
   1. Wipe and recreate SQLite tables (via Alembic or init_db)
-  2. Load sqlite_fixtures.json into SQLite (excluding HLR/LLR tables)
+  2. Load sqlite_fixtures.json into SQLite (excluding HLR/LLR and verification tables)
   3. Sync design nodes and triples to Neo4j
+  4. Sync verification data to Neo4j
 
 WARNING: This replaces all data in both databases.
 """
@@ -33,7 +35,7 @@ NEO4J_FIXTURE = os.path.join(FIXTURES_DIR, "neo4j_fixtures.json")
 
 
 def import_sqlite():
-    """Load SQLite fixture data into the database (excluding HLR/LLR tables)."""
+    """Load SQLite fixture data into the database (excluding HLR/LLR and verification tables)."""
     from backend.db import init_db, get_session
     from backend.db.models import (
         Component,
@@ -43,9 +45,6 @@ def import_sqlite():
         OntologyNode,
         OntologyTriple,
         Predicate,
-        VerificationAction,
-        VerificationCondition,
-        VerificationMethod,
         dependency_components,
     )
 
@@ -56,9 +55,6 @@ def import_sqlite():
 
     with get_session() as session:
         # Delete in dependency order
-        session.query(VerificationAction).delete()
-        session.query(VerificationCondition).delete()
-        session.query(VerificationMethod).delete()
         session.execute(dependency_components.delete())
         session.query(Dependency).delete()
         session.query(DependencyManager).delete()
@@ -112,7 +108,6 @@ def import_sqlite():
             )
 
         # HLR/LLR data is now in Neo4j (Phase 2) — skip loading into SQLite
-        # HLR/LLR M2M relationships (hlr_triples, hlr_nodes, llr_nodes) also removed
 
         # --- Ontology ---
         for row in data.get("ontology_nodes", []):
@@ -150,54 +145,25 @@ def import_sqlite():
                 object_id=row["object_id"],
             ))
 
-        session.flush()
-
-        # --- Verifications (low_level_requirement_id is now a plain integer, no FK) ---
-        for row in data.get("verification_methods", []):
-            session.add(VerificationMethod(
-                id=row["id"],
-                method=row["method"],
-                test_name=row.get("test_name", ""),
-                description=row.get("description", ""),
-                low_level_requirement_id=row["low_level_requirement_id"],
-            ))
-
-        session.flush()
-
-        for row in data.get("verification_conditions", []):
-            session.add(VerificationCondition(
-                id=row["id"],
-                verification_id=row["verification_id"],
-                phase=row.get("phase", "pre"),
-                order=row.get("order", 0),
-                member_qualified_name=row.get("member_qualified_name", ""),
-                operator=row.get("operator", ""),
-                expected_value=row.get("expected_value", ""),
-                ontology_node_id=row.get("ontology_node_id"),
-            ))
-
-        for row in data.get("verification_actions", []):
-            session.add(VerificationAction(
-                id=row["id"],
-                verification_id=row["verification_id"],
-                order=row.get("order", 0),
-                description=row.get("description", ""),
-                member_qualified_name=row.get("member_qualified_name", ""),
-                ontology_node_id=row.get("ontology_node_id"),
-            ))
+        # Verification data is now in Neo4j (Phase 3) — skip loading into SQLite
 
     hlr_count = len(data.get("high_level_requirements", []))
     llr_count = len(data.get("low_level_requirements", []))
+    vm_count = len(data.get("verification_methods", []))
+    cond_count = len(data.get("verification_conditions", []))
+    act_count = len(data.get("verification_actions", []))
     print(f"SQLite fixture loaded from {SQLITE_FIXTURE}")
     print(f"  {len(data.get('ontology_nodes', []))} nodes, {len(data.get('ontology_triples', []))} triples")
     if hlr_count or llr_count:
-        print(f"  Skipping {hlr_count} HLRs and {llr_count} LLRs (now in Neo4j, Phase 2)")
-    print(f"  {len(data.get('verification_methods', []))} verifications")
+        print(f"  Skipping {hlr_count} HLRs and {llr_count} LLRs (Phase 2: in Neo4j)")
+    if vm_count or cond_count or act_count:
+        print(f"  Skipping {vm_count} verifications, {cond_count} conditions, {act_count} actions (Phase 3: in Neo4j)")
 
 
 def import_neo4j():
-    """Load Neo4j fixture data: design nodes and relationships."""
+    """Load Neo4j fixture data: design nodes, relationships, and verification data."""
     from backend.db.neo4j.connection import Neo4jConnection
+    from backend.db.neo4j.repositories.verification import VerificationRepository
 
     with open(NEO4J_FIXTURE) as f:
         data = json.load(f)
@@ -291,6 +257,52 @@ def import_neo4j():
             """
             session.run(cypher, {"subj": rel["subject"], "obj": rel["object"]})
 
+        # Import verification data from fixture
+        ver_repo = VerificationRepository(session)
+        vm_count = 0
+        cond_count = 0
+        act_count = 0
+        for vm_row in data.get("verification_methods", []):
+            vm = ver_repo.create_verification(
+                llr_id=vm_row["low_level_requirement_id"],
+                method=vm_row["method"],
+                test_name=vm_row.get("test_name", ""),
+                description=vm_row.get("description", ""),
+            )
+            vm_count += 1
+
+            # Import conditions for this verification method
+            for c_row in data.get("verification_conditions", []):
+                if c_row["verification_id"] == vm_row["id"]:
+                    # Map legacy member_qualified_name → subject_qualified_name
+                    subject_qn = c_row.get("member_qualified_name", "") or c_row.get("subject_qualified_name", "")
+                    object_qn = c_row.get("object_qualified_name", "") or c_row.get("ontology_node_qualified_name", "")
+                    ver_repo.add_condition(
+                        vm_id=vm.id,
+                        phase=c_row.get("phase", "pre"),
+                        order=c_row.get("order", 0),
+                        operator=c_row.get("operator", "=="),
+                        expected_value=c_row.get("expected_value", ""),
+                        subject_qualified_name=subject_qn,
+                        object_qualified_name=object_qn,
+                    )
+                    cond_count += 1
+
+            # Import actions for this verification method
+            for a_row in data.get("verification_actions", []):
+                if a_row["verification_id"] == vm_row["id"]:
+                    # Map legacy member_qualified_name → callee_qualified_name
+                    callee_qn = a_row.get("member_qualified_name", "") or a_row.get("callee_qualified_name", "")
+                    caller_qn = a_row.get("caller_qualified_name", "")
+                    ver_repo.add_action(
+                        vm_id=vm.id,
+                        order=a_row.get("order", 0),
+                        description=a_row.get("description", ""),
+                        caller_qualified_name=caller_qn,
+                        callee_qualified_name=callee_qn,
+                    )
+                    act_count += 1
+
     neo4j.close()
 
     print(f"\nNeo4j fixture loaded from {NEO4J_FIXTURE}")
@@ -298,6 +310,8 @@ def import_neo4j():
     print(f"  {len(data.get('design_relationships', []))} Design relationships")
     print(f"  {len(data.get('dependency_relationships', []))} dependency relationships")
     print(f"  {len(data.get('dependency_compound_nodes', []))} Compound dependency nodes")
+    if vm_count:
+        print(f"  {vm_count} VerificationMethods, {cond_count} Conditions, {act_count} Actions")
 
 
 if __name__ == "__main__":

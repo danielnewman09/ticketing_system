@@ -17,22 +17,24 @@ a detailed, structured verification procedure.
 
 For each verification method on the LLR, flesh out:
 
-1. **Pre-conditions** — assertions on member variables that must hold before the
+1. **Pre-conditions** — assertions on design elements that must hold before the
    test action. Each has:
-   - member_qualified_name: fully qualified member given as its fully qualified name with `<namespace>::` prefix
+   - subject_qualified_name: fully qualified name of the element being checked, with `<namespace>::` prefix
+   - object_qualified_name: (optional) the right-hand operand, e.g. a constant or enum value
    - operator: one of "==", "!=", "<", ">", "<=", ">=", "is_true", "is_false", "contains", "not_null"
    - expected_value: the expected state (e.g., "0.0", "Operation::None", "true")
 
 2. **Actions** — ordered stimulus steps performed during the test. Each has:
    - description: human-readable step (e.g., "Press the + button")
-   - member_qualified_name: the member invoked, if applicable, given as its fully qualified name with `<namespace>::` prefix
+   - callee_qualified_name: the method or function being called, if applicable, with `<namespace>::` prefix
+   - caller_qualified_name: (optional) the caller context, with `<namespace>::` prefix
 
 3. **Post-conditions** — assertions on member variables that must hold after the
    actions. Same format as pre-conditions.
 
 Guidelines:
 - Reference ONLY real qualified names from the design context above
-- Member qualified names follow C++ convention: ClassName::memberName
+- Qualified names follow C++ convention: ClassName::memberName
 - Keep conditions specific and testable — avoid vague assertions
 - Actions should be concrete, ordered steps
 - For "review" or "inspection" methods, conditions/actions can be lighter
