@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-"""
-Setup project: create HLRs, assign to components, load stdlib docs.
+"""Setup project: create HLRs, assign to components, load stdlib docs.
 
 Steps:
   1. Load C++ standard library docs into Neo4j (idempotent)
-  2. Create HLRs from descriptions
+  2. Create HLRs from descriptions (in Neo4j)
   3. Assign HLRs to architectural components via AI agent
 
 Usage:
@@ -25,7 +24,9 @@ load_dotenv()
 
 from services.dependencies import get_neo4j, init_neo4j, close_neo4j
 from backend.db import init_db, get_session, get_or_create
-from backend.db.models import Component, HighLevelRequirement
+from backend.db.models import Component
+from backend.db.neo4j.connection import Neo4jConnection
+from backend.db.neo4j.repositories.requirement import RequirementRepository
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
@@ -86,20 +87,26 @@ def assign_components():
 
     os.makedirs(LOGS_DIR, exist_ok=True)
 
-    with get_session() as session:
-        for desc in HLR_DESCRIPTIONS:
-            hlr = HighLevelRequirement(description=desc)
-            session.add(hlr)
-        session.flush()
+    # Ensure Neo4j constraints
+    neo4j_conn = Neo4jConnection()
+    neo4j_conn.ensure_constraints()
+    neo4j_conn.ensure_requirement_constraints()
 
-        hlr_count = session.query(HighLevelRequirement).count()
+    # Create HLRs in Neo4j
+    with get_neo4j().session() as ns:
+        repo = RequirementRepository(ns)
+        hlr_dicts = []
+        for desc in HLR_DESCRIPTIONS:
+            hlr = repo.create_hlr(description=desc)
+            hlr_dicts.append({"id": hlr.id, "description": hlr.description})
+            print(f"  Created HLR {hlr.id}: {desc[:60]}...")
+
+        hlr_count = len(hlr_dicts)
         print(f"\n  Assigning {hlr_count} HLRs to components via AI agent...")
 
-        hlr_dicts = [
-            {"id": h.id, "description": h.description}
-            for h in session.query(HighLevelRequirement).all()
-        ]
-        existing = [name for (name,) in session.query(Component.name).all()]
+        existing = []
+        with get_session() as session:
+            existing = [name for (name,) in session.query(Component.name).all()]
 
         assignments = _assign(
             hlr_dicts,
@@ -107,46 +114,47 @@ def assign_components():
             prompt_log_file=os.path.join(LOGS_DIR, "assign_components.md"),
         )
 
-        # First pass: create/update components with namespaces and parents
-        component_cache: dict[str, Component] = {}
-        for a in assignments:
-            comp_name = a["component_name"]
-            if comp_name in component_cache:
-                continue
-            namespace = a.get("namespace", "")
-            desc = a.get("description", "")
-            component, _ = get_or_create(
-                session,
-                Component,
-                defaults={"namespace": namespace, "description": desc},
-                name=comp_name,
-            )
-            if not component.namespace and namespace:
-                component.namespace = namespace
-            if not component.description and desc:
-                component.description = desc
-            component_cache[comp_name] = component
+        # Create/update components in SQLite and assign HLRs in Neo4j
+        with get_session() as session:
+            component_cache: dict[str, Component] = {}
+            for a in assignments:
+                comp_name = a["component_name"]
+                if comp_name in component_cache:
+                    continue
+                namespace = a.get("namespace", "")
+                desc = a.get("description", "")
+                component, _ = get_or_create(
+                    session,
+                    Component,
+                    defaults={"namespace": namespace, "description": desc},
+                    name=comp_name,
+                )
+                if not component.namespace and namespace:
+                    component.namespace = namespace
+                if not component.description and desc:
+                    component.description = desc
+                component_cache[comp_name] = component
 
-        # Set parent relationships
-        session.flush()
-        for a in assignments:
-            parent_name = a.get("parent_component_name", "")
-            if parent_name and parent_name in component_cache:
-                child = component_cache[a["component_name"]]
-                parent = component_cache[parent_name]
-                if child.id != parent.id:
-                    child.parent_id = parent.id
+            # Set parent relationships
+            session.flush()
+            for a in assignments:
+                parent_name = a.get("parent_component_name", "")
+                if parent_name and parent_name in component_cache:
+                    child = component_cache[a["component_name"]]
+                    parent = component_cache[parent_name]
+                    if child.id != parent.id:
+                        child.parent_id = parent.id
 
-        session.flush()
+            session.flush()
 
-        # Second pass: assign HLRs
-        for a in assignments:
-            component = component_cache[a["component_name"]]
-            session.query(HighLevelRequirement).filter_by(id=a["hlr_id"]).update(
-                {"component_id": component.id}
-            )
-            ns_info = f" ns={component.namespace}" if component.namespace else ""
-            print(f"  HLR {a['hlr_id']} -> {a['component_name']}{ns_info} ({a['rationale'][:50]})")
+            # Assign HLRs to components in Neo4j
+            for a in assignments:
+                component = component_cache[a["component_name"]]
+                with get_neo4j().session() as ns:
+                    repo = RequirementRepository(ns)
+                    repo.update_hlr(a["hlr_id"], component_id=component.id)
+                ns_info = f" ns={component.namespace}" if component.namespace else ""
+                print(f"  HLR {a['hlr_id']} -> {a['component_name']}{ns_info} ({a['rationale'][:50]})")
 
     print()
 
