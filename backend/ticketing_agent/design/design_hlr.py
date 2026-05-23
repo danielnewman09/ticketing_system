@@ -116,6 +116,7 @@ def design_hlr(
         dependency_contexts=dependency_contexts,
         component_namespace=component_namespace,
         sibling_namespaces=sibling_namespaces,
+        prior_class_lookup=prior_class_lookup,
         model=model,
         prompt_log_file=design_log,
     )

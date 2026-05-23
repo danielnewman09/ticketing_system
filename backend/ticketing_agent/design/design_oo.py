@@ -145,6 +145,7 @@ def design_oo(
     dependency_contexts: dict[int, dict] | None = None,
     component_namespace: str = "",
     sibling_namespaces: list[str] | None = None,
+    prior_class_lookup: dict[str, str] | None = None,
     model: str = "",
     prompt_log_file: str = "",
 ) -> OODesignSchema:
@@ -233,7 +234,7 @@ def design_oo(
             schema,
             prior_class_lookup=prior_class_lookup or {},
             dependency_lookup=dep_lookup,
-            intercomponent_classes=intercomponent_classes,
+            intercomponent_classes=intercomponent_classes or [],
         )
 
         if not errors:
