@@ -26,17 +26,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from services.dependencies import init_neo4j, close_neo4j
+from services.dependencies import init_neo4j, close_neo4j, get_neo4j
 from backend.db import init_db, get_session
 from backend.db.models import (
-    HighLevelRequirement,
-    LowLevelRequirement,
     OntologyNode,
     OntologyTriple,
     VerificationAction,
     VerificationCondition,
     VerificationMethod,
 )
+from backend.db.neo4j.repositories.requirement import RequirementRepository
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
@@ -52,8 +51,10 @@ def step_decompose():
 
     os.makedirs(LOGS_DIR, exist_ok=True)
 
-    with get_session() as session:
-        hlrs = session.query(HighLevelRequirement).all()
+    with get_neo4j().session() as ns:
+        repo = RequirementRepository(ns)
+        hlrs = repo.list_hlrs()
+
         if not hlrs:
             print("  No HLRs found. Run setup_project.py first.\n")
             return
@@ -67,13 +68,12 @@ def step_decompose():
                 {
                     "id": h.id,
                     "description": h.description,
-                    "component__name": h.component.name if h.component else None,
+                    "component__name": _get_component_name(h.component_id) if h.component_id else None,
                 }
-                for h in session.query(HighLevelRequirement)
-                .filter(HighLevelRequirement.id != hlr.id)
-                .all()
+                for h in hlrs
+                if h.id != hlr.id
             ]
-            component_name = hlr.component.name if hlr.component_id else ""
+            component_name = _get_component_name(hlr.component_id) if hlr.component_id else ""
 
             result = decompose(
                 hlr.description,
@@ -83,13 +83,13 @@ def step_decompose():
                 prompt_log_file=os.path.join(LOGS_DIR, f"decompose_hlr{hlr.id}.md"),
             )
 
-            persisted = persist_decomposition(session, hlr, result.low_level_requirements)
+            with get_neo4j().session() as ns2:
+                persisted = persist_decomposition(ns2, hlr.id, result.low_level_requirements, sql_session=None)
             print(f"    -> HLR {hlr.id}: {hlr.description[:60]}")
             print(f"       {persisted.llrs_created} LLRs generated\n")
 
-        total_hlrs = session.query(HighLevelRequirement).count()
-        total_llrs = session.query(LowLevelRequirement).count()
-        print(f"  Requirements phase complete: {total_hlrs} HLRs, {total_llrs} LLRs\n")
+        all_llrs = repo.list_llrs()
+        print(f"  Requirements phase complete: {len(hlrs)} HLRs, {len(all_llrs)} LLRs\n")
 
 
 def step_design():
@@ -108,23 +108,27 @@ def step_design():
     from backend.codebase.schemas import OODesignSchema
     from backend.requirements.services.persistence import persist_design
 
-    with get_session() as session:
-        hlrs = [
-            {
-                "id": h.id,
-                "description": h.description,
-                "component_id": h.component_id,
-                "dependency_context": h.dependency_context,
-                "component_name": h.component.name if h.component else None,
-                "component_namespace": h.component.namespace if h.component else "",
-                "component_description": h.component.description if h.component else "",
-            }
-            for h in session.query(HighLevelRequirement).all()
-        ]
-        llrs = [
-            {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
-            for l in session.query(LowLevelRequirement).all()
-        ]
+    with get_neo4j().session() as ns:
+        repo = RequirementRepository(ns)
+        hlrs_neo4j = repo.list_hlrs()
+        all_llrs_neo4j = repo.list_llrs()
+
+    hlrs = [
+        {
+            "id": h.id,
+            "description": h.description,
+            "component_id": h.component_id,
+            "dependency_context": h.dependency_context,
+            "component_name": _get_component_name(h.component_id) if h.component_id else None,
+            "component_namespace": _get_component_namespace(h.component_id) if h.component_id else "",
+            "component_description": _get_component_description(h.component_id) if h.component_id else "",
+        }
+        for h in hlrs_neo4j
+    ]
+    llrs = [
+        {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
+        for l in all_llrs_neo4j
+    ]
 
     if not hlrs:
         print("  No HLRs found. Run setup_project.py first.\n")
@@ -237,7 +241,6 @@ def step_design():
                         flag = " [intercomponent]" if node_data.is_intercomponent else ""
                         print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
 
-                from services.dependencies import get_neo4j
                 with get_neo4j().session() as neo4j_session:
                     persisted = persist_design(ontology, neo4j_session, sql_session=session, qname_to_node=qname_to_node)
                 total_nodes += persisted.nodes_created
@@ -267,12 +270,14 @@ def step_verify():
     )
 
     # Build ontology_nodes from both Neo4j (primary) and SQLAlchemy (bridge)
-    from services.dependencies import get_neo4j
+    with get_neo4j().session() as ns:
+        repo = RequirementRepository(ns)
+        all_llrs = repo.list_llrs()
 
     with get_session() as session:
         class_contexts = build_verification_context(session)
 
-        # Design nodes are now in Neo4j; also include any SQLAlchemy bridge nodes
+        # Design nodes from Neo4j + SQLAlchemy bridge
         ontology_nodes = []
         seen_qns: set[str] = set()
         try:
@@ -286,14 +291,13 @@ def step_verify():
                         seen_qns.add(qn)
                         ontology_nodes.append({
                             "qualified_name": qn,
-                            "pk": None,  # No SQLAlchemy pk for Neo4j nodes
+                            "pk": None,
                             "kind": record["kind"],
                             "description": record["desc"] or "",
                         })
         except Exception:
             print("  WARNING: Could not fetch design nodes from Neo4j")
 
-        # Also add any SQLAlchemy bridge nodes (verification-related stubs)
         for n in session.query(OntologyNode).all():
             if n.qualified_name and n.qualified_name not in seen_qns:
                 seen_qns.add(n.qualified_name)
@@ -303,23 +307,22 @@ def step_verify():
                     "kind": n.kind,
                     "description": n.description or "",
                 })
-        llrs = session.query(LowLevelRequirement).all()
 
-        if not llrs:
+        if not all_llrs:
             print("  No LLRs found.\n")
             return
 
-        print(f"  Processing {len(llrs)} LLRs with {len(class_contexts)} class contexts...\n")
+        print(f"  Processing {len(all_llrs)} LLRs with {len(class_contexts)} class contexts...\n")
 
         total_conditions = 0
         total_actions = 0
         total_augmented = 0
 
-        for llr in llrs:
+        for llr in all_llrs:
             llr_dict = {"id": llr.id, "description": llr.description}
             existing = [
                 {"method": v.method, "test_name": v.test_name, "description": v.description}
-                for v in llr.verifications
+                for v in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr.id).all()
             ]
 
             if not existing:
@@ -341,7 +344,7 @@ def step_verify():
                     print(f"      - {qname} ({ctx})")
 
             persisted = persist_verification(
-                session, llr, agent_result.verifications, ontology_nodes
+                session, llr.id, agent_result.verifications, ontology_nodes
             )
             total_conditions += persisted.conditions_created
             total_actions += persisted.actions_created
@@ -357,7 +360,7 @@ def step_verify():
                         f"    Created {augmented.nodes_created} missing design nodes, "
                         f"{augmented.triples_created} triples"
                     )
-                    # Refresh node list from both Neo4j and SQLAlchemy
+                    # Refresh node list
                     ontology_nodes = []
                     seen_qns_refresh: set[str] = set()
                     try:
@@ -411,31 +414,34 @@ def step_summary():
     from backend.db.neo4j.connection import Neo4jConnection
     neo4j = Neo4jConnection()
 
+    with get_neo4j().session() as ns:
+        repo = RequirementRepository(ns)
+        hlr_count = len(repo.list_hlrs())
+        llr_count = len(repo.list_llrs())
+
+        node_count = ns.run("MATCH (d:Design) RETURN count(d) AS cnt").single()["cnt"]
+        triple_count = ns.run("MATCH (d:Design)-[r]->(:Design) RETURN count(r) AS cnt").single()["cnt"]
+
     with get_session() as session:
-        print(f"  HLRs:             {session.query(HighLevelRequirement).count()}")
-        print(f"  LLRs:             {session.query(LowLevelRequirement).count()}")
-        print(f"  Verifications:    {session.query(VerificationMethod).count()}")
-        print(f"  Conditions:       {session.query(VerificationCondition).count()}")
-        print(f"  Actions:          {session.query(VerificationAction).count()}")
+        verif_count = session.query(VerificationMethod).count()
+        cond_count = session.query(VerificationCondition).count()
+        action_count = session.query(VerificationAction).count()
 
-        # Design graph stats come from Neo4j now
-        with neo4j.session() as neo_sess:
-            node_count = neo_sess.run(
-                "MATCH (d:Design) RETURN count(d) AS cnt"
-            ).single()["cnt"]
-            triple_count = neo_sess.run(
-                "MATCH (d:Design)-[r]->(:Design) RETURN count(r) AS cnt"
-            ).single()["cnt"]
-            print(f"  Design nodes:    {node_count}")
-            print(f"  Design triples:   {triple_count}")
+        print(f"  HLRs:             {hlr_count}")
+        print(f"  LLRs:             {llr_count}")
+        print(f"  Verifications:    {verif_count}")
+        print(f"  Conditions:       {cond_count}")
+        print(f"  Actions:          {action_count}")
+        print(f"  Design nodes:    {node_count}")
+        print(f"  Design triples:   {triple_count}")
 
-            # Show HLR → Design traces from Neo4j
-            hlrs = session.query(HighLevelRequirement).all()
-            for hlr in hlrs:
+        # Show HLR → Design traces from Neo4j
+        with get_neo4j().session() as ns:
+            for hlr in repo.list_hlrs():
                 print(f"\n  HLR {hlr.id}: {hlr.description[:60]}")
-                traces = neo_sess.run(
+                traces = ns.run(
                     """
-                    MATCH (h:HLR {sqlite_id: $hid})-[:TRACES_TO]->(d:Design)
+                    MATCH (h:HLR {id: $hid})-[:TRACES_TO]->(d:Design)
                     RETURN d.qualified_name AS qn
                     """,
                     {"hid": hlr.id},
@@ -451,6 +457,45 @@ def step_summary():
     print("  python nicegui_app.py")
     print("  http://127.0.0.1:8081/")
     print("=" * 60)
+
+
+def _get_component_name(component_id: int | None) -> str | None:
+    """Look up a component name by ID from SQLite."""
+    if component_id is None:
+        return None
+    try:
+        from backend.db.models import Component
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            return comp.name if comp else None
+    except Exception:
+        return None
+
+
+def _get_component_namespace(component_id: int | None) -> str:
+    """Look up a component namespace by ID from SQLite."""
+    if component_id is None:
+        return ""
+    try:
+        from backend.db.models import Component
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            return comp.namespace if comp and comp.namespace else ""
+    except Exception:
+        return ""
+
+
+def _get_component_description(component_id: int | None) -> str:
+    """Look up a component description by ID from SQLite."""
+    if component_id is None:
+        return ""
+    try:
+        from backend.db.models import Component
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            return comp.description if comp and comp.description else ""
+    except Exception:
+        return ""
 
 
 if __name__ == "__main__":
