@@ -26,15 +26,15 @@ from backend.requirements.schemas import (
 class TestVerificationConditionSchema:
     def test_minimal(self):
         vc = VerificationConditionSchema(
-            member_qualified_name="Calculator::result", expected_value="OK"
+            subject_qualified_name="Calculator::result", expected_value="OK"
         )
-        assert vc.member_qualified_name == "Calculator::result"
+        assert vc.subject_qualified_name == "Calculator::result"
         assert vc.operator == "=="  # default
         assert vc.expected_value == "OK"
 
     def test_custom_operator(self):
         vc = VerificationConditionSchema(
-            member_qualified_name="Calculator::count",
+            subject_qualified_name="Calculator::count",
             operator=">=",
             expected_value="0",
         )
@@ -42,11 +42,11 @@ class TestVerificationConditionSchema:
 
     def test_missing_required_field(self):
         with pytest.raises(ValidationError):
-            VerificationConditionSchema(member_qualified_name="X")  # no expected_value
+            VerificationConditionSchema(subject_qualified_name="X")  # no expected_value
 
     def test_missing_member(self):
         with pytest.raises(ValidationError):
-            VerificationConditionSchema(expected_value="OK")  # no member_qualified_name
+            VerificationConditionSchema(expected_value="OK")  # no subject_qualified_name
 
 
 # ---------------------------------------------------------------------------
@@ -58,14 +58,14 @@ class TestVerificationActionSchema:
     def test_minimal(self):
         va = VerificationActionSchema(description="Call add(2, 3)")
         assert va.description == "Call add(2, 3)"
-        assert va.member_qualified_name == ""  # default
+        assert va.callee_qualified_name == ""  # default
 
     def test_all_fields(self):
         va = VerificationActionSchema(
             description="Invoke the add method with valid operands",
-            member_qualified_name="Calculator::add",
+            callee_qualified_name="Calculator::add",
         )
-        assert va.member_qualified_name == "Calculator::add"
+        assert va.callee_qualified_name == "Calculator::add"
 
     def test_description_required(self):
         with pytest.raises(ValidationError):
@@ -102,18 +102,18 @@ class TestVerificationSchema:
             description="Verify addition works",
             preconditions=[
                 VerificationConditionSchema(
-                    member_qualified_name="Calc::status", expected_value="READY"
+                    subject_qualified_name="Calc::status", expected_value="READY"
                 )
             ],
             actions=[
                 VerificationActionSchema(
                     description="Call add(2,3)",
-                    member_qualified_name="Calc::add",
+                    callee_qualified_name="Calc::add",
                 )
             ],
             postconditions=[
                 VerificationConditionSchema(
-                    member_qualified_name="Calc::result", expected_value="5"
+                    subject_qualified_name="Calc::result", expected_value="5"
                 )
             ],
         )
@@ -140,7 +140,7 @@ class TestVerificationSchema:
             method="inspection",
             test_name="inspect_wiring",
             preconditions=[
-                VerificationConditionSchema(member_qualified_name="A::ready", expected_value="true")
+                VerificationConditionSchema(subject_qualified_name="A::ready", expected_value="true")
             ],
         )
         json_str = vs.model_dump_json()
@@ -242,7 +242,7 @@ class TestDecomposedRequirementSchema:
                             test_name="test_div",
                             preconditions=[
                                 VerificationConditionSchema(
-                                    member_qualified_name="Calc::ready",
+                                    subject_qualified_name="Calc::ready",
                                     expected_value="true",
                                 )
                             ],
@@ -295,6 +295,7 @@ class TestVerificationMethodTypeLiteral:
             assert vs.method == method
 
 
+
 # ---------------------------------------------------------------------------
 # Phase 3: Qualified name reference fields
 # ---------------------------------------------------------------------------
@@ -303,29 +304,25 @@ class TestVerificationMethodTypeLiteral:
 class TestVerificationConditionSchemaQualifiedNames:
     def test_subject_qualified_name(self):
         vc = VerificationConditionSchema(
-            member_qualified_name="Calculator::result",
-            expected_value="5",
             subject_qualified_name="Calculator::result",
+            expected_value="5",
         )
         assert vc.subject_qualified_name == "Calculator::result"
-        assert vc.member_qualified_name == "Calculator::result"
 
     def test_object_qualified_name(self):
         vc = VerificationConditionSchema(
-            member_qualified_name="Calculator::result",
+            subject_qualified_name="Calculator::result",
             operator="==",
             expected_value="ZERO",
-            subject_qualified_name="Calculator::result",
             object_qualified_name="Calculator::ZERO",
         )
         assert vc.object_qualified_name == "Calculator::ZERO"
 
-    def test_qualified_names_default_empty(self):
+    def test_object_qualified_name_default_empty(self):
         vc = VerificationConditionSchema(
-            member_qualified_name="Calc::x",
+            subject_qualified_name="Calc::x",
             expected_value="0",
         )
-        assert vc.subject_qualified_name == ""
         assert vc.object_qualified_name == ""
 
 
@@ -339,15 +336,15 @@ class TestVerificationActionSchemaQualifiedNames:
         assert va.caller_qualified_name == "Calculator"
         assert va.callee_qualified_name == "Calculator::add"
 
+    def test_callee_only(self):
+        va = VerificationActionSchema(
+            description="Invoke method",
+            callee_qualified_name="Calc::add",
+        )
+        assert va.callee_qualified_name == "Calc::add"
+        assert va.caller_qualified_name == ""
+
     def test_qualified_names_default_empty(self):
         va = VerificationActionSchema(description="Push button")
         assert va.caller_qualified_name == ""
-        assert va.callee_qualified_name == ""
-
-    def test_legacy_member_qualified_name_still_works(self):
-        va = VerificationActionSchema(
-            description="Invoke method",
-            member_qualified_name="Calc::add",
-        )
-        assert va.member_qualified_name == "Calc::add"
         assert va.callee_qualified_name == ""
