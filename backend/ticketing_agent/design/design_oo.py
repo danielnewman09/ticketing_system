@@ -11,6 +11,7 @@ discover_classes skill, whose output is partitioned into
 dependency_classes and as_built_classes.
 """
 
+import json
 import logging
 
 from llm_caller import call_tool
@@ -31,6 +32,100 @@ from backend.ticketing_agent.design.design_oo_prompt import (
 )
 
 log = logging.getLogger("agents.design")
+
+MAX_TOOL_RETRIES = 2
+
+
+# ---------------------------------------------------------------------------
+# Validation helpers
+# ---------------------------------------------------------------------------
+
+
+def _validate_oo_design(
+    oo: OODesignSchema,
+    prior_class_lookup: dict[str, str],
+    dependency_lookup: dict[str, str] | None,
+    intercomponent_classes: list[dict] | None,
+) -> list[str]:
+    """Validate an OO design for association target resolution and intercomponent coverage.
+
+    Returns a list of error strings. Empty list means valid.
+    """
+    errors = []
+
+    # Build set of known names
+    design_class_names = {cls.name for cls in oo.classes}
+    design_iface_names = {iface.name for iface in oo.interfaces}
+    design_enum_names = {enum.name for enum in oo.enums}
+    all_design_names = design_class_names | design_iface_names | design_enum_names
+
+    # Set of intercomponent qualified names for lookup
+    intercomp_qnames: set[str] = set()
+    intercomp_bare: set[str] = set()
+    if intercomponent_classes:
+        intercomp_qnames = {c["qualified_name"] for c in intercomponent_classes}
+        intercomp_bare = {qname.rsplit("::", 1)[-1] for qname in intercomp_qnames}
+
+    # Build dependency lookup
+    dep_lookup = dict(dependency_lookup or {})
+
+    # Check 1: Unknown association targets
+    for assoc in oo.associations:
+        for ref in [assoc.from_class, assoc.to_class]:
+            if ref in all_design_names:
+                continue
+            if ref in prior_class_lookup.values():
+                continue
+            if ref in prior_class_lookup:
+                continue
+            if ref in dep_lookup:
+                continue
+            if ref in intercomp_qnames or ref in intercomp_bare:
+                continue
+            errors.append(
+                f'Unknown class reference: "{ref}" in association '
+                f'({assoc.from_class} -[{assoc.kind}]-> {assoc.to_class}). '
+                f'"{ref}" is not defined in this design or the provided context.'
+            )
+
+    # Check 2: Missing intercomponent associations
+    if intercomponent_classes:
+        for cls in oo.classes:
+            referenced_intercomp: set[str] = set()
+            for attr in cls.attributes:
+                for ic in intercomponent_classes:
+                    ic_bare = ic["qualified_name"].rsplit("::", 1)[-1]
+                    if attr.type_name and (ic_bare in attr.type_name or ic["qualified_name"] in attr.type_name):
+                        referenced_intercomp.add(ic["qualified_name"])
+            for method in cls.methods:
+                if method.return_type:
+                    for ic in intercomponent_classes:
+                        ic_bare = ic["qualified_name"].rsplit("::", 1)[-1]
+                        if ic_bare in method.return_type or ic["qualified_name"] in method.return_type:
+                            referenced_intercomp.add(ic["qualified_name"])
+
+            if referenced_intercomp:
+                assoc_targets = {assoc.to_class for assoc in oo.associations} | {assoc.from_class for assoc in oo.associations}
+                for ic_qname in referenced_intercomp:
+                    if ic_qname not in assoc_targets:
+                        ic_bare = ic_qname.rsplit("::", 1)[-1]
+                        if ic_bare not in assoc_targets:
+                            errors.append(
+                                f"Missing intercomponent association: {cls.name} references "
+                                f"{ic_qname} in attributes/methods but has no association to it."
+                            )
+
+    return errors
+
+
+def _format_design_validation_errors(errors: list[str]) -> str:
+    """Format design validation errors into a retry message."""
+    issue_lines = "\n".join(f"{i+1}. {e}" for i, e in enumerate(errors))
+    return (
+        "Your previous output had the following issues:\n\n"
+        f"<issues>\n{issue_lines}\n</issues>\n\n"
+        "Please correct these issues and respond again with the fixed output."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -110,16 +205,55 @@ def design_oo(
         ),
     }
 
-    result = call_tool(
-        system=system,
-        messages=[user_message],
-        tools=[TOOL_DEFINITION],
-        tool_name="produce_oo_design",
-        model=model,
-        prompt_log_file=prompt_log_file,
-    )
+    messages = [user_message]
 
-    schema = OODesignSchema.model_validate(result)
+    # Build dependency lookup from dependency classes for validation
+    dep_lookup: dict[str, str] = {}
+    if dependency_classes:
+        for cls in dependency_classes:
+            qname = cls.get("qualified_name", "")
+            if qname:
+                bare = qname.rsplit("::", 1)[-1]
+                dep_lookup[bare] = qname
+
+    for attempt in range(MAX_TOOL_RETRIES + 1):
+        result = call_tool(
+            system=system,
+            messages=messages,
+            tools=[TOOL_DEFINITION],
+            tool_name="produce_oo_design",
+            model=model,
+            prompt_log_file=prompt_log_file if attempt == 0 else "",
+        )
+
+        schema = OODesignSchema.model_validate(result)
+
+        # Validate associations and intercomponent coverage
+        errors = _validate_oo_design(
+            schema,
+            prior_class_lookup=prior_class_lookup or {},
+            dependency_lookup=dep_lookup,
+            intercomponent_classes=intercomponent_classes,
+        )
+
+        if not errors:
+            break  # Valid output, proceed
+
+        if attempt < MAX_TOOL_RETRIES:
+            log.warning(
+                "design_oo: validation errors on attempt %d/%d: %s",
+                attempt + 1, MAX_TOOL_RETRIES + 1, errors,
+            )
+            error_msg = _format_design_validation_errors(errors)
+            messages.append({"role": "assistant", "content": json.dumps(result)})
+            messages.append({"role": "user", "content": error_msg})
+            continue
+
+        # Final attempt still has errors — log and proceed
+        log.warning(
+            "design_oo: %d validation errors after %d attempts: %s",
+            len(errors), MAX_TOOL_RETRIES + 1, errors,
+        )
 
     for cls in schema.classes:
         if not cls.methods and not cls.attributes:
