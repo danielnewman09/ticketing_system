@@ -61,8 +61,8 @@ class Neo4jConnection:
             return False
         statements = [
             "CREATE CONSTRAINT design_qualified_name IF NOT EXISTS FOR (n:Design) REQUIRE n.qualified_name IS UNIQUE",
-            "CREATE CONSTRAINT hlr_sqlite_id IF NOT EXISTS FOR (n:HLR) REQUIRE n.sqlite_id IS UNIQUE",
-            "CREATE CONSTRAINT llr_sqlite_id IF NOT EXISTS FOR (n:LLR) REQUIRE n.sqlite_id IS UNIQUE",
+            "CREATE CONSTRAINT hlr_id IF NOT EXISTS FOR (n:HLR) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT llr_id IF NOT EXISTS FOR (n:LLR) REQUIRE n.id IS UNIQUE",
             "CREATE INDEX design_kind IF NOT EXISTS FOR (n:Design) ON (n.kind)",
             "CREATE INDEX design_component_id IF NOT EXISTS FOR (n:Design) ON (n.component_id)",
         ]
@@ -89,6 +89,34 @@ class Neo4jConnection:
             for stmt in statements:
                 session.run(stmt)
         log.info("Neo4j design constraints and indexes ensured")
+        return True
+
+    def ensure_requirement_constraints(self):
+        """Drop old sqlite_id constraints and create new id constraints for HLR/LLR.
+
+        Call this during Phase 2 migration to transition from sqlite_id to native id.
+        Also removes the sqlite_id property from all HLR/LLR nodes.
+        """
+        if not self.verify_connectivity():
+            log.warning("Neo4j not reachable — skipping requirement constraint setup")
+            return False
+        with self.session() as session:
+            # Drop old constraints (they may not exist if Phase 1 was skipped)
+            for old_constraint in ["hlr_sqlite_id", "llr_sqlite_id"]:
+                try:
+                    session.run(f"DROP CONSTRAINT {old_constraint} IF EXISTS")
+                except Exception:
+                    log.debug("Constraint %s did not exist, skipping drop", old_constraint)
+            # Remove sqlite_id property from all HLR/LLR nodes
+            try:
+                session.run("MATCH (h:HLR) REMOVE h.sqlite_id")
+            except Exception:
+                log.debug("No HLR nodes with sqlite_id to remove")
+            try:
+                session.run("MATCH (l:LLR) REMOVE l.sqlite_id")
+            except Exception:
+                log.debug("No LLR nodes with sqlite_id to remove")
+        log.info("Neo4j requirement constraints ensured (sqlite_id dropped, id unique)")
         return True
 
 
