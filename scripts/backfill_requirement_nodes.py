@@ -1,4 +1,8 @@
-"""One-time migration: populate high_level_requirements_nodes and
+"""DEPRECATED: This script was used in Phase 1 to populate M2M association tables
+for HLR/LLR node links. In Phase 2, HLR/LLR data lives in Neo4j and this
+script is no longer needed. Use migrate_phase2_requirements_to_neo4j.py instead.
+
+One-time migration: populate high_level_requirements_nodes and
 low_level_requirements_nodes from existing triple associations.
 
 For each HLR/LLR with linked triples, derive the subject and object nodes
