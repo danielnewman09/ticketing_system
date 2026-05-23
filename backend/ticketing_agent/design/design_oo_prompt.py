@@ -61,6 +61,13 @@ Do not include attributes or methods — those are covered by composition.
 Do NOT manufacture associations just to fill this section.
 Kind is one of: associates, aggregates, depends_on, invokes.
 
+<CONTRACT>
+When a class in your component interacts with an intercomponent class
+(listed in the cross-component section), you MUST include an association
+to that class. This is how inter-component dependencies are tracked.
+Omitting them creates disconnected components in the design.
+</CONTRACT>
+
 ## Visibility
 
 Every method and attribute MUST have a visibility value:
@@ -355,9 +362,16 @@ def build_intercomponent_section(intercomponent_classes):
     lines = [
         "## Cross-component interfaces (read-only context)\n",
         "The following classes/interfaces belong to OTHER components and are ",
-        "marked as inter-component boundaries. You may reference, depend on, ",
-        "or associate with these but do NOT redesign or duplicate them. ",
-        "Do NOT include them in your output.\n",
+        "marked as inter-component boundaries.\n",
+        "\u003cCONTRACT\u003e\n",
+        "You MUST create associations from your classes to intercomponent classes ",
+        "when your design depends on them (e.g., calls their methods, receives ",
+        "their return types, holds references to them). Omitting them creates ",
+        "disconnected components in the design.\n\n",
+        "Do NOT redesign or duplicate these classes in your output classes — only ",
+        "reference their qualified names in associations, inherits_from, attribute ",
+        "types, and method return types.\n",
+        "\u003c/CONTRACT\u003e\n",
     ]
 
     for cls in intercomponent_classes:
@@ -376,6 +390,17 @@ def build_intercomponent_section(intercomponent_classes):
                 lines.append(f"  Public methods: {', '.join(public_methods)}")
 
         lines.append("")
+
+    # Example showing expected cross-component associations
+    if len(intercomponent_classes) > 0:
+        example_class = intercomponent_classes[0]
+        example_qname = example_class["qualified_name"]
+        lines.append("### Example: cross-component association")
+        lines.append(f"If your class calls methods on `{example_qname}`, include an association like:")
+        lines.append(f"  - from_class: YourClass, to_class: {example_qname}, kind: depends_on")
+        lines.append("")
+        lines.append("Note: Use the qualified name (with namespace prefix) for intercomponent")
+        lines.append("classes in from_class/to_class fields of associations.")
 
     return "\n".join(lines)
 
