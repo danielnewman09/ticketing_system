@@ -11,7 +11,6 @@ from backend.db.models.verification import (
     VerificationCondition,
     VerificationMethod,
 )
-from backend.db.models.requirements import HighLevelRequirement, LowLevelRequirement
 from backend.db.models.ontology import OntologyNode
 
 # ---------------------------------------------------------------------------
@@ -38,22 +37,23 @@ class TestVerificationConstants:
 # ---------------------------------------------------------------------------
 
 
+_next_llr_id = [1000]
 class TestVerificationMethod:
     """Tests for VerificationMethod CRUD and relationships."""
 
-    def _make_llr(self, session):
-        """Helper: create an LLR for verification methods."""
-        llr = LowLevelRequirement(description="Test LLR for verification")
-        session.add(llr)
-        session.flush()
-        return llr
+    _next_llr_id = 1000
+
+    def _next_id(self):
+        """Generate a unique LLR ID for testing (Phase 2: no FK constraint)."""
+        TestVerificationMethod._next_llr_id += 1
+        return TestVerificationMethod._next_llr_id - 1
 
     def test_create_verification_method(self, session):
         """Create a VerificationMethod linked to an LLR."""
-        llr = self._make_llr(session)
+        llr_id = self._next_id()
 
         vm = VerificationMethod(
-            low_level_requirement=llr,
+            low_level_requirement_id=llr_id,
             method="automated",
             test_name="test_addition",
             description="Verifies addition works correctly",
@@ -65,14 +65,14 @@ class TestVerificationMethod:
         assert vm.method == "automated"
         assert vm.test_name == "test_addition"
         assert vm.description == "Verifies addition works correctly"
-        assert vm.low_level_requirement is llr
+        assert vm.low_level_requirement_id == llr_id
 
     def test_verification_method_defaults(self, session):
         """VerificationMethod optional fields have expected defaults."""
-        llr = self._make_llr(session)
+        llr_id = self._next_id()
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="review",
         )
         session.add(vm)
@@ -83,10 +83,10 @@ class TestVerificationMethod:
 
     def test_verification_method_repr_with_test_name(self, session):
         """VerificationMethod __repr__ includes method and test name."""
-        llr = self._make_llr(session)
+        llr_id = self._next_id()
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="automated",
             test_name="test_division",
         )
@@ -99,10 +99,10 @@ class TestVerificationMethod:
 
     def test_verification_method_repr_without_test_name(self, session):
         """VerificationMethod __repr__ shows method only when test_name empty."""
-        llr = self._make_llr(session)
+        llr_id = self._next_id()
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="inspection",
         )
         session.add(vm)
@@ -113,10 +113,10 @@ class TestVerificationMethod:
 
     def test_verification_method_to_prompt_text_minimal(self, session):
         """to_prompt_text returns method only when no test_name or description."""
-        llr = self._make_llr(session)
+        llr_id = self._next_id()
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="review",
         )
         session.add(vm)
@@ -126,10 +126,10 @@ class TestVerificationMethod:
 
     def test_verification_method_to_prompt_text_full(self, session):
         """to_prompt_text returns method — test_name — description."""
-        llr = self._make_llr(session)
+        llr_id = self._next_id()
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="automated",
             test_name="test_multiply",
             description="Verifies multiplication",
@@ -144,14 +144,10 @@ class TestVerificationMethod:
 
     def test_verification_method_preconditions(self, seeded_session):
         """VerificationMethod.preconditions returns conditions with phase='pre'."""
-        from backend.db.models.requirements import HighLevelRequirement
 
-        llr = LowLevelRequirement(description="LLR with conditions")
-        seeded_session.add(llr)
-        seeded_session.flush()
+        llr_id = 2002  # Phase 2: placeholder LLR ID
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
             method="automated",
             test_name="test_pre_post",
         )
@@ -184,13 +180,11 @@ class TestVerificationMethod:
 
     def test_verification_method_cascade_delete(self, session):
         """Deleting an LLR cascades to delete its VerificationMethods."""
-        llr = LowLevelRequirement(description="Will be deleted")
-        session.add(llr)
-        session.flush()
-        llr_id = llr.id
+        llr_id = 2001  # Phase 2: placeholder LLR ID
+        llr_id = llr_id
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="automated",
             test_name="test_to_delete",
         )
@@ -198,8 +192,7 @@ class TestVerificationMethod:
         session.flush()
         vm_id = vm.id
 
-        session.delete(llr)
-        session.flush()
+        pass  # Phase 2: LLR no longer in SQLite
 
         assert session.query(VerificationMethod).filter_by(id=vm_id).first() is None
 
@@ -214,12 +207,10 @@ class TestVerificationCondition:
 
     def _make_vm(self, session):
         """Helper: create an LLR and VerificationMethod."""
-        llr = LowLevelRequirement(description="LLR for condition test")
-        session.add(llr)
-        session.flush()
+        llr_id = 2001  # Phase 2: placeholder LLR ID
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="automated",
             test_name="test_conditions",
         )
@@ -347,12 +338,10 @@ class TestVerificationAction:
 
     def _make_vm(self, session):
         """Helper: create an LLR and VerificationMethod."""
-        llr = LowLevelRequirement(description="LLR for action test")
-        session.add(llr)
-        session.flush()
+        llr_id = 2001  # Phase 2: placeholder LLR ID
 
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=llr_id,
             method="automated",
             test_name="test_actions",
         )

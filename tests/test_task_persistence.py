@@ -88,25 +88,9 @@ class TestPersistTasks:
     def test_persist_task_with_verification_link(self, seeded_session):
         from backend.db.models.verification import VerificationMethod
 
-        # Create a verification method
-        from backend.db.models.requirements import LowLevelRequirement
-        from backend.db.models.components import Component
-        from backend.db.models.requirements import HighLevelRequirement
-
-        comp = seeded_session.query(Component).first()
-        hlr = HighLevelRequirement(description="test hlr", component=comp)
-        seeded_session.add(hlr)
-        seeded_session.flush()
-
-        llr = LowLevelRequirement(
-            description="test llr",
-            high_level_requirement_id=hlr.id,
-        )
-        seeded_session.add(llr)
-        seeded_session.flush()
-
+        # Create a verification method with a plain LLR ID (Phase 2: no FK)
         vm = VerificationMethod(
-            low_level_requirement_id=llr.id,
+            low_level_requirement_id=999,
             method="automated",
             test_name="test_my_verification",
         )

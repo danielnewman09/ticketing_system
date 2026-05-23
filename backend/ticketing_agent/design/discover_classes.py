@@ -10,7 +10,7 @@ import json
 import logging
 
 from llm_caller import call_tool_loop
-from backend.db.models.requirements import format_hlrs_for_prompt
+from backend.requirements.formatting import format_hlrs_for_prompt
 
 from backend.ticketing_agent.design.discover_classes_prompt import (
     SYSTEM_PROMPT,

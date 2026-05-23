@@ -70,10 +70,8 @@ def seeded_session(session):
 
     - 1 Language (C++)
     - 1 Component (Calculator) with that language
-    - 1 HighLevelRequirement ("The system shall perform arithmetic")
     """
     from backend.db.models.components import Component, Language
-    from backend.db.models.requirements import HighLevelRequirement
 
     lang = Language(name="C++", version="17")
     session.add(lang)
@@ -81,13 +79,6 @@ def seeded_session(session):
 
     comp = Component(name="Calculator", namespace="calc", language=lang)
     session.add(comp)
-    session.flush()
-
-    hlr = HighLevelRequirement(
-        description="The system shall perform arithmetic operations",
-        component=comp,
-    )
-    session.add(hlr)
     session.flush()
 
     yield session

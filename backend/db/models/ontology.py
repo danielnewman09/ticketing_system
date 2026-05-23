@@ -12,7 +12,6 @@ from backend.db.base import Base
 
 if TYPE_CHECKING:
     from backend.db.models.components import Component
-    from backend.db.models.requirements import HighLevelRequirement, LowLevelRequirement
 
 # ---------------------------------------------------------------------------
 # Node kinds — language-agnostic base kinds

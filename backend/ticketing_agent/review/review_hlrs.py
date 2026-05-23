@@ -6,7 +6,7 @@ Used interactively: the user sees the proposals and decides which to keep.
 """
 
 from llm_caller import call_tool
-from backend.db.models.requirements import format_hlrs_for_prompt
+from backend.requirements.formatting import format_hlrs_for_prompt
 
 from backend.ticketing_agent.review.review_hlrs_prompt import (
     SYSTEM_PROMPT,

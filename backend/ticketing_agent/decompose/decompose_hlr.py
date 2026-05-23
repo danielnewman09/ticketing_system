@@ -8,7 +8,7 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 import json
 
 from llm_caller import call_tool
-from backend.db.models.requirements import format_hlr_dict
+from backend.requirements.formatting import format_hlr_dict
 from backend.requirements.schemas import DecomposedRequirementSchema as DecomposedRequirement
 
 SYSTEM_PROMPT = """\

@@ -15,7 +15,7 @@ import logging
 
 from llm_caller import call_tool
 from backend.codebase.schemas import OODesignSchema
-from backend.db.models.requirements import format_hlrs_for_prompt
+from backend.requirements.formatting import format_hlrs_for_prompt
 
 from backend.ticketing_agent.design.design_oo_prompt import (
     SYSTEM_PROMPT,

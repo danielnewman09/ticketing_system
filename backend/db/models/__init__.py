@@ -1,7 +1,6 @@
 """Re-export all models for convenient imports."""
 
 from backend.db.models.associations import (
-    low_level_requirements_components,
     tickets_components,
     tickets_languages,
 )
@@ -29,14 +28,10 @@ from backend.db.models.ontology import (
     Predicate,
     valid_specializations,
 )
-from backend.db.models.requirements import (
-    HighLevelRequirement,
-    LowLevelRequirement,
-    TicketRequirement,
-    format_hlr_dict,
-    format_hlrs_for_prompt,
-    format_llr_dict,
-)
+from backend.requirements.formatting import format_hlr_dict, format_hlrs_for_prompt, format_llr_dict
+
+# TicketRequirement removed in Phase 2 — requirements are now in Neo4j
+
 from backend.db.models.tickets import (
     Ticket,
     TicketAcceptanceCriteria,
@@ -70,7 +65,6 @@ from backend.db.models.tasks import (
 
 __all__ = [
     # Associations
-    "low_level_requirements_components",
     "tickets_components",
     "tickets_languages",
     # Components
@@ -96,9 +90,6 @@ __all__ = [
     "Predicate",
     "valid_specializations",
     # Requirements
-    "HighLevelRequirement",
-    "LowLevelRequirement",
-    "TicketRequirement",
     "format_hlr_dict",
     "format_hlrs_for_prompt",
     "format_llr_dict",

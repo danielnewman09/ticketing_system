@@ -9,7 +9,7 @@ which helps the decompose agent maintain separation of concerns.
 """
 
 from llm_caller import call_tool
-from backend.db.models.requirements import format_hlrs_for_prompt
+from backend.requirements.formatting import format_hlrs_for_prompt
 
 from backend.ticketing_agent.design.assign_components_prompt import SYSTEM_PROMPT, TOOL_DEFINITION
 

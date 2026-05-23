@@ -36,7 +36,6 @@ dependency_components = Table(
 
 if TYPE_CHECKING:
     from backend.db.models.ontology import OntologyNode
-    from backend.db.models.requirements import HighLevelRequirement, LowLevelRequirement
     from backend.db.models.tickets import Ticket
 
 
@@ -66,9 +65,6 @@ class Component(Base):
     )
 
     # Reverse relationships
-    high_level_requirements: Mapped[list[HighLevelRequirement]] = relationship(
-        "HighLevelRequirement", back_populates="component"
-    )
     ontology_nodes: Mapped[list[OntologyNode]] = relationship(
         "OntologyNode", back_populates="component"
     )

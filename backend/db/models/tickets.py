@@ -11,7 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.db.base import Base
 from backend.db.models.associations import tickets_components, tickets_languages
 from backend.db.models.components import Component, Language
-from backend.db.models.requirements import LowLevelRequirement, TicketRequirement
 
 
 class Ticket(Base):
@@ -55,11 +54,8 @@ class Ticket(Base):
     references: Mapped[list[TicketReference]] = relationship(
         "TicketReference", back_populates="ticket", cascade="all, delete-orphan"
     )
-    low_level_requirements: Mapped[list[LowLevelRequirement]] = relationship(
-        "LowLevelRequirement",
-        secondary=TicketRequirement.__table__,
-        viewonly=True,
-    )
+    # low_level_requirements relationship removed in Phase 2
+    # (HLR/LLR data now in Neo4j; ticket-requirement links not used)
 
     def __repr__(self):
         return self.title

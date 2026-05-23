@@ -11,7 +11,6 @@ from backend.db.base import Base
 
 if TYPE_CHECKING:
     from backend.db.models.ontology import OntologyNode
-    from backend.db.models.requirements import LowLevelRequirement
     from backend.db.models.tasks import TaskVerification
 
 VERIFICATION_METHODS = ["automated", "review", "inspection"]
@@ -35,15 +34,12 @@ class VerificationMethod(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     low_level_requirement_id: Mapped[int] = mapped_column(
-        ForeignKey("low_level_requirements.id", ondelete="CASCADE"), nullable=False
+        Integer, nullable=False
     )
     method: Mapped[str] = mapped_column(String(20), nullable=False)
     test_name: Mapped[str] = mapped_column(String(300), default="", server_default="")
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
 
-    low_level_requirement: Mapped[LowLevelRequirement] = relationship(
-        "LowLevelRequirement", back_populates="verifications"
-    )
     conditions: Mapped[list[VerificationCondition]] = relationship(
         "VerificationCondition", back_populates="verification", cascade="all, delete-orphan"
     )

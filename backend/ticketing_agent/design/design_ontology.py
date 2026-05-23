@@ -16,7 +16,7 @@ from llm_caller import call_tool
 from backend.db.models import Predicate
 from backend.db.models.ontology import NODE_KIND_VALUES
 from backend.codebase.schemas import DesignSchema
-from backend.db.models.requirements import format_hlrs_for_prompt
+from backend.requirements.formatting import format_hlrs_for_prompt
 
 from backend.ticketing_agent.design.design_ontology_prompt import (
     SYSTEM_PROMPT,
