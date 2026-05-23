@@ -124,24 +124,24 @@ def verify(
                 model=model,
                 prompt_log_file=prompt_log_file if attempt == 0 else "",
             )
-        except (json.JSONDecodeError, ValueError) as e:
-            # LLM returned malformed JSON — log it and retry
+        except Exception as e:
+            # LLM returned an error — log it and retry if possible
             log.error(
-                "verify: LLM returned malformed response on attempt %d/%d for LLR %s: %s",
-                attempt + 1, MAX_TOOL_RETRIES + 1, llr.get('id', '?'), e,
+                "verify: LLM call failed on attempt %d/%d for LLR %s: %s: %s",
+                attempt + 1, MAX_TOOL_RETRIES + 1, llr.get('id', '?'), type(e).__name__, e,
             )
             if attempt < MAX_TOOL_RETRIES:
                 messages.append({
                     "role": "user",
                     "content": (
-                        "Your previous response was not valid JSON. "
-                        "Please respond again with a valid tool call. "
-                        "Make sure the produce_verifications tool call contains "
-                        "properly formatted JSON with all required fields."
+                        "Your previous response could not be processed. "
+                        "Please respond again with a valid produce_verifications tool call. "
+                        "Make sure the tool call contains properly formatted JSON "
+                        "with all required fields."
                     ),
                 })
                 continue
-            # Final attempt failed with parse error — re-raise
+            # Final attempt failed — re-raise
             raise
 
         verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]

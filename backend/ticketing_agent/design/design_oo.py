@@ -227,24 +227,24 @@ def design_oo(
                 model=model,
                 prompt_log_file=prompt_log_file if attempt == 0 else "",
             )
-        except (json.JSONDecodeError, ValueError) as e:
-            # LLM returned malformed JSON — log it and retry
+        except Exception as e:
+            # LLM returned an error — log it and retry if possible
             log.error(
-                "design_oo: LLM returned malformed response on attempt %d/%d: %s",
-                attempt + 1, MAX_TOOL_RETRIES + 1, e,
+                "design_oo: LLM call failed on attempt %d/%d: %s: %s",
+                attempt + 1, MAX_TOOL_RETRIES + 1, type(e).__name__, e,
             )
             if attempt < MAX_TOOL_RETRIES:
                 messages.append({
                     "role": "user",
                     "content": (
-                        "Your previous response was not valid JSON. "
-                        "Please respond again with a valid tool call. "
-                        "Make sure the produce_oo_design tool call contains "
-                        "properly formatted JSON with all required fields."
+                        "Your previous response could not be processed. "
+                        "Please respond again with a valid produce_oo_design tool call. "
+                        "Make sure the tool call contains properly formatted JSON "
+                        "with all required fields (modules, classes, interfaces, enums, associations)."
                     ),
                 })
                 continue
-            # Final attempt failed with parse error — re-raise
+            # Final attempt failed — re-raise
             raise
 
         schema = OODesignSchema.model_validate(result)
