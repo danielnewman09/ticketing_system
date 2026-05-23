@@ -1,7 +1,8 @@
 """Tests for persist_design with dependency stub nodes.
 
-Phase 1 note: persist_design now writes to Neo4j via DesignRepository.
-These tests are Neo4j integration tests marked with skipif.
+Phase 2: persist_design uses RequirementRepository for TRACES_TO edges
+(replacing the sqlite_id-based stub approach). These tests are Neo4j
+integration tests marked with skipif.
 """
 
 import os
@@ -145,11 +146,11 @@ class TestPersistDesignNeo4j:
             RequirementLinkSchema,
         )
         from backend.requirements.services.persistence import persist_design
-        from backend.db.neo4j.repositories.design import DesignRepository
+        from backend.db.neo4j.repositories.requirement import RequirementRepository
 
-        # Create HLR stub in Neo4j first
-        repo = DesignRepository(neo4j_session)
-        repo.merge_hlr_stub(sqlite_id=1, description="The system shall calculate")
+        # Create HLR node in Neo4j
+        req_repo = RequirementRepository(neo4j_session)
+        hlr = req_repo.create_hlr(description="The system shall calculate")
 
         design = DesignSchema(
             nodes=[
@@ -163,7 +164,7 @@ class TestPersistDesignNeo4j:
             requirement_links=[
                 RequirementLinkSchema(
                     requirement_type="hlr",
-                    requirement_id=1,
+                    requirement_id=hlr.id,
                     triple_index=-1,  # No triple to link, just node link
                 ),
             ],
@@ -174,7 +175,8 @@ class TestPersistDesignNeo4j:
 
         # Verify TRACES_TO edge exists
         record = neo4j_session.run(
-            "MATCH (h:HLR {sqlite_id: 1})-[r:TRACES_TO]->(d:Design {qualified_name: 'calc::Calculator'}) RETURN type(r) AS rel_type"
+            "MATCH (h:HLR {id: $hid})-[r:TRACES_TO]->(d:Design {qualified_name: 'calc::Calculator'}) RETURN type(r) AS rel_type",
+            {"hid": hlr.id},
         ).single()
         assert record is not None
         assert record["rel_type"] == "TRACES_TO"

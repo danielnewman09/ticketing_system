@@ -1,9 +1,12 @@
-"""Smoke test: verify that the exported SQLite fixtures load correctly."""
+"""Smoke test: verify that the exported SQLite fixtures load correctly.
+
+Phase 2 note: HLR/LLR data is now in Neo4j, not SQLite. These tests
+verify only the SQLite-backed data (ontology, components, verifications).
+HLR/LLR queries should be tested against Neo4j in integration tests.
+"""
 
 from backend.db.models import (
     Component,
-    HighLevelRequirement,
-    LowLevelRequirement,
     OntologyNode,
     OntologyTriple,
     Predicate,
@@ -29,18 +32,6 @@ class TestLoadedFixtures:
         assert len(comps) == 2
         assert comps[0].name == "User Interface"
         assert comps[1].name == "Calculation Engine"
-
-    def test_hlrs_loaded(self, loaded_session):
-        hlrs = loaded_session.query(HighLevelRequirement).order_by(
-            HighLevelRequirement.id
-        ).all()
-        assert len(hlrs) == 2
-        assert "GUI window" in hlrs[0].description or "GUI" in hlrs[0].description
-        assert "addition" in hlrs[1].description.lower() or "arithmetic" in hlrs[1].description.lower()
-
-    def test_llrs_loaded(self, loaded_session):
-        llrs = loaded_session.query(LowLevelRequirement).count()
-        assert llrs == 13
 
     def test_ontology_nodes_loaded(self, loaded_session):
         nodes = loaded_session.query(OntologyNode).order_by(OntologyNode.id).all()
@@ -90,21 +81,6 @@ class TestLoadedFixtures:
 
         actions = loaded_session.query(VerificationAction).count()
         assert actions > 0
-
-    def test_hlr_triples_m2m(self, loaded_session):
-        """HLRs should be linked to ontology triples."""
-        hlr1 = loaded_session.query(HighLevelRequirement).get(1)
-        assert len(hlr1.triples) > 0
-
-    def test_hlr_nodes_m2m(self, loaded_session):
-        """HLRs should be linked to ontology nodes."""
-        hlr1 = loaded_session.query(HighLevelRequirement).get(1)
-        assert len(hlr1.nodes) > 0
-
-    def test_llr_nodes_m2m(self, loaded_session):
-        """LLRs should be linked to ontology nodes."""
-        llr1 = loaded_session.query(LowLevelRequirement).get(1)
-        assert len(llr1.nodes) > 0
 
     def test_intercomponent_flags(self, loaded_session):
         """Dependency stubs should be marked as intercomponent."""

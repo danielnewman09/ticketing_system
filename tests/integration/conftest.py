@@ -2,15 +2,12 @@
 
 Provides a `loaded_session` fixture that loads the exported SQLite fixtures
 into a fresh in-memory database, giving tests a realistic dataset with
-requirements, ontology, dependencies, and verifications.
+ontology, dependencies, and verifications.
 
-Usage in tests::
-
-    from tests.integration.conftest import loaded_session
-
-    def test_something(loaded_session):
-        nodes = loaded_session.query(OntologyNode).all()
-        assert len(nodes) == 47
+Phase 2 note: HLR/LLR data now lives in Neo4j, not SQLite. The fixture
+no longer loads high_level_requirements or low_level_requirements tables.
+Verification methods still use SQLite with a plain low_level_requirement_id
+column (no FK constraint).
 """
 
 import json
@@ -25,9 +22,7 @@ from backend.db.models import (
     Component,
     Dependency,
     DependencyManager,
-    HighLevelRequirement,
     Language,
-    LowLevelRequirement,
     OntologyNode,
     OntologyTriple,
     Predicate,
@@ -48,6 +43,7 @@ def loaded_session():
     """Yield a session with the full exported dataset loaded.
 
     Uses an in-memory SQLite database that is discarded after the test.
+    HLR/LLR data is no longer loaded into SQLite (Phase 2: in Neo4j).
     """
     with open(SQLITE_FIXTURE) as f:
         data = json.load(f)
@@ -117,29 +113,7 @@ def _load_fixture_data(session, data):
             )
         )
 
-    # Requirements
-    for row in data.get("high_level_requirements", []):
-        hlr = HighLevelRequirement(
-            id=row["id"],
-            description=row["description"],
-            component_id=row.get("component_id"),
-        )
-        dep_ctx = next(
-            (d for d in data.get("hlr_dependency_contexts", []) if d["hlr_id"] == row["id"]),
-            None,
-        )
-        if dep_ctx:
-            hlr.dependency_context = dep_ctx["dependency_context"]
-        session.add(hlr)
-
-    for row in data.get("low_level_requirements", []):
-        session.add(LowLevelRequirement(
-            id=row["id"],
-            description=row["description"],
-            high_level_requirement_id=row["high_level_requirement_id"],
-        ))
-
-    session.flush()
+    # HLR/LLR data is now in Neo4j (Phase 2) — skip loading into SQLite
 
     # Ontology
     for row in data.get("ontology_nodes", []):
@@ -179,26 +153,9 @@ def _load_fixture_data(session, data):
 
     session.flush()
 
-    # M2M relationships
-    for row in data.get("hlr_triples", []):
-        hlr = session.get(HighLevelRequirement, row["hlr_id"])
-        triple = session.get(OntologyTriple, row["triple_id"])
-        if hlr and triple:
-            hlr.triples.append(triple)
+    # HLR/LLR M2M relationships with OntologyNode removed (Phase 2)
 
-    for row in data.get("hlr_nodes", []):
-        hlr = session.get(HighLevelRequirement, row["hlr_id"])
-        node = session.get(OntologyNode, row["node_id"])
-        if hlr and node:
-            hlr.nodes.append(node)
-
-    for row in data.get("llr_nodes", []):
-        llr = session.get(LowLevelRequirement, row["llr_id"])
-        node = session.get(OntologyNode, row["node_id"])
-        if llr and node:
-            llr.nodes.append(node)
-
-    # Verifications
+    # Verifications — low_level_requirement_id is a plain integer (no FK)
     for row in data.get("verification_methods", []):
         session.add(VerificationMethod(
             id=row["id"],

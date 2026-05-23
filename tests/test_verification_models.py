@@ -148,6 +148,7 @@ class TestVerificationMethod:
         llr_id = 2002  # Phase 2: placeholder LLR ID
 
         vm = VerificationMethod(
+            low_level_requirement_id=llr_id,
             method="automated",
             test_name="test_pre_post",
         )
@@ -178,10 +179,9 @@ class TestVerificationMethod:
         assert len(vm.postconditions) == 1
         assert post_cond in vm.postconditions
 
-    def test_verification_method_cascade_delete(self, session):
-        """Deleting an LLR cascades to delete its VerificationMethods."""
-        llr_id = 2001  # Phase 2: placeholder LLR ID
-        llr_id = llr_id
+    def test_verification_method_delete_by_llr_id(self, session):
+        """Deleting VerificationMethods by low_level_requirement_id works (Phase 2: no cascade, manual delete)."""
+        llr_id = 2001
 
         vm = VerificationMethod(
             low_level_requirement_id=llr_id,
@@ -192,7 +192,9 @@ class TestVerificationMethod:
         session.flush()
         vm_id = vm.id
 
-        pass  # Phase 2: LLR no longer in SQLite
+        # Phase 2: No cascade from LLR (which is in Neo4j), must delete manually
+        session.query(VerificationMethod).filter_by(low_level_requirement_id=llr_id).delete()
+        session.flush()
 
         assert session.query(VerificationMethod).filter_by(id=vm_id).first() is None
 
