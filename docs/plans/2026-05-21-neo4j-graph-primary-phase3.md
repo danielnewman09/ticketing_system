@@ -1,6 +1,6 @@
 # Phase 3: Verification Structural Redesign — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Promote `VerificationMethod`, `VerificationCondition`, and `VerificationAction` from SQLite table rows to full Neo4j nodes (`:VerificationMethod`, `:Condition`, `:Action`) with typed operand edges (`LEFT_OPERAND`, `RIGHT_OPERAND`, `CALLER`, `CALLEE`). Eliminate `member_qualified_name` string-matching in favor of direct graph edges to `:Design` nodes. Remove the SQLAlchemy models and their tables.
 
@@ -51,7 +51,8 @@
 ### New Files
 - `backend/db/neo4j/repositories/verification.py` — `VerificationRepository` class
 - `backend/db/neo4j/repositories/models/verification.py` — `VerificationMethodNode`, `ConditionNode`, `ActionNode` Pydantic models
-- `scripts/migrate_phase3_verification_to_neo4j.py` — data migration script
+- `backend/requirements/verification_formatting.py` — formatting helpers and constants (replaces deleted model __repr__)
+- `alembic/versions/0562a546e908_drop_verification_tables_and_fk_.py` — Alembic migration
 - `tests/test_verification_repository.py` — unit + integration tests for `VerificationRepository`
 
 ### Modified Files (~20 files)
@@ -73,9 +74,13 @@
 - `scripts/import_fixtures.py` — skip verification table loading (now in Neo4j)
 - `scripts/export_fixtures.py` — export verification data from Neo4j
 - `scripts/01_flush_db.py` — add flushing of `:VerificationMethod`, `:Condition`, `:Action` nodes
+- `alembic/env.py` — add `render_as_batch=True` for SQLite batch ALTER support
+- `frontend/widgets.py` — update dict keys: `member_qualified_name` → `subject_qualified_name`/`callee_qualified_name`
 
 ### Deleted Files
 - `backend/db/models/verification.py` — `VerificationMethod`, `VerificationCondition`, `VerificationAction` models
+- `tests/test_verification_models.py` — tests for deleted SQLAlchemy models
+- `scripts/migrate_phase3_verification_to_neo4j.py` — migration script (created then deleted — clean-slate workflow makes it unnecessary)
 
 ### Modified Files (model cleanup)
 - `backend/db/models/__init__.py` — remove `VerificationMethod`, `VerificationCondition`, `VerificationAction`, `CONDITION_OPERATORS`, `VERIFICATION_METHODS` exports
@@ -90,7 +95,7 @@
 - Create: `backend/db/neo4j/repositories/models/verification.py`
 - Modify: `backend/db/neo4j/repositories/models/__init__.py`
 
-- [ ] **Step 1: Write failing test for verification models**
+- [x] **Step 1: Write failing test for verification models**
 
 Create `tests/test_verification_neo4j_models.py`:
 
@@ -157,12 +162,12 @@ def test_action_node_with_design_references():
     assert a.callee_qualified_name == "Calculator::add"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_verification_neo4j_models.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Implement the models**
+- [x] **Step 3: Implement the models**
 
 Create `backend/db/neo4j/repositories/models/verification.py`:
 
@@ -226,13 +231,13 @@ class ActionNode(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 4: Update models/__init__.py**
+- [x] **Step 4: Update models/__init__.py**
 
 Add exports for the new models.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/db/neo4j/repositories/models/verification.py backend/db/neo4j/repositories/models/__init__.py tests/test_verification_neo4j_models.py
@@ -248,7 +253,7 @@ git commit -m "feat(phase3): add VerificationMethodNode, ConditionNode, ActionNo
 - Modify: `backend/db/neo4j/repositories/__init__.py`
 - Modify: `backend/db/neo4j/connection.py` — add verification constraints
 
-- [ ] **Step 1: Write failing test for VerificationRepository**
+- [x] **Step 1: Write failing test for VerificationRepository**
 
 Create `tests/test_verification_repository.py` with integration tests for:
 - `create_verification(llr_id, method, test_name, description)` → creates `:VerificationMethod` node with `(:LLR)-[:VERIFIES]->(:VerificationMethod)`
@@ -261,9 +266,9 @@ Create `tests/test_verification_repository.py` with integration tests for:
 - `augment_missing_design_nodes(qualified_names)` → creates missing `:Design` stubs for unresolved references
 - `validate_references(qualified_names)` → checks which `:Design` nodes exist
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
-- [ ] **Step 3: Implement VerificationRepository**
+- [x] **Step 3: Implement VerificationRepository**
 
 ```python
 class VerificationRepository:
@@ -328,7 +333,7 @@ Implementation details:
 - `augment_missing_design_nodes`: For each missing qualified name, creates a `:Design` stub node with `kind="member"`, `source_type="verification"` (marks it as auto-created)
 - `delete_verification`: `MATCH (vm:VerificationMethod {id: $id}) DETACH DELETE vm` — cascade deletes conditions and actions via DETACH
 
-- [ ] **Step 4: Add Neo4j constraints**
+- [x] **Step 4: Add Neo4j constraints**
 
 In `connection.py` `ensure_requirement_constraints()`, add:
 ```python
@@ -337,11 +342,11 @@ In `connection.py` `ensure_requirement_constraints()`, add:
 "CREATE CONSTRAINT action_id IF NOT EXISTS FOR (n:Action) REQUIRE n.id IS UNIQUE",
 ```
 
-- [ ] **Step 5: Update repository __init__.py and neo4j/__init__.py**
+- [x] **Step 5: Update repository __init__.py and neo4j/__init__.py**
 
-- [ ] **Step 6: Run integration tests**
+- [x] **Step 6: Run integration tests**
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/db/neo4j/repositories/verification.py backend/db/neo4j/repositories/__init__.py backend/db/neo4j/__init__.py backend/db/neo4j/connection.py tests/test_verification_repository.py
@@ -357,7 +362,7 @@ git commit -m "feat(phase3): add VerificationRepository with full CRUD and const
 
 Currently `VerificationConditionSchema` has `member_qualified_name` and `VerificationActionSchema` has `member_qualified_name`. We add parallel fields for structural edges:
 
-- [ ] **Step 1: Update schemas.py**
+- [x] **Step 1: Update schemas.py**
 
 ```python
 # Make VERIFICATION_METHODS self-contained (no import from deleted model file)
@@ -385,13 +390,13 @@ The prompt/output format transition:
 - When both are provided, `subject_qualified_name` takes precedence
 - When only `member_qualified_name` is provided, it's used as both the edge target and the legacy string
 
-- [ ] **Step 2: Update literal sync check**
+- [x] **Step 2: Update literal sync check**
 
 Remove the import from `backend.db.models.verification` and use the local `VERIFICATION_METHODS` list.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/requirements/schemas.py
@@ -407,7 +412,7 @@ git commit -m "feat(phase3): add subject/callee/object qualified name fields to 
 
 This is the largest single change. `persist_verification()` currently writes to SQLite. It needs to write to Neo4j via `VerificationRepository`. The `resolve_ontology_node()`, `validate_verification_references()`, and `augment_design_for_unresolved()` functions are removed or replaced.
 
-- [ ] **Step 1: Rewrite `persist_verification()`**
+- [x] **Step 1: Rewrite `persist_verification()`**
 
 New signature:
 ```python
@@ -427,35 +432,35 @@ Key changes:
 - Calls `augment_missing_design_nodes()` to create stubs for unresolved references
 - No longer writes to SQLite at all
 
-- [ ] **Step 2: Remove `resolve_ontology_node()`**
+- [x] **Step 2: Remove `resolve_ontology_node()`**
 
 This function did longest-prefix matching against `OntologyNode.qualified_name` in SQLite. It's replaced by Cypher-based edge resolution in `VerificationRepository`.
 
-- [ ] **Step 3: Remove `validate_verification_references()`**
+- [x] **Step 3: Remove `validate_verification_references()`**
 
 Replaced by `VerificationRepository.validate_references()` which checks `:Design` nodes in Neo4j.
 
-- [ ] **Step 4: Replace `augment_design_for_unresolved()`**
+- [x] **Step 4: Replace `augment_design_for_unresolved()`**
 
 Replaced by `VerificationRepository.augment_missing_design_nodes()` which creates `:Design` stubs in Neo4j via Cypher. The old function created `OntologyNode`/`OntologyTriple` in SQLAlchemy and synced to Neo4j — now it's a single Cypher operation.
 
-- [ ] **Step 5: Update `build_verification_context()`**
+- [x] **Step 5: Update `build_verification_context()`**
 
 Remove the SQLAlchemy bridge fallback. The function now queries Neo4j only for design context used by the verification agent.
 
-- [ ] **Step 6: Keep `persist_decomposition()` and `persist_design()` as-is**
+- [x] **Step 6: Keep `persist_decomposition()` and `persist_design()` as-is**
 
 These were updated in Phase 2 and don't need changes. `persist_decomposition()` still creates verification stubs — but now via `VerificationRepository` instead of SQLAlchemy.
 
 **Wait** — actually `persist_decomposition()` currently writes verification stubs to SQLite. This needs updating:
 
-- [ ] **Step 5b: Update `persist_decomposition()` verification stub creation**
+- [x] **Step 5b: Update `persist_decomposition()` verification stub creation**
 
 Change the verification stub creation in `persist_decomposition()` from SQLAlchemy `VerificationMethod()` to `VerificationRepository.create_verification()`. The function already takes `neo4j_session` — just remove the `sql_session` parameter and the SQLAlchemy writes.
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/requirements/services/persistence.py
@@ -473,7 +478,7 @@ git commit -m "feat(phase3): rewrite persist_verification for Neo4j, remove reso
 - Modify: `backend/pipeline/orchestrator.py`
 - Modify: `backend/pipeline/services.py`
 
-- [ ] **Step 1: Update verify_llr_prompt.py**
+- [x] **Step 1: Update verify_llr_prompt.py**
 
 Add guidance for the LLM to output `subject_qualified_name` (for conditions) and `caller_qualified_name`/`callee_qualified_name` (for actions). Keep `member_qualified_name` as an accepted fallback in the schema.
 
@@ -482,36 +487,36 @@ Update `SYSTEM_PROMPT` to instruct:
 - Actions: use `caller_qualified_name` for the invoker and `callee_qualified_name` for the method being called
 - `member_qualified_name` is still accepted but deprecated
 
-- [ ] **Step 2: Update verify_llr.py**
+- [x] **Step 2: Update verify_llr.py**
 
 - Remove `from backend.db.models import VerificationMethod`
 - Use `VerificationRepository` to fetch existing verifications for an LLR
 - Use `VerificationRepository.validate_references()` instead of `validate_verification_references()`
 - Pass `neo4j_session` instead of `sql_session`
 
-- [ ] **Step 3: Update mcp_server.py**
+- [x] **Step 3: Update mcp_server.py**
 
 - Remove `VerificationMethod` import
 - `list_requirements()`: use `VerificationRepository` to list verifications per LLR
 - `save_verification()`: use `VerificationRepository` via `persist_verification()`
 - `apply_remediation()`: use `VerificationRepository` to delete verifications when deleting LLRs; use `VerificationRepository` to create new verification stubs
 
-- [ ] **Step 4: Update pipeline/orchestrator.py**
+- [x] **Step 4: Update pipeline/orchestrator.py**
 
 - Remove `VerificationMethod` import
 - Phase 3 (verification): use `VerificationRepository` to list verifications per LLR
 - Use `VerificationRepository` instead of SQLAlchemy queries for `_get_verification_dicts()`
 - Use `persist_verification()` with `neo4j_session` instead of `sql_session`
 
-- [ ] **Step 5: Update pipeline/services.py**
+- [x] **Step 5: Update pipeline/services.py**
 
 - Remove `VerificationMethod` import from `pipeline/services.py`
 - `_find_verification_by_test_name()`: query `VerificationRepository` instead of SQLAlchemy
 - `TaskVerification.verification_method_id` stays as a plain integer (no FK) — the migration in Task 9 will handle this
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/ticketing_agent/verify/verify_llr.py backend/ticketing_agent/verify/verify_llr_prompt.py backend/ticketing_agent/mcp_server.py backend/pipeline/orchestrator.py backend/pipeline/services.py
@@ -526,22 +531,22 @@ git commit -m "feat(phase3): update agent code and pipeline to use VerificationR
 - Modify: `frontend/data/hlr.py`
 - Modify: `frontend/data/llr.py`
 
-- [ ] **Step 1: Rewrite verification data access in hlr.py**
+- [x] **Step 1: Rewrite verification data access in hlr.py**
 
 Replace `session.query(VerificationMethod)` calls with `VerificationRepository` calls:
 - `fetch_requirements_data()`: get verification counts via `VerificationRepository`
 - `decompose_hlr()`: remove `sql_session` from `persist_verification` call chain
 
-- [ ] **Step 2: Rewrite verification data access in llr.py**
+- [x] **Step 2: Rewrite verification data access in llr.py**
 
 Replace all `VerificationMethod`/`VerificationCondition`/`VerificationAction` queries with `VerificationRepository`:
 - `fetch_llr_detail()`: get verifications from Neo4j
 - `_get_verification_detail()`: rewrite to use `VerificationRepository.list_verifications()` + `list_conditions()` + `list_actions()`
 - Remove all SQLAlchemy verification imports
 
-- [ ] **Step 3: Run import checks**
+- [x] **Step 3: Run import checks**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/data/hlr.py frontend/data/llr.py
@@ -558,7 +563,7 @@ git commit -m "feat(phase3): rewrite frontend verification data access for Neo4j
 - Modify: `backend/db/models/__init__.py` — remove verification model exports
 - Modify: `backend/db/models/tasks.py` — remove `VerificationMethod` FK, make `verification_method_id` a plain integer
 
-- [ ] **Step 1: Create verification_formatting.py**
+- [x] **Step 1: Create verification_formatting.py**
 
 Extract the `__repr__` and `to_prompt_text` methods from `VerificationMethod`, `VerificationCondition`, `VerificationAction`:
 
@@ -604,13 +609,13 @@ CONDITION_OPERATORS = [
 ]
 ```
 
-- [ ] **Step 2: Delete verification.py**
+- [x] **Step 2: Delete verification.py**
 
-- [ ] **Step 3: Update models/__init__.py**
+- [x] **Step 3: Update models/__init__.py**
 
 Remove all verification model exports. Import `VERIFICATION_METHODS` and `CONDITION_OPERATORS` from the new formatting module.
 
-- [ ] **Step 4: Update tasks.py**
+- [x] **Step 4: Update tasks.py**
 
 Change `TaskVerification.verification_method_id` from an FK to a plain integer:
 ```python
@@ -618,16 +623,16 @@ verification_method_id: Mapped[int] = mapped_column(Integer, nullable=False)
 ```
 Remove the `VerificationMethod` import and relationship.
 
-- [ ] **Step 5: Update all imports**
+- [x] **Step 5: Update all imports**
 
 Search for any remaining imports of `VerificationMethod`, `VerificationCondition`, `VerificationAction` from `backend.db.models.verification` or `backend.db.models` and update them to either:
 - Use the Neo4j repository models (`backend.db.neo4j.repositories.models.verification`)
 - Use the formatting module (`backend.requirements.verification_formatting`)
 - Use the repository directly (`VerificationRepository`)
 
-- [ ] **Step 6: Run tests and fix failures**
+- [x] **Step 6: Run tests and fix failures**
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -642,7 +647,7 @@ git commit -m "feat(phase3): drop SQLAlchemy verification models, create verific
 - Create: `alembic/versions/<hash>_drop_verification_tables_and_fk_constraints.py`
 - Modify: (none — just the new migration file)
 
-- [ ] **Step 1: Create the migration**
+- [x] **Step 1: Create the migration**
 
 ```python
 """Drop verification tables and FK constraints.
@@ -705,19 +710,19 @@ def downgrade():
     )
 ```
 
-- [ ] **Step 2: Run migration**
+- [x] **Step 2: Run migration**
 
 ```bash
 alembic upgrade head
 ```
 
-- [ ] **Step 3: Verify tables are dropped**
+- [x] **Step 3: Verify tables are dropped**
 
 ```bash
 python -c "from backend.db import init_db, get_session; init_db(); s = get_session(); print('OK')"
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add alembic/versions/<hash>_drop_verification_tables_and_fk_constraints.py
@@ -731,7 +736,7 @@ git commit -m "feat(phase3): Alembic migration to drop verification tables and F
 **Files:**
 - Create: `scripts/migrate_phase3_verification_to_neo4j.py`
 
-- [ ] **Step 1: Write the migration script**
+- [x] **Step 1: Write the migration script**
 
 The script should:
 1. Read all `VerificationMethod`, `VerificationCondition`, `VerificationAction` rows from SQLite
@@ -741,13 +746,13 @@ The script should:
 5. Preserve the SQLite `id` as the Neo4j `id` (like Phase 2 did for HLR/LLR)
 6. Drop duplicate constraints if needed
 
-- [ ] **Step 2: Test the migration script**
+- [x] **Step 2: Test the migration script**
 
 ```bash
 python scripts/migrate_phase3_verification_to_neo4j.py
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/migrate_phase3_verification_to_neo4j.py
@@ -764,29 +769,29 @@ git commit -m "feat(phase3): data migration script from SQLite verification tabl
 - Modify: `tests/conftest.py` — remove verification-related fixtures
 - Modify: other test files that reference verification models
 
-- [ ] **Step 1: Audit all test files for verification model references**
+- [x] **Step 1: Audit all test files for verification model references**
 
 ```bash
 grep -rn "VerificationMethod\|VerificationCondition\|VerificationAction" tests/
 ```
 
-- [ ] **Step 2: Delete test_verification_models.py**
+- [x] **Step 2: Delete test_verification_models.py**
 
 These tests validate SQLAlchemy model behavior that no longer exists. The replacement tests are in `test_verification_repository.py` (Task 2).
 
-- [ ] **Step 3: Update test_persistence.py**
+- [x] **Step 3: Update test_persistence.py**
 
 Update `persist_verification` tests to use `VerificationRepository` and Neo4j sessions.
 
-- [ ] **Step 4: Update test_conftest_smoke.py and test_requirements_models.py if needed**
+- [x] **Step 4: Update test_conftest_smoke.py and test_requirements_models.py if needed**
 
-- [ ] **Step 5: Run all tests**
+- [x] **Step 5: Run all tests**
 
 ```bash
 pytest tests/ -v --ignore=tests/integration
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/
@@ -804,23 +809,23 @@ git commit -m "feat(phase3): update tests for Neo4j-primary verification"
 - Modify: `scripts/export_fixtures.py`
 - Modify: `scripts/01_flush_db.py`
 
-- [ ] **Step 1: Update 03_design_requirements.py**
+- [x] **Step 1: Update 03_design_requirements.py**
 
 Replace all `VerificationMethod`/`VerificationCondition`/`VerificationAction` imports and queries with `VerificationRepository` calls.
 
-- [ ] **Step 2: Update 05_generate_tasks.py**
+- [x] **Step 2: Update 05_generate_tasks.py**
 
 Replace verification queries with `VerificationRepository`. `persist_verification()` now takes `neo4j_session` instead of `sql_session`.
 
-- [ ] **Step 3: Update import_fixtures.py**
+- [x] **Step 3: Update import_fixtures.py**
 
 Skip `verification_methods`, `verification_conditions`, `verification_actions` table loading (now in Neo4j). Add a Neo4j fixture section that creates `:VerificationMethod`, `:Condition`, `:Action` nodes.
 
-- [ ] **Step 4: Update export_fixtures.py**
+- [x] **Step 4: Update export_fixtures.py**
 
 Export verification data from Neo4j instead of SQLite.
 
-- [ ] **Step 5: Update 01_flush_db.py**
+- [x] **Step 5: Update 01_flush_db.py**
 
 Add flushing of `:VerificationMethod`, `:Condition`, `:Action` nodes:
 ```python
@@ -829,7 +834,7 @@ session.run("MATCH (n:Condition) DETACH DELETE n")
 session.run("MATCH (n:Action) DETACH DELETE n")
 ```
 
-- [ ] **Step 6: Run syntax checks and commit**
+- [x] **Step 6: Run syntax checks and commit**
 
 ```bash
 git add scripts/
@@ -840,7 +845,7 @@ git commit -m "feat(phase3): update scripts for Neo4j-primary verification"
 
 ## Task 12: Integration Verification, Deprecation Notes, Cleanup
 
-- [ ] **Step 1: Run full pipeline end-to-end**
+- [x] **Step 1: Run full pipeline end-to-end**
 
 ```bash
 python scripts/01_flush_db.py
@@ -850,13 +855,13 @@ python scripts/03_design_requirements.py
 
 Verify: HLRs, LLRs, Verifications, Design nodes, and Tasks all created correctly.
 
-- [ ] **Step 2: Run integration tests**
+- [x] **Step 2: Run integration tests**
 
 ```bash
 RUN_NEO4J_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-- [ ] **Step 3: Search for remaining references to deleted models**
+- [x] **Step 3: Search for remaining references to deleted models**
 
 ```bash
 grep -rn "from backend.db.models.verification import\|from backend.db.models import.*VerificationMethod\|from backend.db.models import.*VerificationCondition\|from backend.db.models import.*VerificationAction" backend/ frontend/ scripts/ --include="*.py"
@@ -864,7 +869,7 @@ grep -rn "from backend.db.models.verification import\|from backend.db.models imp
 
 All should be gone. Any remaining references to `VerificationMethod` etc. in `backend/db/models/__init__.py` should use the neo4j repository or formatting module.
 
-- [ ] **Step 4: Add deprecation notes**
+- [x] **Step 4: Add deprecation notes**
 
 Add comments in `backend/requirements/services/persistence.py`:
 ```python
@@ -873,11 +878,11 @@ Add comments in `backend/requirements/services/persistence.py`:
 # Use VerificationRepository for all verification CRUD.
 ```
 
-- [ ] **Step 5: Update this plan document**
+- [x] **Step 5: Update this plan document**
 
 Mark all tasks as complete.
 
-- [ ] **Step 6: Final commit**
+- [x] **Step 6: Final commit**
 
 ```bash
 git add -A
