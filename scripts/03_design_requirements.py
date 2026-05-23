@@ -437,6 +437,7 @@ def step_summary():
 
         # Show HLR → Design traces from Neo4j
         with get_neo4j().session() as ns:
+            repo = RequirementRepository(ns)
             for hlr in repo.list_hlrs():
                 print(f"\n  HLR {hlr.id}: {hlr.description[:60]}")
                 traces = ns.run(
