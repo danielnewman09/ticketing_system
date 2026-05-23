@@ -17,6 +17,7 @@ Node labels and edge types:
 from __future__ import annotations
 
 import logging
+import re
 
 from neo4j import Session as Neo4jSession
 
@@ -27,6 +28,48 @@ from backend.db.neo4j.repositories.models.verification import (
 )
 
 log = logging.getLogger(__name__)
+
+
+# -----------------------------------------------------------------------
+# Qualified-name validation
+# -----------------------------------------------------------------------
+
+_INVALID_QNAME_PATTERNS = re.compile(
+    r'^(test_|result_of_|verify_|check_)'  # test/local identifiers
+    r'|^[a-z]+$'                              # bare lowercase word
+)
+
+
+def _is_valid_verification_qname(qname: str) -> tuple[bool, str | None]:
+    """Check whether a qualified name is valid before creating a stub node.
+
+    Returns (is_valid, corrected_qname_or_None).
+    corrected_qname is provided for the common error of using '.' instead of '::'.
+    """
+    if not qname or not qname.strip():
+        return False, None
+
+    # Reject obvious test artifacts and local variable names
+    if _INVALID_QNAME_PATTERNS.match(qname):
+        return False, None
+
+    # Reject bare lowercase identifiers (not a qualified name)
+    if '::' not in qname and qname.islower():
+        return False, None
+
+    # Auto-correct dot separators to ::
+    if '.' in qname:
+        parts = qname.split('.')
+        # Only correct if all parts look like identifier segments (not decimals)
+        if all(p and (p[0].isupper() or p[0].islower() or p[0] == '_') for p in parts):
+            corrected = '::'.join(parts)
+            return True, corrected
+
+    # Require at least one :: separator (namespace::Class or Class::member)
+    if '::' not in qname:
+        return False, None
+
+    return True, None
 
 
 class VerificationRepository:
@@ -398,15 +441,27 @@ class VerificationRepository:
         For each qualified_name that doesn't match an existing :Design node,
         creates a stub with source_type="verification" (marks it as auto-created).
         Returns the list of qualified_names that were created.
+
+        Invalid qualified names (test artifacts, dot separators, bare words)
+        are skipped with a warning. Dot separators are auto-corrected to ::.
         """
         if not qualified_names:
             return []
 
         created = []
-        for qn in qualified_names:
-            if not qn:
+        for raw_qn in qualified_names:
+            if not raw_qn:
                 continue
-            # Check if :Design node already exists
+
+            # Validate and optionally correct the qualified name
+            is_valid, corrected = _is_valid_verification_qname(raw_qn)
+            if not is_valid:
+                log.warning("augment: skipping invalid verification qname: %r", raw_qn)
+                continue
+
+            qn = corrected if corrected else raw_qn
+
+            # Check if :Design node already exists (with corrected name)
             result = self._session.run(
                 "MATCH (d:Design {qualified_name: $qn}) RETURN count(d) AS cnt",
                 {"qn": qn},
