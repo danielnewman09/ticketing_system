@@ -65,6 +65,9 @@ class Neo4jConnection:
             "CREATE CONSTRAINT llr_id IF NOT EXISTS FOR (n:LLR) REQUIRE n.id IS UNIQUE",
             "CREATE INDEX design_kind IF NOT EXISTS FOR (n:Design) ON (n.kind)",
             "CREATE INDEX design_component_id IF NOT EXISTS FOR (n:Design) ON (n.component_id)",
+            "CREATE CONSTRAINT verification_method_id IF NOT EXISTS FOR (n:VerificationMethod) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT condition_id IF NOT EXISTS FOR (n:Condition) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT action_id IF NOT EXISTS FOR (n:Action) REQUIRE n.id IS UNIQUE",
         ]
         with self.session() as session:
             for stmt in statements:
