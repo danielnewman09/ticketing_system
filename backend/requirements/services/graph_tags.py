@@ -49,7 +49,7 @@ def enrich_with_requirement_tags(
     if session is not None:
         _enrich_via_cypher(session, node_qns, nodes)
     else:
-        from backend.db.neo4j.connection import get_neo4j
+        from services.dependencies import get_neo4j
         neo4j_conn = get_neo4j()
         with neo4j_conn.session() as sess:
             _enrich_via_cypher(sess, node_qns, nodes)
@@ -123,7 +123,7 @@ def tag_direct_nodes_only(
     if session is not None:
         _query(session)
     else:
-        from backend.db.neo4j.connection import get_neo4j
+        from services.dependencies import get_neo4j
         with get_neo4j().session() as sess:
             _query(sess)
 
@@ -140,7 +140,7 @@ def tag_direct_nodes_only(
         if rec:
             hlr_desc = (rec["desc"] or "")[:80]
     else:
-        from backend.db.neo4j.connection import get_neo4j
+        from services.dependencies import get_neo4j
         with get_neo4j().session() as sess:
             rec = sess.run(
                 "MATCH (hlr:HLR {sqlite_id: $hid}) RETURN hlr.description AS desc",

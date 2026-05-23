@@ -14,6 +14,11 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
+load_dotenv()
+
+from sqlalchemy import text
+
 from backend.db import init_db, get_session
 from backend.db.neo4j.connection import get_standalone_driver, Neo4jConnection
 from backend.db.neo4j.repositories.design import DesignRepository
@@ -159,8 +164,8 @@ def migrate_hlr_traces(session, neo4j_session, repo):
     relationship was removed. Read directly via SQL.
     """
     result = session.execute(
-        "SELECT highlevelrequirement_id, ontologynode_id "
-        "FROM high_level_requirements_nodes"
+        text("SELECT highlevelrequirement_id, ontologynode_id "
+        "FROM high_level_requirements_nodes")
     ).fetchall()
     print(f"Migrating {len(result)} HLR↔Node traces...")
 
@@ -190,8 +195,8 @@ def migrate_llr_traces(session, neo4j_session, repo):
     relationship was removed. Read directly via SQL.
     """
     result = session.execute(
-        "SELECT lowlevelrequirement_id, ontologynode_id "
-        "FROM low_level_requirements_nodes"
+        text("SELECT lowlevelrequirement_id, ontologynode_id "
+        "FROM low_level_requirements_nodes")
     ).fetchall()
     print(f"Migrating {len(result)} LLR↔Node traces...")
 

@@ -237,7 +237,7 @@ def step_design():
                         flag = " [intercomponent]" if node_data.is_intercomponent else ""
                         print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
 
-                from backend.db.neo4j.connection import get_neo4j
+                from services.dependencies import get_neo4j
                 with get_neo4j().session() as neo4j_session:
                     persisted = persist_design(ontology, neo4j_session, sql_session=session, qname_to_node=qname_to_node)
                 total_nodes += persisted.nodes_created

@@ -365,7 +365,7 @@ def augment_design_for_unresolved(
     if created_nodes:
         try:
             from backend.db.neo4j.repositories.design import DesignRepository as DR
-            from backend.db.neo4j.connection import get_neo4j
+            from services.dependencies import get_neo4j
 
             new_triples = (
                 session.query(OntologyTriple)
@@ -427,7 +427,7 @@ def persist_decomposition(
 
         # Create LLR stub in Neo4j
         try:
-            from backend.db.neo4j.connection import get_neo4j
+            from services.dependencies import get_neo4j
             with get_neo4j().session() as neo4j_session:
                 repo = DesignRepository(neo4j_session)
                 repo.merge_llr_stub(sqlite_id=llr.id, description=llr.description)

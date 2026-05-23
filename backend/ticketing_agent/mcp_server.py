@@ -233,7 +233,7 @@ def save_ontology_design(
     requirement_links: list[dict] | None = None,
 ) -> str:
     """Save ontology nodes, triples, and requirement links to Neo4j."""
-    from backend.db.neo4j.connection import get_neo4j
+    from services.dependencies import get_neo4j
     with get_session() as session:
         with get_neo4j().session() as neo4j_session:
             design = DesignSchema.model_validate(
