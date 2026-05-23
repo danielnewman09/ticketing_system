@@ -4,13 +4,13 @@ Master orchestrator for the spec-driven development pipeline.
 Given an initial prompt, runs the full pipeline:
   HLR -> Decomposition -> Verification -> Design -> Tasks ->
   Skeleton -> Tests -> Implementation -> Sync Hooks -> Neo4j update
+
+Phase 3: Verification data lives in Neo4j via VerificationRepository.
 """
 
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
-
-from sqlalchemy.orm import Session
 
 if TYPE_CHECKING:
     from backend.db.models.tasks import Task
@@ -24,6 +24,7 @@ def _get_component_name(component_id: int | None) -> str | None:
         return None
     try:
         from backend.db.models import Component
+        from backend.db import get_session
         with get_session() as session:
             comp = session.query(Component).filter_by(id=component_id).first()
             return comp.name if comp else None
@@ -49,39 +50,44 @@ class PipelineResult:
     benchmark_metrics: dict = field(default_factory=dict)
 
 
-def _get_verification_dicts(session: Session) -> list[dict]:
-    """Fetch all verification methods as dicts for the pipeline."""
-    from backend.db.models import VerificationMethod
+def _get_verification_dicts(neo4j_session) -> list[dict]:
+    """Fetch all verification methods from Neo4j as dicts for the pipeline."""
+    from backend.db.neo4j.repositories.verification import VerificationRepository
 
-    verifs = session.query(VerificationMethod).all()
+    repo = VerificationRepository(neo4j_session)
+    # Get all LLRs to find their verifications
+    from backend.db.neo4j.repositories.requirement import RequirementRepository
+    req_repo = RequirementRepository(neo4j_session)
+    all_llrs = req_repo.list_llrs()
+
     result = []
-    for v in verifs:
-        result.append(
-            {
-                "id": v.id,
-                "test_name": v.test_name,
-                "method": v.method,
-                "description": v.description,
-                "llr_id": v.low_level_requirement_id,
+    for llr in all_llrs:
+        for vm in repo.list_verifications(llr.id):
+            conditions = repo.list_conditions(vm.id)
+            actions = repo.list_actions(vm.id)
+            pre = [c for c in conditions if c.phase == "pre"]
+            post = [c for c in conditions if c.phase == "post"]
+            result.append({
+                "id": vm.id,
+                "test_name": vm.test_name,
+                "method": vm.method,
+                "description": vm.description,
+                "llr_id": vm.llr_id,
                 "preconditions": [
-                    f"{c.member_qualified_name} {c.operator} {c.expected_value}"
-                    for c in v.conditions
-                    if c.phase == "pre"
+                    f"{c.subject_qualified_name} {c.operator} {c.expected_value}"
+                    for c in pre
                 ],
-                "actions": [a.description for a in v.actions],
+                "actions": [a.description for a in actions],
                 "postconditions": [
-                    f"{c.member_qualified_name} {c.operator} {c.expected_value}"
-                    for c in v.conditions
-                    if c.phase == "post"
+                    f"{c.subject_qualified_name} {c.operator} {c.expected_value}"
+                    for c in post
                 ],
-            }
-        )
+            })
     return result
 
 
 def run_pipeline(
     initial_prompt: str,
-    session: Session,
     model: str = "",
     language: str = "python",
     workspace_dir: str = "",
@@ -94,7 +100,6 @@ def run_pipeline(
 
     Args:
         initial_prompt: Natural language description of what to build.
-        session: Active SQLAlchemy session.
         model: LLM model override for all agents.
         language: Target programming language (default: "python").
         workspace_dir: Root directory for generated source files.
@@ -103,13 +108,11 @@ def run_pipeline(
     Returns:
         PipelineResult with counts and sync status.
     """
-    from backend.db.models import (
-        Component,
-        OntologyNode,
-        VerificationMethod,
-    )
+    from backend.db import get_session
+    from backend.db.models import Component, OntologyNode
     from backend.db.models.tasks import Task
     from backend.db.neo4j.repositories.requirement import RequirementRepository
+    from backend.db.neo4j.repositories.verification import VerificationRepository
     from services.dependencies import get_neo4j
 
     result = PipelineResult()
@@ -143,13 +146,11 @@ def run_pipeline(
                 ns,
                 hlr.id,
                 decomp_result.low_level_requirements,
-                sql_session=session,
             )
         result.llrs_created += persisted.llrs_created
 
     result.hlrs_created = len(hlrs_neo4j)
-    total_llrs = len(all_llrs_neo4j) if 'all_llrs_neo4j' in dir() else 0
-    log.info("  %d HLRs, %d LLRs", result.hlrs_created, total_llrs)
+    log.info("  %d HLRs, %d LLRs", result.hlrs_created, len(all_llrs_neo4j))
 
     # ------------------------------------------------------------------
     # Phase 3: Verification -- existing agent
@@ -161,53 +162,29 @@ def run_pipeline(
         persist_verification,
     )
 
-    class_contexts = build_verification_context(session)
+    with get_neo4j().session() as ns:
+        ver_repo = VerificationRepository(ns)
+        class_contexts = build_verification_context(ns)
 
-    # Build node list from Neo4j (primary) + SQLAlchemy (bridge)
-    ontology_nodes_list = []
-    seen_qns: set = set()
-    try:
-        from backend.db.neo4j.connection import get_standalone_session as _get_n4j
-        with _get_n4j() as ns:
-            n4_result = ns.run(
-                "MATCH (d:Design) RETURN d.qualified_name AS qn, d.kind AS kind"
+        for llr in all_llrs_neo4j:
+            existing_vms = ver_repo.list_verifications(llr.id)
+            existing_verifs = [
+                {"method": vm.method, "test_name": vm.test_name, "description": vm.description}
+                for vm in existing_vms
+            ]
+            if existing_verifs:
+                result.verifications_created += len(existing_verifs)
+                continue
+
+            vv_result = verify(
+                llr={"id": llr.id, "description": llr.description},
+                existing_verifications=existing_verifs,
+                class_contexts=class_contexts,
+                neo4j_session=ns,
+                model=model,
             )
-            for rec in n4_result:
-                qn = rec["qn"]
-                if qn and qn not in seen_qns:
-                    seen_qns.add(qn)
-                    ontology_nodes_list.append({"qualified_name": qn, "pk": None, "kind": rec["kind"]})
-    except Exception:
-        log.warning("Failed to fetch design nodes from Neo4j for verification", exc_info=True)
-
-    for n in session.query(OntologyNode).all():
-        if n.qualified_name and n.qualified_name not in seen_qns:
-            seen_qns.add(n.qualified_name)
-            ontology_nodes_list.append({"qualified_name": n.qualified_name, "pk": None, "kind": n.kind})
-
-    for llr in all_llrs_neo4j:
-        existing_verifs = []
-        with get_session() as vs:
-            for v in vs.query(VerificationMethod).filter_by(low_level_requirement_id=llr.id).all():
-                existing_verifs.append({"method": v.method, "test_name": v.test_name, "description": v.description})
-        if existing_verifs:
-            result.verifications_created += len(existing_verifs)
-            continue
-
-        vv_result = verify(
-            llr={"id": llr.id, "description": llr.description},
-            existing_verifications=existing_verifs,
-            class_contexts=class_contexts,
-            ontology_nodes=ontology_nodes_list,
-            model=model,
-        )
-        persist_result = persist_verification(
-            session,
-            llr.id,
-            vv_result.verifications,
-            ontology_nodes_list,
-        )
-        result.verifications_created += persist_result.conditions_created
+            persist_result = persist_verification(ns, llr.id, vv_result.verifications)
+            result.verifications_created += persist_result.conditions_created
 
     # ------------------------------------------------------------------
     # Phase 4: Design -- existing agents
@@ -227,14 +204,6 @@ def run_pipeline(
             "component_name": _get_component_name(hlr.component_id) if hlr.component_id else "",
         }
         llrs_for_hlr = req_repo.list_llrs(hlr_id=hlr.id)
-        llrs_for_hlr_dicts = [
-            {
-                "id": l.id,
-                "description": l.description,
-                "hlr_id": l.high_level_requirement_id,
-            }
-            for l in llrs_for_hlr
-        ]
         comp_ns = ""
         if hlr.component_id:
             with get_session() as cs:
@@ -272,12 +241,10 @@ def run_pipeline(
             )
 
         # Persist design to Neo4j
-        from backend.db.neo4j.connection import get_standalone_session as _get_n4j_session
-        with _get_n4j_session() as neo4j_session:
+        with get_neo4j().session() as neo4j_session:
             persist_result = persist_design(
                 ontology,
                 neo4j_session=neo4j_session,
-                sql_session=session,
                 qname_to_node=qname_to_node,
             )
         log.info(
@@ -287,8 +254,6 @@ def run_pipeline(
             persist_result.triples_created,
         )
 
-    # qname_to_node no longer needed for task persistence — tasks link by qualified_name string
-
     # ------------------------------------------------------------------
     # Phase 5: Task generation
     # ------------------------------------------------------------------
@@ -296,7 +261,8 @@ def run_pipeline(
     from backend.ticketing_agent.generate_tasks import generate_tasks
     from backend.pipeline.services import persist_tasks
 
-    all_verifications = _get_verification_dicts(session)
+    with get_neo4j().session() as ns:
+        all_verifications = _get_verification_dicts(ns)
 
     for hlr in hlrs_neo4j:
         hlr_dict = {
@@ -305,23 +271,11 @@ def run_pipeline(
             "component_name": _get_component_name(hlr.component_id) if hlr.component_id else "",
         }
         llrs_for_hlr = req_repo.list_llrs(hlr_id=hlr.id)
-        llrs_for_hlr_dicts = [
-            {
-                "id": l.id,
-                "description": l.description,
-                "hlr_id": l.high_level_requirement_id,
-            }
-            for l in llrs_for_hlr
-        ]
 
         comp_name = _get_component_name(hlr.component_id) or ""
         hlr_classes = [
-            c
-            for c in all_oo_classes
-            if c.get("module") == comp_name
-        ] or all_oo_classes[
-            :3
-        ]  # fallback
+            c for c in all_oo_classes if c.get("module") == comp_name
+        ] or all_oo_classes[:3]
 
         batch = generate_tasks(
             hlr=hlr_dict,
@@ -331,14 +285,15 @@ def run_pipeline(
             model=model,
         )
 
-        persist_result = persist_tasks(session, batch)
-        result.tasks_created += persist_result.tasks_created
-        log.info(
-            "  %d tasks, %d design links, %d verification links",
-            persist_result.tasks_created,
-            persist_result.links_to_design,
-            persist_result.links_to_verification,
-        )
+        with get_session() as session:
+            persist_result = persist_tasks(session, batch)
+            result.tasks_created += persist_result.tasks_created
+            log.info(
+                "  %d tasks, %d design links, %d verification links",
+                persist_result.tasks_created,
+                persist_result.links_to_design,
+                persist_result.links_to_verification,
+            )
 
     # ------------------------------------------------------------------
     # Phase 6: Skeleton generation
@@ -359,8 +314,7 @@ def run_pipeline(
     log.info("Phase 7: Writing tests...")
     from backend.ticketing_agent.write_tests import write_tests
 
-    llrs_neo4j_2 = all_llrs_neo4j
-    for llr in llrs_neo4j_2:
+    for llr in all_llrs_neo4j:
         llr_verifs = [v for v in all_verifications if v.get("llr_id") == llr.id]
         if not llr_verifs:
             continue
@@ -390,7 +344,9 @@ def run_pipeline(
         write_implementation_files,
     )
 
-    tasks = session.query(Task).all()
+    with get_session() as session:
+        tasks = session.query(Task).all()
+
     skeleton_map: dict[str, str] = {}
     if workspace_dir:
         from pathlib import Path
@@ -403,7 +359,6 @@ def run_pipeline(
     for task in tasks:
         task_verifs = [v for v in all_verifications if v.get("test_name") in task.verifications]
 
-        # Get skeleton code for files this task modifies
         task_skeleton = ""
         for sr in skeleton_results:
             task_skeleton += f"# File: {sr.file_path}\n"
@@ -432,7 +387,6 @@ def run_pipeline(
     source_files = []
     if workspace_dir:
         from pathlib import Path
-
         for p in Path(workspace_dir).rglob("*.py"):
             source_files.append(str(p))
 
@@ -451,7 +405,6 @@ def run_pipeline(
     test_files_actual = []
     if workspace_dir:
         from pathlib import Path
-
         for p in Path(workspace_dir).rglob("tests/**/*.py"):
             test_files_actual.append(str(p))
 
@@ -475,28 +428,23 @@ def run_pipeline(
             sync_implementation_status,
             sync_full_design,
         )
-        from backend.db.neo4j.connection import get_standalone_session as get_neo4j_session
 
-        with get_neo4j_session() as neo4j_sess:
-            full_stats = sync_full_design(neo4j_sess, session)
+        with get_session() as session:
+            with get_neo4j().session() as neo4j_sess:
+                full_stats = sync_full_design(neo4j_sess, session)
 
-            for task in session.query(Task).all():
-                try:
-                    sync_task(neo4j_sess, task)
-                except Exception:
-                    log.warning(
-                        "Neo4j task sync failed for task %d",
-                        task.id,
-                    )
+                for task in session.query(Task).all():
+                    try:
+                        sync_task(neo4j_sess, task)
+                    except Exception:
+                        log.warning("Neo4j task sync failed for task %d", task.id)
 
-            for node in (
-                session.query(OntologyNode)
-                .filter_by(
-                    implementation_status="implemented",
-                )
-                .all()
-            ):
-                sync_implementation_status(neo4j_sess, node)
+                for node in (
+                    session.query(OntologyNode)
+                    .filter_by(implementation_status="implemented")
+                    .all()
+                ):
+                    sync_implementation_status(neo4j_sess, node)
 
         result.neo4j_synced = True
         log.info(

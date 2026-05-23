@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from backend.db.models.tasks import Task, TaskDesignNode, TaskVerification
-from backend.db.models.verification import VerificationMethod
 from backend.pipeline.schemas import TaskBatchSchema, TaskSchema
 
 log = logging.getLogger("pipeline.services")
@@ -22,15 +21,14 @@ class TaskPersistResult:
 def persist_tasks(
     session: Session,
     batch: TaskBatchSchema,
-    qname_to_node: dict | None = None,
+    neo4j_session=None,
 ) -> TaskPersistResult:
     """Persist a batch of tasks to SQLite.
 
     Args:
         session: Active SQLAlchemy session.
         batch: TaskBatchSchema from the generate_tasks agent.
-        qname_to_node: Optional mapping. Not used in Phase 1 — tasks
-            link to design nodes by qualified_name string.
+        neo4j_session: Optional Neo4j session for looking up verification methods.
 
     Returns:
         TaskPersistResult with counts of items created.
@@ -66,12 +64,12 @@ def persist_tasks(
             result.links_to_design += 1
 
         for test_name in ts.verification_test_names:
-            vm = _find_verification_by_test_name(session, test_name)
-            if vm:
+            vm_id = _find_verification_id_by_test_name(neo4j_session, test_name)
+            if vm_id is not None:
                 session.add(
                     TaskVerification(
-                        task=task,
-                        verification_method=vm,
+                        task_id=task.id,
+                        verification_method_id=vm_id,
                     )
                 )
                 result.links_to_verification += 1
@@ -107,20 +105,30 @@ def _topological_sort(
     return result
 
 
-def _find_verification_by_test_name(
-    session: Session,
+def _find_verification_id_by_test_name(
+    neo4j_session,
     test_name: str,
-) -> VerificationMethod | None:
-    """Find a VerificationMethod by its test_name."""
-    if not test_name:
+) -> int | None:
+    """Find a VerificationMethod id in Neo4j by its test_name.
+
+    Phase 3: VerificationMethods live in Neo4j, not SQLite.
+    Returns the Neo4j node id or None.
+    """
+    if not test_name or neo4j_session is None:
         return None
-    return (
-        session.query(VerificationMethod)
-        .filter_by(
-            test_name=test_name,
-        )
-        .first()
-    )
+    try:
+        from backend.db.neo4j.repositories.verification import VerificationRepository
+        from backend.db.neo4j.repositories.requirement import RequirementRepository
+
+        ver_repo = VerificationRepository(neo4j_session)
+        req_repo = RequirementRepository(neo4j_session)
+        for llr in req_repo.list_llrs():
+            for vm in ver_repo.list_verifications(llr.id):
+                if vm.test_name == test_name:
+                    return vm.id
+    except Exception:
+        log.warning("Failed to look up verification by test_name in Neo4j", exc_info=True)
+    return None
 
 
 def get_tasks_for_component(
@@ -134,7 +142,6 @@ def get_tasks_for_component(
     if not comp:
         return []
     tasks = session.query(Task).filter_by(component=comp).all()
-    # Eager-load the relationships
     result = []
     for t in tasks:
         session.refresh(t)
@@ -153,5 +160,3 @@ def mark_task_status(
         raise ValueError(f"Invalid status {status!r}, must be one of {valid}")
     task.status = status
     session.flush()
-
-
