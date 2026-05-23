@@ -136,23 +136,84 @@ def resolve_ontology_node(
 def build_verification_context(session: Session) -> list[dict]:
     """Build structured class-level context for the verification agent.
 
-    NOTE: This still queries SQLAlchemy OntologyNode/OntologyTriple.
-    Phase 3 will replace this with Neo4j Cypher queries.
+    Queries both Neo4j (primary source for design nodes) and SQLAlchemy
+    (bridge for any nodes not yet migrated). Falls back to SQLAlchemy-only
+    if Neo4j is unavailable.
     """
     from backend.db.models.ontology import TYPE_KINDS, VALUE_KINDS, OntologyNode, OntologyTriple
 
-    # Load all nodes
+    contexts: dict[str, dict] = {}  # qualified_name -> context dict
+
+    # --- Neo4j design nodes (primary source) ---
+    try:
+        from services.dependencies import get_neo4j
+        with get_neo4j().session() as ns:
+            result = ns.run("""
+                MATCH (parent:Design)
+                WHERE parent.kind IN ['class', 'interface', 'struct', 'type_alias']
+                OPTIONAL MATCH (parent)-[:COMPOSES]->(member:Design)
+                OPTIONAL MATCH (parent)-[r]->(target:Design)
+                WHERE type(r) <> 'COMPOSES' AND type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
+                RETURN parent, collect(DISTINCT member) AS members,
+                       collect(DISTINCT {pred: type(r), tgt_qn: target.qualified_name, tgt_name: target.name}) AS rels
+            """)
+            for record in result:
+                p = dict(record["parent"])
+                qn = p.get("qualified_name", "")
+                if not qn:
+                    continue
+
+                attrs = []
+                methods = []
+                for m in (record["members"] or []):
+                    if m is None:
+                        continue
+                    md = dict(m)
+                    member = {
+                        "name": md.get("name", ""),
+                        "qualified_name": md.get("qualified_name", ""),
+                        "kind": md.get("kind", ""),
+                        "visibility": md.get("visibility", ""),
+                        "type_signature": md.get("type_signature", ""),
+                        "argsstring": md.get("argsstring", ""),
+                        "description": md.get("description", ""),
+                    }
+                    if md.get("kind") in ("attribute", "constant"):
+                        attrs.append(member)
+                    else:
+                        methods.append(member)
+
+                relationships = []
+                for rel in (record["rels"] or []):
+                    if rel is None or rel.get("pred") is None:
+                        continue
+                    relationships.append({
+                        "predicate": rel["pred"],
+                        "target": rel.get("tgt_qn", ""),
+                        "target_name": rel.get("tgt_name", ""),
+                    })
+
+                contexts[qn] = {
+                    "qualified_name": qn,
+                    "kind": p.get("kind", ""),
+                    "description": p.get("description", ""),
+                    "attributes": sorted(attrs, key=lambda a: a["name"]),
+                    "methods": sorted(methods, key=lambda m: m["name"]),
+                    "relationships": relationships,
+                }
+    except Exception:
+        log.warning("Neo4j verification context query failed", exc_info=True)
+
+    # --- SQLAlchemy bridge nodes (augment with anything missing from Neo4j) ---
     all_nodes = session.query(OntologyNode).all()
     node_by_id: dict[int, OntologyNode] = {n.id: n for n in all_nodes}
-
-    # Load all triples
     all_triples = session.query(OntologyTriple).all()
 
-    # Build class contexts
-    class_contexts = []
     for n in all_nodes:
         if n.kind not in TYPE_KINDS:
             continue
+        if n.qualified_name in contexts:
+            continue  # Already have it from Neo4j
 
         attrs = []
         methods = []
@@ -189,18 +250,16 @@ def build_verification_context(session: Session) -> list[dict]:
                     }
                 )
 
-        class_contexts.append(
-            {
-                "qualified_name": n.qualified_name,
-                "kind": n.kind,
-                "description": n.description or "",
-                "attributes": sorted(attrs, key=lambda a: a["name"]),
-                "methods": sorted(methods, key=lambda m: m["name"]),
-                "relationships": relationships,
-            }
-        )
+        contexts[n.qualified_name] = {
+            "qualified_name": n.qualified_name,
+            "kind": n.kind,
+            "description": n.description or "",
+            "attributes": sorted(attrs, key=lambda a: a["name"]),
+            "methods": sorted(methods, key=lambda m: m["name"]),
+            "relationships": relationships,
+        }
 
-    return sorted(class_contexts, key=lambda c: c["qualified_name"])
+    return sorted(contexts.values(), key=lambda c: c["qualified_name"])
 
 
 # ---------------------------------------------------------------------------
