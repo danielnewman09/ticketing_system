@@ -3,9 +3,9 @@
 Consolidates the persistence logic used by demo.py, the MCP server,
 and NiceGUI views into a single place.
 
-Phase 1 note: design nodes and triples are persisted to Neo4j via
-DesignRepository. HLR/LLR and verification data still use SQLAlchemy
-until Phase 2 and Phase 3 respectively.
+Phase 2 note: HLR/LLR data is persisted to Neo4j via
+RequirementRepository. VerificationMethod data still uses SQLAlchemy
+until Phase 3.
 """
 
 from __future__ import annotations
@@ -18,8 +18,6 @@ from sqlalchemy.orm import Session
 
 from backend.db import get_or_create
 from backend.db.models import (
-    HighLevelRequirement,
-    LowLevelRequirement,
     VerificationAction,
     VerificationCondition,
     VerificationMethod,
@@ -27,6 +25,7 @@ from backend.db.models import (
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
 from backend.db.neo4j.repositories.models.design import DesignNode
+from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.requirements.schemas import LowLevelRequirementSchema, VerificationSchema
 
 if TYPE_CHECKING:
@@ -464,55 +463,38 @@ def augment_design_for_unresolved(
 
 
 def persist_decomposition(
-    session: Session,
-    hlr: HighLevelRequirement,
+    neo4j_session: "Neo4jSession",
+    hlr_id: int,
     llrs: list[LowLevelRequirementSchema],
+    sql_session: Session | None = None,
 ) -> DecompositionResult:
-    """Create LLRs (with verification stubs) under an existing HLR.
+    """Create LLRs under an existing HLR in Neo4j. Also persist verification
+    stubs to SQLite if sql_session is provided.
 
-    Also creates :LLR stub nodes in Neo4j and DECOMPOSES_INTO edges
-    from the HLR stub (Phase 1 bridge).
+    Phase 2: HLR/LLR data lives in Neo4j. VerificationMethod stays in SQLite
+    but references LLR by id (not FK).
     """
     result = DecompositionResult()
+    repo = RequirementRepository(neo4j_session)
 
     for llr_data in llrs:
-        llr = LowLevelRequirement(
-            high_level_requirement=hlr,
-            description=llr_data.description,
-        )
-        session.add(llr)
-        session.flush()
+        llr = repo.create_llr(hlr_id=hlr_id, description=llr_data.description)
         result.llrs_created += 1
 
-        # Create LLR stub in Neo4j
-        try:
-            from services.dependencies import get_neo4j
-            with get_neo4j().session() as neo4j_session:
-                repo = DesignRepository(neo4j_session)
-                repo.merge_llr_stub(sqlite_id=llr.id, description=llr.description)
-                # Link HLR → LLR in Neo4j
-                neo4j_session.run(
-                    """
-                    MATCH (h:HLR {sqlite_id: $hid})
-                    MATCH (l:LLR {sqlite_id: $lid})
-                    MERGE (h)-[:DECOMPOSES_INTO]->(l)
-                    """,
-                    {"hid": hlr.id, "lid": llr.id},
+        # Persist verification stubs in SQLite
+        if sql_session is not None:
+            for v in llr_data.verifications:
+                vm = VerificationMethod(
+                    low_level_requirement_id=llr.id,
+                    method=v.method,
+                    test_name=v.test_name,
+                    description=v.description,
                 )
-        except Exception:
-            log.warning("Neo4j LLR stub sync failed for LLR %d", llr.id, exc_info=True)
+                sql_session.add(vm)
+                result.verifications_created += 1
 
-        for v in llr_data.verifications:
-            vm = VerificationMethod(
-                low_level_requirement=llr,
-                method=v.method,
-                test_name=v.test_name,
-                description=v.description,
-            )
-            session.add(vm)
-            result.verifications_created += 1
-
-    session.flush()
+    if sql_session is not None:
+        sql_session.flush()
 
     return result
 
@@ -610,19 +592,17 @@ def persist_design(
         result.triples_created += 1
 
     # --- Requirement links (explicit from LLM) ---
-    if design.requirement_links and sql_session is not None:
+    if design.requirement_links:
+        req_repo = RequirementRepository(neo4j_session)
         for link in design.requirement_links:
             if link.requirement_type == "hlr":
-                design_qn = None
-                # Get the subject or object qualified_name from the triple
                 if 0 <= link.triple_index < len(design.triples):
                     triple_data = design.triples[link.triple_index]
-                    # Link both subject and object of the triple to the HLR
                     for qn in [triple_data.subject_qualified_name, triple_data.object_qualified_name]:
                         if qn in qname_to_node:
                             try:
-                                repo.trace_design_to_hlr(
-                                    hlr_sqlite_id=link.requirement_id,
+                                req_repo.trace_to_design(
+                                    hlr_id=link.requirement_id,
                                     design_qualified_name=qn,
                                 )
                                 result.node_links_applied += 1
@@ -636,14 +616,13 @@ def persist_design(
                                 result.node_links_skipped += 1
                 result.links_applied += 1
             elif link.requirement_type == "llr":
-                design_qn = None
                 if 0 <= link.triple_index < len(design.triples):
                     triple_data = design.triples[link.triple_index]
                     for qn in [triple_data.subject_qualified_name, triple_data.object_qualified_name]:
                         if qn in qname_to_node:
                             try:
-                                repo.trace_design_to_llr(
-                                    llr_sqlite_id=link.requirement_id,
+                                req_repo.trace_to_design(
+                                    llr_id=link.requirement_id,
                                     design_qualified_name=qn,
                                 )
                                 result.node_links_applied += 1
@@ -667,11 +646,15 @@ def persist_design(
 
 def persist_verification(
     session: Session,
-    llr: LowLevelRequirement,
+    llr_id: int,
     verifications: list[VerificationSchema],
     ontology_nodes: list[dict] | None = None,
 ) -> VerificationResult:
     """Replace an LLR's verification methods with fleshed-out versions.
+
+    Takes llr_id (Neo4j LLR node id) instead of SQLAlchemy object.
+    VerificationMethod.low_level_requirement_id is a plain integer
+    reference, not a FK.
 
     NOTE: This still uses SQLAlchemy. Phase 3 will move to Neo4j.
     """
@@ -701,14 +684,14 @@ def persist_verification(
             session.add(vc)
             result.conditions_created += 1
 
-    # Delete existing verifications
-    for vm in list(llr.verifications):
+    # Delete existing verifications for this LLR
+    for vm in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr_id).all():
         session.delete(vm)
     session.flush()
 
     for v in verifications:
         vm = VerificationMethod(
-            low_level_requirement=llr,
+            low_level_requirement_id=llr_id,
             method=v.method,
             test_name=v.test_name,
             description=v.description,
