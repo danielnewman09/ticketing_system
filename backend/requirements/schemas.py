@@ -2,19 +2,27 @@
 Pydantic schemas for requirements models.
 
 These are the single source of truth for the structured data shapes used by
-both the ORM models and the AI agent.
+the AI agent and the persistence layer.
+
+Phase 3: VERIFICATION_METHODS is defined here (not imported from the
+deleted SQLAlchemy model). The schema now includes qualified_name reference
+fields (subject_qualified_name, object_qualified_name, caller_qualified_name,
+callee_qualified_name) alongside legacy member_qualified_name. The repository
+uses subject_qualified_name/caller_qualified_name when present, falling back
+to member_qualified_name for backward compatibility.
 """
 
 from typing import Literal
 
 from pydantic import BaseModel
 
-from backend.db.models.verification import VERIFICATION_METHODS
+# Self-contained list — no longer imported from the deleted SQLAlchemy model.
+VERIFICATION_METHODS = ["automated", "review", "inspection"]
 
 VerificationMethodType = Literal["automated", "review", "inspection"]
 
-# Runtime check: if someone adds a method to the model but forgets
-# to update the Literal above, this will fail at import time.
+# Runtime check: if someone adds a method to this list but forgets
+# to update the Literal above (or vice versa), this will fail at import time.
 _literal_methods = set(VerificationMethodType.__args__)
 _model_methods = set(VERIFICATION_METHODS)
 if _literal_methods != _model_methods:
@@ -25,14 +33,18 @@ if _literal_methods != _model_methods:
 
 
 class VerificationConditionSchema(BaseModel):
-    member_qualified_name: str
+    member_qualified_name: str  # legacy — used as fallback for subject_qualified_name
     operator: str = "=="
     expected_value: str
+    subject_qualified_name: str = ""  # Phase 3: references :Design node via LEFT_OPERAND edge
+    object_qualified_name: str = ""  # Phase 3: optional RIGHT_OPERAND edge reference
 
 
 class VerificationActionSchema(BaseModel):
     description: str
-    member_qualified_name: str = ""
+    member_qualified_name: str = ""  # legacy — used as fallback for callee_qualified_name
+    caller_qualified_name: str = ""  # Phase 3: :CALLER edge target (object performing action)
+    callee_qualified_name: str = ""  # Phase 3: :CALLEE edge target (method being invoked)
 
 
 class VerificationSchema(BaseModel):

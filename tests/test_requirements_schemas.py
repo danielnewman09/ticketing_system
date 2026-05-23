@@ -280,7 +280,7 @@ class TestDecomposedRequirementSchema:
 class TestVerificationMethodTypeLiteral:
     def test_literal_matches_model_constant(self):
         """VerificationMethodType must stay in sync with VERIFICATION_METHODS."""
-        from backend.db.models.verification import VERIFICATION_METHODS
+        from backend.requirements.schemas import VERIFICATION_METHODS
 
         literal_methods = set(VerificationMethodType.__args__)
         model_methods = set(VERIFICATION_METHODS)
@@ -293,3 +293,61 @@ class TestVerificationMethodTypeLiteral:
         for method in VerificationMethodType.__args__:
             vs = VerificationSchema(method=method)
             assert vs.method == method
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Qualified name reference fields
+# ---------------------------------------------------------------------------
+
+
+class TestVerificationConditionSchemaQualifiedNames:
+    def test_subject_qualified_name(self):
+        vc = VerificationConditionSchema(
+            member_qualified_name="Calculator::result",
+            expected_value="5",
+            subject_qualified_name="Calculator::result",
+        )
+        assert vc.subject_qualified_name == "Calculator::result"
+        assert vc.member_qualified_name == "Calculator::result"
+
+    def test_object_qualified_name(self):
+        vc = VerificationConditionSchema(
+            member_qualified_name="Calculator::result",
+            operator="==",
+            expected_value="ZERO",
+            subject_qualified_name="Calculator::result",
+            object_qualified_name="Calculator::ZERO",
+        )
+        assert vc.object_qualified_name == "Calculator::ZERO"
+
+    def test_qualified_names_default_empty(self):
+        vc = VerificationConditionSchema(
+            member_qualified_name="Calc::x",
+            expected_value="0",
+        )
+        assert vc.subject_qualified_name == ""
+        assert vc.object_qualified_name == ""
+
+
+class TestVerificationActionSchemaQualifiedNames:
+    def test_caller_and_callee(self):
+        va = VerificationActionSchema(
+            description="Calculator calls add(2,3)",
+            caller_qualified_name="Calculator",
+            callee_qualified_name="Calculator::add",
+        )
+        assert va.caller_qualified_name == "Calculator"
+        assert va.callee_qualified_name == "Calculator::add"
+
+    def test_qualified_names_default_empty(self):
+        va = VerificationActionSchema(description="Push button")
+        assert va.caller_qualified_name == ""
+        assert va.callee_qualified_name == ""
+
+    def test_legacy_member_qualified_name_still_works(self):
+        va = VerificationActionSchema(
+            description="Invoke method",
+            member_qualified_name="Calc::add",
+        )
+        assert va.member_qualified_name == "Calc::add"
+        assert va.callee_qualified_name == ""
