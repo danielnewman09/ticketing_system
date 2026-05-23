@@ -408,21 +408,43 @@ def step_summary():
     print("SUMMARY")
     print("=" * 60)
 
+    from backend.db.neo4j.connection import Neo4jConnection
+    neo4j = Neo4jConnection()
+
     with get_session() as session:
         print(f"  HLRs:             {session.query(HighLevelRequirement).count()}")
         print(f"  LLRs:             {session.query(LowLevelRequirement).count()}")
         print(f"  Verifications:    {session.query(VerificationMethod).count()}")
         print(f"  Conditions:       {session.query(VerificationCondition).count()}")
         print(f"  Actions:          {session.query(VerificationAction).count()}")
-        print(f"  Ontology nodes:   {session.query(OntologyNode).count()}")
-        print(f"  Ontology triples: {session.query(OntologyTriple).count()}")
 
-        for hlr in session.query(HighLevelRequirement).all():
-            print(f"\n  HLR {hlr.id}: {hlr.description[:60]}")
-            for triple in hlr.triples:
-                print(f"    -> {triple.subject.name} --{triple.predicate}--> {triple.object.name}")
-            if not hlr.triples:
-                print(f"    (no triples linked)")
+        # Design graph stats come from Neo4j now
+        with neo4j.session() as neo_sess:
+            node_count = neo_sess.run(
+                "MATCH (d:Design) RETURN count(d) AS cnt"
+            ).single()["cnt"]
+            triple_count = neo_sess.run(
+                "MATCH (d:Design)-[r]->(:Design) RETURN count(r) AS cnt"
+            ).single()["cnt"]
+            print(f"  Design nodes:    {node_count}")
+            print(f"  Design triples:   {triple_count}")
+
+            # Show HLR → Design traces from Neo4j
+            hlrs = session.query(HighLevelRequirement).all()
+            for hlr in hlrs:
+                print(f"\n  HLR {hlr.id}: {hlr.description[:60]}")
+                traces = neo_sess.run(
+                    """
+                    MATCH (h:HLR {sqlite_id: $hid})-[:TRACES_TO]->(d:Design)
+                    RETURN d.qualified_name AS qn
+                    """,
+                    {"hid": hlr.id},
+                ).data()
+                if traces:
+                    for t in traces:
+                        print(f"    -> {t['qn']}")
+                else:
+                    print(f"    (no design traces)")
 
     print("\n" + "=" * 60)
     print("Explore in the dashboard:")

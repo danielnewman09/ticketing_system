@@ -66,14 +66,33 @@ def fetch_llr_detail(llr_id):
 
         components = [c.name for c in llr.components]
 
-        triples = [
-            {
-                "subject": t.subject.name,
-                "predicate": t.predicate.name,
-                "object": t.object.name,
-            }
-            for t in llr.triples
-        ]
+        # Triples from Neo4j TRACES_TO edges
+        triples = []
+        try:
+            from services.dependencies import get_neo4j
+            with get_neo4j().session() as ns:
+                result = ns.run(
+                    """
+                    MATCH (l:LLR {sqlite_id: $lid})-[:TRACES_TO]->(d:Design)
+                    OPTIONAL MATCH (d)-[r]->(d2:Design)
+                    WHERE type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
+                    RETURN d.qualified_name AS subj, type(r) AS pred, d2.qualified_name AS obj
+                    """,
+                    {"lid": llr_id},
+                )
+                seen = set()
+                for rec in result:
+                    key = (rec["subj"], rec["pred"], rec["obj"])
+                    if key not in seen and all(key):
+                        seen.add(key)
+                        triples.append({
+                            "subject": rec["subj"],
+                            "predicate": rec["pred"],
+                            "object": rec["obj"],
+                        })
+        except Exception:
+            pass  # Triples are best-effort
+
 
         return {
             "id": llr.id,
