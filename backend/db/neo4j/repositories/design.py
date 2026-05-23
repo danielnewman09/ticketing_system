@@ -49,7 +49,7 @@ class DesignRepository:
         kind_label = node.kind.capitalize() if node.kind else "Unknown"
 
         cypher = f"""
-        MERGE (d:Design {{qualified_name: $qn}})
+        MERGE (d:Design {{qualified_name: $qualified_name}})
         SET d:{kind_label},
             d.name = $name,
             d.kind = $kind,
