@@ -13,6 +13,31 @@ a detailed, structured verification procedure.
 
 {design_context}
 
+<FORMAT-CONTRACT name="qualified-names">
+All `subject_qualified_name`, `object_qualified_name`, `callee_qualified_name`,
+and `caller_qualified_name` fields MUST use qualified names that exactly match
+the design context section above.
+
+Pattern: <namespace>::<ClassName>::<memberName>
+
+✓ calculation_engine::CalculatorEngine::validateInput
+✓ user_interface::CalculatorWindow::equalsButton
+✗ user_interface::CalculatorWindow.equalsButton
+  → Dot separator — use :: everywhere
+✗ calculation_engine::CalculatorEngine::last_result.is_success
+  → Nested attribute path — reference the outer attribute directly
+    (calculation_engine::CalculatorEngine::last_result)
+    and the inner class member separately
+    (calculation_engine::CalculatorResult::is_success)
+✗ result_of_first_call
+  → Test variable, not a design element
+✗ test_validate_input_syntax
+  → Test function, not a design element
+
+If no exact match exists in the design context, do NOT fabricate a name.
+Omit the reference field or use expected_value alone.
+</FORMAT-CONTRACT>
+
 ## Instructions
 
 For each verification method on the LLR, flesh out:
@@ -35,7 +60,9 @@ For each verification method on the LLR, flesh out:
 Guidelines:
 - Reference ONLY real qualified names from the design context above
 - Qualified names follow C++ convention: ClassName::memberName
-- Keep conditions specific and testable — avoid vague assertions
+- Keep conditions specific and testable. Every qualified name you write MUST
+  exactly match a name shown in the design context section. If no exact match
+  exists, do not fabricate one — omit the reference field or use expected_value alone.
 - Actions should be concrete, ordered steps
 - For "review" or "inspection" methods, conditions/actions can be lighter
 - Preserve the existing method, test_name, and description from the input
