@@ -16,6 +16,7 @@ checks references against :Design nodes in Neo4j.
 
 import json
 import logging
+import os
 
 from llm_caller import call_tool
 from backend.requirements.schemas import VerificationSchema
@@ -130,6 +131,24 @@ def verify(
                 "verify: LLM call failed on attempt %d/%d for LLR %s: %s: %s",
                 attempt + 1, MAX_TOOL_RETRIES + 1, llr.get('id', '?'), type(e).__name__, e,
             )
+            # Write failure info to prompt log for debugging
+            if prompt_log_file:
+                try:
+                    base, ext = os.path.splitext(prompt_log_file)
+                    fail_path = f"{base}_attempt{attempt + 1}_failed.txt"
+                    os.makedirs(os.path.dirname(fail_path), exist_ok=True)
+                    with open(fail_path, "w") as f:
+                        f.write(f"verify attempt {attempt + 1}/{MAX_TOOL_RETRIES + 1} FAILED\n")
+                        f.write(f"Error: {type(e).__name__}: {e}\n\n")
+                        f.write(f"Messages so far ({len(messages)} turns):\n")
+                        for i, msg in enumerate(messages):
+                            f.write(f"\n--- Message {i + 1} ({msg.get('role', 'unknown')}) ---\n")
+                            f.write(str(msg.get('content', ''))[:5000])
+                            f.write("\n")
+                        f.write("\n")
+                        f.write(f"Retrying with recovery message...\n")
+                except Exception:
+                    pass  # Best-effort logging
             if attempt < MAX_TOOL_RETRIES:
                 messages.append({
                     "role": "user",

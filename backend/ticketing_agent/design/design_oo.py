@@ -13,6 +13,7 @@ dependency_classes and as_built_classes.
 
 import json
 import logging
+import os
 
 from llm_caller import call_tool
 from backend.codebase.schemas import OODesignSchema
@@ -230,9 +231,27 @@ def design_oo(
         except Exception as e:
             # LLM returned an error — log it and retry if possible
             log.error(
-                "design_oo: LLM call failed on attempt %d/%d: %s: %s",
-                attempt + 1, MAX_TOOL_RETRIES + 1, type(e).__name__, e,
+                "design_oo: LLM call failed on attempt %d/%d for HLR %s: %s: %s",
+                attempt + 1, MAX_TOOL_RETRIES + 1, hlr.get('id', '?'), type(e).__name__, e,
             )
+            # Write failure info to prompt log for debugging
+            if prompt_log_file:
+                try:
+                    base, ext = os.path.splitext(prompt_log_file)
+                    fail_path = f"{base}_attempt{attempt + 1}_failed.txt"
+                    os.makedirs(os.path.dirname(fail_path), exist_ok=True)
+                    with open(fail_path, "w") as f:
+                        f.write(f"design_oo attempt {attempt + 1}/{MAX_TOOL_RETRIES + 1} FAILED\n")
+                        f.write(f"Error: {type(e).__name__}: {e}\n\n")
+                        f.write(f"Messages so far ({len(messages)} turns):\n")
+                        for i, msg in enumerate(messages):
+                            f.write(f"\n--- Message {i + 1} ({msg.get('role', 'unknown')}) ---\n")
+                            f.write(str(msg.get('content', ''))[:5000])
+                            f.write("\n")
+                        f.write("\n")
+                        f.write(f"Retrying with recovery message...\n")
+                except Exception:
+                    pass  # Best-effort logging
             if attempt < MAX_TOOL_RETRIES:
                 messages.append({
                     "role": "user",
