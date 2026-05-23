@@ -266,17 +266,43 @@ def step_verify():
         augment_design_for_unresolved,
     )
 
+    # Build ontology_nodes from both Neo4j (primary) and SQLAlchemy (bridge)
+    from services.dependencies import get_neo4j
+
     with get_session() as session:
         class_contexts = build_verification_context(session)
-        ontology_nodes = [
-            {
-                "qualified_name": n.qualified_name,
-                "pk": n.id,
-                "kind": n.kind,
-                "description": n.description,
-            }
-            for n in session.query(OntologyNode).all()
-        ]
+
+        # Design nodes are now in Neo4j; also include any SQLAlchemy bridge nodes
+        ontology_nodes = []
+        seen_qns: set[str] = set()
+        try:
+            with get_neo4j().session() as ns:
+                result = ns.run(
+                    "MATCH (d:Design) RETURN d.qualified_name AS qn, d.kind AS kind, d.name AS name, d.description AS desc"
+                )
+                for record in result:
+                    qn = record["qn"]
+                    if qn and qn not in seen_qns:
+                        seen_qns.add(qn)
+                        ontology_nodes.append({
+                            "qualified_name": qn,
+                            "pk": None,  # No SQLAlchemy pk for Neo4j nodes
+                            "kind": record["kind"],
+                            "description": record["desc"] or "",
+                        })
+        except Exception:
+            print("  WARNING: Could not fetch design nodes from Neo4j")
+
+        # Also add any SQLAlchemy bridge nodes (verification-related stubs)
+        for n in session.query(OntologyNode).all():
+            if n.qualified_name and n.qualified_name not in seen_qns:
+                seen_qns.add(n.qualified_name)
+                ontology_nodes.append({
+                    "qualified_name": n.qualified_name,
+                    "pk": n.id,
+                    "kind": n.kind,
+                    "description": n.description or "",
+                })
         llrs = session.query(LowLevelRequirement).all()
 
         if not llrs:
@@ -331,15 +357,35 @@ def step_verify():
                         f"    Created {augmented.nodes_created} missing design nodes, "
                         f"{augmented.triples_created} triples"
                     )
-                    ontology_nodes = [
-                        {
-                            "qualified_name": n.qualified_name,
-                            "pk": n.id,
-                            "kind": n.kind,
-                            "description": n.description,
-                        }
-                        for n in session.query(OntologyNode).all()
-                    ]
+                    # Refresh node list from both Neo4j and SQLAlchemy
+                    ontology_nodes = []
+                    seen_qns_refresh: set[str] = set()
+                    try:
+                        with get_neo4j().session() as ns:
+                            result = ns.run(
+                                "MATCH (d:Design) RETURN d.qualified_name AS qn, d.kind AS kind, d.name AS name, d.description AS desc"
+                            )
+                            for record in result:
+                                qn = record["qn"]
+                                if qn and qn not in seen_qns_refresh:
+                                    seen_qns_refresh.add(qn)
+                                    ontology_nodes.append({
+                                        "qualified_name": qn,
+                                        "pk": None,
+                                        "kind": record["kind"],
+                                        "description": record["desc"] or "",
+                                    })
+                    except Exception:
+                        pass
+                    for n in session.query(OntologyNode).all():
+                        if n.qualified_name and n.qualified_name not in seen_qns_refresh:
+                            seen_qns_refresh.add(n.qualified_name)
+                            ontology_nodes.append({
+                                "qualified_name": n.qualified_name,
+                                "pk": n.id,
+                                "kind": n.kind,
+                                "description": n.description or "",
+                            })
                     class_contexts = build_verification_context(session)
 
             for v in agent_result.verifications:

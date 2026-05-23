@@ -102,10 +102,6 @@ def run_pipeline(
     result = PipelineResult()
     log.info("Pipeline started: %s", initial_prompt[:100])
 
-    # Open Neo4j session for design persistence (Phase 4+)
-    from backend.db.neo4j.connection import get_standalone_session as get_neo4j_session
-    neo4j_sess = get_neo4j_session()
-
     # ------------------------------------------------------------------
     # Phase 1-2: Decompose -- existing agent
     # ------------------------------------------------------------------
@@ -147,10 +143,28 @@ def run_pipeline(
     )
 
     class_contexts = build_verification_context(session)
-    ontology_nodes_list = [
-        {"qualified_name": n.qualified_name, "pk": n.id, "kind": n.kind}
-        for n in session.query(OntologyNode).all()
-    ]
+
+    # Build node list from Neo4j (primary) + SQLAlchemy (bridge)
+    ontology_nodes_list = []
+    seen_qns: set = set()
+    try:
+        from backend.db.neo4j.connection import get_standalone_session as _get_n4j
+        with _get_n4j() as ns:
+            n4_result = ns.run(
+                "MATCH (d:Design) RETURN d.qualified_name AS qn, d.kind AS kind"
+            )
+            for rec in n4_result:
+                qn = rec["qn"]
+                if qn and qn not in seen_qns:
+                    seen_qns.add(qn)
+                    ontology_nodes_list.append({"qualified_name": qn, "pk": None, "kind": rec["kind"]})
+    except Exception:
+        log.warning("Failed to fetch design nodes from Neo4j for verification", exc_info=True)
+
+    for n in session.query(OntologyNode).all():
+        if n.qualified_name and n.qualified_name not in seen_qns:
+            seen_qns.add(n.qualified_name)
+            ontology_nodes_list.append({"qualified_name": n.qualified_name, "pk": None, "kind": n.kind})
 
     for llr in session.query(LowLevelRequirement).all():
         existing_verifs = [
@@ -236,12 +250,15 @@ def run_pipeline(
                 }
             )
 
-        persist_result = persist_design(
-            ontology,
-            neo4j_session=neo4j_sess,
-            sql_session=session,
-            qname_to_node=qname_to_node,
-        )
+        # Persist design to Neo4j
+        from backend.db.neo4j.connection import get_standalone_session as _get_n4j_session
+        with _get_n4j_session() as neo4j_session:
+            persist_result = persist_design(
+                ontology,
+                neo4j_session=neo4j_session,
+                sql_session=session,
+                qname_to_node=qname_to_node,
+            )
         log.info(
             "  HLR %d: %d design nodes, %d triples",
             hlr.id,
