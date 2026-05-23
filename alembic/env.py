@@ -59,6 +59,7 @@ def run_migrations_offline() -> None:
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
+        render_as_batch=True,
         dialect_opts={"paramstyle": "named"},
         include_name=include_name,
         include_object=include_object,
@@ -79,6 +80,7 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
+            render_as_batch=True,
             target_metadata=target_metadata,
             include_name=include_name,
             include_object=include_object,
