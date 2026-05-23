@@ -79,20 +79,16 @@ if __name__ == "__main__":
     import os
     import sys
 
-    from backend.db import init_db, get_session
-    from backend.db.models import HighLevelRequirement, LowLevelRequirement
+    from backend.db import init_db
+    from backend.db.neo4j.repositories.requirement import RequirementRepository
+    from services.dependencies import get_neo4j
 
     init_db()
 
-    with get_session() as session:
-        hlrs = [
-            {"id": h.id, "description": h.description}
-            for h in session.query(HighLevelRequirement).all()
-        ]
-        llrs = [
-            {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
-            for l in session.query(LowLevelRequirement).all()
-        ]
+    with get_neo4j().session() as ns:
+        req_repo = RequirementRepository(ns)
+        hlrs = [{"id": h.id, "description": h.description} for h in req_repo.list_hlrs()]
+        llrs = [{"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id} for l in req_repo.list_llrs()]
 
     if not hlrs:
         print("No requirements found. Run the demo or create some first.")

@@ -15,10 +15,10 @@ from sqlalchemy.orm import Session
 from backend.db.models import (
     OntologyNode,
     OntologyTriple,
-    HighLevelRequirement,
-    LowLevelRequirement,
 )
 from backend.db.models.ontology import TYPE_KINDS, VALUE_KINDS
+from backend.db.neo4j.repositories.requirement import RequirementRepository
+from services.dependencies import get_neo4j
 
 # ---------------------------------------------------------------------------
 # Valid relationship rules
@@ -484,13 +484,12 @@ def _build_conflict_context(session: Session, proposed, existing_qname, existing
     triple_ids = {t.id for t in related_triples}
 
     hlr_context = []
-    for h in session.query(HighLevelRequirement).all():
-        if any(t.id in triple_ids for t in h.triples):
-            hlr_context.append(f"HLR {h.id}: {h.description}")
-
     llr_context = []
-    for l in session.query(LowLevelRequirement).all():
-        if any(t.id in triple_ids for t in l.triples):
+    with get_neo4j().session() as ns:
+        req_repo = RequirementRepository(ns)
+        for h in req_repo.list_hlrs():
+            hlr_context.append(f"HLR {h.id}: {h.description}")
+        for l in req_repo.list_llrs():
             llr_context.append(f"LLR {l.id} (HLR {l.high_level_requirement_id}): {l.description}")
 
     return {

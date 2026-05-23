@@ -109,8 +109,10 @@ if __name__ == "__main__":
     import sys
 
     from backend.db import init_db, get_session
-    from backend.db.models import LowLevelRequirement
+    from backend.db.models import VerificationMethod
+    from backend.db.neo4j.repositories.requirement import RequirementRepository
     from backend.requirements.services.persistence import build_verification_context
+    from services.dependencies import get_neo4j
 
     init_db()
 
@@ -119,13 +121,18 @@ if __name__ == "__main__":
         print("Usage: python -m agents.verify_llr <llr_id>")
         sys.exit(1)
 
-    with get_session() as session:
-        llr = session.query(LowLevelRequirement).filter_by(id=llr_id).first()
+    with get_neo4j().session() as ns:
+        req_repo = RequirementRepository(ns)
+        llr = req_repo.get_llr(llr_id)
+        if not llr:
+            print(f"LLR {llr_id} not found")
+            sys.exit(1)
         llr_dict = {"id": llr.id, "description": llr.description}
 
+    with get_session() as session:
         existing = [
             {"method": v.method, "test_name": v.test_name, "description": v.description}
-            for v in llr.verifications
+            for v in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr_id).all()
         ]
 
         class_contexts = build_verification_context(session)

@@ -18,6 +18,19 @@ if TYPE_CHECKING:
 log = logging.getLogger("pipeline.orchestrator")
 
 
+def _get_component_name(component_id: int | None) -> str | None:
+    """Look up a component name by ID from SQLite."""
+    if component_id is None:
+        return None
+    try:
+        from backend.db.models import Component
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            return comp.name if comp else None
+    except Exception:
+        return None
+
+
 @dataclass
 class PipelineResult:
     """Aggregated results from a full pipeline run."""
@@ -92,12 +105,12 @@ def run_pipeline(
     """
     from backend.db.models import (
         Component,
-        HighLevelRequirement,
-        LowLevelRequirement,
         OntologyNode,
         VerificationMethod,
     )
     from backend.db.models.tasks import Task
+    from backend.db.neo4j.repositories.requirement import RequirementRepository
+    from services.dependencies import get_neo4j
 
     result = PipelineResult()
     log.info("Pipeline started: %s", initial_prompt[:100])
@@ -109,27 +122,33 @@ def run_pipeline(
     from backend.ticketing_agent.decompose.decompose_hlr import decompose
     from backend.requirements.services.persistence import persist_decomposition
 
-    hlrs = session.query(HighLevelRequirement).all()
-    if not hlrs:
+    with get_neo4j().session() as ns:
+        req_repo = RequirementRepository(ns)
+        hlrs_neo4j = req_repo.list_hlrs()
+        all_llrs_neo4j = req_repo.list_llrs()
+
+    if not hlrs_neo4j:
         log.warning("No HLRs found -- nothing to decompose.")
         return result
 
-    for hlr in hlrs:
-        llrs_existing = hlr.low_level_requirements
-        if llrs_existing:
-            result.llrs_created += len(llrs_existing)
+    for hlr in hlrs_neo4j:
+        llrs_for_hlr = req_repo.list_llrs(hlr_id=hlr.id)
+        if llrs_for_hlr:
+            result.llrs_created += len(llrs_for_hlr)
             continue
 
         decomp_result = decompose(hlr.description, model=model)
-        persisted = persist_decomposition(
-            session,
-            hlr,
-            decomp_result.low_level_requirements,
-        )
+        with get_neo4j().session() as ns:
+            persisted = persist_decomposition(
+                ns,
+                hlr.id,
+                decomp_result.low_level_requirements,
+                sql_session=session,
+            )
         result.llrs_created += persisted.llrs_created
 
-    result.hlrs_created = session.query(HighLevelRequirement).count()
-    total_llrs = session.query(LowLevelRequirement).count()
+    result.hlrs_created = len(hlrs_neo4j)
+    total_llrs = len(all_llrs_neo4j) if 'all_llrs_neo4j' in dir() else 0
     log.info("  %d HLRs, %d LLRs", result.hlrs_created, total_llrs)
 
     # ------------------------------------------------------------------
@@ -166,15 +185,11 @@ def run_pipeline(
             seen_qns.add(n.qualified_name)
             ontology_nodes_list.append({"qualified_name": n.qualified_name, "pk": None, "kind": n.kind})
 
-    for llr in session.query(LowLevelRequirement).all():
-        existing_verifs = [
-            {
-                "method": v.method,
-                "test_name": v.test_name,
-                "description": v.description,
-            }
-            for v in llr.verifications
-        ]
+    for llr in all_llrs_neo4j:
+        existing_verifs = []
+        with get_session() as vs:
+            for v in vs.query(VerificationMethod).filter_by(low_level_requirement_id=llr.id).all():
+                existing_verifs.append({"method": v.method, "test_name": v.test_name, "description": v.description})
         if existing_verifs:
             result.verifications_created += len(existing_verifs)
             continue
@@ -188,7 +203,7 @@ def run_pipeline(
         )
         persist_result = persist_verification(
             session,
-            llr,
+            llr.id,
             vv_result.verifications,
             ontology_nodes_list,
         )
@@ -205,21 +220,27 @@ def run_pipeline(
     qname_to_node: dict[str, DesignNode] = {}
     all_oo_classes: list[dict] = []
 
-    for hlr in hlrs:
+    for hlr in hlrs_neo4j:
         hlr_dict = {
             "id": hlr.id,
             "description": hlr.description,
-            "component_name": hlr.component.name if hlr.component else "",
+            "component_name": _get_component_name(hlr.component_id) if hlr.component_id else "",
         }
-        llrs_for_hlr = [
+        llrs_for_hlr = req_repo.list_llrs(hlr_id=hlr.id)
+        llrs_for_hlr_dicts = [
             {
                 "id": l.id,
                 "description": l.description,
                 "hlr_id": l.high_level_requirement_id,
             }
-            for l in hlr.low_level_requirements
+            for l in llrs_for_hlr
         ]
-        comp_ns = hlr.component.namespace if hlr.component else ""
+        comp_ns = ""
+        if hlr.component_id:
+            with get_session() as cs:
+                comp = cs.query(Component).filter_by(id=hlr.component_id).first()
+                if comp:
+                    comp_ns = comp.namespace or ""
 
         oo, ontology = design_hlr(
             hlr=hlr_dict,
@@ -277,25 +298,27 @@ def run_pipeline(
 
     all_verifications = _get_verification_dicts(session)
 
-    for hlr in hlrs:
+    for hlr in hlrs_neo4j:
         hlr_dict = {
             "id": hlr.id,
             "description": hlr.description,
-            "component_name": hlr.component.name if hlr.component else "",
+            "component_name": _get_component_name(hlr.component_id) if hlr.component_id else "",
         }
-        llrs_for_hlr = [
+        llrs_for_hlr = req_repo.list_llrs(hlr_id=hlr.id)
+        llrs_for_hlr_dicts = [
             {
                 "id": l.id,
                 "description": l.description,
                 "hlr_id": l.high_level_requirement_id,
             }
-            for l in hlr.low_level_requirements
+            for l in llrs_for_hlr
         ]
 
+        comp_name = _get_component_name(hlr.component_id) or ""
         hlr_classes = [
             c
             for c in all_oo_classes
-            if c.get("module") == (hlr.component.name if hlr.component else "")
+            if c.get("module") == comp_name
         ] or all_oo_classes[
             :3
         ]  # fallback
@@ -336,8 +359,8 @@ def run_pipeline(
     log.info("Phase 7: Writing tests...")
     from backend.ticketing_agent.write_tests import write_tests
 
-    llrs = session.query(LowLevelRequirement).all()
-    for llr in llrs:
+    llrs_neo4j_2 = all_llrs_neo4j
+    for llr in llrs_neo4j_2:
         llr_verifs = [v for v in all_verifications if v.get("llr_id") == llr.id]
         if not llr_verifs:
             continue

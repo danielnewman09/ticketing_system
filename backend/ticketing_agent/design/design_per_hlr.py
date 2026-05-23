@@ -18,6 +18,20 @@ from backend.ticketing_agent.design.order_hlrs import order_hlrs
 log = logging.getLogger("agents.design")
 
 
+def _get_comp_ns(component_id: int | None) -> str:
+    """Look up a component namespace by ID from SQLite."""
+    if component_id is None:
+        return ""
+    try:
+        from backend.db import get_session
+        from backend.db.models import Component
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            return comp.namespace if comp and comp.namespace else ""
+    except Exception:
+        return ""
+
+
 def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
     """Extract class summaries from an OO design for the existing_classes prompt.
 
@@ -294,47 +308,59 @@ def design_and_persist_hlr(
     Returns dict with nodes_created, triples_created, links_applied.
     """
     from backend.db import get_session
-    from backend.db.models import HighLevelRequirement
+    from backend.db.models import Component
+    from backend.db.neo4j.repositories.requirement import RequirementRepository
     from backend.requirements.services.persistence import persist_design
+    from services.dependencies import get_neo4j
 
-    # --- Load data from DB ---
-    with get_session() as session:
-        hlr_obj = session.query(HighLevelRequirement).filter_by(id=hlr_id).first()
+    # --- Load data from Neo4j ---
+    with get_neo4j().session() as ns:
+        req_repo = RequirementRepository(ns)
+        hlr_obj = req_repo.get_hlr(hlr_id)
         if not hlr_obj:
             raise ValueError(f"HLR {hlr_id} not found")
-        if not hlr_obj.low_level_requirements:
+        llrs_for_hlr = req_repo.list_llrs(hlr_id=hlr_id)
+        if not llrs_for_hlr:
             raise ValueError(f"HLR {hlr_id} has no LLRs. Decompose it first.")
+        all_hlrs_neo4j = req_repo.list_hlrs()
 
-        hlr_dict = {
-            "id": hlr_obj.id,
-            "description": hlr_obj.description,
-            "component_id": hlr_obj.component_id,
-            "component_name": hlr_obj.component.name if hlr_obj.component else None,
-            "component_namespace": hlr_obj.component.namespace if hlr_obj.component else "",
+    component_name = None
+    component_namespace = ""
+    if hlr_obj.component_id:
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=hlr_obj.component_id).first()
+            if comp:
+                component_name = comp.name
+                component_namespace = comp.namespace or ""
+
+    hlr_dict = {
+        "id": hlr_obj.id,
+        "description": hlr_obj.description,
+        "component_id": hlr_obj.component_id,
+        "component_name": component_name,
+        "component_namespace": component_namespace,
+    }
+    llr_dicts = [
+        {"id": l.id, "description": l.description, "hlr_id": hlr_obj.id}
+        for l in llrs_for_hlr
+    ]
+
+    other_hlr_summaries = [
+        {"id": h.id, "description": h.description, "status": "unknown"}
+        for h in all_hlrs_neo4j
+        if h.id != hlr_id
+    ]
+
+    sibling_namespaces = list(
+        {
+            _get_comp_ns(h.component_id)
+            for h in all_hlrs_neo4j
+            if h.id != hlr_id and h.component_id
         }
-        llr_dicts = [
-            {"id": l.id, "description": l.description, "hlr_id": hlr_obj.id}
-            for l in hlr_obj.low_level_requirements
-        ]
+    )
 
-        all_hlrs = session.query(HighLevelRequirement).all()
-        other_hlr_summaries = [
-            {"id": h.id, "description": h.description, "status": "unknown"}
-            for h in all_hlrs
-            if h.id != hlr_id
-        ]
-
-        component_namespace = hlr_dict["component_namespace"]
-        sibling_namespaces = list(
-            {
-                h.component.namespace
-                for h in all_hlrs
-                if h.id != hlr_id and h.component and h.component.namespace
-            }
-        )
-
-        dep_ctx = hlr_obj.dependency_context
-        dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
+    dep_ctx = hlr_obj.dependency_context
+    dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
 
     # --- Dependency graph toolset ---
     dep_toolset = None
