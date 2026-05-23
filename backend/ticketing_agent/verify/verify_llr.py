@@ -15,6 +15,7 @@ checks references against :Design nodes in Neo4j.
 """
 
 import json
+import logging
 
 from llm_caller import call_tool
 from backend.requirements.schemas import VerificationSchema
@@ -24,6 +25,27 @@ from backend.ticketing_agent.verify.verify_llr_prompt import (
     TOOL_DEFINITION,
     format_structured_context,
 )
+
+log = logging.getLogger("agents.verify")
+
+MAX_TOOL_RETRIES = 2
+
+
+def _format_verification_validation_errors(unresolved: list[str]) -> str:
+    """Format unresolved qualified name errors into a retry message.
+
+    Includes formatting guidance so the LLM sees the syntax rules again.
+    """
+    issue_lines = "\n".join(f'{i+1}. "{qn}"' for i, qn in enumerate(unresolved))
+    return (
+        "Your previous output referenced qualified names that do not exist "
+        "in the design context:\n\n"
+        f"<issues>\n{issue_lines}\n</issues>\n\n"
+        "Please correct these issues by referencing ONLY names that appear "
+        "in the design context section above. Use :: separators (not dots). "
+        "Do not fabricate test-local variable names.\n\n"
+        "Respond again with the corrected verifications."
+    )
 
 
 class VerifyResult:
@@ -86,27 +108,53 @@ def verify(
         f"Existing verification stubs:\n{verifications_text}"
     )
 
-    result = call_tool(
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-        tools=[TOOL_DEFINITION],
-        tool_name="produce_verifications",
-        model=model,
-        prompt_log_file=prompt_log_file,
-    )
+    messages = [{"role": "user", "content": user_message}]
 
-    verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]
-
-    # Validate references against :Design nodes in Neo4j
+    verifications = []
     resolved = []
     unresolved = []
-    if neo4j_session is not None:
-        from backend.db.neo4j.repositories.verification import VerificationRepository
 
-        qnames = _collect_qualified_names(verifications)
-        if qnames:
-            repo = VerificationRepository(neo4j_session)
-            resolved, unresolved = repo.validate_references(qnames)
+    for attempt in range(MAX_TOOL_RETRIES + 1):
+        result = call_tool(
+            system=system_prompt,
+            messages=messages,
+            tools=[TOOL_DEFINITION],
+            tool_name="produce_verifications",
+            model=model,
+            prompt_log_file=prompt_log_file if attempt == 0 else "",
+        )
+
+        verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]
+
+        # Validate references against :Design nodes in Neo4j
+        if neo4j_session is not None:
+            from backend.db.neo4j.repositories.verification import VerificationRepository
+
+            qnames = _collect_qualified_names(verifications)
+            if qnames:
+                repo = VerificationRepository(neo4j_session)
+                resolved, unresolved = repo.validate_references(qnames)
+            else:
+                unresolved = []
+
+        if not unresolved:
+            break  # All references valid, proceed
+
+        if attempt < MAX_TOOL_RETRIES:
+            log.warning(
+                "verify: %d unresolved references on attempt %d/%d: %s",
+                len(unresolved), attempt + 1, MAX_TOOL_RETRIES + 1, unresolved,
+            )
+            error_msg = _format_verification_validation_errors(unresolved)
+            messages.append({"role": "assistant", "content": json.dumps(result)})
+            messages.append({"role": "user", "content": error_msg})
+            continue
+
+        # Final attempt still has unresolved — log and proceed
+        log.warning(
+            "verify: %d unresolved references after %d attempts: %s",
+            len(unresolved), MAX_TOOL_RETRIES + 1, unresolved,
+        )
 
     return VerifyResult(verifications=verifications, resolved=resolved, unresolved=unresolved)
 
