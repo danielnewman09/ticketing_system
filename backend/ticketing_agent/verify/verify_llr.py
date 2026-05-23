@@ -115,14 +115,34 @@ def verify(
     unresolved = []
 
     for attempt in range(MAX_TOOL_RETRIES + 1):
-        result = call_tool(
-            system=system_prompt,
-            messages=messages,
-            tools=[TOOL_DEFINITION],
-            tool_name="produce_verifications",
-            model=model,
-            prompt_log_file=prompt_log_file if attempt == 0 else "",
-        )
+        try:
+            result = call_tool(
+                system=system_prompt,
+                messages=messages,
+                tools=[TOOL_DEFINITION],
+                tool_name="produce_verifications",
+                model=model,
+                prompt_log_file=prompt_log_file if attempt == 0 else "",
+            )
+        except (json.JSONDecodeError, ValueError) as e:
+            # LLM returned malformed JSON — log it and retry
+            log.error(
+                "verify: LLM returned malformed response on attempt %d/%d for LLR %s: %s",
+                attempt + 1, MAX_TOOL_RETRIES + 1, llr.get('id', '?'), e,
+            )
+            if attempt < MAX_TOOL_RETRIES:
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Your previous response was not valid JSON. "
+                        "Please respond again with a valid tool call. "
+                        "Make sure the produce_verifications tool call contains "
+                        "properly formatted JSON with all required fields."
+                    ),
+                })
+                continue
+            # Final attempt failed with parse error — re-raise
+            raise
 
         verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]
 
