@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 """Import JSON fixtures into a fresh database, recreating the full state.
 
+Phase 2 note: HLR/LLR data lives in Neo4j, not SQLite. The SQLite
+fixture loader skips HLR/LLR and their M2M relationships. HLR/LLR
+data should be created via the dashboard or scripts (02_setup_project.py).
+
 Usage:
     source .venv/bin/activate
     python scripts/import_fixtures.py
 
 This will:
   1. Wipe and recreate SQLite tables (via Alembic or init_db)
-  2. Load sqlite_fixtures.json into SQLite
+  2. Load sqlite_fixtures.json into SQLite (excluding HLR/LLR tables)
   3. Sync design nodes and triples to Neo4j
 
 WARNING: This replaces all data in both databases.
@@ -29,15 +33,13 @@ NEO4J_FIXTURE = os.path.join(FIXTURES_DIR, "neo4j_fixtures.json")
 
 
 def import_sqlite():
-    """Load SQLite fixture data into the database."""
+    """Load SQLite fixture data into the database (excluding HLR/LLR tables)."""
     from backend.db import init_db, get_session
     from backend.db.models import (
         Component,
         Dependency,
         DependencyManager,
-        HighLevelRequirement,
         Language,
-        LowLevelRequirement,
         OntologyNode,
         OntologyTriple,
         Predicate,
@@ -53,7 +55,7 @@ def import_sqlite():
     init_db()
 
     with get_session() as session:
-        # Delete in dependency order (reverse of creation)
+        # Delete in dependency order
         session.query(VerificationAction).delete()
         session.query(VerificationCondition).delete()
         session.query(VerificationMethod).delete()
@@ -62,8 +64,6 @@ def import_sqlite():
         session.query(DependencyManager).delete()
         session.query(OntologyTriple).delete()
         session.query(OntologyNode).delete()
-        session.query(LowLevelRequirement).delete()
-        session.query(HighLevelRequirement).delete()
         session.query(Component).delete()
         session.query(Language).delete()
         session.query(Predicate).delete()
@@ -111,30 +111,8 @@ def import_sqlite():
                 )
             )
 
-        # --- Requirements ---
-        for row in data.get("high_level_requirements", []):
-            hlr = HighLevelRequirement(
-                id=row["id"],
-                description=row["description"],
-                component_id=row.get("component_id"),
-            )
-            # dependency_context is stored separately
-            dep_ctx = next(
-                (d for d in data.get("hlr_dependency_contexts", []) if d["hlr_id"] == row["id"]),
-                None,
-            )
-            if dep_ctx:
-                hlr.dependency_context = dep_ctx["dependency_context"]
-            session.add(hlr)
-
-        for row in data.get("low_level_requirements", []):
-            session.add(LowLevelRequirement(
-                id=row["id"],
-                description=row["description"],
-                high_level_requirement_id=row["high_level_requirement_id"],
-            ))
-
-        session.flush()
+        # HLR/LLR data is now in Neo4j (Phase 2) — skip loading into SQLite
+        # HLR/LLR M2M relationships (hlr_triples, hlr_nodes, llr_nodes) also removed
 
         # --- Ontology ---
         for row in data.get("ontology_nodes", []):
@@ -174,26 +152,7 @@ def import_sqlite():
 
         session.flush()
 
-        # M2M relationships (now that nodes and triples have IDs)
-        for row in data.get("hlr_triples", []):
-            hlr = session.query(HighLevelRequirement).get(row["hlr_id"])
-            triple = session.query(OntologyTriple).get(row["triple_id"])
-            if hlr and triple:
-                hlr.triples.append(triple)
-
-        for row in data.get("hlr_nodes", []):
-            hlr = session.query(HighLevelRequirement).get(row["hlr_id"])
-            node = session.query(OntologyNode).get(row["node_id"])
-            if hlr and node:
-                hlr.nodes.append(node)
-
-        for row in data.get("llr_nodes", []):
-            llr = session.query(LowLevelRequirement).get(row["llr_id"])
-            node = session.query(OntologyNode).get(row["node_id"])
-            if llr and node:
-                llr.nodes.append(node)
-
-        # --- Verifications ---
+        # --- Verifications (low_level_requirement_id is now a plain integer, no FK) ---
         for row in data.get("verification_methods", []):
             session.add(VerificationMethod(
                 id=row["id"],
@@ -227,11 +186,12 @@ def import_sqlite():
                 ontology_node_id=row.get("ontology_node_id"),
             ))
 
-        # session commits on exit via context manager
-
+    hlr_count = len(data.get("high_level_requirements", []))
+    llr_count = len(data.get("low_level_requirements", []))
     print(f"SQLite fixture loaded from {SQLITE_FIXTURE}")
     print(f"  {len(data.get('ontology_nodes', []))} nodes, {len(data.get('ontology_triples', []))} triples")
-    print(f"  {len(data.get('high_level_requirements', []))} HLRs, {len(data.get('low_level_requirements', []))} LLRs")
+    if hlr_count or llr_count:
+        print(f"  Skipping {hlr_count} HLRs and {llr_count} LLRs (now in Neo4j, Phase 2)")
     print(f"  {len(data.get('verification_methods', []))} verifications")
 
 
@@ -296,8 +256,6 @@ def import_neo4j():
                 "is_abstract": node.get("is_abstract", False),
                 "is_final": node.get("is_final", False),
             }
-            # Can't parameterize labels in Cypher, so the kind label is interpolated
-            # This is safe because kind values come from a fixed enum
             session.run(cypher, params)
 
         # Create design→design relationships

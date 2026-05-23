@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-"""
-Benchmark: Simple Calculator Application.
+"""Benchmark: Simple Calculator Application.
 
-Seeds HLRs for a calculator application.
+Seeds HLRs for a calculator application in Neo4j.
 
 Usage:
     source .venv/bin/activate
@@ -19,7 +18,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from backend.db import init_db, get_session, get_or_create
-from backend.db.models import Component, HighLevelRequirement, Language
+from backend.db.models import Component, Language
+from backend.db.neo4j.connection import Neo4jConnection
+from backend.db.neo4j.repositories.requirement import RequirementRepository
+from services.dependencies import get_neo4j, init_neo4j, close_neo4j
 
 CALCULATOR_HLRS = [
     "The calculator application provides a GUI with a numeric display and buttons "
@@ -33,17 +35,13 @@ CALCULATOR_HLRS = [
 
 def main():
     init_db()
+    init_neo4j()
+
+    neo4j_conn = Neo4jConnection()
+    neo4j_conn.ensure_constraints()
+    neo4j_conn.ensure_requirement_constraints()
 
     with get_session() as session:
-        existing = (
-            session.query(HighLevelRequirement)
-            .filter(HighLevelRequirement.description.like("%calculator%"))
-            .count()
-        )
-        if existing >= len(CALCULATOR_HLRS):
-            print(f"Already seeded: {existing} calculator HLRs")
-            return
-
         lang, _ = get_or_create(session, Language, name="Python", defaults={"version": "3.11"})
         comp, created = get_or_create(
             session,
@@ -58,17 +56,23 @@ def main():
         if created:
             print(f"Created component: {comp.name}")
 
-        for desc in CALCULATOR_HLRS:
-            hlr = HighLevelRequirement(description=desc, component=comp)
-            session.add(hlr)
-            print(f"Added HLR: {desc[:80]}...")
+    with get_neo4j().session() as ns:
+        repo = RequirementRepository(ns)
 
-        count = (
-            session.query(HighLevelRequirement)
-            .filter(HighLevelRequirement.component == comp)
-            .count()
-        )
-        print(f"\nBenchmark seeded: {count} HLRs for component '{comp.name}'")
+        existing = len(repo.list_hlrs(component_id=None))
+        if existing >= len(CALCULATOR_HLRS):
+            print(f"Already seeded: {existing} HLRs")
+            close_neo4j()
+            return
+
+        for desc in CALCULATOR_HLRS:
+            hlr = repo.create_hlr(description=desc)
+            print(f"Added HLR {hlr.id}: {desc[:80]}...")
+
+        count = len(repo.list_hlrs())
+        print(f"\nBenchmark seeded: {count} HLRs")
+
+    close_neo4j()
 
 
 if __name__ == "__main__":

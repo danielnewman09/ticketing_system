@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-"""
-Generate tasks from HLRs through the design pipeline.
+"""Generate tasks from HLRs through the design pipeline.
 
-Reads existing HLRs + LLRs from the database, runs decomposition/design,
+Reads existing HLRs + LLRs from Neo4j, runs decomposition/design,
 then generates implementation tasks linked to design nodes and verifications.
 
 Usage:
@@ -19,10 +18,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from services.dependencies import init_neo4j, close_neo4j
+from services.dependencies import init_neo4j, close_neo4j, get_neo4j
 from backend.db import init_db, get_session
-from backend.db.models import HighLevelRequirement, LowLevelRequirement
-from backend.db.models.requirements import format_hlrs_for_prompt
+from backend.db.models import VerificationMethod
+from backend.db.neo4j.repositories.requirement import RequirementRepository
+from backend.requirements.formatting import format_hlrs_for_prompt
 from backend.ticketing_agent.decompose.decompose_hlr import decompose
 from backend.ticketing_agent.design.design_hlr import design_hlr
 from backend.ticketing_agent.generate_tasks import generate_tasks
@@ -30,6 +30,30 @@ from backend.pipeline.services import persist_tasks, build_qname_to_node
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
+
+
+def _get_component_name(component_id):
+    if component_id is None:
+        return ""
+    try:
+        from backend.db.models import Component
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            return comp.name if comp else ""
+    except Exception:
+        return ""
+
+
+def _get_component_namespace(component_id):
+    if component_id is None:
+        return ""
+    try:
+        from backend.db.models import Component
+        with get_session() as session:
+            comp = session.query(Component).filter_by(id=component_id).first()
+            return comp.namespace if comp and comp.namespace else ""
+    except Exception:
+        return ""
 
 
 def main():
@@ -43,72 +67,79 @@ def main():
     init_db()
     os.makedirs(LOGS_DIR, exist_ok=True)
 
-    with get_session() as session:
-        if args.hlr_id:
-            hlrs = [session.query(HighLevelRequirement).filter_by(id=args.hlr_id).first()]
-            hlrs = [h for h in hlrs if h]  # filter None
-        else:
-            hlrs = session.query(HighLevelRequirement).all()
+    with get_neo4j().session() as ns:
+        repo = RequirementRepository(ns)
 
-        if not hlrs:
+        if args.hlr_id:
+            hlr_obj = repo.get_hlr(args.hlr_id)
+            hlrs_neo4j = [hlr_obj] if hlr_obj else []
+        else:
+            hlrs_neo4j = repo.list_hlrs()
+
+        if not hlrs_neo4j:
             print("No HLRs found. Run 02_setup_project.py first.")
             return
 
-        for hlr in hlrs:
+        for hlr in hlrs_neo4j:
             print(f"\n{'='*60}")
             print(f"HLR {hlr.id}: {hlr.description[:60]}...")
             print(f"{'='*60}")
 
+            llrs_neo4j = repo.list_llrs(hlr_id=hlr.id)
             llrs = [
                 {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
-                for l in hlr.low_level_requirements
+                for l in llrs_neo4j
             ]
 
             # Decompose if no LLRs exist
             if not llrs:
                 print("  Decomposing...")
+                from backend.requirements.services.persistence import persist_decomposition
+
                 result = decompose(
                     hlr.description,
                     prompt_log_file=os.path.join(LOGS_DIR, f"decompose_hlr{hlr.id}.md"),
                 )
-                from backend.requirements.services.persistence import persist_decomposition
-
-                persist_decomposition(session, hlr, result.low_level_requirements)
+                with get_neo4j().session() as ns2:
+                    persisted = persist_decomposition(ns2, hlr.id, result.low_level_requirements, sql_session=None)
+                llrs_neo4j = repo.list_llrs(hlr_id=hlr.id)
                 llrs = [
-                    {
-                        "id": l.id,
-                        "description": l.description,
-                        "hlr_id": l.high_level_requirement_id,
-                    }
-                    for l in hlr.low_level_requirements
+                    {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
+                    for l in llrs_neo4j
                 ]
                 print(f"  Generated {len(llrs)} LLRs")
+
+            component_name = _get_component_name(hlr.component_id)
+            component_namespace = _get_component_namespace(hlr.component_id)
 
             # Design
             hlr_dict = {
                 "id": hlr.id,
                 "description": hlr.description,
-                "component_name": hlr.component.name if hlr.component else "",
+                "component_name": component_name,
             }
-            component_namespace = hlr.component.namespace if hlr.component else ""
-            component_id = hlr.component_id
 
             print("  Designing...")
             oo, ontology = design_hlr(
                 hlr=hlr_dict,
                 llrs=llrs,
                 component_namespace=component_namespace,
-                component_id=component_id,
+                component_id=hlr.component_id,
                 prompt_log_file=os.path.join(LOGS_DIR, f"design_oo_hlr{hlr.id}.md"),
             )
             print(f"  Design: {len(oo.classes)} classes, {len(oo.interfaces)} interfaces")
 
-            # Verifications
+            # Verifications from SQLite
             verifications = []
-            for llr in hlr.low_level_requirements:
-                verifications.extend(
-                    [{**v.model_dump(), "llr_id": llr.id} for v in llr.verifications]
-                )
+            with get_session() as session:
+                for llr in llrs_neo4j:
+                    for v in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr.id).all():
+                        verifications.append({
+                            "method": v.method,
+                            "test_name": v.test_name,
+                            "description": v.description,
+                            "llr_id": llr.id,
+                        })
             print(f"  Verifications: {len(verifications)}")
 
             # Tasks
@@ -124,14 +155,15 @@ def main():
             print(f"  Generated {len(batch.tasks)} tasks")
 
             # Persist
-            qname_map = build_qname_to_node(session)
-            qname_map.update({c.name: component_namespace + "::" + c.name for c in oo.classes})
-            result = persist_tasks(session, batch, qname_map)
-            print(
-                f"  Persisted: {result.tasks_created} tasks, "
-                f"{result.links_to_design} design links, "
-                f"{result.links_to_verification} verification links"
-            )
+            with get_session() as session:
+                qname_map = build_qname_to_node(session)
+                qname_map.update({c.name: component_namespace + "::" + c.name for c in oo.classes})
+                result = persist_tasks(session, batch, qname_map)
+                print(
+                    f"  Persisted: {result.tasks_created} tasks, "
+                    f"{result.links_to_design} design links, "
+                    f"{result.links_to_verification} verification links"
+                )
 
 
 if __name__ == "__main__":

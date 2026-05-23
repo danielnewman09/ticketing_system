@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 """Export current database state to JSON fixtures for integration tests.
 
+Phase 2 note: HLR/LLR data is now in Neo4j, not SQLite. The SQLite
+fixture includes verification data (with plain low_level_requirement_id)
+but not HLR/LLR tables. HLR/LLR data should be created via scripts or
+the dashboard and then exported from Neo4j separately if needed.
+
 Usage:
     source .venv/bin/activate
     python scripts/export_fixtures.py
 
 Outputs:
-    tests/integration/sqlite_fixtures.json   — requirements, components, ontology, verifications
-    tests/integration/neo4j_fixtures.json    — design nodes & relationships (excludes as-built/cppreference)
+    tests/integration/sqlite_fixtures.json   — components, ontology, verifications
+    tests/integration/neo4j_fixtures.json    — design nodes & relationships
 """
 
 import json
@@ -26,20 +31,18 @@ NEO4J_FIXTURE = os.path.join(FIXTURES_DIR, "neo4j_fixtures.json")
 
 
 # ---------------------------------------------------------------------------
-# SQLite export
+# SQLite export (no HLR/LLR — those are in Neo4j)
 # ---------------------------------------------------------------------------
 
 
 def export_sqlite():
-    """Dump all domain tables from db.sqlite3 to a JSON fixture."""
+    """Dump domain tables from db.sqlite3 to a JSON fixture (excluding HLR/LLR)."""
     from backend.db import init_db, get_session
     from backend.db.models import (
         Component,
         DependencyManager,
         Dependency,
-        HighLevelRequirement,
         Language,
-        LowLevelRequirement,
         OntologyNode,
         OntologyTriple,
         Predicate,
@@ -55,202 +58,114 @@ def export_sqlite():
     with get_session() as session:
         data = {}
 
-        # Languages
         data["languages"] = [
-            {
-                "id": l.id,
-                "name": l.name,
-                "version": l.version,
-            }
+            {"id": l.id, "name": l.name, "version": l.version}
             for l in session.query(Language).order_by(Language.id).all()
         ]
 
-        # Components
         data["components"] = [
             {
-                "id": c.id,
-                "name": c.name,
-                "description": c.description,
-                "language_id": c.language_id,
-                "parent_id": c.parent_id,
+                "id": c.id, "name": c.name, "description": c.description,
+                "language_id": c.language_id, "parent_id": c.parent_id,
                 "namespace": c.namespace,
             }
             for c in session.query(Component).order_by(Component.id).all()
         ]
 
-        # Dependency managers
         data["dependency_managers"] = [
             {
-                "id": dm.id,
-                "name": dm.name,
-                "language_id": dm.language_id,
-                "version": dm.version,
-                "lock_file": dm.lock_file,
+                "id": dm.id, "name": dm.name, "language_id": dm.language_id,
+                "version": dm.version, "lock_file": dm.lock_file,
             }
             for dm in session.query(DependencyManager).order_by(DependencyManager.id).all()
         ]
 
-        # Dependencies
         data["dependencies"] = [
-            {
-                "id": d.id,
-                "name": d.name,
-                "version": d.version,
-                "manager_id": d.manager_id,
-            }
+            {"id": d.id, "name": d.name, "version": d.version, "manager_id": d.manager_id}
             for d in session.query(Dependency).order_by(Dependency.id).all()
         ]
 
-        # Component ↔ dependency M2M
         data["dependency_components"] = [
-            {
-                "component_id": cd.component_id,
-                "dependency_id": cd.dependency_id,
-            }
+            {"component_id": cd.component_id, "dependency_id": cd.dependency_id}
             for cd in session.query(dependency_components).all()
         ]
 
-        # Predicates
         data["predicates"] = [
-            {
-                "id": p.id,
-                "name": p.name,
-                "description": p.description,
-            }
+            {"id": p.id, "name": p.name, "description": p.description}
             for p in session.query(Predicate).order_by(Predicate.id).all()
         ]
 
-        # HLRs
-        data["high_level_requirements"] = [
-            {
-                "id": h.id,
-                "description": h.description,
-                "component_id": h.component_id,
-            }
-            for h in session.query(HighLevelRequirement).order_by(HighLevelRequirement.id).all()
-        ]
+        # HLR/LLR data is in Neo4j (Phase 2) — not exported from SQLite
 
-        # LLRs
-        data["low_level_requirements"] = [
-            {
-                "id": l.id,
-                "description": l.description,
-                "high_level_requirement_id": l.high_level_requirement_id,
-            }
-            for l in session.query(LowLevelRequirement).order_by(LowLevelRequirement.id).all()
-        ]
-
-        # Ontology nodes
         data["ontology_nodes"] = [
             {
-                "id": n.id,
-                "qualified_name": n.qualified_name,
-                "name": n.name,
-                "kind": n.kind,
-                "specialization": n.specialization,
-                "visibility": n.visibility,
-                "description": n.description,
-                "refid": n.refid,
-                "component_id": n.component_id,
-                "is_intercomponent": n.is_intercomponent,
-                "source_type": n.source_type,
-                "type_signature": n.type_signature,
-                "argsstring": n.argsstring,
-                "definition": n.definition,
-                "file_path": n.file_path,
+                "id": n.id, "qualified_name": n.qualified_name, "name": n.name or "",
+                "kind": n.kind or "", "specialization": n.specialization or "",
+                "visibility": n.visibility or "", "description": n.description or "",
+                "refid": n.refid or "", "component_id": n.component_id,
+                "is_intercomponent": getattr(n, "is_intercomponent", False),
+                "source_type": n.source_type or "",
+                "type_signature": getattr(n, "type_signature", "") or "",
+                "argsstring": getattr(n, "argsstring", "") or "",
+                "definition": getattr(n, "definition", "") or "",
+                "file_path": getattr(n, "file_path", "") or "",
                 "line_number": n.line_number,
-                "is_static": n.is_static,
-                "is_const": n.is_const,
-                "is_virtual": n.is_virtual,
-                "is_abstract": n.is_abstract,
-                "is_final": n.is_final,
+                "is_static": getattr(n, "is_static", False),
+                "is_const": getattr(n, "is_const", False),
+                "is_virtual": getattr(n, "is_virtual", False),
+                "is_abstract": getattr(n, "is_abstract", False),
+                "is_final": getattr(n, "is_final", False),
             }
             for n in session.query(OntologyNode).order_by(OntologyNode.id).all()
         ]
 
-        # Ontology triples
         data["ontology_triples"] = [
             {
-                "id": t.id,
-                "subject_id": t.subject_id,
-                "predicate_id": t.predicate_id,
-                "object_id": t.object_id,
+                "id": t.id, "subject_id": t.subject_id,
+                "predicate_id": t.predicate_id, "object_id": t.object_id,
             }
             for t in session.query(OntologyTriple).order_by(OntologyTriple.id).all()
         ]
 
-        # HLR ↔ triple M2M
-        data["hlr_triples"] = []
-        for h in session.query(HighLevelRequirement).order_by(HighLevelRequirement.id).all():
-            for t in h.triples:
-                data["hlr_triples"].append({"hlr_id": h.id, "triple_id": t.id})
+        # HLR/LLR M2M relationships removed (Phase 2: data in Neo4j via TRACES_TO)
 
-        # HLR ↔ node M2M
-        data["hlr_nodes"] = []
-        for h in session.query(HighLevelRequirement).order_by(HighLevelRequirement.id).all():
-            for n in h.nodes:
-                data["hlr_nodes"].append({"hlr_id": h.id, "node_id": n.id})
-
-        # LLR ↔ node M2M
-        data["llr_nodes"] = []
-        for l in session.query(LowLevelRequirement).order_by(LowLevelRequirement.id).all():
-            for n in l.nodes:
-                data["llr_nodes"].append({"llr_id": l.id, "node_id": n.id})
-
-        # Verification methods
         data["verification_methods"] = [
             {
-                "id": v.id,
-                "method": v.method,
-                "test_name": v.test_name,
-                "description": v.description,
+                "id": v.id, "method": v.method, "test_name": v.test_name or "",
+                "description": v.description or "",
                 "low_level_requirement_id": v.low_level_requirement_id,
             }
             for v in session.query(VerificationMethod).order_by(VerificationMethod.id).all()
         ]
 
-        # Verification conditions
         data["verification_conditions"] = [
             {
-                "id": c.id,
-                "verification_id": c.verification_id,
-                "phase": c.phase,
-                "order": c.order,
-                "member_qualified_name": c.member_qualified_name,
-                "operator": c.operator,
-                "expected_value": c.expected_value,
+                "id": c.id, "verification_id": c.verification_id, "phase": c.phase or "pre",
+                "order": c.order or 0, "member_qualified_name": c.member_qualified_name or "",
+                "operator": c.operator or "", "expected_value": c.expected_value or "",
                 "ontology_node_id": c.ontology_node_id,
             }
             for c in session.query(VerificationCondition).order_by(VerificationCondition.id).all()
         ]
 
-        # Verification actions
         data["verification_actions"] = [
             {
-                "id": a.id,
-                "verification_id": a.verification_id,
-                "order": a.order,
-                "description": a.description,
-                "member_qualified_name": a.member_qualified_name,
+                "id": a.id, "verification_id": a.verification_id,
+                "order": a.order or 0, "description": a.description or "",
+                "member_qualified_name": a.member_qualified_name or "",
                 "ontology_node_id": a.ontology_node_id,
             }
             for a in session.query(VerificationAction).order_by(VerificationAction.id).all()
         ]
 
-        # HLR dependency_context (JSON column)
-        data["hlr_dependency_contexts"] = []
-        for h in session.query(HighLevelRequirement).order_by(HighLevelRequirement.id).all():
-            if h.dependency_context:
-                data["hlr_dependency_contexts"].append(
-                    {"hlr_id": h.id, "dependency_context": h.dependency_context}
-                )
-
     with open(SQLITE_FIXTURE, "w") as f:
         json.dump(data, f, indent=2)
 
+    hlr_count = len(data.get("high_level_requirements", []))
+    llr_count = len(data.get("low_level_requirements", []))
     print(f"SQLite fixture written to {SQLITE_FIXTURE}")
     print(f"  {len(data['ontology_nodes'])} nodes, {len(data['ontology_triples'])} triples")
-    print(f"  {len(data['high_level_requirements'])} HLRs, {len(data['low_level_requirements'])} LLRs")
+    print(f"  HLR/LLR data not included (Phase 2: in Neo4j)")
     print(f"  {len(data['verification_methods'])} verifications")
 
 
@@ -260,18 +175,13 @@ def export_sqlite():
 
 
 def export_neo4j():
-    """Dump Design nodes and their relationships from Neo4j to JSON.
-
-    Excludes as-built and cppreference nodes (those come from Doxygen indexing
-    and are not part of the design-intent data).
-    """
+    """Dump Design nodes and their relationships from Neo4j to JSON."""
     from backend.db.neo4j.connection import Neo4jConnection
 
     neo4j = Neo4jConnection()
     os.makedirs(FIXTURES_DIR, exist_ok=True)
 
     with neo4j.session() as session:
-        # --- Design nodes (synced from SQLite) ---
         nodes_result = session.run(
             "MATCH (n:Design) "
             "RETURN n.qualified_name AS qname, n.name AS name, n.kind AS kind, "
@@ -290,7 +200,6 @@ def export_neo4j():
         nodes = []
         for record in nodes_result:
             node = dict(record)
-            # Convert Neo4j types to JSON-serializable
             for key, val in node.items():
                 if val is None:
                     node[key] = None
@@ -298,7 +207,6 @@ def export_neo4j():
                     node[key] = list(val)
             nodes.append(node)
 
-        # --- Design relationships ---
         rels_result = session.run(
             "MATCH (s:Design)-[r]->(o:Design) "
             "RETURN s.qualified_name AS subject, type(r) AS predicate, "
@@ -307,8 +215,6 @@ def export_neo4j():
         )
         design_rels = [dict(r) for r in rels_result]
 
-        # --- Design → Compound relationships (dependency edges) ---
-        # These are edges from design nodes to external library nodes
         dep_rels_result = session.run(
             "MATCH (s:Design)-[r]->(c:Compound) "
             "WHERE NOT c.source STARTS WITH 'as-built' "
@@ -318,7 +224,6 @@ def export_neo4j():
         )
         dep_rels = [dict(r) for r in dep_rels_result]
 
-        # --- IMPLEMENTED_BY links ---
         impl_result = session.run(
             "MATCH (d:Design)-[:IMPLEMENTED_BY]->(target) "
             "RETURN d.qualified_name AS design_qname, "
@@ -328,8 +233,6 @@ def export_neo4j():
         )
         impl_links = [dict(r) for r in impl_result]
 
-        # --- Compound nodes that design stubs reference (dependency targets) ---
-        # Collect unique qualified names referenced by dependency relationships
         dep_compound_qnames = [r["object"] for r in dep_rels]
         compound_nodes = []
         if dep_compound_qnames:
@@ -362,10 +265,6 @@ def export_neo4j():
     print(f"  {len(compound_nodes)} referenced Compound nodes")
     print(f"  {len(impl_links)} IMPLEMENTED_BY links")
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print("Exporting SQLite fixtures...")
