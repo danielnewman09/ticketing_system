@@ -267,12 +267,10 @@ if __name__ == "__main__":
             )
 
         hlr_triples = {}
-        for hlr in session.query(HighLevelRequirement).all():
-            hlr_triples[hlr.id] = [t.id for t in hlr.triples]
+        # HLR/LLR ↔ OntologyTriple M2M removed in Phase 1
+        # Triple data is now in Neo4j via TRACES_TO edges
 
         llr_triples = {}
-        for llr in session.query(LowLevelRequirement).all():
-            llr_triples[llr.id] = [t.id for t in llr.triples]
 
     result = challenge(hlrs, llrs, nodes, triples, hlr_triples, llr_triples)
     print(json.dumps(result.model_dump(), indent=2))
