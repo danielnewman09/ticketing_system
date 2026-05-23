@@ -51,6 +51,12 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
     # Clear Neo4j design graph (preserves cppreference data)
     clear_design_graph()
 
+    # Clear HLR/LLR nodes too (Phase 2 primary store)
+    from services.dependencies import get_neo4j
+    with get_neo4j().session() as session:
+        session.run("MATCH (n:HLR) DETACH DELETE n")
+        session.run("MATCH (n:LLR) DETACH DELETE n")
+
     close_neo4j()
 
     if clear_logs:
