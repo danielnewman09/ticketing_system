@@ -56,6 +56,9 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
     with get_neo4j().session() as session:
         session.run("MATCH (n:HLR) DETACH DELETE n")
         session.run("MATCH (n:LLR) DETACH DELETE n")
+        session.run("MATCH (n:VerificationMethod) DETACH DELETE n")
+        session.run("MATCH (n:Condition) DETACH DELETE n")
+        session.run("MATCH (n:Action) DETACH DELETE n")
 
     close_neo4j()
 
