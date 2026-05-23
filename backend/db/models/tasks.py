@@ -13,7 +13,6 @@ from backend.db.base import Base
 if TYPE_CHECKING:
     from backend.db.models.components import Component
     from backend.db.models.ontology import OntologyNode
-    from backend.db.models.verification import VerificationMethod
 
 
 class Task(Base):
@@ -28,7 +27,6 @@ class Task(Base):
         server_default="medium",
     )
     status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending")
-    # pending, scaffolded, tested, implemented, verified
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -57,13 +55,11 @@ class Task(Base):
     )
     children: Mapped[list[Task]] = relationship("Task", back_populates="parent")
 
-    # Design elements this task implements
     design_nodes: Mapped[list[TaskDesignNode]] = relationship(
         "TaskDesignNode",
         back_populates="task",
         cascade="all, delete-orphan",
     )
-    # Verifications this task covers
     verifications: Mapped[list[TaskVerification]] = relationship(
         "TaskVerification",
         back_populates="task",
@@ -75,12 +71,7 @@ class Task(Base):
 
 
 class TaskDesignNode(Base):
-    """Links a task to one or more ontology design nodes.
-
-    Phase 1: uses qualified_name string reference instead of FK to
-    ontology_nodes table. The ontology_node_id FK is kept temporarily
-    for backward compatibility but should be migrated.
-    """
+    """Links a task to one or more ontology design nodes by qualified_name."""
 
     __tablename__ = "task_design_nodes"
 
@@ -92,7 +83,7 @@ class TaskDesignNode(Base):
     ontology_node_qualified_name: Mapped[str] = mapped_column(
         String(500), nullable=False, server_default=""
     )
-    # FK kept for backward compatibility — Phase 2 will remove it
+    # FK kept for backward compatibility — will be removed when ontology_nodes table is dropped
     ontology_node_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("ontology_nodes.id", ondelete="SET NULL"), nullable=True
     )
@@ -102,7 +93,11 @@ class TaskDesignNode(Base):
 
 
 class TaskVerification(Base):
-    """Links a task to one or more verification methods it must satisfy."""
+    """Links a task to a verification method.
+
+    Phase 3: verification_method_id is a plain integer referencing a
+    :VerificationMethod node in Neo4j (no FK constraint).
+    """
 
     __tablename__ = "task_verifications"
 
@@ -112,9 +107,8 @@ class TaskVerification(Base):
         nullable=False,
     )
     verification_method_id: Mapped[int] = mapped_column(
-        ForeignKey("verification_methods.id", ondelete="CASCADE"),
+        Integer,
         nullable=False,
     )
 
     task: Mapped[Task] = relationship("Task", back_populates="verifications")
-    verification_method: Mapped[VerificationMethod] = relationship("VerificationMethod")

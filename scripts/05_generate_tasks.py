@@ -20,7 +20,7 @@ load_dotenv()
 
 from services.dependencies import init_neo4j, close_neo4j, get_neo4j
 from backend.db import init_db, get_session
-from backend.db.models import VerificationMethod
+from backend.db.neo4j.repositories.verification import VerificationRepository
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.requirements.formatting import format_hlrs_for_prompt
 from backend.ticketing_agent.decompose.decompose_hlr import decompose
@@ -127,17 +127,17 @@ def main():
                 component_id=hlr.component_id,
                 prompt_log_file=os.path.join(LOGS_DIR, f"design_oo_hlr{hlr.id}.md"),
             )
-            print(f"  Design: {len(oo.classes)} classes, {len(oo.interfaces)} interfaces")
 
-            # Verifications from SQLite
+            # Verifications from Neo4j
             verifications = []
-            with get_session() as session:
+            with get_neo4j().session() as ns:
+                ver_repo = VerificationRepository(ns)
                 for llr in llrs_neo4j:
-                    for v in session.query(VerificationMethod).filter_by(low_level_requirement_id=llr.id).all():
+                    for vm in ver_repo.list_verifications(llr.id):
                         verifications.append({
-                            "method": v.method,
-                            "test_name": v.test_name,
-                            "description": v.description,
+                            "method": vm.method,
+                            "test_name": vm.test_name,
+                            "description": vm.description,
                             "llr_id": llr.id,
                         })
             print(f"  Verifications: {len(verifications)}")

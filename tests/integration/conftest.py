@@ -26,9 +26,6 @@ from backend.db.models import (
     OntologyNode,
     OntologyTriple,
     Predicate,
-    VerificationAction,
-    VerificationCondition,
-    VerificationMethod,
 )
 
 import backend.db.models  # noqa: F401 — ensure all tables are registered
@@ -155,38 +152,5 @@ def _load_fixture_data(session, data):
 
     # HLR/LLR M2M relationships with OntologyNode removed (Phase 2)
 
-    # Verifications — low_level_requirement_id is a plain integer (no FK)
-    for row in data.get("verification_methods", []):
-        session.add(VerificationMethod(
-            id=row["id"],
-            method=row["method"],
-            test_name=row.get("test_name", ""),
-            description=row.get("description", ""),
-            low_level_requirement_id=row["low_level_requirement_id"],
-        ))
+    # Phase 3: Verification data lives in Neo4j — skip loading into SQLite
 
-    session.flush()
-
-    for row in data.get("verification_conditions", []):
-        session.add(VerificationCondition(
-            id=row["id"],
-            verification_id=row["verification_id"],
-            phase=row.get("phase", "pre"),
-            order=row.get("order", 0),
-            member_qualified_name=row.get("member_qualified_name", ""),
-            operator=row.get("operator", ""),
-            expected_value=row.get("expected_value", ""),
-            ontology_node_id=row.get("ontology_node_id"),
-        ))
-
-    for row in data.get("verification_actions", []):
-        session.add(VerificationAction(
-            id=row["id"],
-            verification_id=row["verification_id"],
-            order=row.get("order", 0),
-            description=row.get("description", ""),
-            member_qualified_name=row.get("member_qualified_name", ""),
-            ontology_node_id=row.get("ontology_node_id"),
-        ))
-
-    session.flush()

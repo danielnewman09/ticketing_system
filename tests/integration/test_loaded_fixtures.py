@@ -10,9 +10,6 @@ from backend.db.models import (
     OntologyNode,
     OntologyTriple,
     Predicate,
-    VerificationAction,
-    VerificationCondition,
-    VerificationMethod,
 )
 
 
@@ -73,14 +70,10 @@ class TestLoadedFixtures:
         assert len(dep2) == 1
 
     def test_verifications_loaded(self, loaded_session):
-        methods = loaded_session.query(VerificationMethod).count()
-        assert methods == 13  # one per LLR
-
-        conditions = loaded_session.query(VerificationCondition).count()
-        assert conditions > 0
-
-        actions = loaded_session.query(VerificationAction).count()
-        assert actions > 0
+        """Phase 3: verification data lives in Neo4j, not SQLite.
+        Verification tables will be dropped by Alembic migration.
+        Verification data is tested against Neo4j in test_verification_repository.py."""
+        pass
 
     def test_intercomponent_flags(self, loaded_session):
         """Dependency stubs should be marked as intercomponent."""

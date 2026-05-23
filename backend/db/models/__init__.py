@@ -1,4 +1,9 @@
-"""Re-export all models for convenient imports."""
+"""Re-export all models for convenient imports.
+
+Phase 3: VerificationMethod, VerificationCondition, VerificationAction
+SQLAlchemy models deleted. Constants moved to verification_formatting.py.
+Verification data lives in Neo4j via VerificationRepository.
+"""
 
 from backend.db.models.associations import (
     tickets_components,
@@ -29,21 +34,17 @@ from backend.db.models.ontology import (
     valid_specializations,
 )
 from backend.requirements.formatting import format_hlr_dict, format_hlrs_for_prompt, format_llr_dict
+from backend.requirements.verification_formatting import CONDITION_OPERATORS, VERIFICATION_METHODS
 
 # TicketRequirement removed in Phase 2 — requirements are now in Neo4j
+# VerificationMethod/VerificationCondition/VerificationAction removed in Phase 3
+# — verification data lives in Neo4j via VerificationRepository
 
 from backend.db.models.tickets import (
     Ticket,
     TicketAcceptanceCriteria,
     TicketFile,
     TicketReference,
-)
-from backend.db.models.verification import (
-    CONDITION_OPERATORS,
-    VERIFICATION_METHODS,
-    VerificationAction,
-    VerificationCondition,
-    VerificationMethod,
 )
 from backend.db.models.project import ProjectMeta
 from backend.db.models.codebase import (
@@ -93,17 +94,14 @@ __all__ = [
     "format_hlr_dict",
     "format_hlrs_for_prompt",
     "format_llr_dict",
+    # Verification constants (models removed in Phase 3)
+    "CONDITION_OPERATORS",
+    "VERIFICATION_METHODS",
     # Tickets
     "Ticket",
     "TicketAcceptanceCriteria",
     "TicketFile",
     "TicketReference",
-    # Verification
-    "CONDITION_OPERATORS",
-    "VERIFICATION_METHODS",
-    "VerificationAction",
-    "VerificationCondition",
-    "VerificationMethod",
     # Project
     "ProjectMeta",
     # Codebase (external, read-only)
