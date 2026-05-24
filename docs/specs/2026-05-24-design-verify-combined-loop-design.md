@@ -97,7 +97,9 @@ Validation and lookup tools query **two sources** — the in-memory draft design
 class DesignAndVerificationSchema(BaseModel):
     oo_design: OODesignSchema
     verifications: dict[int, list[VerificationSchema]]
-    # key = LLR id, value = verification procedures for that LLR
+    # key = LLR id, value = verification procedures for that LLR.
+    # The agent produces verifications for one LLR at a time within the loop,
+    # but they are all collected into this dict for the final commit.
 ```
 
 **`commit_design_and_verifications` validation:**
