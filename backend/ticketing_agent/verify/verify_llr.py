@@ -8,28 +8,33 @@ verification specifications with:
 - Actions: ordered steps/stimuli referencing ontology members
 - Post-conditions: expected member state after the stimulus
 
-Runs after design_ontology so it can reference concrete ontology members.
-
-Phase 3: Validation uses VerificationRepository.validate_references() which
-checks references against :Design nodes in Neo4j.
+Uses call_tool_loop with intermediate tools (validate_qualified_names,
+lookup_design_element) so the LLM can self-correct before committing the
+final verification procedures.
 """
 
 import json
 import logging
 import os
 
-from llm_caller import call_tool
+from llm_caller import call_tool_loop
 from backend.requirements.schemas import VerificationSchema
 
 from backend.ticketing_agent.verify.verify_llr_prompt import (
     SYSTEM_PROMPT,
-    TOOL_DEFINITION,
     format_structured_context,
+)
+from backend.ticketing_agent.verify.verify_llr_tools import (
+    ALL_TOOLS,
+    make_verify_dispatcher,
 )
 
 log = logging.getLogger("agents.verify")
 
-MAX_TOOL_RETRIES = 2
+
+# ---------------------------------------------------------------------------
+# Validation helpers (used by dispatcher and post-loop check)
+# ---------------------------------------------------------------------------
 
 
 def _validate_verification_qnames(verifications: list[VerificationSchema]) -> list[str]:
@@ -63,36 +68,6 @@ def _validate_verification_qnames(verifications: list[VerificationSchema]) -> li
     return errors
 
 
-def _format_verification_validation_errors(unresolved: list[str]) -> str:
-    """Format unresolved qualified name errors into a retry message.
-
-    Includes formatting guidance so the LLM sees the syntax rules again.
-    """
-    issue_lines = "\n".join(f'{i+1}. "{qn}"' for i, qn in enumerate(unresolved))
-    return (
-        "Your previous output referenced qualified names that do not exist "
-        "in the design context:\n\n"
-        f"<issues>\n{issue_lines}\n</issues>\n\n"
-        "Please correct these issues by referencing ONLY names that appear "
-        "in the design context section above. Use :: separators (not dots). "
-        "Do not fabricate test-local variable names.\n\n"
-        "Respond again with the corrected verifications."
-    )
-
-
-class VerifyResult:
-    """Wrapper for the agent's structured output with validation report."""
-
-    def __init__(self, verifications: list[VerificationSchema], resolved: list[str] | None = None, unresolved: list[str] | None = None):
-        self.verifications = verifications
-        self.resolved = resolved or []
-        self.unresolved = unresolved or []
-
-    @property
-    def all_resolved(self) -> bool:
-        return len(self.unresolved) == 0
-
-
 def _collect_qualified_names(verifications: list[VerificationSchema]) -> list[str]:
     """Collect all qualified names referenced in verification conditions and actions."""
     qnames = []
@@ -110,6 +85,24 @@ def _collect_qualified_names(verifications: list[VerificationSchema]) -> list[st
     return qnames
 
 
+class VerifyResult:
+    """Wrapper for the agent's structured output with validation report."""
+
+    def __init__(self, verifications: list[VerificationSchema], resolved: list[str] | None = None, unresolved: list[str] | None = None):
+        self.verifications = verifications
+        self.resolved = resolved or []
+        self.unresolved = unresolved or []
+
+    @property
+    def all_resolved(self) -> bool:
+        return len(self.unresolved) == 0
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
 def verify(
     llr: dict,
     existing_verifications: list[dict],
@@ -121,6 +114,9 @@ def verify(
     """
     Takes an LLR dict, its existing verifications, and structured design context.
     Returns fleshed-out verification procedures with a validation report.
+
+    Uses call_tool_loop with validate_qualified_names and lookup_design_element
+    tools so the LLM can self-correct before committing the final output.
 
     llr: {id, description}
     existing_verifications: [{method, test_name, description}, ...]
@@ -142,117 +138,46 @@ def verify(
 
     messages = [{"role": "user", "content": user_message}]
 
-    verifications = []
+    # Build tool dispatcher with Neo4j session for lookups
+    dispatcher = make_verify_dispatcher(neo4j_session=neo4j_session)
+
+    # Run the tool loop
+    result = call_tool_loop(
+        system=system_prompt,
+        messages=messages,
+        tools=ALL_TOOLS,
+        final_tool_name="produce_verifications",
+        tool_dispatcher=dispatcher,
+        model=model,
+        max_tokens=4096,
+        max_turns=10,
+        prompt_log_file=prompt_log_file,
+    )
+
+    # Parse the final result
+    verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]
+
+    # Post-loop: validate qname format and resolve references
+    format_errors = _validate_verification_qnames(verifications)
+    if format_errors:
+        log.warning(
+            "verify: %d qname format issues remain after tool loop for LLR %s: %s",
+            len(format_errors), llr.get('id', '?'), format_errors[:5],
+        )
+
+    # Resolve references against Neo4j
     resolved = []
     unresolved = []
-
-    for attempt in range(MAX_TOOL_RETRIES + 1):
-        try:
-            result = call_tool(
-                system=system_prompt,
-                messages=messages,
-                tools=[TOOL_DEFINITION],
-                tool_name="produce_verifications",
-                model=model,
-                prompt_log_file=prompt_log_file if attempt == 0 else "",
-            )
-        except Exception as e:
-            # LLM returned an error — log it and retry if possible
-            log.error(
-                "verify: LLM call failed on attempt %d/%d for LLR %s: %s: %s",
-                attempt + 1, MAX_TOOL_RETRIES + 1, llr.get('id', '?'), type(e).__name__, e,
-            )
-            # Write failure info to prompt log for debugging
-            if prompt_log_file:
-                try:
-                    base, ext = os.path.splitext(prompt_log_file)
-                    fail_path = f"{base}_attempt{attempt + 1}_failed.txt"
-                    os.makedirs(os.path.dirname(fail_path), exist_ok=True)
-                    with open(fail_path, "w") as f:
-                        f.write(f"verify attempt {attempt + 1}/{MAX_TOOL_RETRIES + 1} FAILED\n")
-                        f.write(f"Error: {type(e).__name__}: {e}\n\n")
-                        f.write(f"Messages so far ({len(messages)} turns):\n")
-                        for i, msg in enumerate(messages):
-                            f.write(f"\n--- Message {i + 1} ({msg.get('role', 'unknown')}) ---\n")
-                            f.write(str(msg.get('content', ''))[:5000])
-                            f.write("\n")
-                        f.write("\n")
-                        f.write(f"Retrying with recovery message...\n")
-                except Exception:
-                    pass  # Best-effort logging
-            if attempt < MAX_TOOL_RETRIES:
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "Your previous response could not be processed. "
-                        "Please respond again with a valid produce_verifications tool call. "
-                        "Make sure the tool call contains properly formatted JSON "
-                        "with all required fields."
-                    ),
-                })
-                continue
-            # Final attempt failed — re-raise
-            raise
-
-        verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]
-
-        # Phase 1: Validate qname format (catch test artifacts, bare names, dots)
-        format_errors = _validate_verification_qnames(verifications)
-        if format_errors:
-            if attempt < MAX_TOOL_RETRIES:
-                log.warning(
-                    "verify: %d invalid qname patterns on attempt %d/%d for LLR %s",
-                    len(format_errors), attempt + 1, MAX_TOOL_RETRIES + 1,
-                    llr.get('id', '?'),
-                )
-                issue_detail = "\n".join(f"  - {e}" for e in format_errors)
-                error_msg = (
-                    "Your previous output used invalid qualified names. "
-                    "caller_qualified_name must reference a real design element "
-                    "from the design context, not a test function name. "
-                    "Do NOT use test_ prefixes or bare identifiers.\n\n"
-                    f"Specific issues:\n{issue_detail}\n\n"
-                    "Please respond again with corrected verifications."
-                )
-                messages.append({"role": "assistant", "content": json.dumps(result)})
-                messages.append({"role": "user", "content": error_msg})
-                continue
-            else:
-                log.warning(
-                    "verify: %d invalid qname patterns after %d attempts for LLR %s: %s",
-                    len(format_errors), MAX_TOOL_RETRIES + 1,
-                    llr.get('id', '?'), format_errors,
-                )
-
-        # Phase 2: Validate references against :Design nodes in Neo4j
-        if neo4j_session is not None:
-            from backend.db.neo4j.repositories.verification import VerificationRepository
-
-            qnames = _collect_qualified_names(verifications)
-            if qnames:
-                repo = VerificationRepository(neo4j_session)
-                resolved, unresolved = repo.validate_references(qnames)
-            else:
-                unresolved = []
-
-        if not unresolved and not format_errors:
-            break  # All references valid, proceed
-
-        if unresolved and attempt < MAX_TOOL_RETRIES:
-            log.warning(
-                "verify: %d unresolved references on attempt %d/%d: %s",
-                len(unresolved), attempt + 1, MAX_TOOL_RETRIES + 1, unresolved,
-            )
-            error_msg = _format_verification_validation_errors(unresolved)
-            messages.append({"role": "assistant", "content": json.dumps(result)})
-            messages.append({"role": "user", "content": error_msg})
-            continue
-
-        # Final attempt still has issues — log and proceed
+    if neo4j_session is not None:
+        from backend.db.neo4j.repositories.verification import VerificationRepository
+        qnames = _collect_qualified_names(verifications)
+        if qnames:
+            repo = VerificationRepository(neo4j_session)
+            resolved, unresolved = repo.validate_references(qnames)
         if unresolved:
             log.warning(
-                "verify: %d unresolved references after %d attempts: %s",
-                len(unresolved), MAX_TOOL_RETRIES + 1, unresolved,
+                "verify: %d unresolved references after tool loop for LLR %s: %s",
+                len(unresolved), llr.get('id', '?'), unresolved[:5],
             )
 
     return VerifyResult(verifications=verifications, resolved=resolved, unresolved=unresolved)

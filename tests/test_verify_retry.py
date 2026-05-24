@@ -1,13 +1,14 @@
-"""Tests for verify_llr validate-and-retry integration."""
+"""Tests for verify_llr validation helpers and tool-loop integration."""
 
+from unittest.mock import patch
 from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema, VerificationActionSchema
+from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames, _collect_qualified_names, VerifyResult
 
 
 class TestCollectQualifiedNames:
     """Test _collect_qualified_names helper."""
 
     def test_collects_from_preconditions(self):
-        from backend.ticketing_agent.verify.verify_llr import _collect_qualified_names
         vs = [
             VerificationSchema(
                 method="automated",
@@ -24,7 +25,6 @@ class TestCollectQualifiedNames:
         assert "calc::Engine::precision" in qnames
 
     def test_collects_from_actions(self):
-        from backend.ticketing_agent.verify.verify_llr import _collect_qualified_names
         vs = [
             VerificationSchema(
                 method="automated",
@@ -41,7 +41,6 @@ class TestCollectQualifiedNames:
         assert "calc::Engine::add" in qnames
 
     def test_collects_from_postconditions(self):
-        from backend.ticketing_agent.verify.verify_llr import _collect_qualified_names
         vs = [
             VerificationSchema(
                 method="automated",
@@ -57,28 +56,6 @@ class TestCollectQualifiedNames:
         qnames = _collect_qualified_names(vs)
         assert "calc::Engine::result" in qnames
 
-
-class TestFormatVerificationValidationErrors:
-    """Test _format_verification_validation_errors helper."""
-
-    def test_format_single_error(self):
-        from backend.ticketing_agent.verify.verify_llr import _format_verification_validation_errors
-        msg = _format_verification_validation_errors([
-            "user_interface::CalculatorWindow.equalsButton — dot separator, use ::",
-        ])
-        assert "<issues>" in msg
-        assert "CalculatorWindow.equalsButton" in msg
-        assert "corrected" in msg.lower() or "correct these" in msg.lower()
-
-    def test_format_multiple_errors(self):
-        from backend.ticketing_agent.verify.verify_llr import _format_verification_validation_errors
-        msg = _format_verification_validation_errors([
-            "user_interface::CalculatorWindow.equalsButton",
-            "result_of_first_call",
-        ])
-        assert "<issues>" in msg
-        assert "CalculatorWindow.equalsButton" in msg
-        assert "result_of_first_call" in msg
 
 class TestValidateVerificationQnames:
     """Test _validate_verification_qnames format validation."""
@@ -113,7 +90,6 @@ class TestValidateVerificationQnames:
         )
 
     def test_valid_qnames_pass(self):
-        from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
         vs = [self._make_verification(
             caller_qn="calc::Engine",
             callee_qn="calc::Engine::calculate",
@@ -123,7 +99,6 @@ class TestValidateVerificationQnames:
         assert errors == []
 
     def test_test_prefix_in_caller_flagged(self):
-        from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
         vs = [self._make_verification(caller_qn="test_division_of_valid_numbers")]
         errors = _validate_verification_qnames(vs)
         assert len(errors) == 1
@@ -131,21 +106,18 @@ class TestValidateVerificationQnames:
         assert "not a design element" in errors[0]
 
     def test_result_of_prefix_in_subject_flagged(self):
-        from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
         vs = [self._make_verification(subject_qn="result_of_first_call")]
         errors = _validate_verification_qnames(vs)
         assert len(errors) == 1
         assert "result_of" in errors[0]
 
     def test_bare_lowercase_in_caller_flagged(self):
-        from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
         vs = [self._make_verification(caller_qn="test_context")]
         errors = _validate_verification_qnames(vs)
         assert len(errors) == 1
         assert "test_context" in errors[0]
 
     def test_dot_separator_flagged_with_correction(self):
-        from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
         vs = [self._make_verification(subject_qn="calc.Engine.state")]
         errors = _validate_verification_qnames(vs)
         assert len(errors) == 1
@@ -153,16 +125,59 @@ class TestValidateVerificationQnames:
         assert "calc::Engine::state" in errors[0]
 
     def test_empty_caller_not_flagged(self):
-        from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
         vs = [self._make_verification(caller_qn="", callee_qn="calc::Engine::run")]
         errors = _validate_verification_qnames(vs)
         assert errors == []
 
     def test_multiple_errors_all_flagged(self):
-        from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
         vs = [self._make_verification(
             caller_qn="test_validate",
             subject_qn="result_of_call",
         )]
         errors = _validate_verification_qnames(vs)
         assert len(errors) == 2
+
+
+class TestVerifyResult:
+    def test_all_resolved_true(self):
+        r = VerifyResult(verifications=[], resolved=["a"], unresolved=[])
+        assert r.all_resolved is True
+
+    def test_all_resolved_false(self):
+        r = VerifyResult(verifications=[], resolved=["a"], unresolved=["b"])
+        assert r.all_resolved is False
+
+
+class TestVerifyToolLoop:
+    def test_verify_returns_result_on_valid_output(self):
+        """Verify that verify() returns VerifyResult via call_tool_loop."""
+        from backend.ticketing_agent.verify.verify_llr import verify
+
+        mock_result = {
+            "verifications": [
+                {
+                    "method": "automated",
+                    "test_name": "check_display",
+                    "description": "Check display",
+                    "preconditions": [
+                        {
+                            "subject_qualified_name": "ui::MainWindow::display",
+                            "operator": "not_null",
+                            "expected_value": "",
+                        }
+                    ],
+                    "actions": [],
+                    "postconditions": [],
+                }
+            ]
+        }
+        with patch("backend.ticketing_agent.verify.verify_llr.call_tool_loop", return_value=mock_result):
+            result = verify(
+                llr={"id": 1, "description": "Test LLR"},
+                existing_verifications=[{"method": "automated", "test_name": "check_display", "description": "Check display"}],
+                class_contexts=[],
+                neo4j_session=None,
+            )
+        assert isinstance(result, VerifyResult)
+        assert len(result.verifications) == 1
+        assert result.verifications[0].test_name == "check_display"
