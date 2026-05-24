@@ -56,6 +56,10 @@ def _configure_logging():
     root_logger.addHandler(file_handler)
     root_logger.setLevel(logging.DEBUG)
 
+    # Suppress noisy neo4j driver/pool/io logs in the pipeline log
+    for _neo_name in ["neo4j", "neo4j.driver", "neo4j.io", "neo4j.pool"]:
+        logging.getLogger(_neo_name).setLevel(logging.WARNING)
+
     # Also set up a handler that captures agent-level logs
     for logger_name in ["agents.verify", "agents.design", "agents.discover"]:
         logger = logging.getLogger(logger_name)

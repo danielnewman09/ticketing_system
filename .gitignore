@@ -21,3 +21,4 @@ llm_caller/
 **/node_modules/
 .superpowers/
 .playwright-mcp/
+logs_test/
