@@ -63,3 +63,16 @@ class TestSystemPromptContract:
     def test_system_prompt_intercomponent_contract_mentions_disconnected(self):
         """The contract should mention disconnected components."""
         assert "disconnected" in SYSTEM_PROMPT.lower()
+
+class TestToolDescriptions:
+    def test_system_prompt_contains_validate_design_description(self):
+        from backend.ticketing_agent.design.design_oo_prompt import SYSTEM_PROMPT
+        assert "validate_design" in SYSTEM_PROMPT
+
+    def test_system_prompt_contains_check_class_name_description(self):
+        from backend.ticketing_agent.design.design_oo_prompt import SYSTEM_PROMPT
+        assert "check_class_name" in SYSTEM_PROMPT
+
+    def test_system_prompt_contains_recommended_workflow(self):
+        from backend.ticketing_agent.design.design_oo_prompt import SYSTEM_PROMPT
+        assert "Recommended workflow" in SYSTEM_PROMPT

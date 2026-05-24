@@ -63,3 +63,16 @@ class TestFormatStructuredContext:
         ]
         result = format_structured_context(ctx)
         assert "calculate" in result
+
+class TestToolDescriptions:
+    def test_system_prompt_contains_validate_qnames_description(self):
+        from backend.ticketing_agent.verify.verify_llr_prompt import SYSTEM_PROMPT
+        assert "validate_qualified_names" in SYSTEM_PROMPT
+
+    def test_system_prompt_contains_lookup_design_element_description(self):
+        from backend.ticketing_agent.verify.verify_llr_prompt import SYSTEM_PROMPT
+        assert "lookup_design_element" in SYSTEM_PROMPT
+
+    def test_system_prompt_contains_recommended_workflow(self):
+        from backend.ticketing_agent.verify.verify_llr_prompt import SYSTEM_PROMPT
+        assert "Recommended workflow" in SYSTEM_PROMPT
