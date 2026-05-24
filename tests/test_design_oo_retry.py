@@ -1,178 +1,116 @@
-"""Tests for design_oo validate-and-retry functionality."""
+"""Tests for design_oo validation helpers and tool-loop integration."""
 
-from backend.codebase.schemas import (
-    AssociationSchema,
-    AttributeSchema,
-    ClassSchema,
-    MethodSchema,
-    OODesignSchema,
-)
+from unittest.mock import patch
+from backend.codebase.schemas import OODesignSchema, ClassSchema, AssociationSchema
+from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+
+def _make_design(associations=None, classes=None, class_attrs=None, class_methods=None):
+    """Helper to create a minimal OODesignSchema for testing."""
+    if classes is None:
+        classes = [ClassSchema(
+            name="TestClass",
+            module="test",
+            description="A test class",
+            visibility="public",
+            is_intercomponent=False,
+            requirement_ids=[],
+            attributes=class_attrs or [],
+            methods=class_methods or [],
+            inherits_from=[],
+            realizes_interfaces=[],
+        )]
+    return OODesignSchema(
+        modules=["test"],
+        classes=classes,
+        interfaces=[],
+        enums=[],
+        associations=associations or [],
+    )
 
 
 class TestValidateOODesign:
-    """Test _validate_oo_design association validation."""
-
     def test_unknown_association_target_flagged(self):
-        from backend.ticketing_agent.design.design_oo import _validate_oo_design
-        oo = OODesignSchema(
-            modules=["ui"],
-            classes=[
-                ClassSchema(name="CalculatorWindow", module="ui", attributes=[], methods=[]),
-            ],
-            associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="NonExistentClass",
-                    kind="depends_on",
-                    description="Unknown ref",
-                ),
-            ],
-        )
-        errors = _validate_oo_design(
-            oo,
-            prior_class_lookup={},
-            dependency_lookup={},
-            intercomponent_classes=[],
-        )
-        assert any("NonExistentClass" in e for e in errors)
+        oo = _make_design(associations=[
+            AssociationSchema(from_class="TestClass", to_class="PhantomClass", kind="depends_on", description="bad")
+        ])
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
+        assert any("PhantomClass" in e for e in errors)
 
     def test_known_intercomponent_class_not_flagged(self):
-        from backend.ticketing_agent.design.design_oo import _validate_oo_design
-        oo = OODesignSchema(
-            modules=["ui"],
-            classes=[
-                ClassSchema(name="CalculatorWindow", module="ui", attributes=[], methods=[]),
-            ],
-            associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="calculation_engine::CalculatorEngine",
-                    kind="depends_on",
-                    description="Uses engine",
-                ),
-            ],
-        )
-        errors = _validate_oo_design(
-            oo,
-            prior_class_lookup={},
-            dependency_lookup={},
-            intercomponent_classes=[
-                {"qualified_name": "calculation_engine::CalculatorEngine", "kind": "class"},
-            ],
-        )
-        assert len(errors) == 0
+        oo = _make_design(associations=[
+            AssociationSchema(from_class="TestClass", to_class="ui::Display", kind="depends_on", description="ok")
+        ])
+        intercomp = [{"qualified_name": "ui::Display", "kind": "class", "description": "Display", "name": "Display", "methods": [], "attributes": []}]
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
+        assert errors == []
 
     def test_missing_intercomponent_association_flagged(self):
-        from backend.ticketing_agent.design.design_oo import _validate_oo_design
-        oo = OODesignSchema(
-            modules=["ui"],
-            classes=[
-                ClassSchema(
-                    name="CalculatorWindow",
-                    module="ui",
-                    attributes=[
-                        AttributeSchema(name="result", type_name="CalculatorResult", visibility="private", description=""),
-                    ],
-                    methods=[
-                        MethodSchema(name="calculate", visibility="public", description="", parameters=[], return_type="CalculatorResult"),
-                    ],
-                ),
-            ],
-            associations=[],
+        oo = _make_design(
+            classes=[ClassSchema(
+                name="TestClass", module="test", description="test",
+                visibility="public", is_intercomponent=False,
+                requirement_ids=[],
+                attributes=[{"name": "disp", "type_name": "Display", "visibility": "private", "description": "display"}],
+                methods=[],
+                inherits_from=[],
+                realizes_interfaces=[],
+            )],
         )
-        errors = _validate_oo_design(
-            oo,
-            prior_class_lookup={},
-            dependency_lookup={},
-            intercomponent_classes=[
-                {"qualified_name": "calculation_engine::CalculatorResult", "kind": "class"},
-            ],
-        )
-        assert any("CalculatorResult" in e and "no association" in e for e in errors)
+        intercomp = [{"qualified_name": "ui::Display", "kind": "class", "description": "Display", "name": "Display", "methods": [], "attributes": []}]
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
+        assert any("Missing intercomponent" in e for e in errors)
 
     def test_valid_design_no_errors(self):
-        from backend.ticketing_agent.design.design_oo import _validate_oo_design
-        oo = OODesignSchema(
-            modules=["ui"],
-            classes=[
-                ClassSchema(name="CalculatorWindow", module="ui", attributes=[], methods=[]),
-            ],
-            associations=[],
-        )
-        errors = _validate_oo_design(
-            oo,
-            prior_class_lookup={},
-            dependency_lookup={},
-            intercomponent_classes=[],
-        )
-        assert len(errors) == 0
+        oo = _make_design()
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
+        assert errors == []
 
     def test_dependency_lookup_target_not_flagged(self):
-        from backend.ticketing_agent.design.design_oo import _validate_oo_design
-        oo = OODesignSchema(
-            modules=["ui"],
-            classes=[
-                ClassSchema(name="CalculatorWindow", module="ui", attributes=[], methods=[]),
-            ],
-            associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="aggregates",
-                    description="Uses buttons",
-                ),
-            ],
-        )
-        errors = _validate_oo_design(
-            oo,
-            prior_class_lookup={},
-            dependency_lookup={"Fl_Button": "Fl_Button"},
-            intercomponent_classes=[],
-        )
-        assert len(errors) == 0
+        oo = _make_design(associations=[
+            AssociationSchema(from_class="TestClass", to_class="Fl_Window", kind="depends_on", description="dep")
+        ])
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={"Fl_Window": "fltk::Fl_Window"}, intercomponent_classes=None)
+        assert errors == []
 
     def test_prior_class_lookup_target_not_flagged(self):
-        from backend.ticketing_agent.design.design_oo import _validate_oo_design
-        oo = OODesignSchema(
-            modules=["ui"],
-            classes=[
-                ClassSchema(name="CalculatorWindow", module="ui", attributes=[], methods=[]),
-            ],
-            associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="CalculatorPanel",
-                    kind="aggregates",
-                    description="Contains panel",
-                ),
-            ],
-        )
-        errors = _validate_oo_design(
-            oo,
-            prior_class_lookup={"CalculatorPanel": "ui::CalculatorPanel"},
-            dependency_lookup={},
-            intercomponent_classes=[],
-        )
-        assert len(errors) == 0
-
-
-class TestFormatDesignValidationErrors:
-    """Test _format_design_validation_errors."""
-
-    def test_format_single_error(self):
-        from backend.ticketing_agent.design.design_oo import _format_design_validation_errors
-        msg = _format_design_validation_errors(["Missing association to CalculatorResult"])
-        assert "<issues>" in msg
-        assert "CalculatorResult" in msg
-        assert "correct these issues" in msg
-
-    def test_format_multiple_errors(self):
-        from backend.ticketing_agent.design.design_oo import _format_design_validation_errors
-        msg = _format_design_validation_errors([
-            "Missing association to CalculatorResult",
-            "Unknown class UnknownClass",
+        oo = _make_design(associations=[
+            AssociationSchema(from_class="TestClass", to_class="PriorClass", kind="depends_on", description="prior")
         ])
-        assert "1." in msg
-        assert "2." in msg
-        assert "CalculatorResult" in msg
-        assert "UnknownClass" in msg
+        errors = _validate_oo_design(oo, prior_class_lookup={"PriorClass": "ns::PriorClass"}, dependency_lookup=None, intercomponent_classes=None)
+        assert errors == []
+
+
+class TestDesignOOToolLoop:
+    def test_design_oo_returns_schema_on_valid_output(self):
+        """Verify design_oo function returns OODesignSchema via call_tool_loop."""
+        from backend.ticketing_agent.design.design_oo import design_oo
+
+        mock_result = {
+            "modules": ["test_ns"],
+            "classes": [{
+                "name": "TestClass",
+                "module": "test_ns",
+                "description": "A test class",
+                "visibility": "public",
+                "is_intercomponent": False,
+                "requirement_ids": [],
+                "attributes": [],
+                "methods": [],
+                "inherits_from": [],
+                "realizes_interfaces": [],
+            }],
+            "interfaces": [],
+            "enums": [],
+            "associations": [],
+        }
+        with patch("backend.ticketing_agent.design.design_oo.call_tool_loop", return_value=mock_result):
+            result = design_oo(
+                hlr={"id": 1, "description": "Test HLR"},
+                llrs=[],
+                prior_class_lookup={},
+            )
+        assert isinstance(result, OODesignSchema)
+        assert result.modules == ["test_ns"]
+        assert len(result.classes) == 1
+        assert result.classes[0].name == "TestClass"
