@@ -312,95 +312,270 @@ def step_design():
     print(f"    {total_linked} requirement-to-triple links applied, {total_skipped} skipped\n")
 
 
-def step_verify():
+def step_design_and_verify():
     print("=" * 60)
-    print("STEP 3: Verify — flesh out LLR verification procedures")
+    print("STEP 2: Design + Verify — combined per-HLR loop")
     print("=" * 60)
-    step_log = logging.getLogger("pipeline.verify")
+    print("  Designing and verifying each HLR in dependency order...\n")
+    step_log = logging.getLogger("pipeline.design_verify")
 
-    from backend.ticketing_agent.verify.verify_llr import verify
-    from backend.requirements.services.persistence import (
-        build_verification_context,
-        persist_verification,
+    from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
+    from backend.ticketing_agent.design.design_per_hlr import (
+        _build_class_lookup,
+        _extract_existing_classes,
+        _extract_intercomponent_context,
     )
-    from backend.db.neo4j.repositories.verification import VerificationRepository
-    from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
+    from backend.ticketing_agent.design.order_hlrs import order_hlrs
+    from backend.codebase.schemas import OODesignSchema
+    from backend.requirements.services.persistence import persist_design, persist_verification
+    from backend.requirements.services.persistence import build_verification_context
+
+    # --- Design phase context ---
+    from backend.ticketing_agent.design.design_hlr import design_hlr
 
     with get_neo4j().session() as ns:
-        req_repo = RequirementRepository(ns)
-        ver_repo = VerificationRepository(ns)
-        all_llrs = req_repo.list_llrs()
+        repo = RequirementRepository(ns)
+        hlrs_neo4j = repo.list_hlrs()
+        all_llrs_neo4j = repo.list_llrs()
 
-        class_contexts = build_verification_context(ns)
+    hlrs = [
+        {
+            "id": h.id,
+            "description": h.description,
+            "component_id": h.component_id,
+            "dependency_context": h.dependency_context,
+            "component_name": _get_component_name(h.component_id) if h.component_id else None,
+            "component_namespace": _get_component_namespace(h.component_id) if h.component_id else "",
+            "component_description": _get_component_description(h.component_id) if h.component_id else "",
+        }
+        for h in hlrs_neo4j
+    ]
+    llrs = [
+        {"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id}
+        for l in all_llrs_neo4j
+    ]
 
-        if not all_llrs:
-            print("  No LLRs found.\n")
-            return
+    if not hlrs:
+        print("  No HLRs found. Run setup_project.py first.\n")
+        return
 
-        print(f"  Processing {len(all_llrs)} LLRs with {len(class_contexts)} class contexts...\n")
+    # Order HLRs
+    prompt_log = os.path.join(LOGS_DIR, "order_hlrs.md")
+    ordered = order_hlrs(hlrs, prompt_log_file=prompt_log)
+    ordered_ids = [entry["id"] for entry in ordered]
 
-        total_conditions = 0
-        total_actions = 0
-        total_qname_errors = 0
-        total_unresolved = 0
+    hlr_by_id = {h["id"]: h for h in hlrs}
+    llrs_by_hlr: dict[int, list[dict]] = {}
+    for llr in llrs:
+        hlr_id = llr.get("hlr_id")
+        if hlr_id is not None:
+            llrs_by_hlr.setdefault(hlr_id, []).append(llr)
 
-        for llr in all_llrs:
-            llr_dict = {"id": llr.id, "description": llr.description}
-            existing_vms = ver_repo.list_verifications(llr.id)
-            existing = [
-                {"method": vm.method, "test_name": vm.test_name, "description": vm.description}
-                for vm in existing_vms
-            ]
+    # Accumulate
+    designed: dict[int, tuple[OODesignSchema, int | None, str]] = {}
+    accumulated_class_lookup: dict[str, str] = {}
+    total_nodes = 0
+    total_triples = 0
+    total_linked = 0
+    total_skipped = 0
+    total_conditions = 0
+    total_actions = 0
+    total_qname_errors = 0
+    total_unresolved = 0
+    qname_to_node: dict = {}
 
-            if not existing:
-                print(f"  LLR {llr.id}: no verifications to flesh out, skipping")
+    # Connect to dependency graph
+    dep_toolset = None
+    try:
+        from doxygen_index.tools import create_toolset
+        dep_toolset = create_toolset()
+        print("  Dependency graph connected\n")
+    except Exception as e:
+        print(f"  Dependency graph unavailable: {e}\n")
+
+    # Build dependency lookup from toolset
+    dependency_lookup: dict[str, str] = {}
+    if dep_toolset:
+        try:
+            for cls_info in dep_toolset.get_all_classes():
+                qname = cls_info.get("qualified_name", "")
+                bare = qname.rsplit("::", 1)[-1] if qname else ""
+                if bare:
+                    dependency_lookup[bare] = qname
+        except Exception:
+            pass
+
+    try:
+        for i, hlr_id in enumerate(ordered_ids, 1):
+            hlr = hlr_by_id.get(hlr_id)
+            if not hlr:
                 continue
 
-            print(f"  LLR {llr.id}: {llr.description[:60]}...")
-            step_log.info("Verifying LLR %d: %s", llr.id, llr.description)
-            agent_result = verify(
-                llr_dict,
-                existing,
-                class_contexts,
-                neo4j_session=ns,
-                prompt_log_file=os.path.join(LOGS_DIR, f"verify_llr{llr.id}.md"),
-            )
+            hlr_llrs = llrs_by_hlr.get(hlr_id, [])
+            component_id = hlr.get("component_id")
+            component_name = hlr.get("component_name", "")
 
-            # Check for invalid qname patterns even if retry didn't fix them
-            format_errors = _validate_verification_qnames(agent_result.verifications)
-            if format_errors:
-                total_qname_errors += len(format_errors)
-                step_log.warning(
-                    "LLR %d: %d qname format issues after verification: %s",
-                    llr.id, len(format_errors), format_errors[:5],
-                )
-                for err in format_errors:
-                    print(f"    QNAME ISSUE: {err}")
+            print(f"  [{i}/{len(ordered_ids)}] HLR {hlr_id}: {hlr['description'][:55]}...")
 
-            if not agent_result.all_resolved:
-                total_unresolved += len(agent_result.unresolved)
-                print(f"    WARN: {len(agent_result.unresolved)} unresolved references")
-                for qname in agent_result.unresolved:
-                    print(f"      - {qname}")
+            # Gather in-memory context
+            existing_classes = []
+            for prev_id, (prev_oo, prev_comp_id, _) in designed.items():
+                if prev_comp_id == component_id:
+                    existing_classes.extend(_extract_existing_classes(prev_oo))
 
-            persisted = persist_verification(ns, llr.id, agent_result.verifications)
-            total_conditions += persisted.conditions_created
-            total_actions += persisted.actions_created
-
-            for v in agent_result.verifications:
-                print(
-                    f"    [{v.method}] {v.test_name}: "
-                    f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
-                    f"{len(v.postconditions)} post"
+            intercomponent_classes = []
+            for prev_id, (prev_oo, prev_comp_id, prev_comp_name) in designed.items():
+                               intercomponent_classes.extend(
+                    _extract_intercomponent_context(
+                        prev_oo,
+                        prev_comp_name,
+                        component_id,
+                        prev_comp_id,
+                    )
                 )
 
-        print(f"\n  Verification phase complete:")
-        print(f"    {total_conditions} conditions, {total_actions} actions created")
-        if total_unresolved:
-            print(f"    {total_unresolved} unresolved references (see logs)")
-        if total_qname_errors:
-            print(f"    {total_qname_errors} qname format issues (see logs)")
-        print()
+            other_hlr_summaries = [
+                {
+                    "id": h["id"],
+                    "description": h["description"],
+                    "status": "designed" if h["id"] in designed else "pending",
+                }
+                for h in hlrs
+                if h["id"] != hlr_id
+            ]
+
+            dep_ctx = hlr.get("dependency_context")
+            dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
+
+            component_namespace = hlr.get("component_namespace", "")
+            sibling_namespaces = [
+                h.get("component_namespace", "")
+                for h in hlrs
+                if h["id"] != hlr_id and h.get("component_namespace")
+            ]
+
+            # --- Design phase (to get discovery + ontology mapping) ---
+            step_log.info("Designing HLR %d: %s", hlr_id, hlr['description'])
+            try:
+                oo, ontology = design_hlr(
+                    hlr=hlr,
+                    llrs=hlr_llrs,
+                    existing_classes=existing_classes or None,
+                    intercomponent_classes=intercomponent_classes or None,
+                    other_hlr_summaries=other_hlr_summaries or None,
+                    dependency_contexts=dependency_contexts,
+                    component_namespace=component_namespace,
+                    sibling_namespaces=sibling_namespaces or None,
+                    component_id=component_id,
+                    prior_class_lookup=accumulated_class_lookup or None,
+                    toolset=dep_toolset,
+                    log_dir=LOGS_DIR,
+                )
+            except Exception as e:
+                step_log.exception("HLR %d design failed: %s", hlr_id, e)
+                print(f"    ERROR: HLR {hlr_id} design failed: {e}")
+                raise
+
+            step_log.info("HLR %d: %d classes, %d associations", hlr_id, len(oo.classes), len(oo.associations))
+
+            # Persist design
+            accumulated_class_lookup.update(_build_class_lookup(oo))
+            designed[hlr_id] = (oo, component_id, component_name)
+
+            with get_session() as session:
+                for node_data in ontology.nodes:
+                    if node_data.qualified_name not in qname_to_node:
+                        flag = " [intercomponent]" if node_data.is_intercomponent else ""
+                        print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
+
+                with get_neo4j().session() as neo4j_session:
+                    persisted = persist_design(ontology, neo4j_session, qname_to_node=qname_to_node)
+                total_nodes += persisted.nodes_created
+                total_triples += persisted.triples_created
+                total_linked += persisted.links_applied
+                total_skipped += persisted.links_skipped
+
+            # --- Verify phase (combined loop per HLR) ---
+            step_log.info("Verifying HLR %d: %d LLRs", hlr_id, len(hlr_llrs))
+
+            # Get existing verification stubs for this HLR's LLRs
+            with get_neo4j().session() as ns:
+                from backend.db.neo4j.repositories.verification import VerificationRepository
+                ver_repo = VerificationRepository(ns)
+                existing_verifications = []
+                for llr in hlr_llrs:
+                    vms = ver_repo.list_verifications(llr["id"])
+                    for vm in vms:
+                        existing_verifications.append(
+                            {"method": vm.method, "test_name": vm.test_name, "description": vm.description}
+                        )
+
+            # Build verification context (class-level context from Neo4j)
+            with get_neo4j().session() as ns:
+                class_contexts = build_verification_context(ns)
+
+            try:
+                result = design_and_verify(
+                    hlr=hlr,
+                    llrs=hlr_llrs,
+                    existing_verifications=existing_verifications or None,
+                    existing_classes=existing_classes or None,
+                    intercomponent_classes=intercomponent_classes or None,
+                    other_hlr_summaries=other_hlr_summaries or None,
+                    dependency_contexts=dependency_contexts,
+                    component_namespace=component_namespace,
+                    sibling_namespaces=sibling_namespaces or None,
+                    prior_class_lookup=accumulated_class_lookup or None,
+                    dependency_lookup=dependency_lookup or None,
+                    neo4j_session=None,  # Use a fresh session below
+                    model="",
+                    prompt_log_file=os.path.join(LOGS_DIR, f"design_verify_hlr{hlr_id}.md"),
+                )
+            except Exception as e:
+                step_log.exception("HLR %d verify failed: %s", hlr_id, e)
+                print(f"    ERROR: HLR {hlr_id} verify failed: {e}")
+                raise
+
+            if result.design_warnings:
+                step_log.warning("HLR %d: %d design warnings: %s", hlr_id, len(result.design_warnings), result.design_warnings[:3])
+
+            # Persist verifications
+            with get_neo4j().session() as ns:
+                for llr_id, verifs in result.verifications.items():
+                    persisted = persist_verification(ns, llr_id, verifs)
+                    total_conditions += persisted.conditions_created
+                    total_actions += persisted.actions_created
+
+                    for v in verifs:
+                        print(
+                            f"    [{v.method}] {v.test_name}: "
+                            f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
+                            f"{len(v.postconditions)} post"
+                        )
+
+            # Check for cross-component associations
+            for assoc in oo.associations:
+                to_cls = assoc.to_class
+                if '::' in to_cls:
+                    to_ns = to_cls.split('::')[0]
+                    if to_ns != component_namespace:
+                        step_log.info("HLR %d: cross-component association: %s -> %s (%s)",
+                                      hlr_id, assoc.from_class, to_cls, assoc.relationship)
+                        print(f"    CROSS-COMPONENT: {assoc.from_class} -> {to_cls} ({assoc.relationship})")
+    finally:
+        if dep_toolset:
+            dep_toolset.close()
+            print("  Dependency graph disconnected")
+
+    print(f"\n  Design + Verify phase complete:")
+    print(f"    {total_nodes} nodes, {total_triples} triples")
+    print(f"    {total_linked} requirement-to-triple links applied, {total_skipped} skipped")
+    print(f"    {total_conditions} conditions, {total_actions} actions created")
+    if total_unresolved:
+        print(f"    {total_unresolved} unresolved references (see logs)")
+    if total_qname_errors:
+        print(f"    {total_qname_errors} qname format issues (see logs)")
+    print()
 
 def step_summary():
     print("=" * 60)
@@ -493,8 +668,7 @@ if __name__ == "__main__":
     try:
         init_db()
         step_decompose()
-        step_design()
-        step_verify()
+        step_design_and_verify()
         step_summary()
     except Exception as e:
         logging.getLogger(__name__).exception("Pipeline failed: %s", e)
