@@ -79,3 +79,50 @@ class TestTaskBatchSchema:
         d = batch.model_dump()
         assert d["component_name"] == ""
         assert len(d["tasks"]) == 1
+
+
+def test_design_and_verification_schema_creation():
+    """DesignAndVerificationSchema accepts valid input."""
+    from backend.codebase.schemas import DesignAndVerificationSchema
+    from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema
+
+    v = VerificationSchema(
+        method="automated",
+        test_name="test_add",
+        description="Test addition",
+        preconditions=[
+            VerificationConditionSchema(
+                subject_qualified_name="calculation_engine::Calculator",
+                operator="not_null",
+                expected_value="exists",
+            )
+        ],
+        actions=[],
+        postconditions=[],
+    )
+    schema = DesignAndVerificationSchema(
+        oo_design={
+            "modules": ["calculation_engine"],
+            "classes": [
+                {
+                    "name": "Calculator",
+                    "module": "calculation_engine",
+                    "description": "Calculator",
+                    "visibility": "public",
+                    "is_intercomponent": False,
+                    "requirement_ids": [],
+                    "attributes": [],
+                    "methods": [],
+                    "inherits_from": [],
+                    "realizes_interfaces": [],
+                }
+            ],
+            "interfaces": [],
+            "enums": [],
+            "associations": [],
+        },
+        verifications={1: [v]},
+    )
+    assert len(schema.verifications) == 1
+    assert 1 in schema.verifications
+    assert schema.verifications[1][0].test_name == "test_add"

@@ -148,7 +148,7 @@ def design_oo(
         tool_dispatcher=dispatcher,
         model=model,
         max_tokens=4096,
-        max_turns=10,
+        max_turns=50,
         prompt_log_file=prompt_log_file,
     )
 

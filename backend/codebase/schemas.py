@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from backend.db.models.ontology import NODE_KINDS, SOURCE_TYPES, VISIBILITY_CHOICES
+from backend.requirements.schemas import VerificationSchema
 
 # Derived from the canonical NODE_KINDS list so there is one place to
 # add or remove kinds.
@@ -142,3 +143,19 @@ class DesignSchema(BaseModel):
     nodes: list[OntologyNodeSchema]
     triples: list[OntologyTripleSchema]
     requirement_links: list[RequirementTripleLinkSchema] = []
+
+
+# ---------------------------------------------------------------------------
+# Combined Design + Verification schema (for combined tool loop)
+# ---------------------------------------------------------------------------
+
+
+class DesignAndVerificationSchema(BaseModel):
+    """Combined output for the design+verify tool loop.
+
+    The oo_design is the final OO class design, and verifications maps
+    LLR ids to their verification procedures.
+    """
+
+    oo_design: OODesignSchema
+    verifications: dict[int, list[VerificationSchema]] = {}
