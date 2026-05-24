@@ -57,7 +57,6 @@ class VerificationResult:
     verifications_saved: int = 0
     conditions_created: int = 0
     actions_created: int = 0
-    nodes_augmented: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -316,31 +315,9 @@ def persist_verification(
     :Condition nodes (via :HAS_CONDITION with :LEFT_OPERAND/:RIGHT_OPERAND
     edges to :Design) and :Action nodes (via :HAS_ACTION with :CALLER/:CALLEE
     edges to :Design).
-
-    Any referenced qualified names that don't have a corresponding :Design
-    node are auto-created as stubs via augment_missing_design_nodes().
     """
     result = VerificationResult()
     repo = VerificationRepository(neo4j_session)
-
-    # Collect all qualified names referenced in conditions and actions
-    all_qnames: list[str] = []
-    for v in verifications:
-        for cond in v.preconditions + v.postconditions:
-            if cond.subject_qualified_name:
-                all_qnames.append(cond.subject_qualified_name)
-            if cond.object_qualified_name:
-                all_qnames.append(cond.object_qualified_name)
-        for action in v.actions:
-            if action.caller_qualified_name:
-                all_qnames.append(action.caller_qualified_name)
-            if action.callee_qualified_name:
-                all_qnames.append(action.callee_qualified_name)
-
-    # Auto-create missing :Design stubs for unresolved references
-    if all_qnames:
-        created = repo.augment_missing_design_nodes(all_qnames)
-        result.nodes_augmented = len(created)
 
     # Delete existing verifications for this LLR
     existing_vms = repo.list_verifications(llr_id)

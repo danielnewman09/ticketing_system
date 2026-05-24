@@ -292,7 +292,6 @@ def save_verification(
                 "verifications_saved": result.verifications_saved,
                 "conditions_created": result.conditions_created,
                 "actions_created": result.actions_created,
-                "nodes_augmented": result.nodes_augmented,
             }
         )
 

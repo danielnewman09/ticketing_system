@@ -341,7 +341,6 @@ def step_verify():
 
         total_conditions = 0
         total_actions = 0
-        total_augmented = 0
         total_qname_errors = 0
         total_unresolved = 0
 
@@ -388,10 +387,6 @@ def step_verify():
             total_conditions += persisted.conditions_created
             total_actions += persisted.actions_created
 
-            if persisted.nodes_augmented:
-                total_augmented += persisted.nodes_augmented
-                print(f"    Created {persisted.nodes_augmented} missing design node stubs")
-
             for v in agent_result.verifications:
                 print(
                     f"    [{v.method}] {v.test_name}: "
@@ -401,8 +396,6 @@ def step_verify():
 
         print(f"\n  Verification phase complete:")
         print(f"    {total_conditions} conditions, {total_actions} actions created")
-        if total_augmented:
-            print(f"    {total_augmented} design node stubs created via augmentation")
         if total_unresolved:
             print(f"    {total_unresolved} unresolved references (see logs)")
         if total_qname_errors:
