@@ -94,6 +94,7 @@ class DesignRepository:
         kind: str | None = None,
         search: str | None = None,
         component_id: int | None = None,
+        exclude_source_types: list[str] | None = None,
     ) -> list[DesignNode]:
         """Find :Design nodes matching optional filters."""
         conditions = ["d:Design"]
@@ -108,6 +109,9 @@ class DesignRepository:
         if search:
             conditions.append("(d.name CONTAINS $search OR d.qualified_name CONTAINS $search)")
             params["search"] = search
+        if exclude_source_types:
+            conditions.append("NOT d.source_type IN $exclude_types")
+            params["exclude_types"] = exclude_source_types
 
         where = " AND ".join(conditions)
         cypher = f"MATCH (d) WHERE {where} RETURN d"

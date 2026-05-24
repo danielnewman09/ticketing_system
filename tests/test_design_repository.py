@@ -263,3 +263,47 @@ class TestDesignRepositoryIntegration:
             ).single()
             assert record is None, "Dependency stub should not be created as Design node"
         driver.close()
+
+    def test_find_nodes_excludes_verification_stubs(self):
+        """find_nodes with exclude_source_types skips verification stubs."""
+        from backend.db.neo4j.repositories.design import DesignRepository
+        from backend.db.neo4j.repositories.models.design import DesignNode
+        from backend.db.neo4j.connection import get_standalone_driver
+
+        driver = get_standalone_driver()
+        with driver.session(database="neo4j") as session:
+            repo = DesignRepository(session)
+
+            # Create a real node and a verification stub
+            real = DesignNode(
+                qualified_name="test::RealClass",
+                name="RealClass",
+                kind="class",
+                description="A real class",
+            )
+            stub = DesignNode(
+                qualified_name="test::FakeMethod",
+                name="FakeMethod",
+                kind="member",
+                source_type="verification",
+                description="Auto-created from verification reference",
+            )
+            repo.merge_node(real)
+            repo.merge_node(stub)
+
+            # Search without filter — both appear
+            all_results = repo.find_nodes(search="test")
+            qnames = [n.qualified_name for n in all_results]
+            assert "test::RealClass" in qnames
+            assert "test::FakeMethod" in qnames
+
+            # Search with filter — stub excluded
+            filtered = repo.find_nodes(search="test", exclude_source_types=["verification"])
+            filtered_qnames = [n.qualified_name for n in filtered]
+            assert "test::RealClass" in filtered_qnames
+            assert "test::FakeMethod" not in filtered_qnames
+
+            # Clean up
+            repo.delete_node("test::RealClass")
+            repo.delete_node("test::FakeMethod")
+        driver.close()
