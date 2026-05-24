@@ -32,6 +32,37 @@ log = logging.getLogger("agents.verify")
 MAX_TOOL_RETRIES = 2
 
 
+def _validate_verification_qnames(verifications: list[VerificationSchema]) -> list[str]:
+    """Check for invalid qualified name patterns in verification output.
+
+    Returns a list of error messages for any qnames that fail format validation.
+    Catches test artifacts, bare lowercase identifiers, dot separators, etc.
+    """
+    from backend.db.neo4j.repositories.verification import _is_valid_verification_qname
+
+    errors: list[str] = []
+    for v in verifications:
+        for cond in v.preconditions + v.postconditions:
+            for qn_field in ("subject_qualified_name", "object_qualified_name"):
+                qn = getattr(cond, qn_field, "")
+                if qn:
+                    is_valid, corrected = _is_valid_verification_qname(qn)
+                    if not is_valid:
+                        errors.append(f"Invalid qname in precondition/postcondition: {qn_field}={qn}")
+                    elif corrected:
+                        errors.append(f"Dot separator in qname: {qn_field}={qn} (should be {corrected})")
+        for action in v.actions:
+            for qn_field in ("callee_qualified_name", "caller_qualified_name"):
+                qn = getattr(action, qn_field, "")
+                if qn:
+                    is_valid, corrected = _is_valid_verification_qname(qn)
+                    if not is_valid:
+                        errors.append(f"Invalid qname in action: {qn_field}={qn} (not a design element)")
+                    elif corrected:
+                        errors.append(f"Dot separator in qname: {qn_field}={qn} (should be {corrected})")
+    return errors
+
+
 def _format_verification_validation_errors(unresolved: list[str]) -> str:
     """Format unresolved qualified name errors into a retry message.
 
@@ -165,7 +196,35 @@ def verify(
 
         verifications = [VerificationSchema.model_validate(v) for v in result["verifications"]]
 
-        # Validate references against :Design nodes in Neo4j
+        # Phase 1: Validate qname format (catch test artifacts, bare names, dots)
+        format_errors = _validate_verification_qnames(verifications)
+        if format_errors:
+            if attempt < MAX_TOOL_RETRIES:
+                log.warning(
+                    "verify: %d invalid qname patterns on attempt %d/%d for LLR %s",
+                    len(format_errors), attempt + 1, MAX_TOOL_RETRIES + 1,
+                    llr.get('id', '?'),
+                )
+                issue_detail = "\n".join(f"  - {e}" for e in format_errors)
+                error_msg = (
+                    "Your previous output used invalid qualified names. "
+                    "caller_qualified_name must reference a real design element "
+                    "from the design context, not a test function name. "
+                    "Do NOT use test_ prefixes or bare identifiers.\n\n"
+                    f"Specific issues:\n{issue_detail}\n\n"
+                    "Please respond again with corrected verifications."
+                )
+                messages.append({"role": "assistant", "content": json.dumps(result)})
+                messages.append({"role": "user", "content": error_msg})
+                continue
+            else:
+                log.warning(
+                    "verify: %d invalid qname patterns after %d attempts for LLR %s: %s",
+                    len(format_errors), MAX_TOOL_RETRIES + 1,
+                    llr.get('id', '?'), format_errors,
+                )
+
+        # Phase 2: Validate references against :Design nodes in Neo4j
         if neo4j_session is not None:
             from backend.db.neo4j.repositories.verification import VerificationRepository
 
@@ -176,10 +235,10 @@ def verify(
             else:
                 unresolved = []
 
-        if not unresolved:
+        if not unresolved and not format_errors:
             break  # All references valid, proceed
 
-        if attempt < MAX_TOOL_RETRIES:
+        if unresolved and attempt < MAX_TOOL_RETRIES:
             log.warning(
                 "verify: %d unresolved references on attempt %d/%d: %s",
                 len(unresolved), attempt + 1, MAX_TOOL_RETRIES + 1, unresolved,
@@ -189,11 +248,12 @@ def verify(
             messages.append({"role": "user", "content": error_msg})
             continue
 
-        # Final attempt still has unresolved — log and proceed
-        log.warning(
-            "verify: %d unresolved references after %d attempts: %s",
-            len(unresolved), MAX_TOOL_RETRIES + 1, unresolved,
-        )
+        # Final attempt still has issues — log and proceed
+        if unresolved:
+            log.warning(
+                "verify: %d unresolved references after %d attempts: %s",
+                len(unresolved), MAX_TOOL_RETRIES + 1, unresolved,
+            )
 
     return VerifyResult(verifications=verifications, resolved=resolved, unresolved=unresolved)
 

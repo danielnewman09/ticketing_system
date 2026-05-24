@@ -19,6 +19,8 @@ Requires ANTHROPIC_API_KEY in the environment.
 
 import os
 import sys
+import logging
+import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -36,6 +38,39 @@ from backend.db.neo4j.repositories.requirement import RequirementRepository
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
+
+
+def _configure_logging():
+    """Set up file logging for the pipeline run."""
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    log_file = os.path.join(LOGS_DIR, "design_pipeline.log")
+
+    # Configure root logger to write to file
+    file_handler = logging.FileHandler(log_file, mode="w")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
+    root_logger.setLevel(logging.DEBUG)
+
+    # Also set up a handler that captures agent-level logs
+    for logger_name in ["agents.verify", "agents.design", "agents.discover"]:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.DEBUG)
+
+    # Link the app.log file
+    app_handler = logging.FileHandler(os.path.join(LOGS_DIR, "app.log"), mode="w")
+    app_handler.setLevel(logging.INFO)
+    app_handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    logging.getLogger("app").addHandler(app_handler)
+
+    return log_file
 
 
 def step_decompose():
@@ -94,6 +129,7 @@ def step_design():
     print("STEP 2: Design — discover + design + map per HLR")
     print("=" * 60)
     print("  Designing each HLR individually in dependency order...\n")
+    step_log = logging.getLogger("pipeline.design")
 
     from backend.ticketing_agent.design.design_hlr import design_hlr
     from backend.ticketing_agent.design.design_per_hlr import (
@@ -212,20 +248,38 @@ def step_design():
             ]
 
             # Design single HLR
-            oo, ontology = design_hlr(
-                hlr=hlr,
-                llrs=hlr_llrs,
-                existing_classes=existing_classes or None,
-                intercomponent_classes=intercomponent_classes or None,
-                other_hlr_summaries=other_hlr_summaries or None,
-                dependency_contexts=dependency_contexts,
-                component_namespace=component_namespace,
-                sibling_namespaces=sibling_namespaces or None,
-                component_id=component_id,
-                prior_class_lookup=accumulated_class_lookup,
-                toolset=dep_toolset,
-                log_dir=LOGS_DIR,
-            )
+            step_log.info("Designing HLR %d: %s", hlr_id, hlr['description'])
+            try:
+                oo, ontology = design_hlr(
+                    hlr=hlr,
+                    llrs=hlr_llrs,
+                    existing_classes=existing_classes or None,
+                    intercomponent_classes=intercomponent_classes or None,
+                    other_hlr_summaries=other_hlr_summaries or None,
+                    dependency_contexts=dependency_contexts,
+                    component_namespace=component_namespace,
+                    sibling_namespaces=sibling_namespaces or None,
+                    component_id=component_id,
+                    prior_class_lookup=accumulated_class_lookup,
+                    toolset=dep_toolset,
+                    log_dir=LOGS_DIR,
+                )
+            except Exception as e:
+                step_log.exception("HLR %d design failed: %s", hlr_id, e)
+                print(f"    ERROR: HLR {hlr_id} design failed: {e}")
+                raise
+
+            step_log.info("HLR %d: %d classes, %d associations", hlr_id, len(oo.classes), len(oo.associations))
+
+            # Check for cross-component associations
+            for assoc in oo.associations:
+                to_cls = assoc.to_class
+                if '::' in to_cls:
+                    to_ns = to_cls.split('::')[0]
+                    if to_ns != component_namespace:
+                        step_log.info("HLR %d: cross-component association: %s -> %s (%s)",
+                                      hlr_id, assoc.from_class, to_cls, assoc.relationship)
+                        print(f"    CROSS-COMPONENT: {assoc.from_class} -> {to_cls} ({assoc.relationship})")
 
             # Accumulate
             accumulated_class_lookup.update(_build_class_lookup(oo))
@@ -258,6 +312,7 @@ def step_verify():
     print("=" * 60)
     print("STEP 3: Verify — flesh out LLR verification procedures")
     print("=" * 60)
+    step_log = logging.getLogger("pipeline.verify")
 
     from backend.ticketing_agent.verify.verify_llr import verify
     from backend.requirements.services.persistence import (
@@ -265,6 +320,7 @@ def step_verify():
         persist_verification,
     )
     from backend.db.neo4j.repositories.verification import VerificationRepository
+    from backend.ticketing_agent.verify.verify_llr import _validate_verification_qnames
 
     with get_neo4j().session() as ns:
         req_repo = RequirementRepository(ns)
@@ -282,6 +338,8 @@ def step_verify():
         total_conditions = 0
         total_actions = 0
         total_augmented = 0
+        total_qname_errors = 0
+        total_unresolved = 0
 
         for llr in all_llrs:
             llr_dict = {"id": llr.id, "description": llr.description}
@@ -296,6 +354,7 @@ def step_verify():
                 continue
 
             print(f"  LLR {llr.id}: {llr.description[:60]}...")
+            step_log.info("Verifying LLR %d: %s", llr.id, llr.description)
             agent_result = verify(
                 llr_dict,
                 existing,
@@ -304,7 +363,19 @@ def step_verify():
                 prompt_log_file=os.path.join(LOGS_DIR, f"verify_llr{llr.id}.md"),
             )
 
+            # Check for invalid qname patterns even if retry didn't fix them
+            format_errors = _validate_verification_qnames(agent_result.verifications)
+            if format_errors:
+                total_qname_errors += len(format_errors)
+                step_log.warning(
+                    "LLR %d: %d qname format issues after verification: %s",
+                    llr.id, len(format_errors), format_errors[:5],
+                )
+                for err in format_errors:
+                    print(f"    QNAME ISSUE: {err}")
+
             if not agent_result.all_resolved:
+                total_unresolved += len(agent_result.unresolved)
                 print(f"    WARN: {len(agent_result.unresolved)} unresolved references")
                 for qname in agent_result.unresolved:
                     print(f"      - {qname}")
@@ -327,9 +398,12 @@ def step_verify():
         print(f"\n  Verification phase complete:")
         print(f"    {total_conditions} conditions, {total_actions} actions created")
         if total_augmented:
-            print(f"    {total_augmented} design node stubs created via augmentation\n")
-        else:
-            print()
+            print(f"    {total_augmented} design node stubs created via augmentation")
+        if total_unresolved:
+            print(f"    {total_unresolved} unresolved references (see logs)")
+        if total_qname_errors:
+            print(f"    {total_qname_errors} qname format issues (see logs)")
+        print()
 
 def step_summary():
     print("=" * 60)
@@ -415,6 +489,9 @@ def _get_component_description(component_id: int | None) -> str:
 
 
 if __name__ == "__main__":
+    log_file = _configure_logging()
+    print(f"Pipeline log: {log_file}")
+    print(f"Started at {datetime.datetime.now().isoformat()}")
     init_neo4j()
     try:
         init_db()
@@ -422,5 +499,10 @@ if __name__ == "__main__":
         step_design()
         step_verify()
         step_summary()
+    except Exception as e:
+        logging.getLogger(__name__).exception("Pipeline failed: %s", e)
+        print(f"\nPipeline failed: {e}")
+        print(f"Check {log_file} for details.")
+        raise
     finally:
         close_neo4j()
