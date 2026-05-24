@@ -1,6 +1,6 @@
 # Combined Design+Verify Loop Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Merge the design and verification phases into a single per-HLR tool loop, eliminating verification stub pollution and enabling the agent to revise the design when verification reveals gaps.
 
@@ -16,7 +16,7 @@
 - Modify: `backend/codebase/schemas.py` (add new schema at the end)
 - Test: `tests/test_pipeline_schemas.py` (add test for new schema)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/test_pipeline_schemas.py`:
 
@@ -68,12 +68,12 @@ def test_design_and_verification_schema_creation():
     assert schema.verifications[1][0].test_name == "test_add"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_pipeline_schemas.py::test_design_and_verification_schema_creation -v`
 Expected: FAIL (ImportError — DesignAndVerificationSchema doesn't exist yet)
 
-- [ ] **Step 3: Add DesignAndVerificationSchema to schemas.py**
+- [x] **Step 3: Add DesignAndVerificationSchema to schemas.py**
 
 Add at the end of `backend/codebase/schemas.py`, after the `DesignSchema` class:
 
@@ -100,12 +100,12 @@ Add the import at the top of `backend/codebase/schemas.py`:
 from backend.requirements.schemas import VerificationSchema
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_pipeline_schemas.py::test_design_and_verification_schema_creation -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/codebase/schemas.py tests/test_pipeline_schemas.py
@@ -120,7 +120,7 @@ git commit -m "feat: add DesignAndVerificationSchema for combined loop"
 - Modify: `backend/db/neo4j/repositories/design.py` (add `exclude_source_types` param)
 - Test: `tests/test_design_repository.py` (add test)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/test_design_repository.py`:
 
@@ -166,12 +166,12 @@ def test_find_nodes_excludes_verification_stubs(neo4j_session):
     repo.delete_node("test::FakeMethod")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_design_repository.py::test_find_nodes_excludes_verification_stubs -v`
 Expected: FAIL (TypeError — `exclude_source_types` param doesn't exist yet)
 
-- [ ] **Step 3: Add exclude_source_types parameter to find_nodes**
+- [x] **Step 3: Add exclude_source_types parameter to find_nodes**
 
 In `backend/db/neo4j/repositories/design.py`, modify the `find_nodes` method signature and implementation:
 
@@ -206,12 +206,12 @@ if exclude_source_types:
     params["exclude_types"] = exclude_source_types
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_design_repository.py::test_find_nodes_excludes_verification_stubs -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/db/neo4j/repositories/design.py tests/test_design_repository.py
@@ -229,7 +229,7 @@ git commit -m "feat: add exclude_source_types filter to DesignRepository.find_no
 
 This is the core module. It contains the tool definitions, the stateful dispatcher, and the combined validation logic.
 
-- [ ] **Step 1: Create the package init file**
+- [x] **Step 1: Create the package init file**
 
 Create `backend/ticketing_agent/design_verify/__init__.py`:
 
@@ -237,7 +237,7 @@ Create `backend/ticketing_agent/design_verify/__init__.py`:
 """Combined design+verify tool loop agent."""
 ```
 
-- [ ] **Step 2: Write the failing test for draft state and merged lookup**
+- [x] **Step 2: Write the failing test for draft state and merged lookup**
 
 Create `tests/test_combined_tools.py`:
 
@@ -545,12 +545,12 @@ class TestCommitDesignAndVerifications:
         assert result["committed"] is True
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `pytest tests/test_combined_tools.py -v`
 Expected: FAIL (ImportError — module doesn't exist yet)
 
-- [ ] **Step 4: Create the combined_tools.py module**
+- [x] **Step 4: Create the combined_tools.py module**
 
 Create `backend/ticketing_agent/design_verify/combined_tools.py`:
 
@@ -1126,12 +1126,12 @@ def make_combined_dispatcher(
     return dispatch
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `pytest tests/test_combined_tools.py -v`
 Expected: Most tests PASS. Some may need adjustment for serialization of the commit tool input.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/ticketing_agent/design_verify/__init__.py backend/ticketing_agent/design_verify/combined_tools.py tests/test_combined_tools.py
@@ -1145,7 +1145,7 @@ git commit -m "feat: add combined design+verify tools module with draft-state di
 **Files:**
 - Create: `backend/ticketing_agent/design_verify/combined_prompt.py`
 
-- [ ] **Step 1: Create the combined prompt module**
+- [x] **Step 1: Create the combined prompt module**
 
 Create `backend/ticketing_agent/design_verify/combined_prompt.py`:
 
@@ -1311,7 +1311,7 @@ from backend.ticketing_agent.design.design_oo_prompt import (
 )
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add backend/ticketing_agent/design_verify/combined_prompt.py
@@ -1325,7 +1325,7 @@ git commit -m "feat: add combined design+verify prompt module"
 **Files:**
 - Create: `backend/ticketing_agent/design_verify/combined_loop.py`
 
-- [ ] **Step 1: Create the combined loop module**
+- [x] **Step 1: Create the combined loop module**
 
 Create `backend/ticketing_agent/design_verify/combined_loop.py`:
 
@@ -1502,7 +1502,7 @@ def design_and_verify(
     )
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add backend/ticketing_agent/design_verify/combined_loop.py
@@ -1516,7 +1516,7 @@ git commit -m "feat: add combined design+verify loop entry point"
 **Files:**
 - Modify: `backend/requirements/services/persistence.py`
 
-- [ ] **Step 1: Remove the augment call and stub-creation logic**
+- [x] **Step 1: Remove the augment call and stub-creation logic**
 
 In `backend/requirements/services/persistence.py`, modify the `persist_verification` function:
 
@@ -1562,7 +1562,7 @@ grep -rn "nodes_augmented" backend/ scripts/
 
 Remove any references found in `scripts/03_design_requirements.py` and elsewhere.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add backend/requirements/services/persistence.py scripts/03_design_requirements.py
@@ -1576,7 +1576,7 @@ git commit -m "feat: remove augment_missing_design_nodes from persist_verificati
 **Files:**
 - Modify: `backend/db/neo4j/repositories/verification.py`
 
-- [ ] **Step 1: Remove the augment_missing_design_nodes method**
+- [x] **Step 1: Remove the augment_missing_design_nodes method**
 
 In `backend/db/neo4j/repositories/verification.py`, delete the `augment_missing_design_nodes` method entirely (approximately lines 200-240).
 
@@ -1590,7 +1590,7 @@ grep -rn "augment_missing_design_nodes" backend/ scripts/ tests/
 
 Remove any remaining references.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add backend/db/neo4j/repositories/verification.py
@@ -1606,7 +1606,7 @@ git commit -m "feat: remove augment_missing_design_nodes from VerificationReposi
 
 Replace the separate `step_design` and `step_verify` functions with a combined `step_design_and_verify` function that calls `design_and_verify` from the new module.
 
-- [ ] **Step 1: Add the combined step function**
+- [x] **Step 1: Add the combined step function**
 
 Add a new `step_design_and_verify()` function that replaces `step_design` and `step_verify`. The function should:
 
@@ -1621,11 +1621,11 @@ Key changes in the design+verify loop:
 - For each LLR id in `result.verifications`, persist via `persist_verification`
 - Log any `design_warnings` or `verification_warnings`
 
-- [ ] **Step 2: Update the main block**
+- [x] **Step 2: Update the main block**
 
 Change `step_design(); step_verify()` to `step_design_and_verify()` in the `__main__` block.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/03_design_requirements.py
@@ -1639,7 +1639,7 @@ git commit -m "feat: update pipeline to use combined design+verify loop"
 **Files:**
 - Modify: `scripts/01_flush_db.py`
 
-- [ ] **Step 1: Add verification stub cleanup**
+- [x] **Step 1: Add verification stub cleanup**
 
 In `scripts/01_flush_db.py`, add after the existing Neo4j cleanup block:
 
@@ -1657,7 +1657,7 @@ In `scripts/01_flush_db.py`, add after the existing Neo4j cleanup block:
 
 This ensures a clean start when the pipeline runs.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add scripts/01_flush_db.py
@@ -1671,7 +1671,7 @@ git commit -m "feat: add verification stub cleanup to flush_db"
 **Files:**
 - Create: `tests/test_integration_combined_loop.py`
 
-- [ ] **Step 1: Write an integration test that exercises the combined loop**
+- [x] **Step 1: Write an integration test that exercises the combined loop**
 
 This test verifies the combined loop works end-to-end with a mock LLM. It doesn't require Neo4j.
 
@@ -1799,12 +1799,12 @@ def test_combined_loop_rejects_unresolved_references():
     assert any("GhostClass" in e for e in commit_result["errors"])
 ```
 
-- [ ] **Step 2: Run the integration test**
+- [x] **Step 2: Run the integration test**
 
 Run: `pytest tests/test_integration_combined_loop.py -v`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/test_integration_combined_loop.py
@@ -1815,12 +1815,12 @@ git commit -m "test: add integration tests for combined design+verify loop"
 
 ### Task 11: Run full test suite and verify no regressions
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 Run: `pytest tests/ -v --tb=short`
 Expected: All existing tests pass, new tests pass.
 
-- [ ] **Step 2: Run the pipeline end-to-end (manual smoke test)**
+- [x] **Step 2: Run the pipeline end-to-end (manual smoke test)**
 
 ```bash
 python scripts/01_flush_db.py
@@ -1830,7 +1830,7 @@ python scripts/03_design_requirements.py
 
 Expected: Pipeline runs through decompose → design+verify → summary with no verification stub creation and fewer unresolved references.
 
-- [ ] **Step 3: Commit any fixes**
+- [x] **Step 3: Commit any fixes**
 
 ```bash
 git add -A && git commit -m "fix: address any test failures from integration"
