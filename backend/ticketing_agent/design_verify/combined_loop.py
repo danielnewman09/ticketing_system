@@ -1,0 +1,214 @@
+"""Combined design+verify agent: per-HLR loop that designs and verifies.
+
+Uses call_tool_loop with draft-state tools so the agent can design,
+verify, discover gaps, and revise before committing.
+"""
+
+import json
+import logging
+import os
+
+from llm_caller import call_tool_loop
+from backend.codebase.schemas import OODesignSchema
+from backend.requirements.schemas import VerificationSchema
+from backend.requirements.formatting import format_hlrs_for_prompt
+
+from backend.ticketing_agent.design_verify.combined_prompt import SYSTEM_PROMPT, format_llr_section
+from backend.ticketing_agent.design_verify.combined_tools import (
+    ALL_TOOLS,
+    make_combined_dispatcher,
+)
+from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+log = logging.getLogger("agents.design_verify")
+
+
+class DesignVerifyResult:
+    """Result from the combined design+verify loop."""
+
+    def __init__(
+        self,
+        oo_design: OODesignSchema,
+        verifications: dict[int, list[VerificationSchema]],
+        design_warnings: list[str] | None = None,
+        verification_warnings: list[str] | None = None,
+    ):
+        self.oo_design = oo_design
+        self.verifications = verifications
+        self.design_warnings = design_warnings or []
+        self.verification_warnings = verification_warnings or []
+
+
+def design_and_verify(
+    hlr: dict,
+    llrs: list[dict],
+    existing_verifications: list[dict] | None = None,
+    existing_classes: list[dict] | None = None,
+    intercomponent_classes: list[dict] | None = None,
+    other_hlr_summaries: list[dict] | None = None,
+    dependency_contexts: dict[int, dict] | None = None,
+    component_namespace: str = "",
+    sibling_namespaces: list[str] | None = None,
+    prior_class_lookup: dict[str, str] | None = None,
+    dependency_lookup: dict[str, str] | None = None,
+    neo4j_session=None,
+    model: str = "",
+    prompt_log_file: str = "",
+) -> DesignVerifyResult:
+    """Run the combined design+verify loop for a single HLR.
+
+    Uses call_tool_loop with design and verification tools so the LLM
+    can design, verify against LLRs, discover gaps, and revise.
+
+    Args:
+        hlr: HLR dict with {id, description, component_name?}.
+        llrs: LLR dicts for this HLR.
+        existing_verifications: Existing verification stubs for these LLRs.
+        existing_classes: Classes already designed in the same component.
+        intercomponent_classes: Public API classes from other components.
+        other_hlr_summaries: Other HLRs for context.
+        dependency_contexts: Dependency assessment keyed by HLR ID.
+        component_namespace: Required namespace for this component.
+        sibling_namespaces: Other component namespaces.
+        prior_class_lookup: bare_name -> qualified_name for previously designed classes.
+        dependency_lookup: bare_name -> qualified_name for dependency API classes.
+        neo4j_session: Optional Neo4j session for persistent lookups.
+        model: LLM model override.
+        prompt_log_file: File path for prompt logging.
+
+    Returns:
+        DesignVerifyResult with oo_design, verifications, and any warnings.
+    """
+    from backend.ticketing_agent.design_verify.combined_prompt import (
+        build_specializations_section,
+        build_dependency_api_section,
+        build_as_built_section,
+        build_existing_classes_section,
+        build_intercomponent_section,
+        build_other_hlrs_section,
+        build_namespace_section,
+    )
+
+    requirements_text = format_hlrs_for_prompt([hlr], llrs, include_component=True)
+
+    # Build prompt sections from context
+    specializations_section = ""
+    # TODO: build from language/specialization info when available
+
+    namespace_section = build_namespace_section(component_namespace, sibling_namespaces or []) if component_namespace else ""
+
+    dep_api_section = ""
+    if dependency_lookup:
+        dep_classes = []
+        for bare, qname in dependency_lookup.items():
+            dep_classes.append({"qualified_name": qname, "name": bare})
+        dep_api_section = build_dependency_api_section(dep_classes)
+
+    as_built_section = ""
+    if existing_classes:
+        as_built_section = build_as_built_section(existing_classes)
+
+    existing_section = ""
+    if existing_classes:
+        existing_section = build_existing_classes_section(existing_classes)
+
+    intercomp_section = ""
+    if intercomponent_classes:
+        intercomp_section = build_intercomponent_section(intercomponent_classes)
+
+    other_hlrs_section = ""
+    if other_hlr_summaries:
+        other_hlrs_section = build_other_hlrs_section(other_hlr_summaries)
+
+    llr_section = format_llr_section(llrs)
+
+    system = SYSTEM_PROMPT.format(
+        specializations_section=specializations_section,
+        namespace_section=namespace_section,
+        dependency_api_section=dep_api_section,
+        as_built_section=as_built_section,
+        existing_classes_section=existing_section,
+        intercomponent_section=intercomp_section,
+        other_hlrs_section=other_hlrs_section,
+        llr_section=llr_section,
+    )
+
+    # Build component context for the user prompt
+    component_name = hlr.get("component_name")
+    component_hint = ""
+    if component_name:
+        component_desc = hlr.get("component_description", "")
+        component_hint = f"\n\nThis requirement belongs to the architectural component: **{component_name}**"
+        if component_namespace:
+            component_hint += f" (namespace: `{component_namespace}`)"
+        component_hint += ". Your class design should be scoped to this component context.\n"
+        if component_desc:
+            component_hint += f"\n### Component Description\n\n{component_desc}\n"
+
+    # Format existing verification stubs
+    existing_verifs_text = ""
+    if existing_verifications:
+        lines = ["Existing verification stubs:"]
+        for v in existing_verifications:
+            lines.append(f"  - [{v['method']}] {v.get('test_name', '')}: {v.get('description', '')}")
+        existing_verifs_text = "\n".join(lines)
+
+    user_content = (
+        f"Design the object-oriented class structure and write verification procedures "
+        f"for the following requirements:\n\n{requirements_text}{component_hint}"
+    )
+    if existing_verifs_text:
+        user_content += f"\n\n{existing_verifs_text}"
+
+    messages = [{"role": "user", "content": user_content}]
+
+    # Build dependency lookup dict for dispatcher
+    dep_lookup = dict(dependency_lookup or {})
+
+    # Build tool dispatcher with draft state + Neo4j
+    dispatcher = make_combined_dispatcher(
+        prior_class_lookup=prior_class_lookup or {},
+        dependency_lookup=dep_lookup,
+        intercomponent_classes=intercomponent_classes or [],
+        neo4j_session=neo4j_session,
+    )
+
+    # Run the tool loop
+    result = call_tool_loop(
+        system=system,
+        messages=messages,
+        tools=ALL_TOOLS,
+        final_tool_name="commit_design_and_verifications",
+        tool_dispatcher=dispatcher,
+        model=model,
+        max_tokens=8192,
+        max_turns=75,
+        prompt_log_file=prompt_log_file,
+    )
+
+    # Parse the final result
+    oo_design = OODesignSchema.model_validate(result["oo_design"])
+    verifications = {}
+    for llr_id_str, v_list in result.get("verifications", {}).items():
+        llr_id = int(llr_id_str)
+        verifications[llr_id] = [VerificationSchema.model_validate(v) for v in v_list]
+
+    # Post-loop validation
+    design_warnings = []
+    verification_warnings = []
+
+    design_errors = _validate_oo_design(
+        oo_design,
+        prior_class_lookup=prior_class_lookup or {},
+        dependency_lookup=dep_lookup,
+        intercomponent_classes=intercomponent_classes or [],
+    )
+    if design_errors:
+        design_warnings.extend(design_errors)
+
+    return DesignVerifyResult(
+        oo_design=oo_design,
+        verifications=verifications,
+        design_warnings=design_warnings,
+        verification_warnings=verification_warnings,
+    )
