@@ -136,15 +136,12 @@ Guidelines:
 The `verifications` field in `commit_design_and_verifications` MUST be a JSON
 object keyed by LLR ID (integer), NOT by test name or description.
 
-e.g. if LLR IDs are 1 and 2:
-  "verifications": {{
-    "1": [VerificationSchema, ...],
-    "2": [VerificationSchema, ...]
-  }}
+Example (LLR IDs 1 and 2):
+  "verifications": {{ "1": [...], "2": [...] }}
 
-✗ "verifications": {{"test_add": [...]}}
-✗ "verifications": {{"engine_addition_returns_correct_sum": [...]}}
-✓ "verifications": {{"1": [...]}}
+Wrong: "verifications": {{"test_add": [...]}}
+Wrong: "verifications": {{"engine_addition_returns_correct_sum": [...]}}
+Correct: "verifications": {{"1": [...]}}
 </FORMAT-CONTRACT>
 
 You MUST use the commit_design_and_verifications tool to return your final result.
