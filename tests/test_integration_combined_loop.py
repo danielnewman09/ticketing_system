@@ -119,3 +119,27 @@ def test_combined_loop_rejects_unresolved_references():
     ))
     assert commit_result["committed"] is False
     assert any("GhostClass" in e for e in commit_result["errors"])
+
+
+def test_commit_tool_uses_string_llr_ids():
+    """Commit result always uses string LLR ID keys."""
+    from backend.ticketing_agent.design_verify.combined_tools import make_combined_dispatcher
+
+    dispatcher = make_combined_dispatcher(
+        prior_class_lookup={},
+        dependency_lookup=None,
+        intercomponent_classes=None,
+        neo4j_session=None,
+    )
+
+    dispatcher("draft_design", {"design": _minimal_design_dict()})
+
+    commit_result = json.loads(dispatcher(
+        "commit_design_and_verifications",
+        {
+            "oo_design": _minimal_design_dict(),
+            "verifications": {"1": [_minimal_verification_dict()]},
+        },
+    ))
+    assert commit_result["committed"] is True
+    assert "1" in commit_result["verifications"]

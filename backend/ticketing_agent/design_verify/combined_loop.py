@@ -160,6 +160,11 @@ def design_and_verify(
     if existing_verifs_text:
         user_content += f"\n\n{existing_verifs_text}"
 
+    # Explicitly list the LLR IDs so the LLM knows the correct keys
+    if llrs:
+        llr_ids = ", ".join(str(llr["id"]) for llr in llrs)
+        user_content += f"\n\nThe LLR IDs for this requirement are: [{llr_ids}]. Use these as keys in the verifications dict."
+
     messages = [{"role": "user", "content": user_content}]
 
     # Build dependency lookup dict for dispatcher
@@ -189,9 +194,36 @@ def design_and_verify(
     # Parse the final result
     oo_design = OODesignSchema.model_validate(result["oo_design"])
     verifications = {}
+    valid_llr_ids = {llr["id"] for llr in (llrs or [])}
+
     for llr_id_str, v_list in result.get("verifications", {}).items():
-        llr_id = int(llr_id_str)
-        verifications[llr_id] = [VerificationSchema.model_validate(v) for v in v_list]
+        # Attempt to parse key as LLR ID; handle non-numeric keys gracefully
+        try:
+            llr_id = int(llr_id_str)
+        except (ValueError, TypeError):
+            # LLM used a non-numeric key (e.g. test name) — try to match
+            # to known LLRs, or distribute to all LLRs if unknown
+            log.warning(
+                "design_and_verify: non-numeric verification key '%s', "
+                "distributing to all LLRs",
+                llr_id_str,
+            )
+            for known_id in valid_llr_ids:
+                parsed = [VerificationSchema.model_validate(v) for v in v_list]
+                verifications.setdefault(known_id, []).extend(parsed)
+            continue
+
+        if valid_llr_ids and llr_id not in valid_llr_ids:
+            log.warning(
+                "design_and_verify: verification key %d not in known LLR IDs %s, "
+                "distributing to first LLR",
+                llr_id, valid_llr_ids,
+            )
+            fallback_id = min(valid_llr_ids)
+            parsed = [VerificationSchema.model_validate(v) for v in v_list]
+            verifications.setdefault(fallback_id, []).extend(parsed)
+        else:
+            verifications[llr_id] = [VerificationSchema.model_validate(v) for v in v_list]
 
     # Post-loop validation
     design_warnings = []

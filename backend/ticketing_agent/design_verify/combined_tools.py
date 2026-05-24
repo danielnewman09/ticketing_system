@@ -20,6 +20,28 @@ from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
 
 log = logging.getLogger("agents.design_verify")
 
+
+# ---------------------------------------------------------------------------
+# Schema helpers
+# ---------------------------------------------------------------------------
+
+
+def _commit_tool_schema() -> dict:
+    """Build the JSON schema for commit_design_and_verifications.
+
+    Customizes the verifications field to explicitly describe the LLR ID key
+    format, which LLMs frequently get wrong.
+    """
+    schema = DesignAndVerificationSchema.model_json_schema()
+    # Add a clear description to the verifications property
+    if "properties" in schema and "verifications" in schema["properties"]:
+        schema["properties"]["verifications"]["description"] = (
+            "Map of LLR ID (integer string) to list of verification procedures. "
+            "Keys MUST be LLR IDs like \"1\", \"2\" — NOT test names. "
+            "Example: {\"1\": [...], \"2\": [...]}"
+        )
+    return schema
+
 # ---------------------------------------------------------------------------
 # Tool definitions (Anthropic format)
 # ---------------------------------------------------------------------------
@@ -139,7 +161,7 @@ COMMIT_TOOL = {
         "sound. If there are errors, returns them for the agent to fix "
         "before retrying."
     ),
-    "input_schema": DesignAndVerificationSchema.model_json_schema(),
+    "input_schema": _commit_tool_schema(),
 }
 
 ALL_TOOLS = [
