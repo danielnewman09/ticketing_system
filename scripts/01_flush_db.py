@@ -60,6 +60,15 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
         session.run("MATCH (n:Condition) DETACH DELETE n")
         session.run("MATCH (n:Action) DETACH DELETE n")
 
+        # Clean up verification stub nodes (source_type='verification')
+        result = session.run(
+            "MATCH (d:Design {source_type: 'verification'}) DETACH DELETE d "
+            "RETURN count(d) AS deleted"
+        )
+        deleted = result.single()["deleted"]
+        if deleted:
+            print(f"  Deleted {deleted} verification stub design nodes")
+
     close_neo4j()
 
     if clear_logs:
