@@ -241,8 +241,7 @@ class VerificationRepository:
         If subject_qualified_name references an existing :Design node, a
         :LEFT_OPERAND edge is created. Similarly for object_qualified_name
         with a :RIGHT_OPERAND edge. If the :Design node doesn't exist yet,
-        the qualified name is stored as a property but no edge is created
-        (call augment_missing_design_nodes() first if needed).
+        the qualified name is stored as a property but no edge is created.
         """
         next_id = self._next_condition_id()
 
@@ -434,57 +433,6 @@ class VerificationRepository:
     # -----------------------------------------------------------------------
     # Design node augmentation and validation
     # -----------------------------------------------------------------------
-
-    def augment_missing_design_nodes(self, qualified_names: list[str]) -> list[str]:
-        """Create missing :Design stub nodes for unresolved verification references.
-
-        For each qualified_name that doesn't match an existing :Design node,
-        creates a stub with source_type="verification" (marks it as auto-created).
-        Returns the list of qualified_names that were created.
-
-        Invalid qualified names (test artifacts, dot separators, bare words)
-        are skipped with a warning. Dot separators are auto-corrected to ::.
-        """
-        if not qualified_names:
-            return []
-
-        created = []
-        for raw_qn in qualified_names:
-            if not raw_qn:
-                continue
-
-            # Validate and optionally correct the qualified name
-            is_valid, corrected = _is_valid_verification_qname(raw_qn)
-            if not is_valid:
-                log.warning("augment: skipping invalid verification qname: %r", raw_qn)
-                continue
-
-            qn = corrected if corrected else raw_qn
-
-            # Check if :Design node already exists (with corrected name)
-            result = self._session.run(
-                "MATCH (d:Design {qualified_name: $qn}) RETURN count(d) AS cnt",
-                {"qn": qn},
-            )
-            if result.single()["cnt"] > 0:
-                continue
-
-            # Parse parent and member name for stub creation
-            name = qn.rsplit("::", 1)[-1] if "::" in qn else qn
-
-            # Create the stub :Design node
-            self._session.run(
-                """
-                MERGE (d:Design {qualified_name: $qn})
-                SET d.name = $name, d.kind = 'member', d.source_type = 'verification',
-                    d.description = 'Auto-created from verification reference'
-                """,
-                {"qn": qn, "name": name},
-            )
-            created.append(qn)
-            log.info("augment: created verification stub :Design node %s", qn)
-
-        return created
 
     def validate_references(self, qualified_names: list[str]) -> tuple[list[str], list[str]]:
         """Check which qualified_names exist as :Design nodes in Neo4j.
