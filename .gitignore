@@ -22,3 +22,4 @@ llm_caller/
 .superpowers/
 .playwright-mcp/
 logs_test/
+.worktrees/
