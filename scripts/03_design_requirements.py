@@ -203,7 +203,7 @@ def step_design():
         print(f"  Dependency graph unavailable: {e}\n")
 
     # Get a Neo4j session for container lookup seeding
-    neo4j_session = get_neo4j().session()
+    neo4j_session = get_neo4j().get_driver().session()
 
     try:
         for i, hlr_id in enumerate(ordered_ids, 1):
@@ -307,8 +307,10 @@ def step_design():
                 total_linked += persisted.links_applied
                 total_skipped += persisted.links_skipped
     finally:
-        if neo4j_session:
+        try:
             neo4j_session.close()
+        except Exception:
+            pass
         if dep_toolset:
             dep_toolset.close()
             print("  Dependency graph disconnected")
@@ -412,7 +414,7 @@ def step_design_and_verify():
             pass
 
     # Get a Neo4j session for container lookup seeding
-    neo4j_session = get_neo4j().session()
+    neo4j_session = get_neo4j().get_driver().session()
 
     try:
         for i, hlr_id in enumerate(ordered_ids, 1):
@@ -573,8 +575,10 @@ def step_design_and_verify():
                                       hlr_id, assoc.from_class, to_cls, assoc.relationship)
                         print(f"    CROSS-COMPONENT: {assoc.from_class} -> {to_cls} ({assoc.relationship})")
     finally:
-        if neo4j_session:
+        try:
             neo4j_session.close()
+        except Exception:
+            pass
         if dep_toolset:
             dep_toolset.close()
             print("  Dependency graph disconnected")

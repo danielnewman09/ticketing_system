@@ -107,6 +107,18 @@ def design_hlr(
             log.exception("Class discovery failed for HLR %s", hlr_id)
             discovery_failed = True
 
+    # --- Step 1.5: Seed standard containers from Neo4j ---
+    container_classes = []
+    if neo4j_session is not None:
+        container_lookup = seed_container_lookup(neo4j_session)
+        if container_lookup:
+            container_classes = get_container_class_info(neo4j_session)
+            log.info(
+                "  HLR %s: seeded %d container entries from Neo4j",
+                hlr_id,
+                len(container_lookup),
+            )
+
     # --- Step 2: Design OO (single-turn) ---
     design_log = os.path.join(log_dir, f"design_oo_hlr{hlr_id}.md") if log_dir else ""
     oo = design_oo(
@@ -129,14 +141,12 @@ def design_hlr(
     )
 
     # --- Step 3: Map to ontology (deterministic) ---
-    # Build dependency_lookup from discovery results.
+    # Build dependency_lookup from discovery results + seeded containers.
     # The mapper needs bare_name -> qualified_name so that references
     # like inherits_from=["Fl_Window"] can be resolved.  Discovery
     # returns qualified_name but no separate "name" field, so we
     # derive the bare name from the qualified name.
-    # Build dependency_lookup from discovery results + seeded containers
     dependency_lookup = None
-    container_classes = []
     if dependency_classes:
         dependency_lookup = {}
         for cls in dependency_classes:
@@ -149,7 +159,7 @@ def design_hlr(
             len(dependency_lookup),
         )
 
-    # Seed standard containers from Neo4j into dependency_lookup
+    # Merge seeded containers into dependency_lookup for map_to_ontology
     if neo4j_session is not None:
         container_lookup = seed_container_lookup(neo4j_session)
         if container_lookup:
@@ -158,13 +168,11 @@ def design_hlr(
             before = len(dependency_lookup)
             dependency_lookup.update(container_lookup)
             log.info(
-                "  HLR %s: seeded %d container entries into dependency_lookup (was %d, now %d)",
+                "  HLR %s: merged containers into dependency_lookup (was %d, now %d)",
                 hlr_id,
-                len(container_lookup),
                 before,
                 len(dependency_lookup),
             )
-            container_classes = get_container_class_info(neo4j_session)
 
     ontology = map_oo_to_ontology(
         oo,
