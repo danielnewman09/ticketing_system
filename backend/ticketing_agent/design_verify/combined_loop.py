@@ -52,6 +52,7 @@ def design_and_verify(
     prior_class_lookup: dict[str, str] | None = None,
     dependency_lookup: dict[str, str] | None = None,
     neo4j_session=None,
+    toolset=None,
     model: str = "",
     prompt_log_file: str = "",
     discovery_failed: bool = False,
@@ -200,6 +201,7 @@ def design_and_verify(
         dependency_lookup=dep_lookup,
         intercomponent_classes=intercomponent_classes or [],
         neo4j_session=neo4j_session,
+        toolset=toolset,
     )
 
     # Run the tool loop
@@ -214,6 +216,24 @@ def design_and_verify(
         max_turns=75,
         prompt_log_file=prompt_log_file,
     )
+
+    # Warn if the agent spent too many turns on discovery without designing
+    if prompt_log_file and os.path.exists(prompt_log_file):
+        try:
+            with open(prompt_log_file) as f:
+                log_content = f.read()
+            discovery_calls = log_content.count("dispatching search_symbols") + \
+                              log_content.count("dispatching get_compound") + \
+                              log_content.count("dispatching browse_namespace") + \
+                              log_content.count("dispatching find_inheritance")
+            if discovery_calls > 20:
+                log.warning(
+                    "design_and_verify: HLR %s used %d discovery tool calls — "
+                    "consider tightening the discovery prompt",
+                    hlr.get("id", "?"), discovery_calls,
+                )
+        except Exception:
+            pass
 
     # Parse the final result
     oo_design = OODesignSchema.model_validate(result["oo_design"])
