@@ -11,8 +11,8 @@ import logging
 import os
 
 from backend.codebase.schemas import DesignSchema, OODesignSchema
-from backend.ticketing_agent.design.design_oo import design_oo
-from backend.ticketing_agent.design.discover_classes import discover_classes
+# from backend.ticketing_agent.design.design_oo import design_oo  # no longer called from pipeline
+# from backend.ticketing_agent.design.discover_classes import discover_classes  # no longer called from pipeline
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
@@ -64,48 +64,10 @@ def design_hlr(
     """
     hlr_id = hlr.get("id", "?")
 
-    # --- Step 1: Discover dependency + as-built classes ---
-    dependency_classes = None
-    as_built_classes = None
-    discovery_failed = False
-
-    if toolset:
-        discovery_log = os.path.join(log_dir, f"discover_classes_hlr{hlr_id}.md") if log_dir else ""
-        try:
-            discovered = discover_classes(
-                hlr=hlr,
-                llrs=llrs,
-                dependency_contexts=dependency_contexts,
-                component_namespace=component_namespace,
-                toolset=toolset,
-                model=model,
-                prompt_log_file=discovery_log,
-            )
-            log.info(
-                "  HLR %s: discover_classes returned %d items",
-                hlr_id,
-                len(discovered),
-            )
-            for c in discovered:
-                log.info(
-                    "    %s [%s] %s",
-                    c.get("category"),
-                    c.get("kind"),
-                    c.get("qualified_name"),
-                )
-            dependency_classes = [
-                c for c in discovered if c.get("category") == "dependency"
-            ] or None
-            as_built_classes = [c for c in discovered if c.get("category") == "as-built"] or None
-            log.info(
-                "  HLR %s: %d dependency, %d as-built classes for design_oo",
-                hlr_id,
-                len(dependency_classes or []),
-                len(as_built_classes or []),
-            )
-        except Exception:
-            log.exception("Class discovery failed for HLR %s", hlr_id)
-            discovery_failed = True
+    # --- Step 1: Skip separate discovery + design_oo ---
+    # Discovery is now handled inside the design_and_verify loop.
+    # The agent discovers dependencies on-the-fly using search_symbols,
+    # get_compound, etc.
 
     # --- Step 1.5: Seed standard containers from Neo4j ---
     container_classes = []
@@ -119,60 +81,44 @@ def design_hlr(
                 len(container_lookup),
             )
 
-    # --- Step 2: Design OO (single-turn) ---
-    design_log = os.path.join(log_dir, f"design_oo_hlr{hlr_id}.md") if log_dir else ""
-    oo = design_oo(
+    # --- Build dependency_lookup for the combined loop ---
+    # Discovery results come through the toolset at runtime.
+    # We pre-seed standard containers since they aren't searchable.
+    dep_lookup: dict[str, str] = {}
+    if neo4j_session is not None:
+        container_lookup = seed_container_lookup(neo4j_session)
+        if container_lookup:
+            dep_lookup.update(container_lookup)
+
+    # --- Step 2: Combined design + verify (includes discovery) ---
+    from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
+
+    discovery_failed = toolset is None
+
+    verify_log = os.path.join(log_dir, f"design_verify_hlr{hlr_id}.md") if log_dir else ""
+    result = design_and_verify(
         hlr=hlr,
         llrs=llrs,
-        language=language,
         existing_classes=existing_classes,
-        dependency_classes=(dependency_classes or []) + container_classes,
-        as_built_classes=as_built_classes,
         intercomponent_classes=intercomponent_classes,
-        other_hlr_summaries=other_hlr_summaries,
         dependency_contexts=dependency_contexts,
         component_namespace=component_namespace,
         sibling_namespaces=sibling_namespaces,
         prior_class_lookup=prior_class_lookup,
-        model=model,
-        prompt_log_file=design_log,
-        discovery_failed=discovery_failed,
+        dependency_lookup=dep_lookup or None,
         neo4j_session=neo4j_session,
+        toolset=toolset,
+        model=model,
+        prompt_log_file=verify_log,
+        discovery_failed=discovery_failed,
     )
 
-    # --- Step 3: Map to ontology (deterministic) ---
-    # Build dependency_lookup from discovery results + seeded containers.
-    # The mapper needs bare_name -> qualified_name so that references
-    # like inherits_from=["Fl_Window"] can be resolved.  Discovery
-    # returns qualified_name but no separate "name" field, so we
-    # derive the bare name from the qualified name.
-    dependency_lookup = None
-    if dependency_classes:
-        dependency_lookup = {}
-        for cls in dependency_classes:
-            qname = cls["qualified_name"]
-            bare = qname.rsplit("::", 1)[-1]
-            dependency_lookup[bare] = qname
-        log.info(
-            "  HLR %s: dependency_lookup has %d entries from discovery",
-            hlr_id,
-            len(dependency_lookup),
-        )
+    oo = result.oo_design
 
-    # Merge seeded containers into dependency_lookup for map_to_ontology
-    if neo4j_session is not None:
-        container_lookup = seed_container_lookup(neo4j_session)
-        if container_lookup:
-            if dependency_lookup is None:
-                dependency_lookup = {}
-            before = len(dependency_lookup)
-            dependency_lookup.update(container_lookup)
-            log.info(
-                "  HLR %s: merged containers into dependency_lookup (was %d, now %d)",
-                hlr_id,
-                before,
-                len(dependency_lookup),
-            )
+    # --- Step 3: Map to ontology (deterministic) ---
+    dependency_lookup = None
+    if dep_lookup:
+        dependency_lookup = dep_lookup
 
     ontology = map_oo_to_ontology(
         oo,
@@ -191,4 +137,4 @@ def design_hlr(
         len(ontology.triples),
     )
 
-    return oo, ontology
+    return oo, ontology, result.verifications
