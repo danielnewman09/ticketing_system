@@ -138,7 +138,10 @@ ontology = map_oo_to_ontology(result.oo_design, dependency_lookup, ...)
 
 The function signature gains a `toolset` parameter passed through to the combined
 loop's dispatcher. `dependency_lookup` is built from `seed_container_lookup()` only
-(standard containers like std::vector) — no separate discovery step.
+(standard containers like std::vector) — no separate discovery step, because the
+agent discovers dependency classes on-the-fly and uses qualified names directly in
+the design. Only container classes (which aren't searchable in the codebase index)
+need to be pre-seeded.
 
 **Changes to `scripts/03_design_requirements.py`:**
 
