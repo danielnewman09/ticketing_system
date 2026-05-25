@@ -309,17 +309,14 @@ def step_design_and_verify():
     print("  Designing and verifying each HLR in dependency order...\n")
     step_log = logging.getLogger("pipeline.design_verify")
 
-    from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
     from backend.ticketing_agent.design.design_per_hlr import (
         _build_class_lookup,
         _extract_existing_classes,
         _extract_intercomponent_context,
     )
     from backend.ticketing_agent.design.order_hlrs import order_hlrs
-    from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
     from backend.codebase.schemas import OODesignSchema
     from backend.requirements.services.persistence import persist_design, persist_verification
-    from backend.requirements.services.persistence import build_verification_context
 
     # --- Design phase context ---
     from backend.ticketing_agent.design.design_hlr import design_hlr
@@ -438,10 +435,10 @@ def step_design_and_verify():
                 if h["id"] != hlr_id and h.get("component_namespace")
             ]
 
-            # --- Discovery phase (find dependency classes; initial design is NOT persisted) ---
-            step_log.info("Discovering dependencies for HLR %d: %s", hlr_id, hlr['description'])
+            # --- Single unified call: design_hlr now includes discovery + verify ---
+            step_log.info("Designing + verifying HLR %d: %s", hlr_id, hlr['description'])
             try:
-                oo_initial, _ontology_initial = design_hlr(
+                oo, ontology, verifs = design_hlr(
                     hlr=hlr,
                     llrs=hlr_llrs,
                     existing_classes=existing_classes or None,
@@ -456,125 +453,50 @@ def step_design_and_verify():
                     log_dir=LOGS_DIR,
                 )
             except Exception as e:
-                step_log.exception("HLR %d discovery failed: %s", hlr_id, e)
-                print(f"    ERROR: HLR {hlr_id} discovery failed: {e}")
+                step_log.exception("HLR %d design+verify failed: %s", hlr_id, e)
+                print(f"    ERROR: HLR {hlr_id} design+verify failed: {e}")
                 raise
 
             step_log.info(
-                "HLR %d initial design: %d classes, %d associations (not persisted — will use verified design)",
-                hlr_id, len(oo_initial.classes), len(oo_initial.associations),
+                "HLR %d: %d classes, %d nodes, %d triples",
+                hlr_id, len(oo.classes), len(ontology.nodes), len(ontology.triples),
             )
 
-            # --- Verify phase (combined design+verify loop — the PRIMARY design) ---
-            step_log.info("Verifying HLR %d: %d LLRs", hlr_id, len(hlr_llrs))
+            # Accumulate from the verified design
+            accumulated_class_lookup.update(_build_class_lookup(oo))
+            designed[hlr_id] = (oo, component_id, component_name)
 
-            # Get existing verification stubs for this HLR's LLRs
+            # Print nodes
+            for node_data in ontology.nodes:
+                if node_data.qualified_name not in qname_to_node:
+                    flag = " [intercomponent]" if node_data.is_intercomponent else ""
+                    print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
+
+            # Persist design to Neo4j
             with get_neo4j().session() as ns:
-                from backend.db.neo4j.repositories.verification import VerificationRepository
-                ver_repo = VerificationRepository(ns)
-                existing_verifications = []
-                for llr in hlr_llrs:
-                    vms = ver_repo.list_verifications(llr["id"])
-                    for vm in vms:
-                        existing_verifications.append(
-                            {"method": vm.method, "test_name": vm.test_name, "description": vm.description}
-                        )
-
-            # Build verification context (class-level context from Neo4j)
-            with get_neo4j().session() as ns:
-                class_contexts = build_verification_context(ns)
-
-            try:
-                result = design_and_verify(
-                    hlr=hlr,
-                    llrs=hlr_llrs,
-                    existing_verifications=existing_verifications or None,
-                    existing_classes=existing_classes or None,
-                    intercomponent_classes=intercomponent_classes or None,
-                    dependency_contexts=dependency_contexts,
-                    component_namespace=component_namespace,
-                    sibling_namespaces=sibling_namespaces or None,
-                    prior_class_lookup=accumulated_class_lookup or None,
-                    dependency_lookup=dependency_lookup or None,
-                    neo4j_session=None,  # Use a fresh session below
-                    model="",
-                    prompt_log_file=os.path.join(LOGS_DIR, f"design_verify_hlr{hlr_id}.md"),
-                )
-            except Exception as e:
-                step_log.exception("HLR %d verify failed: %s", hlr_id, e)
-                print(f"    ERROR: HLR {hlr_id} verify failed: {e}")
-                raise
-
-            if result.design_warnings:
-                step_log.warning("HLR %d: %d design warnings: %s", hlr_id, len(result.design_warnings), result.design_warnings[:3])
-
-            # --- Persist the VERIFIED design (primary source of truth) ---
-            verified_oo = result.oo_design
-            step_log.info(
-                "HLR %d verified design: %d classes, %d associations",
-                hlr_id, len(verified_oo.classes), len(verified_oo.associations),
-            )
-
-            # Build dependency lookup for map_to_ontology
-            dep_lookup_for_mapping = dict(dependency_lookup) if dependency_lookup else None
-            if neo4j_session:
-                try:
-                    from backend.ticketing_agent.design.container_lookup import seed_container_lookup
-                    container_lookup = seed_container_lookup(neo4j_session)
-                    if container_lookup:
-                        if dep_lookup_for_mapping is None:
-                            dep_lookup_for_mapping = {}
-                        dep_lookup_for_mapping.update(container_lookup)
-                except Exception:
-                    step_log.warning("Container lookup failed for mapping, continuing without it")
-
-            verified_ontology = map_oo_to_ontology(
-                verified_oo,
-                component_id=component_id,
-                prior_class_lookup=accumulated_class_lookup or None,
-                component_namespace=component_namespace,
-                dependency_lookup=dep_lookup_for_mapping,
-            )
-
-            step_log.info(
-                "HLR %d verified ontology: %d nodes, %d triples",
-                hlr_id, len(verified_ontology.nodes), len(verified_ontology.triples),
-            )
-
-            # Accumulate from the VERIFIED design (not the initial one)
-            accumulated_class_lookup.update(_build_class_lookup(verified_oo))
-            designed[hlr_id] = (verified_oo, component_id, component_name)
-
-            # Persist verified design to Neo4j
-            with get_session() as session:
-                for node_data in verified_ontology.nodes:
-                    if node_data.qualified_name not in qname_to_node:
-                        flag = " [intercomponent]" if node_data.is_intercomponent else ""
-                        print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
-
-                with get_neo4j().session() as neo4j_sess:
-                    persisted = persist_design(verified_ontology, neo4j_sess, qname_to_node=qname_to_node)
-                total_nodes += persisted.nodes_created
-                total_triples += persisted.triples_created
-                total_linked += persisted.links_applied
-                total_skipped += persisted.links_skipped
+                persisted = persist_design(ontology, ns, qname_to_node=qname_to_node)
+            total_nodes += persisted.nodes_created
+            total_triples += persisted.triples_created
+            total_linked += persisted.links_applied
+            total_skipped += persisted.links_skipped
 
             # Persist verifications
-            with get_neo4j().session() as ns:
-                for llr_id, verifs in result.verifications.items():
-                    persisted = persist_verification(ns, llr_id, verifs)
-                    total_conditions += persisted.conditions_created
-                    total_actions += persisted.actions_created
+            if verifs:
+                with get_neo4j().session() as ns:
+                    for llr_id, llr_verifs in verifs.items():
+                        persisted = persist_verification(ns, llr_id, llr_verifs)
+                        total_conditions += persisted.conditions_created
+                        total_actions += persisted.actions_created
 
-                    for v in verifs:
-                        print(
-                            f"    [{v.method}] {v.test_name}: "
-                            f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
-                            f"{len(v.postconditions)} post"
-                        )
+                        for v in llr_verifs:
+                            print(
+                                f"    [{v.method}] {v.test_name}: "
+                                f"{len(v.preconditions)} pre, {len(v.actions)} actions, "
+                                f"{len(v.postconditions)} post"
+                            )
 
-            # Check for cross-component associations in the verified design
-            for assoc in verified_oo.associations:
+            # Check for cross-component associations
+            for assoc in oo.associations:
                 to_cls = assoc.to_class
                 if '::' in to_cls:
                     to_ns = to_cls.split('::')[0]
