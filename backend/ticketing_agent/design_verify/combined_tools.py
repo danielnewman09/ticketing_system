@@ -22,6 +22,17 @@ log = logging.getLogger("agents.design_verify")
 
 
 # ---------------------------------------------------------------------------
+# Discovery helpers
+# ---------------------------------------------------------------------------
+
+
+def _slim_compound(records: list[dict]) -> list[dict]:
+    """Strip heavyweight fields from get_compound results."""
+    drop = {"detailed", "member_refid", "member_brief"}
+    return [{k: v for k, v in r.items() if k not in drop} for r in records]
+
+
+# ---------------------------------------------------------------------------
 # Schema helpers
 # ---------------------------------------------------------------------------
 
@@ -194,7 +205,142 @@ FIND_MECHANISM_TOOL = {
     },
 }
 
+
+SEARCH_SYMBOLS_TOOL = {
+    "name": "search_symbols",
+    "description": (
+        "Full-text search across indexed symbol names and documentation. "
+        "Use this to discover dependency or project classes relevant to "
+        "the requirements when designing. Supports natural-language terms "
+        "(e.g. 'window create', 'font rendering'). Returns matches with "
+        "qualified_name, kind, source, and relevance score."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search terms (supports Lucene syntax — AND, OR, quotes).",
+            },
+            "source": {
+                "type": "string",
+                "description": "Optional dependency name to restrict results (e.g. 'fltk', 'boost').",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of results.",
+                "default": 20,
+            },
+        },
+        "required": ["query"],
+    },
+}
+
+GET_COMPOUND_TOOL = {
+    "name": "get_compound",
+    "description": (
+        "Get full details of a class, struct, or enum and its members from "
+        "the indexed codebase. Use this after search_symbols identifies a "
+        "compound of interest. Returns the compound metadata plus all of "
+        "its members with signatures. Essential for understanding the API "
+        "of a class you plan to inherit from or reference."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Exact or qualified name (e.g. 'Fl_Window', 'boost::gregorian::date').",
+            },
+            "source": {
+                "type": "string",
+                "description": "Optional dependency name filter.",
+            },
+        },
+        "required": ["name"],
+    },
+}
+
+BROWSE_NAMESPACE_TOOL = {
+    "name": "browse_namespace",
+    "description": (
+        "List classes, free functions, and other symbols within a namespace "
+        "in the indexed codebase. Returns both nested compounds and "
+        "namespace-level members. Use this to explore a dependency's top-level "
+        "types when you don't know exact class names."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Namespace name (e.g. 'Fl', 'boost::asio').",
+            },
+            "source": {
+                "type": "string",
+                "description": "Optional dependency name filter.",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum results.",
+                "default": 50,
+            },
+        },
+        "required": ["name"],
+    },
+}
+
+FIND_INHERITANCE_TOOL = {
+    "name": "find_inheritance",
+    "description": (
+        "Explore the inheritance hierarchy of a class in the indexed codebase. "
+        "Use this to understand parent classes and derived classes — if a class "
+        "is relevant, its base classes may also be. Essential for determining "
+        "the correct inherits_from list in your design."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Exact or qualified class name.",
+            },
+            "direction": {
+                "type": "string",
+                "enum": ["up", "down", "both"],
+                "description": 'Direction: "up" (base classes), "down" (derived), or "both".',
+                "default": "both",
+            },
+            "max_depth": {
+                "type": "integer",
+                "description": "Maximum inheritance depth to traverse.",
+                "default": 5,
+            },
+        },
+        "required": ["name"],
+    },
+}
+
+LIST_SOURCES_TOOL = {
+    "name": "list_sources",
+    "description": (
+        "List all indexed dependency sources and their symbol counts. "
+        "Call this first to see which dependencies are available before "
+        "searching for specific classes."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+}
+
 ALL_TOOLS = [
+    LIST_SOURCES_TOOL,
+    SEARCH_SYMBOLS_TOOL,
+    GET_COMPOUND_TOOL,
+    BROWSE_NAMESPACE_TOOL,
+    FIND_INHERITANCE_TOOL,
     DRAFT_DESIGN_TOOL,
     VALIDATE_DESIGN_TOOL,
     CHECK_CLASS_NAME_TOOL,
@@ -296,6 +442,7 @@ def make_combined_dispatcher(
     dependency_lookup: dict[str, str] | None,
     intercomponent_classes: list[dict] | None,
     neo4j_session=None,
+    toolset=None,
 ):
     """Create a tool dispatcher for the combined design+verify tool loop.
 
@@ -314,7 +461,17 @@ def make_combined_dispatcher(
     def dispatch(tool_name: str, tool_input: dict) -> str:
         nonlocal _draft_design, _draft_lookup
 
-        if tool_name == "draft_design":
+        if tool_name == "list_sources":
+            return _dispatch_discovery("list_sources", tool_input)
+        elif tool_name == "search_symbols":
+            return _dispatch_discovery("search_symbols", tool_input)
+        elif tool_name == "get_compound":
+            return _dispatch_discovery("get_compound", tool_input)
+        elif tool_name == "browse_namespace":
+            return _dispatch_discovery("browse_namespace", tool_input)
+        elif tool_name == "find_inheritance":
+            return _dispatch_discovery("find_inheritance", tool_input)
+        elif tool_name == "draft_design":
             return _dispatch_draft_design(tool_input)
         elif tool_name == "validate_design":
             return _dispatch_validate_design(tool_input)
@@ -330,6 +487,39 @@ def make_combined_dispatcher(
             return _dispatch_commit(tool_input, _draft_design, _draft_lookup)
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+    # -- discovery tools (routed to doxygen_index toolset) --------------------
+
+    _DISCOVERY_METHOD_MAP = {
+        "list_sources": "list_sources",
+        "search_symbols": "search_symbols",
+        "get_compound": "get_compound",
+        "browse_namespace": "browse_namespace",
+        "find_inheritance": "find_inheritance",
+    }
+
+    _DISCOVERY_SLIM = {
+        "get_compound": _slim_compound,
+    }
+
+    def _dispatch_discovery(tool_name: str, tool_input: dict) -> str:
+        if toolset is None:
+            return json.dumps({
+                "error": "Codebase index not available. Proceed with your design using general knowledge and note the gap.",
+            })
+        method_name = _DISCOVERY_METHOD_MAP.get(tool_name)
+        method = getattr(toolset, method_name, None) if toolset else None
+        if not method:
+            return json.dumps({"error": f"Discovery tool {tool_name} not available"})
+        try:
+            result = method(**tool_input)
+            slim = _DISCOVERY_SLIM.get(tool_name)
+            if slim:
+                result = slim(result)
+            return json.dumps(result, default=str)
+        except Exception as e:
+            log.warning("Discovery tool %s failed: %s", tool_name, e)
+            return json.dumps({"error": str(e)})
 
     # -- draft_design --------------------------------------------------------
 
@@ -348,6 +538,18 @@ def make_combined_dispatcher(
             intercomponent_classes=intercomponent_classes or [],
         )
 
+        # Check for enum name collisions across components
+        warnings = []
+        for enum in design.enums:
+            enum_qname = f"{enum.module}::{enum.name}" if enum.module else enum.name
+            if enum.name in prior_class_lookup:
+                existing_qname = prior_class_lookup[enum.name]
+                if existing_qname != enum_qname:
+                    warnings.append(
+                        f"Enum '{enum.name}' already exists as '{existing_qname}' in a prior design. "
+                        f"Consider referencing the existing enum or renaming yours to avoid confusion."
+                    )
+
         # Store draft
         _draft_design = design
         _draft_lookup = _build_draft_lookup(design)
@@ -355,6 +557,7 @@ def make_combined_dispatcher(
         return json.dumps({
             "valid": len(errors) == 0,
             "errors": errors,
+            "warnings": warnings,
             "draft_summary": _draft_summary(design),
         })
 
@@ -372,10 +575,23 @@ def make_combined_dispatcher(
             dependency_lookup=dep_lookup,
             intercomponent_classes=intercomponent_classes or [],
         )
+
+        # Check for enum name collisions across components
+        warnings = []
+        for enum in design.enums:
+            enum_qname = f"{enum.module}::{enum.name}" if enum.module else enum.name
+            if enum.name in prior_class_lookup:
+                existing_qname = prior_class_lookup[enum.name]
+                if existing_qname != enum_qname:
+                    warnings.append(
+                        f"Enum '{enum.name}' already exists as '{existing_qname}' in a prior design. "
+                        f"Consider referencing the existing enum or renaming yours to avoid confusion."
+                    )
+
         return json.dumps({
             "valid": len(errors) == 0,
             "errors": errors,
-            "warnings": [],
+            "warnings": warnings,
         })
 
     # -- check_class_name ----------------------------------------------------
