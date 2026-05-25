@@ -13,7 +13,7 @@ from backend.codebase.schemas import OODesignSchema
 from backend.requirements.schemas import VerificationSchema
 from backend.requirements.formatting import format_hlrs_for_prompt
 
-from backend.ticketing_agent.design_verify.combined_prompt import SYSTEM_PROMPT, format_llr_section
+from backend.ticketing_agent.design_verify.combined_prompt import SYSTEM_PROMPT
 from backend.ticketing_agent.design_verify.combined_tools import (
     ALL_TOOLS,
     make_combined_dispatcher,
@@ -46,7 +46,6 @@ def design_and_verify(
     existing_verifications: list[dict] | None = None,
     existing_classes: list[dict] | None = None,
     intercomponent_classes: list[dict] | None = None,
-    other_hlr_summaries: list[dict] | None = None,
     dependency_contexts: dict[int, dict] | None = None,
     component_namespace: str = "",
     sibling_namespaces: list[str] | None = None,
@@ -68,7 +67,6 @@ def design_and_verify(
         existing_verifications: Existing verification stubs for these LLRs.
         existing_classes: Classes already designed in the same component.
         intercomponent_classes: Public API classes from other components.
-        other_hlr_summaries: Other HLRs for context.
         dependency_contexts: Dependency assessment keyed by HLR ID.
         component_namespace: Required namespace for this component.
         sibling_namespaces: Other component namespaces.
@@ -90,11 +88,27 @@ def design_and_verify(
         build_as_built_section,
         build_existing_classes_section,
         build_intercomponent_section,
-        build_other_hlrs_section,
         build_namespace_section,
     )
 
     requirements_text = format_hlrs_for_prompt([hlr], llrs, include_component=True)
+
+    # Build dependency lookup dict, seeded with standard containers from Neo4j
+    # This must happen BEFORE prompt-building so container_classes is available.
+    dep_lookup = dict(dependency_lookup or {})
+    container_classes = []
+    if neo4j_session is not None:
+        container_lookup = seed_container_lookup(neo4j_session)
+        if container_lookup:
+            before = len(dep_lookup)
+            dep_lookup.update(container_lookup)
+            log.info(
+                "Seeded %d container entries into dep_lookup (was %d, now %d)",
+                len(container_lookup),
+                before,
+                len(dep_lookup),
+            )
+            container_classes = get_container_class_info(neo4j_session)
 
     # Build prompt sections from context
     specializations_section = ""
@@ -103,7 +117,7 @@ def design_and_verify(
     namespace_section = build_namespace_section(component_namespace, sibling_namespaces or []) if component_namespace else ""
 
     dep_api_section = ""
-    all_dep_classes = list(dependency_lookup or {}.items())
+    all_dep_classes = list(dep_lookup.items())
     if container_classes:
         # Add container classes to the dependency context
         all_dep_classes.extend((c["name"], c["qualified_name"]) for c in container_classes)
@@ -123,12 +137,6 @@ def design_and_verify(
     if intercomponent_classes:
         intercomp_section = build_intercomponent_section(intercomponent_classes)
 
-    other_hlrs_section = ""
-    if other_hlr_summaries:
-        other_hlrs_section = build_other_hlrs_section(other_hlr_summaries)
-
-    llr_section = format_llr_section(llrs)
-
     system = SYSTEM_PROMPT.format(
         specializations_section=specializations_section,
         namespace_section=namespace_section,
@@ -136,8 +144,6 @@ def design_and_verify(
         as_built_section=as_built_section,
         existing_classes_section=existing_section,
         intercomponent_section=intercomp_section,
-        other_hlrs_section=other_hlrs_section,
-        llr_section=llr_section,
     )
 
     if discovery_failed:
@@ -187,24 +193,6 @@ def design_and_verify(
         user_content += f"\n\nThe LLR IDs for this requirement are: [{llr_ids}]. Use these as keys in the verifications dict."
 
     messages = [{"role": "user", "content": user_content}]
-
-    # Build dependency lookup dict, seeded with standard containers from Neo4j
-    dep_lookup = dict(dependency_lookup or {})
-
-    # Seed standard containers from Neo4j
-    container_classes = []
-    if neo4j_session is not None:
-        container_lookup = seed_container_lookup(neo4j_session)
-        if container_lookup:
-            before = len(dep_lookup)
-            dep_lookup.update(container_lookup)
-            log.info(
-                "Seeded %d container entries into dep_lookup (was %d, now %d)",
-                len(container_lookup),
-                before,
-                len(dep_lookup),
-            )
-            container_classes = get_container_class_info(neo4j_session)
 
     # Build tool dispatcher with draft state + Neo4j
     dispatcher = make_combined_dispatcher(

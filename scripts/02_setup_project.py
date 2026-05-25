@@ -34,6 +34,7 @@ LOGS_DIR = os.path.join(REPO_ROOT, "logs")
 HLR_DESCRIPTIONS = [
     "The application displays a GUI window with a numeric display area and buttons for digits 0-9, basic arithmetic operators (+, -, ×, ÷), a clear button, and an equals button",
     "The calculator performs addition, subtraction, multiplication, and division operations with proper input validation, returns results immediately, and recovers from errors such as division by zero or invalid syntax",
+    "The calculator backend exposes an interface that clearly encapsulates the backend engine while making it straightforward to call necessary functions and retrieve operational data from the user interface."
 ]
 
 

@@ -19,25 +19,25 @@ For the high-level requirement itself, provide a clear prose description that
 captures the intent.
 
 Then, decompose it into low-level requirements.
+
 Each LLR shall:
 - Include a prose description of the specific behavior
 - Have one or more verification methods, each with:
   - method: one of "automated", "review", or "inspection"
-  - confirmation: how we know the requirement is met (e.g., "the operator field
+  - verification: how we know the requirement is met (e.g., "the operator field
     is populated with the ADDITION enum value")
   - test_name: a snake_case test function name that would verify this
     (e.g., "user_presses_addition_key")
 
 Guidelines:
-- LLRs shall be atomic and testable
-- Each LLR shall map to a single observable behavior
 - Prefer "automated" verification where the behavior is programmatically testable
 - Use "review" for design/UX concerns and "inspection" for documentation/process
-- test_name should be descriptive and follow snake_case convention
+
+**Key Principles:**
+- LLRs shall be atomic and testable
+- Each LLR shall map to a single observable behavior
 - Generate enough LLRs to fully cover the HLR, but no more than necessary
-- Focus strictly on the scope of the target HLR. If other HLRs are provided as
-  context, do NOT generate LLRs that belong to those other HLRs. Use them only
-  to understand boundaries and avoid overlap.
+- test_name should be descriptive and follow snake_case convention
 
 You MUST use the decompose_requirement tool to return your result.
 """
@@ -47,20 +47,6 @@ TOOL_DEFINITION = {
     "description": "Return the structured decomposition of a high-level requirement",
     "input_schema": DecomposedRequirement.model_json_schema(),
 }
-
-
-def _format_sibling_context(other_hlrs: list[dict]) -> str:
-    """Format sibling HLRs into a context block for the prompt."""
-    if not other_hlrs:
-        return ""
-    lines = [
-        "\n\nOther HLRs in the system (for context only — do NOT decompose these, "
-        "only use them to understand scope boundaries):\n"
-    ]
-    for hlr in other_hlrs:
-        lines.append(f"- {format_hlr_dict(hlr, include_component=True)}")
-    return "\n".join(lines)
-
 
 def _format_dependency_context(dependency_context: dict) -> str:
     """Format dependency assessment into a context block for the prompt."""
@@ -104,9 +90,7 @@ def decompose(
     if component:
         user_content += (
             f"\n\nThis HLR belongs to the **{component}** component. "
-            "Keep LLRs focused on this component's scope."
         )
-    user_content += _format_sibling_context(other_hlrs or [])
     user_content += _format_dependency_context(dependency_context or {})
 
     result = call_tool(
@@ -120,6 +104,7 @@ def decompose(
         tools=[TOOL_DEFINITION],
         tool_name="decompose_requirement",
         model=model,
+        max_tokens=32768,
         prompt_log_file=prompt_log_file,
     )
 

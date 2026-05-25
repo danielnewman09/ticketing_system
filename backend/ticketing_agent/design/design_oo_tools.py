@@ -254,6 +254,24 @@ def make_design_dispatcher(
     return dispatch
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _extract_type_refs(type_string: str, known_names: set[str], out: set[str]) -> None:
+    """Extract references to known design entity names from a type string.
+
+    Handles types like `CalculatorResult`, `const CalculatorResult&`,
+    `vector<CalculatorResult>`, `std::unique_ptr<Operator>`, etc.
+    Only adds names that appear in *known_names*.
+    """
+    import re
+    # Match word tokens that could be design entity names
+    for token in re.findall(r'\b([A-Z][A-Za-z0-9_]*)\b', type_string):
+        if token in known_names:
+            out.add(token)
+
+
+# ---------------------------------------------------------------------------
 # Validation (used by dispatcher and post-loop check)
 # ---------------------------------------------------------------------------
 
@@ -350,5 +368,88 @@ def _validate_oo_design(
                                 f"Missing intercomponent association: {cls.name} references "
                                 f"{ic_qname} in attributes/methods but has no association to it."
                             )
+
+    # Check 4: Disconnected design entities
+    # An entity is "disconnected" if it has no inbound references (nothing
+    # references it as a type, no association points to it, nothing inherits
+    # from it or realizes it as an interface) AND it references no other
+    # entities (no associations from it, no non-primitive attribute types,
+    # etc.).  A single-entity design is inherently not disconnected.
+    #
+    # Build per-entity reference tracking:
+    #  - inbound:  other entities that reference this entity
+    #  - outbound: entities this entity references
+    inbound: dict[str, set[str]] = {name: set() for name in all_design_names}
+    outbound: dict[str, set[str]] = {name: set() for name in all_design_names}
+
+    # Association edges
+    for assoc in oo.associations:
+        if assoc.from_class in all_design_names:
+            if assoc.to_class in all_design_names:
+                inbound[assoc.to_class].add(assoc.from_class)
+            outbound[assoc.from_class].add(assoc.to_class)
+        elif assoc.to_class in all_design_names:
+            inbound[assoc.to_class].add(assoc.from_class)
+
+    # Type references from attributes, method params/returns, inheritance, interfaces
+    for cls in oo.classes:
+        for attr in cls.attributes:
+            if attr.type_name:
+                _extract_type_refs(attr.type_name, all_design_names, outbound[cls.name])
+        for method in cls.methods:
+            if method.return_type:
+                _extract_type_refs(method.return_type, all_design_names, outbound[cls.name])
+            for param in (method.parameters or []):
+                if isinstance(param, str):
+                    _extract_type_refs(param, all_design_names, outbound[cls.name])
+        for parent in (cls.inherits_from or []):
+            if parent in all_design_names:
+                outbound[cls.name].add(parent)
+                inbound[parent].add(cls.name)
+        for iface in (cls.realizes_interfaces or []):
+            if iface in all_design_names:
+                outbound[cls.name].add(iface)
+                inbound[iface].add(cls.name)
+
+    # Type references from interfaces (methods)
+    for iface in oo.interfaces:
+        for method in iface.methods:
+            if method.return_type:
+                _extract_type_refs(method.return_type, all_design_names, outbound[iface.name])
+            for param in (method.parameters or []):
+                if isinstance(param, str):
+                    _extract_type_refs(param, all_design_names, outbound[iface.name])
+
+    # Derive inbound from outbound: if entity A references entity B,
+    # then B has A as an inbound reference.
+    for entity_name, refs in outbound.items():
+        for ref_name in refs:
+            if ref_name in inbound and ref_name != entity_name:
+                inbound[ref_name].add(entity_name)
+
+    # Single-entity designs are not disconnected
+    if len(all_design_names) <= 1:
+        pass
+    else:
+        # Check every class, interface, and enum
+        disconnected = []
+        for cls in oo.classes:
+            if not inbound[cls.name] and not outbound[cls.name]:
+                disconnected.append((cls.name, "class"))
+        for iface in oo.interfaces:
+            if not inbound[iface.name] and not outbound[iface.name]:
+                disconnected.append((iface.name, "interface"))
+        for enum in oo.enums:
+            if not inbound[enum.name] and not outbound[enum.name]:
+                disconnected.append((enum.name, "enum"))
+
+        for name, kind in disconnected:
+            errors.append(
+                f"Disconnected {kind} \"{name}\" is not referenced by any association, "
+                f"attribute type, method parameter/return type, inheritance, or interface, "
+                f"and does not itself reference any other design entity. "
+                f"Either remove it or connect it to the design (e.g., use it as an attribute "
+                f"type, add an association, or reference it in a method signature)."
+            )
 
     return errors

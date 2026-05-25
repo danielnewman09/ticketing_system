@@ -6,6 +6,12 @@ _COLLAPSIBLE_KINDS = {"attribute", "method", "variable", "function", "friend", "
 _OWNER_KINDS = {"class", "interface", "enum", "struct"}
 _VISIBILITY_PREFIX = {"private": "-", "protected": "#", "public": "+"}
 
+# Canonical order for visibility groups in UML labels
+_VISIBILITY_ORDER = ["public", "protected", "private"]
+
+# Canonical order for member kinds within a visibility group
+_KIND_ORDER = {"attribute": 0, "method": 1, "enum_value": 2}
+
 
 def _dedup_by_name(members: list[dict]) -> list[dict]:
     seen: set[str] = set()
@@ -142,27 +148,28 @@ def _collect_collapsible(
     return collapsed, remove_node_ids, remove_edge_ids, external_entity_ids
 
 
-def _format_compartment(members: list[dict], is_dependency: bool, suffix: str = "") -> list[str]:
-    if is_dependency:
-        members = _dedup_by_name(members)
-    members.sort(key=lambda m: m["name"])
-    lines: list[str] = []
-    for m in members:
-        vis = _VISIBILITY_PREFIX.get(m["visibility"], " ")
-        sig = f": {m['type_signature']}" if m["type_signature"] else ""
-        lines.append(f"{vis} {m['name']}{suffix}{sig}")
-    return lines
-
-
-def _format_enum_compartment(values: list[dict]) -> list[str]:
-    """Format enum values as a UML-style list without visibility prefixes."""
-    values.sort(key=lambda m: m["name"])
-    return [m["name"] for m in values]
+def _format_member_line(m: dict, suffix: str = "") -> str:
+    """Format a single member as a UML-style line: visibility prefix + name + suffix + type."""
+    vis = _VISIBILITY_PREFIX.get(m["visibility"], " ")
+    sig = f": {m['type_signature']}" if m["type_signature"] else ""
+    return f"{vis} {m['name']}{suffix}{sig}"
 
 
 def _build_uml_label(
     class_name: str, by_kind: dict[str, list[dict]], is_dependency: bool, *, owner_kind: str = ""
 ) -> tuple[str, int]:
+    """Build a UML-style class label grouped by visibility.
+
+    Produces a label where public (+) members are above the divider
+    and private (-) / protected (#) members are below it:
+
+        ────────────
+        + public_method()
+        + public_attr: string
+        ────────────
+        - private_attr: int
+        # protected_method(): bool
+    """
     separator = "\u2500" * max(len(class_name), 10)
     lines = [class_name]
 
@@ -170,26 +177,46 @@ def _build_uml_label(
     if owner_kind == "enum":
         lines.insert(0, "\u00ABenumeration\u00BB")
 
-    attrs = by_kind.get("attribute", [])
-    attr_lines = _format_compartment(attrs, is_dependency) if attrs else []
-    if attr_lines:
-        lines.append(separator)
-        lines.extend(attr_lines)
+    # Collect all members, tagging each with its kind for ordering
+    all_members: list[dict] = []
+    for kind, members in by_kind.items():
+        suffix = "()" if kind == "method" else ""
+        for m in members:
+            all_members.append({**m, "_kind": kind, "_suffix": suffix})
 
-    methods = by_kind.get("method", [])
-    method_lines = _format_compartment(methods, is_dependency, "()") if methods else []
-    if method_lines:
-        lines.append(separator)
-        lines.extend(method_lines)
+    if is_dependency:
+        all_members = _dedup_by_name(all_members)
 
-    # Enum values compartment (separate from attributes)
-    enum_vals = by_kind.get("enum_value", [])
-    enum_lines = _format_enum_compartment(enum_vals) if enum_vals else []
-    if enum_lines:
-        lines.append(separator)
-        lines.extend(enum_lines)
+    # Group members by visibility (public, protected, private)
+    visibility_groups: dict[str, list[dict]] = {}
+    for m in all_members:
+        vis = m.get("visibility", "") or "public"
+        if vis not in _VISIBILITY_ORDER:
+            vis = "public"
+        visibility_groups.setdefault(vis, []).append(m)
 
-    return "\n".join(lines), len(attr_lines) + len(method_lines) + len(enum_lines)
+    total_members = 0
+    for vis in _VISIBILITY_ORDER:
+        group = visibility_groups.get(vis, [])
+        if not group:
+            continue
+        # Sort within group: kind order first, then name
+        group.sort(key=lambda m: (_KIND_ORDER.get(m.get("_kind", ""), 99), m["name"]))
+        lines.append(separator)
+        for m in group:
+            lines.append(_format_member_line(m, m.get("_suffix", "")))
+        total_members += len(group)
+
+    # If there were no visibility groups but we had members, add a single compartment
+    if total_members == 0 and all_members:
+        lines.append(separator)
+        for m in all_members:
+            m_sorted = sorted(all_members, key=lambda m: (_KIND_ORDER.get(m.get("_kind", ""), 99), m["name"]))
+        for m in m_sorted:
+            lines.append(_format_member_line(m, m.get("_suffix", "")))
+        total_members = len(m_sorted)
+
+    return "\n".join(lines), total_members
 
 
 def collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:

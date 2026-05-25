@@ -212,3 +212,101 @@ class TestCheckClassNameDispatcher:
         dispatcher = _make_dispatcher()
         result = json.loads(dispatcher("unknown_tool", {}))
         assert "error" in result
+
+
+class TestDisconnectedEntityValidation:
+    """Test Check 4: disconnected design entities."""
+
+    def test_single_class_design_not_flagged(self):
+        """A single-class design should not be flagged as disconnected."""
+        from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+        oo = OODesignSchema.model_validate(_sample_design_dict())
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
+        assert not any("Disconnected" in e for e in errors)
+
+    def test_disconnected_enum_flagged(self):
+        """An enum not referenced anywhere should be flagged as disconnected."""
+        from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+        design = _sample_design_dict()
+        design["enums"] = [
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+        ]
+        oo = OODesignSchema.model_validate(design)
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
+        assert any("Disconnected" in e and "Operation" in e for e in errors)
+
+    def test_enum_connected_via_attribute_type_not_flagged(self):
+        """An enum used as an attribute type should not be flagged."""
+        from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+        design = _sample_design_dict()
+        design["enums"] = [
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+        ]
+        design["classes"][0]["attributes"].append(
+            {"name": "op", "type_name": "Operation", "visibility": "private", "description": "Current operation"}
+        )
+        oo = OODesignSchema.model_validate(design)
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
+        assert not any("Disconnected" in e for e in errors)
+
+    def test_enum_connected_via_return_type_not_flagged(self):
+        """An enum used as a method return type should not be flagged."""
+        from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+        design = _sample_design_dict()
+        design["enums"] = [
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+        ]
+        design["classes"][0]["methods"].append(
+            {"name": "getOperation", "description": "Get operation", "visibility": "public", "parameters": [], "return_type": "Operation"}
+        )
+        oo = OODesignSchema.model_validate(design)
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
+        assert not any("Disconnected" in e for e in errors)
+
+    def test_enum_connected_via_association_not_flagged(self):
+        """An enum connected via association should not be flagged."""
+        from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+        design = _sample_design_dict()
+        design["enums"] = [
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+        ]
+        design["associations"] = [
+            {"from_class": "Calculator", "to_class": "Operation", "kind": "depends_on", "description": "Uses operation enum"}
+        ]
+        oo = OODesignSchema.model_validate(design)
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
+        assert not any("Disconnected" in e for e in errors)
+
+    def test_disconnected_class_flagged(self):
+        """A class not referenced by any other entity should be flagged."""
+        from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+        design = _sample_design_dict()
+        design["classes"].append(
+            {"name": "Orphan", "module": "calculation_engine", "description": "Disconnected class",
+             "visibility": "public", "is_intercomponent": False, "requirement_ids": [],
+             "attributes": [], "methods": [], "inherits_from": [], "realizes_interfaces": []}
+        )
+        oo = OODesignSchema.model_validate(design)
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
+        assert any("Disconnected" in e and "Orphan" in e for e in errors)
+
+    def test_enum_connected_via_method_parameter_not_flagged(self):
+        """An enum used as a method parameter type should not be flagged."""
+        from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+
+        design = _sample_design_dict()
+        design["enums"] = [
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+        ]
+        design["classes"][0]["methods"].append(
+            {"name": "setOperator", "description": "Set the operator", "visibility": "public", "parameters": ["Operation op"], "return_type": "void"}
+        )
+        oo = OODesignSchema.model_validate(design)
+        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
+        assert not any("Disconnected" in e for e in errors)

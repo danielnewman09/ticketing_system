@@ -234,25 +234,8 @@ def step_design():
                     )
                 )
 
-            other_hlr_summaries = [
-                {
-                    "id": h["id"],
-                    "description": h["description"],
-                    "status": "designed" if h["id"] in designed else "pending",
-                }
-                for h in hlrs
-                if h["id"] != hlr_id
-            ]
-
             dep_ctx = hlr.get("dependency_context")
             dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
-
-            component_namespace = hlr.get("component_namespace", "")
-            sibling_namespaces = [
-                h.get("component_namespace", "")
-                for h in hlrs
-                if h["id"] != hlr_id and h.get("component_namespace")
-            ]
 
             # Design single HLR
             step_log.info("Designing HLR %d: %s", hlr_id, hlr['description'])
@@ -262,7 +245,6 @@ def step_design():
                     llrs=hlr_llrs,
                     existing_classes=existing_classes or None,
                     intercomponent_classes=intercomponent_classes or None,
-                    other_hlr_summaries=other_hlr_summaries or None,
                     dependency_contexts=dependency_contexts,
                     component_namespace=component_namespace,
                     sibling_namespaces=sibling_namespaces or None,
@@ -334,6 +316,7 @@ def step_design_and_verify():
         _extract_intercomponent_context,
     )
     from backend.ticketing_agent.design.order_hlrs import order_hlrs
+    from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
     from backend.codebase.schemas import OODesignSchema
     from backend.requirements.services.persistence import persist_design, persist_verification
     from backend.requirements.services.persistence import build_verification_context
@@ -445,16 +428,6 @@ def step_design_and_verify():
                     )
                 )
 
-            other_hlr_summaries = [
-                {
-                    "id": h["id"],
-                    "description": h["description"],
-                    "status": "designed" if h["id"] in designed else "pending",
-                }
-                for h in hlrs
-                if h["id"] != hlr_id
-            ]
-
             dep_ctx = hlr.get("dependency_context")
             dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
 
@@ -465,15 +438,14 @@ def step_design_and_verify():
                 if h["id"] != hlr_id and h.get("component_namespace")
             ]
 
-            # --- Design phase (to get discovery + ontology mapping) ---
-            step_log.info("Designing HLR %d: %s", hlr_id, hlr['description'])
+            # --- Discovery phase (find dependency classes; initial design is NOT persisted) ---
+            step_log.info("Discovering dependencies for HLR %d: %s", hlr_id, hlr['description'])
             try:
-                oo, ontology = design_hlr(
+                oo_initial, _ontology_initial = design_hlr(
                     hlr=hlr,
                     llrs=hlr_llrs,
                     existing_classes=existing_classes or None,
                     intercomponent_classes=intercomponent_classes or None,
-                    other_hlr_summaries=other_hlr_summaries or None,
                     dependency_contexts=dependency_contexts,
                     component_namespace=component_namespace,
                     sibling_namespaces=sibling_namespaces or None,
@@ -484,30 +456,16 @@ def step_design_and_verify():
                     log_dir=LOGS_DIR,
                 )
             except Exception as e:
-                step_log.exception("HLR %d design failed: %s", hlr_id, e)
-                print(f"    ERROR: HLR {hlr_id} design failed: {e}")
+                step_log.exception("HLR %d discovery failed: %s", hlr_id, e)
+                print(f"    ERROR: HLR {hlr_id} discovery failed: {e}")
                 raise
 
-            step_log.info("HLR %d: %d classes, %d associations", hlr_id, len(oo.classes), len(oo.associations))
+            step_log.info(
+                "HLR %d initial design: %d classes, %d associations (not persisted — will use verified design)",
+                hlr_id, len(oo_initial.classes), len(oo_initial.associations),
+            )
 
-            # Persist design
-            accumulated_class_lookup.update(_build_class_lookup(oo))
-            designed[hlr_id] = (oo, component_id, component_name)
-
-            with get_session() as session:
-                for node_data in ontology.nodes:
-                    if node_data.qualified_name not in qname_to_node:
-                        flag = " [intercomponent]" if node_data.is_intercomponent else ""
-                        print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
-
-                with get_neo4j().session() as neo4j_session:
-                    persisted = persist_design(ontology, neo4j_session, qname_to_node=qname_to_node)
-                total_nodes += persisted.nodes_created
-                total_triples += persisted.triples_created
-                total_linked += persisted.links_applied
-                total_skipped += persisted.links_skipped
-
-            # --- Verify phase (combined loop per HLR) ---
+            # --- Verify phase (combined design+verify loop — the PRIMARY design) ---
             step_log.info("Verifying HLR %d: %d LLRs", hlr_id, len(hlr_llrs))
 
             # Get existing verification stubs for this HLR's LLRs
@@ -533,7 +491,6 @@ def step_design_and_verify():
                     existing_verifications=existing_verifications or None,
                     existing_classes=existing_classes or None,
                     intercomponent_classes=intercomponent_classes or None,
-                    other_hlr_summaries=other_hlr_summaries or None,
                     dependency_contexts=dependency_contexts,
                     component_namespace=component_namespace,
                     sibling_namespaces=sibling_namespaces or None,
@@ -551,6 +508,57 @@ def step_design_and_verify():
             if result.design_warnings:
                 step_log.warning("HLR %d: %d design warnings: %s", hlr_id, len(result.design_warnings), result.design_warnings[:3])
 
+            # --- Persist the VERIFIED design (primary source of truth) ---
+            verified_oo = result.oo_design
+            step_log.info(
+                "HLR %d verified design: %d classes, %d associations",
+                hlr_id, len(verified_oo.classes), len(verified_oo.associations),
+            )
+
+            # Build dependency lookup for map_to_ontology
+            dep_lookup_for_mapping = dict(dependency_lookup) if dependency_lookup else None
+            if neo4j_session:
+                try:
+                    from backend.ticketing_agent.design.container_lookup import seed_container_lookup
+                    container_lookup = seed_container_lookup(neo4j_session)
+                    if container_lookup:
+                        if dep_lookup_for_mapping is None:
+                            dep_lookup_for_mapping = {}
+                        dep_lookup_for_mapping.update(container_lookup)
+                except Exception:
+                    step_log.warning("Container lookup failed for mapping, continuing without it")
+
+            verified_ontology = map_oo_to_ontology(
+                verified_oo,
+                component_id=component_id,
+                prior_class_lookup=accumulated_class_lookup or None,
+                component_namespace=component_namespace,
+                dependency_lookup=dep_lookup_for_mapping,
+            )
+
+            step_log.info(
+                "HLR %d verified ontology: %d nodes, %d triples",
+                hlr_id, len(verified_ontology.nodes), len(verified_ontology.triples),
+            )
+
+            # Accumulate from the VERIFIED design (not the initial one)
+            accumulated_class_lookup.update(_build_class_lookup(verified_oo))
+            designed[hlr_id] = (verified_oo, component_id, component_name)
+
+            # Persist verified design to Neo4j
+            with get_session() as session:
+                for node_data in verified_ontology.nodes:
+                    if node_data.qualified_name not in qname_to_node:
+                        flag = " [intercomponent]" if node_data.is_intercomponent else ""
+                        print(f"    Node: {node_data.qualified_name} ({node_data.kind}){flag}")
+
+                with get_neo4j().session() as neo4j_sess:
+                    persisted = persist_design(verified_ontology, neo4j_sess, qname_to_node=qname_to_node)
+                total_nodes += persisted.nodes_created
+                total_triples += persisted.triples_created
+                total_linked += persisted.links_applied
+                total_skipped += persisted.links_skipped
+
             # Persist verifications
             with get_neo4j().session() as ns:
                 for llr_id, verifs in result.verifications.items():
@@ -565,8 +573,8 @@ def step_design_and_verify():
                             f"{len(v.postconditions)} post"
                         )
 
-            # Check for cross-component associations
-            for assoc in oo.associations:
+            # Check for cross-component associations in the verified design
+            for assoc in verified_oo.associations:
                 to_cls = assoc.to_class
                 if '::' in to_cls:
                     to_ns = to_cls.split('::')[0]

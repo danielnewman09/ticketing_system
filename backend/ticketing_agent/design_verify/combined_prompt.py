@@ -60,8 +60,6 @@ errors, they are returned for you to fix before retrying.
 {as_built_section}
 {existing_classes_section}
 {intercomponent_section}
-{other_hlrs_section}
-{llr_section}
 
 <FORMAT-CONTRACT name="qualified-names">
 All `subject_qualified_name`, `object_qualified_name`, `callee_qualified_name`,
@@ -148,16 +146,6 @@ You MUST use the commit_design_and_verifications tool to return your final resul
 """
 
 
-def format_llr_section(llrs: list[dict]) -> str:
-    """Format LLRs as a prompt section for verification."""
-    if not llrs:
-        return ""
-    lines = ["## Requirements to Verify\n"]
-    for llr in llrs:
-        lines.append(f"- LLR {llr.get('id', '?')}: {llr.get('description', '')}")
-    return "\n".join(lines)
-
-
 # Re-use format helpers from design_oo_prompt
 from backend.ticketing_agent.design.design_oo_prompt import (
     build_specializations_section,
@@ -165,7 +153,6 @@ from backend.ticketing_agent.design.design_oo_prompt import (
     build_as_built_section,
     build_existing_classes_section,
     build_intercomponent_section,
-    build_other_hlrs_section,
     build_namespace_section,
     build_dependency_section,
 )
