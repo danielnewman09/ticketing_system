@@ -2,6 +2,7 @@
 
 import json
 import pytest
+from unittest.mock import MagicMock
 
 from backend.codebase.schemas import OODesignSchema
 from backend.requirements.schemas import (
@@ -299,3 +300,132 @@ class TestCommitDesignAndVerifications:
             },
         ))
         assert result["committed"] is True
+
+class TestDiscoveryToolDispatch:
+    """Test that discovery tool calls route through the toolset correctly."""
+
+    def test_search_symbols_dispatches_to_toolset(self):
+        """search_symbols should call toolset.search_symbols and return results."""
+        mock_toolset = MagicMock()
+        mock_toolset.search_symbols.return_value = [
+            {"qualified_name": "Fl_Window", "kind": "class", "source": "fltk", "score": 10.0},
+        ]
+
+        dispatch = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            toolset=mock_toolset,
+        )
+
+        result = json.loads(dispatch("search_symbols", {"query": "window"}))
+        mock_toolset.search_symbols.assert_called_once_with(query="window")
+
+    def test_get_compound_dispatches_to_toolset(self):
+        """get_compound should call toolset.get_compound with the name parameter."""
+        mock_toolset = MagicMock()
+        mock_toolset.get_compound.return_value = [
+            {"qualified_name": "Fl_Window", "kind": "class"},
+        ]
+
+        dispatch = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            toolset=mock_toolset,
+        )
+
+        result = json.loads(dispatch("get_compound", {"name": "Fl_Window"}))
+        mock_toolset.get_compound.assert_called_once_with(name="Fl_Window")
+
+    def test_list_sources_dispatches_to_toolset(self):
+        """list_sources should call toolset.list_sources."""
+        mock_toolset = MagicMock()
+        mock_toolset.list_sources.return_value = [
+            {"source": "fltk", "node_type": "Compound", "count": 212},
+        ]
+
+        dispatch = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            toolset=mock_toolset,
+        )
+
+        result = json.loads(dispatch("list_sources", {}))
+        mock_toolset.list_sources.assert_called_once_with()
+
+    def test_browse_namespace_dispatches_to_toolset(self):
+        """browse_namespace should call toolset.browse_namespace."""
+        mock_toolset = MagicMock()
+        mock_toolset.browse_namespace.return_value = [
+            {"qualified_name": "Fl_Window", "kind": "class"},
+        ]
+
+        dispatch = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            toolset=mock_toolset,
+        )
+
+        result = json.loads(dispatch("browse_namespace", {"name": "Fl"}))
+        mock_toolset.browse_namespace.assert_called_once_with(name="Fl")
+
+    def test_find_inheritance_dispatches_to_toolset(self):
+        """find_inheritance should call toolset.find_inheritance."""
+        mock_toolset = MagicMock()
+        mock_toolset.find_inheritance.return_value = [
+            {"qualified_name": "Fl_Group", "kind": "class", "direction": "up"},
+        ]
+
+        dispatch = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            toolset=mock_toolset,
+        )
+
+        result = json.loads(dispatch("find_inheritance", {"name": "Fl_Window"}))
+        mock_toolset.find_inheritance.assert_called_once_with(name="Fl_Window")
+
+    def test_discovery_without_toolset_returns_error(self):
+        """When toolset is None, discovery tools should return a helpful error."""
+        dispatch = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            toolset=None,
+        )
+
+        result = json.loads(dispatch("search_symbols", {"query": "window"}))
+        assert "error" in result
+        assert "not available" in result["error"]
+
+    def test_discovery_tool_failure_returns_error(self):
+        """If the toolset method raises, the dispatcher should return error JSON."""
+        mock_toolset = MagicMock()
+        mock_toolset.search_symbols.side_effect = RuntimeError("Neo4j down")
+
+        dispatch = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            toolset=mock_toolset,
+        )
+
+        result = json.loads(dispatch("search_symbols", {"query": "window"}))
+        assert "error" in result
+
+    def test_slim_compound_strips_fields(self):
+        """get_compound results should have 'detailed' and 'member_refid' stripped."""
+        from backend.ticketing_agent.design_verify.combined_tools import _slim_compound
+        records = [
+            {"qualified_name": "Fl_Window", "detailed": "long text", "member_refid": "ref123", "name": "Fl_Window"},
+            {"qualified_name": "Fl_Button", "member_brief": "brief", "name": "Fl_Button"},
+        ]
+        slimmed = _slim_compound(records)
+        assert all("detailed" not in r for r in slimmed)
+        assert all("member_refid" not in r for r in slimmed)
+        assert all("member_brief" not in r for r in slimmed)
+        assert slimmed[0]["name"] == "Fl_Window"
