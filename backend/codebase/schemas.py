@@ -72,8 +72,9 @@ class InterfaceSchema(BaseModel):
 class AssociationSchema(BaseModel):
     from_class: str
     to_class: str
-    kind: Literal["associates", "aggregates", "depends_on", "invokes"]
+    kind: Literal["associates", "aggregates", "depends_on", "references", "invokes"]
     description: str = ""
+    mechanism: str = ""
     requirement_ids: list[str] = []  # tagged: "hlr:3", "llr:7" (also accepts "HLR 3", "LLR 7")
 
 
@@ -126,6 +127,7 @@ class OntologyTripleSchema(BaseModel):
     subject_qualified_name: str
     predicate: str  # Must match a Predicate.name in the database
     object_qualified_name: str
+    mechanism: str = ""  # Container/smart-ptr type for aggregates/references
 
 
 class RequirementTripleLinkSchema(BaseModel):

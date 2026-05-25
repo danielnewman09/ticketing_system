@@ -202,6 +202,9 @@ def step_design():
     except Exception as e:
         print(f"  Dependency graph unavailable: {e}\n")
 
+    # Get a Neo4j session for container lookup seeding
+    neo4j_session = get_neo4j().session()
+
     try:
         for i, hlr_id in enumerate(ordered_ids, 1):
             hlr = hlr_by_id.get(hlr_id)
@@ -266,6 +269,7 @@ def step_design():
                     component_id=component_id,
                     prior_class_lookup=accumulated_class_lookup,
                     toolset=dep_toolset,
+                    neo4j_session=neo4j_session,
                     log_dir=LOGS_DIR,
                 )
             except Exception as e:
@@ -303,6 +307,8 @@ def step_design():
                 total_linked += persisted.links_applied
                 total_skipped += persisted.links_skipped
     finally:
+        if neo4j_session:
+            neo4j_session.close()
         if dep_toolset:
             dep_toolset.close()
             print("  Dependency graph disconnected")
@@ -405,6 +411,9 @@ def step_design_and_verify():
         except Exception:
             pass
 
+    # Get a Neo4j session for container lookup seeding
+    neo4j_session = get_neo4j().session()
+
     try:
         for i, hlr_id in enumerate(ordered_ids, 1):
             hlr = hlr_by_id.get(hlr_id)
@@ -469,6 +478,7 @@ def step_design_and_verify():
                     component_id=component_id,
                     prior_class_lookup=accumulated_class_lookup or None,
                     toolset=dep_toolset,
+                    neo4j_session=neo4j_session,
                     log_dir=LOGS_DIR,
                 )
             except Exception as e:
@@ -563,6 +573,8 @@ def step_design_and_verify():
                                       hlr_id, assoc.from_class, to_cls, assoc.relationship)
                         print(f"    CROSS-COMPONENT: {assoc.from_class} -> {to_cls} ({assoc.relationship})")
     finally:
+        if neo4j_session:
+            neo4j_session.close()
         if dep_toolset:
             dep_toolset.close()
             print("  Dependency graph disconnected")

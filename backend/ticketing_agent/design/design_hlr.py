@@ -13,6 +13,7 @@ import os
 from backend.codebase.schemas import DesignSchema, OODesignSchema
 from backend.ticketing_agent.design.design_oo import design_oo
 from backend.ticketing_agent.design.discover_classes import discover_classes
+from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
 log = logging.getLogger("agents.design")
@@ -31,6 +32,7 @@ def design_hlr(
     component_id: int | None = None,
     prior_class_lookup: dict[str, str] | None = None,
     toolset=None,
+    neo4j_session=None,
     model: str = "",
     log_dir: str = "",
 ) -> tuple[OODesignSchema, DesignSchema]:
@@ -53,6 +55,7 @@ def design_hlr(
             designs, for cross-HLR reference resolution in ontology.
         toolset: A ``DependencyGraphTools`` instance for discovery.
             When ``None``, discovery is skipped.
+        neo4j_session: Optional Neo4j session for container lookup seeding.
         model: LLM model override.
         log_dir: Directory for per-step prompt logs.
 
@@ -64,6 +67,7 @@ def design_hlr(
     # --- Step 1: Discover dependency + as-built classes ---
     dependency_classes = None
     as_built_classes = None
+    discovery_failed = False
 
     if toolset:
         discovery_log = os.path.join(log_dir, f"discover_classes_hlr{hlr_id}.md") if log_dir else ""
@@ -101,6 +105,7 @@ def design_hlr(
             )
         except Exception:
             log.exception("Class discovery failed for HLR %s", hlr_id)
+            discovery_failed = True
 
     # --- Step 2: Design OO (single-turn) ---
     design_log = os.path.join(log_dir, f"design_oo_hlr{hlr_id}.md") if log_dir else ""
@@ -109,7 +114,7 @@ def design_hlr(
         llrs=llrs,
         language=language,
         existing_classes=existing_classes,
-        dependency_classes=dependency_classes,
+        dependency_classes=(dependency_classes or []) + container_classes,
         as_built_classes=as_built_classes,
         intercomponent_classes=intercomponent_classes,
         other_hlr_summaries=other_hlr_summaries,
@@ -119,6 +124,8 @@ def design_hlr(
         prior_class_lookup=prior_class_lookup,
         model=model,
         prompt_log_file=design_log,
+        discovery_failed=discovery_failed,
+        neo4j_session=neo4j_session,
     )
 
     # --- Step 3: Map to ontology (deterministic) ---
@@ -127,7 +134,9 @@ def design_hlr(
     # like inherits_from=["Fl_Window"] can be resolved.  Discovery
     # returns qualified_name but no separate "name" field, so we
     # derive the bare name from the qualified name.
+    # Build dependency_lookup from discovery results + seeded containers
     dependency_lookup = None
+    container_classes = []
     if dependency_classes:
         dependency_lookup = {}
         for cls in dependency_classes:
@@ -135,10 +144,27 @@ def design_hlr(
             bare = qname.rsplit("::", 1)[-1]
             dependency_lookup[bare] = qname
         log.info(
-            "  HLR %s: dependency_lookup has %d entries",
+            "  HLR %s: dependency_lookup has %d entries from discovery",
             hlr_id,
             len(dependency_lookup),
         )
+
+    # Seed standard containers from Neo4j into dependency_lookup
+    if neo4j_session is not None:
+        container_lookup = seed_container_lookup(neo4j_session)
+        if container_lookup:
+            if dependency_lookup is None:
+                dependency_lookup = {}
+            before = len(dependency_lookup)
+            dependency_lookup.update(container_lookup)
+            log.info(
+                "  HLR %s: seeded %d container entries into dependency_lookup (was %d, now %d)",
+                hlr_id,
+                len(container_lookup),
+                before,
+                len(dependency_lookup),
+            )
+            container_classes = get_container_class_info(neo4j_session)
 
     ontology = map_oo_to_ontology(
         oo,

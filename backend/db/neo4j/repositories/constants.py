@@ -16,16 +16,18 @@ PREDICATE_TO_REL_TYPE = {
     "depends_on": "DEPENDS_ON",
     "generalizes": "GENERALIZES",
     "realizes": "REALIZES",
+    "references": "REFERENCES",
     "invokes": "INVOKES",
 }
 
 DEFAULT_PREDICATES = [
     ("associates", "General association between two entities"),
-    ("aggregates", "Whole-part relationship where the part can exist independently"),
+    ("aggregates", "Whole-part relationship where the part can exist independently. Specify mechanism for container types (e.g., std::vector, std::list)"),
     ("composes", "Strong whole-part relationship where the part is owned by the whole"),
-    ("depends_on", "One entity depends on another"),
+    ("depends_on", "One entity depends on another (e.g., for a header include)"),
     ("generalizes", "Inheritance / is-a relationship"),
     ("realizes", "A class implements/realizes an interface or contract"),
+    ("references", "One entity holds a reference or pointer to another. Specify mechanism (e.g., std::unique_ptr, std::shared_ptr, raw_pointer, reference)"),
     ("invokes", "Weak association, signifying a caller-callee relationship"),
 ]
 

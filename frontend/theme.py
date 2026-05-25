@@ -49,7 +49,6 @@ KIND_COLORS = {
     "module": "#1abc9c",
     "function": "#27ae60",
     "constant": "#7f8c8d",
-    "enum_value": "#c0392b",
     "primitive": "#95a5a6",
     "type_alias": "#e67e22",
     "variable": "#8b6914",

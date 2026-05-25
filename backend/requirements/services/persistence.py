@@ -248,6 +248,7 @@ def persist_design(
             triple_data.subject_qualified_name,
             triple_data.predicate,
             triple_data.object_qualified_name,
+            mechanism=getattr(triple_data, "mechanism", "") or "",
         )
         result.triples_created += 1
 

@@ -267,7 +267,7 @@ def render_ontology_graph_controls(
         ).classes("w-36")
         ui.button("Fit", on_click=on_fit).props("flat dense")
         if on_toggle_req_tags:
-            ui.switch("HLR Tags", value=True, on_change=on_toggle_req_tags).props("dense")
+            ui.switch("Reqs", value=True, on_change=on_toggle_req_tags).props("dense")
         if on_toggle_deps:
             ui.switch("Deps", value=True, on_change=on_toggle_deps).props("dense")
 
@@ -283,9 +283,9 @@ def render_ontology_graph_legend():
                 ui.label(kind).classes("text-xs")
         with ui.row().classes("items-center gap-1"):
             ui.html(
-                '<div style="width:10px;height:10px;border-radius:50%;background:#3498db;border:3px solid #e67e22"></div>'
+                '<div style="width:10px;height:10px;border-radius:50%;background:#e67e22;border:3px solid #e67e22"></div>'
             )
-            ui.label("HLR Tag").classes("text-xs")
+            ui.label("Requirement").classes("text-xs")
         with ui.row().classes("items-center gap-1"):
             ui.html(
                 '<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>'

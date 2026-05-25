@@ -62,7 +62,38 @@ CHECK_CLASS_NAME_TOOL = {
     },
 }
 
-ALL_TOOLS = [VALIDATE_DESIGN_TOOL, CHECK_CLASS_NAME_TOOL, PRODUCE_OO_DESIGN_TOOL]
+
+FIND_MECHANISM_TOOL = {
+    "name": "find_mechanism",
+    "description": (
+        "Search the dependency graph for container or smart-pointer types "
+        "(e.g., std::vector, std::map, boost::unordered_map). "
+        "Returns matching types with their qualified_name, kind, source, "
+        "and brief description. Use this to discover the correct mechanism "
+        "name for aggregates and references associations. Common containers "
+        "(std::vector, std::map, etc.) are pre-loaded in the dependency "
+        "context and available without a search."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": (
+                    "Container or smart-pointer name to search for "
+                    "(e.g., 'vector', 'unordered_map', 'shared_ptr')"
+                ),
+            },
+            "library": {
+                "type": "string",
+                "description": "Optional library source to restrict search (e.g., 'cppreference', 'boost')",
+            },
+        },
+        "required": ["query"],
+    },
+}
+
+ALL_TOOLS = [VALIDATE_DESIGN_TOOL, CHECK_CLASS_NAME_TOOL, FIND_MECHANISM_TOOL, PRODUCE_OO_DESIGN_TOOL]
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +104,7 @@ def make_design_dispatcher(
     prior_class_lookup: dict[str, str],
     dependency_lookup: dict[str, str] | None,
     intercomponent_classes: list[dict] | None,
+    neo4j_session=None,
 ):
     """Create a tool dispatcher for the design_oo tool loop.
 
@@ -89,6 +121,8 @@ def make_design_dispatcher(
             return _dispatch_validate_design(tool_input)
         elif tool_name == "check_class_name":
             return _dispatch_check_class_name(tool_input)
+        elif tool_name == "find_mechanism":
+            return _dispatch_find_mechanism(tool_input)
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -157,6 +191,66 @@ def make_design_dispatcher(
             "matches": matches,
         })
 
+    def _dispatch_find_mechanism(tool_input: dict) -> str:
+        query = tool_input.get("query", "")
+        library = tool_input.get("library")
+        if not query:
+            return json.dumps({"containers": []})
+
+        matches = []
+        query_lower = query.lower()
+
+        # Search dep_lookup (includes pre-seeded containers)
+        for bare, qname in dep_lookup.items():
+            if query_lower in bare.lower() or query_lower in qname.lower():
+                matches.append({
+                    "qualified_name": qname,
+                    "name": bare,
+                    "kind": "class",
+                    "source": "dependency",
+                    "brief": "",
+                })
+
+        # Search Neo4j if session is available
+        if neo4j_session is not None:
+            try:
+                result = neo4j_session.run(
+                    "MATCH (n:Compound) "
+                    "WHERE n.qualified_name CONTAINS $query "
+                    "AND n.kind IN ['class', 'struct'] "
+                    "AND (n.source = 'cppreference' OR n.source = 'boost' OR n.source IS NOT NULL) "
+                    "RETURN n.qualified_name AS qn, n.name AS name, "
+                    "n.kind AS kind, n.source AS source, n.brief AS brief "
+                    "LIMIT 20",
+                    query=query,
+                )
+                for record in result:
+                    qn = record["qn"]
+                    # Skip if already found in dep_lookup
+                    if any(m["qualified_name"] == qn for m in matches):
+                        continue
+                    if library and record["source"] != library:
+                        continue
+                    matches.append({
+                        "qualified_name": qn,
+                        "name": record["name"] or qn.rsplit("::", 1)[-1],
+                        "kind": record["kind"] or "class",
+                        "source": record["source"] or "dependency",
+                        "brief": record["brief"] or "",
+                    })
+            except Exception:
+                log.warning("find_mechanism: Neo4j query failed", exc_info=True)
+
+        # Deduplicate by qualified_name
+        seen = set()
+        deduped = []
+        for m in matches:
+            if m["qualified_name"] not in seen:
+                seen.add(m["qualified_name"])
+                deduped.append(m)
+
+        return json.dumps({"containers": deduped[:20]})
+
     return dispatch
 
 # ---------------------------------------------------------------------------
@@ -210,7 +304,27 @@ def _validate_oo_design(
                 f'"{ref}" is not defined in this design or the provided context.'
             )
 
-    # Check 2: Missing intercomponent associations
+    # Check 2: aggregates must have a mechanism; references recommended
+    for assoc in oo.associations:
+        if assoc.kind == "aggregates" and not assoc.mechanism:
+            errors.append(
+                f"Association {assoc.from_class} -[aggregates]-> {assoc.to_class} "
+                f"has no mechanism. Use find_mechanism to discover the container "
+                f"type (e.g., std::vector, std::map) and specify it in the mechanism field."
+            )
+        if assoc.kind == "aggregates" and assoc.mechanism:
+            mechanism = assoc.mechanism
+            if mechanism not in all_design_names and mechanism not in prior_class_lookup and mechanism not in dep_lookup:
+                errors.append(
+                    f"Association {assoc.from_class} -[aggregates]-> {assoc.to_class} "
+                    f"has mechanism '{mechanism}' which is not a known class or dependency. "
+                    f"Use find_mechanism to search for the correct container name."
+                )
+        if assoc.kind == "references" and not assoc.mechanism:
+            # Warning only — mechanism is optional but recommended for references
+            pass
+
+    # Check 3: Missing intercomponent associations
     if intercomponent_classes:
         for cls in oo.classes:
             referenced_intercomp: set[str] = set()

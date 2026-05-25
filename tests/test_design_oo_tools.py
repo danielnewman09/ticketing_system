@@ -74,9 +74,9 @@ def _make_dispatcher():
 
 class TestToolSchemas:
     def test_all_tools_present(self):
-        assert len(ALL_TOOLS) == 3
+        assert len(ALL_TOOLS) == 4
         names = {t["name"] for t in ALL_TOOLS}
-        assert names == {"validate_design", "check_class_name", "produce_oo_design"}
+        assert names == {"validate_design", "check_class_name", "find_mechanism", "produce_oo_design"}
 
     def test_validate_design_tool_schema(self):
         assert VALIDATE_DESIGN_TOOL["name"] == "validate_design"

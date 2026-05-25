@@ -48,6 +48,12 @@ def format_cytoscape_graph(raw: dict) -> dict:
 
     Input: {"nodes": [{flat properties}...], "edges": [{"source", "target", "type"}...]}
     Output: {"nodes": [{"data": {...}}...], "edges": [{"data": {"id", "source", "target", "label"}}...]}
+
+    Pipeline:
+    1. Build Cytoscape elements from raw data.
+    2. collapse_members — fold attributes/methods/enum_values into owner nodes.
+    3. assign_namespace_parents — group nodes into namespace containers.
+    4. tag_cross_layer — mark dependency/as-built nodes and cross-layer edges.
     """
     nodes = [{"data": build_cytoscape_node(n)} for n in raw.get("nodes", [])]
     edges = [{"data": build_cytoscape_edge(e)} for e in raw.get("edges", [])]

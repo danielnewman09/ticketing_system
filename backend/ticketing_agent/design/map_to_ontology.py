@@ -81,13 +81,14 @@ def map_oo_to_ontology(
             )
         )
 
-    def _add_triple(subject_qname, predicate, object_qname):
+    def _add_triple(subject_qname, predicate, object_qname, mechanism=""):
         idx = len(triples)
         triples.append(
             OntologyTripleSchema(
                 subject_qualified_name=subject_qname,
                 predicate=predicate,
                 object_qualified_name=object_qname,
+                mechanism=mechanism,
             )
         )
         return idx
@@ -352,8 +353,114 @@ def map_oo_to_ontology(
     for assoc in oo.associations:
         from_qname = _resolve_ref(assoc.from_class) or class_lookup.get(assoc.from_class, assoc.from_class)
         to_qname = _resolve_ref(assoc.to_class) or class_lookup.get(assoc.to_class, assoc.to_class)
-        triple_idx = _add_triple(from_qname, assoc.kind, to_qname)
+        mechanism = assoc.mechanism if assoc.kind in ("aggregates", "references") else ""
+        triple_idx = _add_triple(from_qname, assoc.kind, to_qname, mechanism=mechanism)
         _link_reqs(assoc.requirement_ids, triple_idx)
+
+    # --- Infer DEPENDS_ON from mechanism fields and aggregation/references ---
+    #
+    # The mechanism field on aggregates/references associations tells us
+    # the concrete container or smart-pointer type, which implies a header
+    # dependency.  For example:
+    #   aggregates with mechanism="std::vector" → depends_on std::vector
+    #   references with mechanism="std::unique_ptr" → depends_on std::unique_ptr
+    #   references with mechanism="raw_pointer" → no additional dependency
+    #
+    # We also infer depends_on from the target class when it's an external
+    # dependency (even without a mechanism).
+    #
+    # Resolution order for mechanism:
+    #   1. Check dep_lookup (pre-seeded with containers from Neo4j)
+    #      → links to the real cppreference-indexed node
+    #   2. Fall back to _FALLBACK_CONTAINERS (creates stub node)
+    #      → only when Neo4j data is unavailable
+
+    # Fallback containers for when they're not in the dependency lookup.
+    # These create stub nodes as a safety net when cppreference data is
+    # not indexed.  When the container IS in dep_lookup, _resolve_ref will
+    # link to the real Neo4j node instead.
+    # Fallback for both containers and smart pointers.  Smart-pointer types
+    # are included here for REFERENCES mechanism support.  When the type IS
+    # in dep_lookup, _resolve_ref will link to the real Neo4j node instead.
+    _FALLBACK_CONTAINERS = {
+        "std::vector": "std::vector",
+        "std::list": "std::list",
+        "std::set": "std::set",
+        "std::map": "std::map",
+        "std::array": "std::array",
+        "std::deque": "std::deque",
+        "std::unordered_map": "std::unordered_map",
+        "std::unordered_set": "std::unordered_set",
+        "std::queue": "std::queue",
+        "std::stack": "std::stack",
+        "std::priority_queue": "std::priority_queue",
+        "std::unique_ptr": "std::unique_ptr",
+        "std::shared_ptr": "std::shared_ptr",
+        "std::weak_ptr": "std::weak_ptr",
+    }
+    # Mechanisms that don't add a dependency (raw pointers and references
+    # don't require extra headers beyond what the pointed-to type needs).
+    _NO_DEP_MECHANISMS = {"raw_pointer", "reference", "pointer"}
+
+    _existing_depends: set[tuple[str, str]] = set()
+    for t in triples:
+        if t.predicate == "depends_on":
+            _existing_depends.add((t.subject_qualified_name, t.object_qualified_name))
+
+    _dep_qnames: set[str] = set(dep_lookup.values())
+
+    # Process each association for mechanism deps and target deps
+    for assoc in oo.associations:
+        from_qname = _resolve_ref(assoc.from_class) or class_lookup.get(assoc.from_class, assoc.from_class)
+        to_qname = _resolve_ref(assoc.to_class) or class_lookup.get(assoc.to_class, assoc.to_class)
+
+        # Infer dependency from the container/smart-ptr mechanism
+        if assoc.kind in ("aggregates", "references") and assoc.mechanism:
+            if assoc.mechanism not in _NO_DEP_MECHANISMS:
+                # Try to resolve the mechanism through dep_lookup first (real
+                # Neo4j node), then fall back to stub creation.
+                resolved = _resolve_ref(assoc.mechanism)
+                if resolved:
+                    # Real dependency node found — create depends_on edge to it
+                    if (from_qname, resolved) not in _existing_depends:
+                        _add_triple(from_qname, "depends_on", resolved)
+                        _existing_depends.add((from_qname, resolved))
+                        log.info(
+                            "Inferring depends_on from mechanism %s (resolved): %s -> %s",
+                            assoc.mechanism, from_qname, resolved,
+                        )
+                elif assoc.mechanism in _FALLBACK_CONTAINERS:
+                    # Fallback: create a stub node if the mechanism isn't in
+                    # the dependency lookup (e.g., cppreference data not indexed)
+                    dep_qname = _FALLBACK_CONTAINERS[assoc.mechanism]
+                    if (from_qname, dep_qname) not in _existing_depends:
+                        if dep_qname not in node_index:
+                            _add_node(
+                                "class",
+                                assoc.mechanism,
+                                dep_qname,
+                                is_intercomponent=True,
+                                description=f"Standard library: {dep_qname}",
+                                source_type="dependency",
+                            )
+                        _add_triple(from_qname, "depends_on", dep_qname)
+                        _existing_depends.add((from_qname, dep_qname))
+                        log.info(
+                            "Inferring depends_on from mechanism %s (stub): %s -> %s",
+                            assoc.mechanism, from_qname, dep_qname,
+                        )
+
+        # Infer depends_on from aggregates/references to external dependencies
+        if assoc.kind in ("aggregates", "references") and to_qname in _dep_qnames:
+            if (from_qname, to_qname) not in _existing_depends:
+                log.info(
+                    "Inferring depends_on from %s: %s -> %s",
+                    assoc.kind,
+                    from_qname,
+                    to_qname,
+                )
+                _add_triple(from_qname, "depends_on", to_qname)
+                _existing_depends.add((from_qname, to_qname))
 
     return DesignSchema(
         nodes=nodes,

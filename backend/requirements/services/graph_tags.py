@@ -87,8 +87,6 @@ def _enrich_via_cypher(
         qn = d.get("qualified_name", "")
         if qn in qn_to_reqs:
             d["requirements"] = qn_to_reqs[qn]
-            badges = " ".join(f"[{r['type']} {r['id']}]" for r in qn_to_reqs[qn])
-            d["label"] = d.get("label", "") + "\n" + badges
             d["has_requirements"] = "true"
 
 
@@ -160,6 +158,4 @@ def tag_direct_nodes_only(
                 "type": "HLR",
                 "description": hlr_desc,
             })
-            badge = f"[HLR {hlr_id}]"
-            d["label"] = d.get("label", "") + "\n" + badge
             d["has_requirements"] = "true"

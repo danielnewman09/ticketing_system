@@ -60,6 +60,8 @@ def design_oo(
     prior_class_lookup: dict[str, str] | None = None,
     model: str = "",
     prompt_log_file: str = "",
+    discovery_failed: bool = False,
+    neo4j_session=None,
 ) -> OODesignSchema:
     """
     Stage 1: derive an OO class design from a single HLR and its LLRs.
@@ -79,6 +81,14 @@ def design_oo(
         dependency_contexts: Dependency assessment keyed by HLR ID.
         component_namespace: Required C++ namespace for this component.
         sibling_namespaces: Other component namespaces (for context).
+        prior_class_lookup: Name -> qualified_name mapping from prior
+            designs, for cross-HLR reference resolution in ontology.
+        model: LLM model override.
+        prompt_log_file: Optional path to log the prompt exchange.
+        discovery_failed: If True, the dependency discover step failed
+            and no dependency classes are available. The design agent
+            will be warned about this gap.
+        neo4j_session: Optional Neo4j session for container mechanism lookups.
     """
     requirements_text = format_hlrs_for_prompt([hlr], llrs, include_component=True)
 
@@ -94,6 +104,20 @@ def design_oo(
     dep_section = build_dependency_section(dependency_contexts or {})
     if dep_section:
         system += dep_section
+
+    if discovery_failed:
+        system += (
+            "\n\n## WARNING: Dependency discovery failed\n\n"
+            "The dependency discovery step encountered an error and could not"
+            " complete. No dependency API classes or as-built classes are"
+            " available in the design context. You should design classes that"
+            " are self-contained and note in your design that dependency"
+            " integration (e.g., inheriting from framework base classes like"
+            " Fl_Window or Fl_Button for GUI components) will need to be"
+            " added once discovery is re-run successfully. If you are aware"
+            " of relevant dependency classes from general knowledge, you may"
+            " reference them using inherits_from but acknowledge the gap."
+        )
 
     # Build component context for the user prompt
     component_name = hlr.get("component_name")
@@ -137,6 +161,7 @@ def design_oo(
         prior_class_lookup=prior_class_lookup or {},
         dependency_lookup=dep_lookup,
         intercomponent_classes=intercomponent_classes or [],
+        neo4j_session=neo4j_session,
     )
 
     # Run the tool loop
@@ -147,7 +172,7 @@ def design_oo(
         final_tool_name="produce_oo_design",
         tool_dispatcher=dispatcher,
         model=model,
-        max_tokens=4096,
+        max_tokens=32768,
         max_turns=50,
         prompt_log_file=prompt_log_file,
     )

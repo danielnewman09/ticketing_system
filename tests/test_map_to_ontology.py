@@ -222,6 +222,181 @@ class TestDependsOnFromTypeSignatures:
         assert len(dep_triples) == 0
 
 
+class TestAggregatesInfersDependsOn:
+    """When a design class aggregates an external dependency class,
+    a depends_on triple should be inferred even if the design agent
+    didn't explicitly include one."""
+
+    def test_aggregates_dependency_infers_depends_on(self):
+        """aggregates to a dependency class should auto-add depends_on."""
+        oo = OODesignSchema(
+            modules=["ui"],
+            classes=[
+                ClassSchema(
+                    name="CalculatorWindow",
+                    module="ui",
+                    attributes=[],
+                    methods=[],
+                ),
+            ],
+            associations=[
+                AssociationSchema(
+                    from_class="CalculatorWindow",
+                    to_class="Fl_Button",
+                    kind="aggregates",
+                    description="Button widget",
+                ),
+            ],
+        )
+        dep_lookup = {"Fl_Button": "Fl_Button"}
+        result = map_oo_to_ontology(
+            oo, dependency_lookup=dep_lookup, component_id=1
+        )
+
+        agg_triples = [
+            t for t in result.triples
+            if t.predicate == "aggregates"
+            and t.subject_qualified_name == "ui::CalculatorWindow"
+            and t.object_qualified_name == "Fl_Button"
+        ]
+        assert len(agg_triples) == 1
+
+        dep_triples = [
+            t for t in result.triples
+            if t.predicate == "depends_on"
+            and t.subject_qualified_name == "ui::CalculatorWindow"
+            and t.object_qualified_name == "Fl_Button"
+        ]
+        assert len(dep_triples) == 1, (
+            f"Expected 1 inferred depends_on triple, got {dep_triples}. "
+            f"All triples: {[(t.predicate, t.subject_qualified_name, t.object_qualified_name) for t in result.triples]}"
+        )
+
+    def test_aggregates_dependency_no_duplicate_depends_on(self):
+        """If the agent already provided depends_on, don't duplicate it."""
+        oo = OODesignSchema(
+            modules=["ui"],
+            classes=[
+                ClassSchema(
+                    name="CalculatorWindow",
+                    module="ui",
+                    attributes=[],
+                    methods=[],
+                ),
+            ],
+            associations=[
+                AssociationSchema(
+                    from_class="CalculatorWindow",
+                    to_class="Fl_Button",
+                    kind="aggregates",
+                    description="Button widget",
+                ),
+                AssociationSchema(
+                    from_class="CalculatorWindow",
+                    to_class="Fl_Button",
+                    kind="depends_on",
+                    description="Uses Fl_Button",
+                ),
+            ],
+        )
+        dep_lookup = {"Fl_Button": "Fl_Button"}
+        result = map_oo_to_ontology(
+            oo, dependency_lookup=dep_lookup, component_id=1
+        )
+
+        dep_triples = [
+            t for t in result.triples
+            if t.predicate == "depends_on"
+            and t.subject_qualified_name == "ui::CalculatorWindow"
+            and t.object_qualified_name == "Fl_Button"
+        ]
+        assert len(dep_triples) == 1, (
+            f"Expected exactly 1 depends_on triple (no duplicates), got {len(dep_triples)}"
+        )
+
+    def test_aggregates_design_class_no_depends_on_inferred(self):
+        """Aggregating a design-internal class should NOT infer depends_on."""
+        oo = OODesignSchema(
+            modules=["ui"],
+            classes=[
+                ClassSchema(
+                    name="CalculatorWindow",
+                    module="ui",
+                    attributes=[],
+                    methods=[],
+                ),
+                ClassSchema(
+                    name="CalculatorDisplay",
+                    module="ui",
+                    attributes=[],
+                    methods=[],
+                ),
+            ],
+            associations=[
+                AssociationSchema(
+                    from_class="CalculatorWindow",
+                    to_class="CalculatorDisplay",
+                    kind="aggregates",
+                    description="Display component",
+                ),
+            ],
+        )
+        dep_lookup = {}
+        result = map_oo_to_ontology(
+            oo, dependency_lookup=dep_lookup, component_id=1
+        )
+
+        dep_triples = [
+            t for t in result.triples
+            if t.predicate == "depends_on"
+        ]
+        assert len(dep_triples) == 0, (
+            f"No depends_on should be inferred for design-internal aggregates, "
+            f"got {dep_triples}"
+        )
+
+    def test_aggregates_multiple_dependencies(self):
+        """Multiple aggregates to different dependencies should each infer depends_on."""
+        oo = OODesignSchema(
+            modules=["ui"],
+            classes=[
+                ClassSchema(
+                    name="CalculatorWindow",
+                    module="ui",
+                    attributes=[],
+                    methods=[],
+                ),
+            ],
+            associations=[
+                AssociationSchema(
+                    from_class="CalculatorWindow",
+                    to_class="Fl_Button",
+                    kind="aggregates",
+                    description="Button",
+                ),
+                AssociationSchema(
+                    from_class="CalculatorWindow",
+                    to_class="Fl_Box",
+                    kind="aggregates",
+                    description="Box",
+                ),
+            ],
+        )
+        dep_lookup = {"Fl_Button": "Fl_Button", "Fl_Box": "Fl_Box"}
+        result = map_oo_to_ontology(
+            oo, dependency_lookup=dep_lookup, component_id=1
+        )
+
+        dep_triples = [
+            t for t in result.triples
+            if t.predicate == "depends_on"
+            and t.subject_qualified_name == "ui::CalculatorWindow"
+        ]
+        dep_targets = {t.object_qualified_name for t in dep_triples}
+        assert "Fl_Button" in dep_targets
+        assert "Fl_Box" in dep_targets
+
+
 class TestNoDependencyLookup:
     """Without a dependency_lookup, behavior should be unchanged."""
 

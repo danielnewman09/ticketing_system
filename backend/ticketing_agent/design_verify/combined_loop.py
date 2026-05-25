@@ -18,6 +18,7 @@ from backend.ticketing_agent.design_verify.combined_tools import (
     ALL_TOOLS,
     make_combined_dispatcher,
 )
+from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
 from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
 
 log = logging.getLogger("agents.design_verify")
@@ -54,6 +55,7 @@ def design_and_verify(
     neo4j_session=None,
     model: str = "",
     prompt_log_file: str = "",
+    discovery_failed: bool = False,
 ) -> DesignVerifyResult:
     """Run the combined design+verify loop for a single HLR.
 
@@ -75,6 +77,9 @@ def design_and_verify(
         neo4j_session: Optional Neo4j session for persistent lookups.
         model: LLM model override.
         prompt_log_file: File path for prompt logging.
+        discovery_failed: If True, the dependency discover step failed
+            and no dependency classes are available. The design agent
+            will be warned about this gap.
 
     Returns:
         DesignVerifyResult with oo_design, verifications, and any warnings.
@@ -98,10 +103,12 @@ def design_and_verify(
     namespace_section = build_namespace_section(component_namespace, sibling_namespaces or []) if component_namespace else ""
 
     dep_api_section = ""
-    if dependency_lookup:
-        dep_classes = []
-        for bare, qname in dependency_lookup.items():
-            dep_classes.append({"qualified_name": qname, "name": bare})
+    all_dep_classes = list(dependency_lookup or {}.items())
+    if container_classes:
+        # Add container classes to the dependency context
+        all_dep_classes.extend((c["name"], c["qualified_name"]) for c in container_classes)
+    if all_dep_classes:
+        dep_classes = [{"qualified_name": qname, "name": bare} for bare, qname in all_dep_classes]
         dep_api_section = build_dependency_api_section(dep_classes)
 
     as_built_section = ""
@@ -132,6 +139,20 @@ def design_and_verify(
         other_hlrs_section=other_hlrs_section,
         llr_section=llr_section,
     )
+
+    if discovery_failed:
+        system += (
+            "\n\n## WARNING: Dependency discovery failed\n\n"
+            "The dependency discovery step encountered an error and could not"
+            " complete. No dependency API classes or as-built classes are"
+            " available in the design context. You should design classes that"
+            " are self-contained and note in your design that dependency"
+            " integration (e.g., inheriting from framework base classes like"
+            " Fl_Window or Fl_Button for GUI components) will need to be"
+            " added once discovery is re-run successfully. If you are aware"
+            " of relevant dependency classes from general knowledge, you may"
+            " reference them using inherits_from but acknowledge the gap."
+        )
 
     # Build component context for the user prompt
     component_name = hlr.get("component_name")
@@ -167,8 +188,23 @@ def design_and_verify(
 
     messages = [{"role": "user", "content": user_content}]
 
-    # Build dependency lookup dict for dispatcher
+    # Build dependency lookup dict, seeded with standard containers from Neo4j
     dep_lookup = dict(dependency_lookup or {})
+
+    # Seed standard containers from Neo4j
+    container_classes = []
+    if neo4j_session is not None:
+        container_lookup = seed_container_lookup(neo4j_session)
+        if container_lookup:
+            before = len(dep_lookup)
+            dep_lookup.update(container_lookup)
+            log.info(
+                "Seeded %d container entries into dep_lookup (was %d, now %d)",
+                len(container_lookup),
+                before,
+                len(dep_lookup),
+            )
+            container_classes = get_container_class_info(neo4j_session)
 
     # Build tool dispatcher with draft state + Neo4j
     dispatcher = make_combined_dispatcher(
@@ -186,7 +222,7 @@ def design_and_verify(
         final_tool_name="commit_design_and_verifications",
         tool_dispatcher=dispatcher,
         model=model,
-        max_tokens=8192,
+        max_tokens=16384,
         max_turns=75,
         prompt_log_file=prompt_log_file,
     )

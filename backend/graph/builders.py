@@ -70,9 +70,15 @@ def build_cytoscape_edge(e: dict) -> dict:
     """Build a Cytoscape edge-data dict from a raw edge dict."""
     global _edge_counter
     _edge_counter += 1
+    label = e.get("type", "")
+    # Append mechanism info to the edge label for aggregates/references
+    mechanism = e.get("mechanism", "")
+    if mechanism and label in ("AGGREGATES", "REFERENCES"):
+        label = f"{label}\n<{mechanism}>"
     return {
         "id": f"e_{_edge_counter}_{e.get('source', '')}_{e.get('target', '')}_{e.get('type', '')}",
         "source": e.get("source", ""),
         "target": e.get("target", ""),
-        "label": e.get("type", ""),
+        "label": label,
+        "mechanism": mechanism,
     }
