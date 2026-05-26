@@ -37,6 +37,8 @@ log = logging.getLogger(__name__)
 class DecompositionResult:
     llrs_created: int = 0
     verifications_created: int = 0
+    conditions_created: int = 0
+    actions_created: int = 0
 
 
 @dataclass
@@ -139,9 +141,10 @@ def persist_decomposition(
     hlr_id: int,
     llrs: list[LowLevelRequirementSchema],
 ) -> DecompositionResult:
-    """Create LLRs under an existing HLR in Neo4j, with verification stubs.
+    """Create LLRs under an existing HLR in Neo4j, with verification methods,
+    conditions, and actions.
 
-    Phase 3: Both LLRs and verification stubs go to Neo4j.
+    Phase 3: Both LLRs and verification data go to Neo4j.
     """
     result = DecompositionResult()
     req_repo = RequirementRepository(neo4j_session)
@@ -151,15 +154,49 @@ def persist_decomposition(
         llr = req_repo.create_llr(hlr_id=hlr_id, description=llr_data.description)
         result.llrs_created += 1
 
-        # Persist verification stubs in Neo4j
+        # Persist verification methods with conditions and actions
         for v in llr_data.verifications:
-            ver_repo.create_verification(
+            vm = ver_repo.create_verification(
                 llr_id=llr.id,
                 method=v.method,
                 test_name=v.test_name,
                 description=v.description,
             )
             result.verifications_created += 1
+
+            for i, cond in enumerate(v.preconditions):
+                ver_repo.add_condition(
+                    vm_id=vm.id,
+                    phase="pre",
+                    order=i,
+                    operator=cond.operator,
+                    expected_value=cond.expected_value,
+                    subject_qualified_name=cond.subject_qualified_name,
+                    object_qualified_name=cond.object_qualified_name,
+                )
+                result.conditions_created += 1
+
+            for i, action in enumerate(v.actions):
+                ver_repo.add_action(
+                    vm_id=vm.id,
+                    order=i,
+                    description=action.description,
+                    callee_qualified_name=action.callee_qualified_name,
+                    caller_qualified_name=action.caller_qualified_name,
+                )
+                result.actions_created += 1
+
+            for i, cond in enumerate(v.postconditions):
+                ver_repo.add_condition(
+                    vm_id=vm.id,
+                    phase="post",
+                    order=i,
+                    operator=cond.operator,
+                    expected_value=cond.expected_value,
+                    subject_qualified_name=cond.subject_qualified_name,
+                    object_qualified_name=cond.object_qualified_name,
+                )
+                result.conditions_created += 1
 
     return result
 
