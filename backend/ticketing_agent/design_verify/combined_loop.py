@@ -44,10 +44,8 @@ class DesignVerifyResult:
 def design_and_verify(
     hlr: dict,
     llrs: list[dict],
-    existing_verifications: list[dict] | None = None,
     existing_classes: list[dict] | None = None,
     intercomponent_classes: list[dict] | None = None,
-    dependency_contexts: dict[int, dict] | None = None,
     component_namespace: str = "",
     sibling_namespaces: list[str] | None = None,
     prior_class_lookup: dict[str, str] | None = None,
@@ -98,50 +96,9 @@ def design_and_verify(
     if neo4j_session is not None and llrs:
         ver_repo = VerificationRepository(neo4j_session)
         for llr in llrs:
-            llr_id = llr["id"]
-            vms = ver_repo.list_verifications(llr_id)
-            if vms:
-                verifs_for_llr = []
-                for vm in vms:
-                    conditions = ver_repo.list_conditions(vm.id)
-                    actions = ver_repo.list_actions(vm.id)
-                    preconds = [
-                        {
-                            "subject_qualified_name": c.subject_qualified_name,
-                            "operator": c.operator,
-                            "expected_value": c.expected_value,
-                            "object_qualified_name": c.object_qualified_name,
-                        }
-                        for c in conditions
-                        if c.phase == "pre"
-                    ]
-                    postconds = [
-                        {
-                            "subject_qualified_name": c.subject_qualified_name,
-                            "operator": c.operator,
-                            "expected_value": c.expected_value,
-                            "object_qualified_name": c.object_qualified_name,
-                        }
-                        for c in conditions
-                        if c.phase == "post"
-                    ]
-                    action_dicts = [
-                        {
-                            "description": a.description,
-                            "callee_qualified_name": a.callee_qualified_name,
-                            "caller_qualified_name": a.caller_qualified_name,
-                        }
-                        for a in actions
-                    ]
-                    verifs_for_llr.append({
-                        "method": vm.method,
-                        "test_name": vm.test_name,
-                        "description": vm.description,
-                        "preconditions": preconds,
-                        "actions": action_dicts,
-                        "postconditions": postconds,
-                    })
-                llr_verifications[llr_id] = verifs_for_llr
+            verifs = ver_repo.get_verifications_for_llr(llr["id"])
+            if verifs:
+                llr_verifications[llr["id"]] = verifs
 
     requirements_text = format_llrs_with_verifications_for_prompt(llrs, llr_verifications)
 
@@ -171,11 +128,6 @@ def design_and_verify(
 
     namespace_section = build_namespace_section(component_namespace, sibling_namespaces or []) if component_namespace else ""
 
-    dep_api_section = ""
-    if dependency_lookup:
-        dep_classes = [{"qualified_name": qname, "name": bare} for bare, qname in dependency_lookup.items()]
-        dep_api_section = build_dependency_api_section(dep_classes)
-
     as_built_section = ""
     if existing_classes:
         as_built_section = build_as_built_section(existing_classes)
@@ -191,7 +143,6 @@ def design_and_verify(
     system = SYSTEM_PROMPT.format(
         specializations_section=specializations_section,
         namespace_section=namespace_section,
-        dependency_api_section=dep_api_section,
         as_built_section=as_built_section,
         existing_classes_section=existing_section,
         intercomponent_section=intercomp_section,
@@ -227,11 +178,6 @@ def design_and_verify(
         f"Design the object-oriented class structure and write verification procedures "
         f"for the following requirements:\n\n{requirements_text}{component_hint}"
     )
-
-    # Explicitly list the LLR IDs so the LLM knows the correct keys
-    if llrs:
-        llr_ids = ", ".join(str(llr["id"]) for llr in llrs)
-        user_content += f"\n\nThe LLR IDs for this requirement are: [{llr_ids}]. Use these as keys in the verifications dict."
 
     messages = [{"role": "user", "content": user_content}]
 
