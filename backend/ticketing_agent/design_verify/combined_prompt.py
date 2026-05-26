@@ -36,18 +36,18 @@ the design context or the current draft.
 
 Pattern: <namespace>::<ClassName>::<memberName>
 
-✓ calculation_engine::CalculatorEngine::validateInput
-✓ user_interface::CalculatorWindow::equalsButton
-✗ user_interface::CalculatorWindow.equalsButton
+[Good] calculation_engine::CalculatorEngine::validateInput
+[Good] user_interface::CalculatorWindow::equalsButton
+[Bad] user_interface::CalculatorWindow.equalsButton
   → Dot separator — use :: everywhere
-✗ calculation_engine::CalculatorEngine::last_result.is_success
+[Bad] calculation_engine::CalculatorEngine::last_result.is_success
   → Nested attribute path — reference the outer attribute directly
     (calculation_engine::CalculatorEngine::lastResult)
     and the inner class member separately
     (calculation_engine::CalculationResult::isSuccess)
-✗ result_of_first_call
+[Bad] result_of_first_call
   → Test variable, not a design element
-✗ test_validate_input_syntax
+[Bad] test_validate_input_syntax
   → Test function, not a design element
 
 If no exact match exists in the design context or current draft, do NOT
@@ -56,12 +56,24 @@ reference field and use expected_value alone.
 
 **object_qualified_name** must be a qualified name from the design context or
 draft. Use expected_value for literal values and constants:
-✓ object_qualified_name: "Operator::MULTIPLY", expected_value: "active"
-✗ object_qualified_name: "×"  ← this is a label, use expected_value instead
-✗ object_qualified_name: "division operator button"  ← description, not a qname
+[Good] object_qualified_name: "Operator::MULTIPLY", expected_value: "active"
+[Bad] object_qualified_name: "×"
+  → Label, not a qname — use expected_value instead
+[Bad] object_qualified_name: "division operator button"
+  → Description, not a qname — use expected_value instead
 
 Do not reference constructors (ClassName::ClassName) unless they are
 explicitly designed as methods in the design context or your draft.
+
+| Anti-pattern | What goes wrong | Instead |
+|---|---|---|
+| Dot separator in qname (Window.button) | Parser cannot split on :: — reference undefined | Use :: everywhere: Namespace::Class::member |
+| Nested attribute path (Engine::result.is_success) | Cannot reference nested members through a single qname | Reference outer attribute and inner member separately |
+| Test variable as qname (result_of_first_call) | Not a design element — lookup fails | Use design element qnames or expected_value for values |
+| Test function as qname (test_validate_input) | Not a design element — lookup fails | Reference the method being tested: Namespace::Class::method |
+| Label as object_qualified_name ("×") | Not a qname — object_qualified_name expects a design reference | Use expected_value for literal values and constants |
+| Description as object_qualified_name ("division operator button") | Not a qname — descriptions don't resolve | Use expected_value for descriptive text, qname for design references |
+| Constructor reference (ClassName::ClassName) | No such method unless explicitly designed | Only reference constructors if they appear in the design |
 </FORMAT-CONTRACT>
 
 ## Instructions
