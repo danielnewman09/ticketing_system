@@ -60,7 +60,9 @@ The formatted output includes:
 - Actions: caller → callee with descriptions
 - Postconditions: same format as preconditions
 
-In `combined_loop.py`, the `design_and_verify` function will receive the full decompose output (or reconstructed `DecomposedRequirementSchema` / `LowLevelRequirementSchema` data) and format it with the new formatter instead of `format_hlrs_for_prompt`.
+**Data flow:** The decompose output (LLRs with verifications) is already persisted to Neo4j by the time `design_and_verify` runs. Since `neo4j_session` is already passed to `design_and_verify`, the function will fetch the full verification data for each LLR using `VerificationRepository` and format it with the new formatter.
+
+Specifically, in `combined_loop.py`, after building the LLR list, query Neo4j for each LLR's verification stubs (method, test_name, description, preconditions, actions, postconditions) and include them when formatting the prompt. The `existing_verifications` parameter (currently just method/test_name/description stubs) will be replaced by this richer data source.
 
 **Files changed:**
 - `backend/ticketing_agent/design_verify/combined_prompt.py` — remove tool descriptions from SYSTEM_PROMPT
