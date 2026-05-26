@@ -431,6 +431,57 @@ class VerificationRepository:
         return actions
 
     # -----------------------------------------------------------------------
+    # Hydrated verification retrieval
+    # -----------------------------------------------------------------------
+
+    def get_verifications_for_llr(self, llr_id: int) -> list[dict]:
+        """Return fully-hydrated verification dicts for a given LLR.
+
+        Each dict has: method, test_name, description, preconditions,
+        actions, postconditions — matching the shape expected by
+        format_llrs_with_verifications_for_prompt().
+        """
+        vms = self.list_verifications(llr_id)
+        result = []
+        for vm in vms:
+            conditions = self.list_conditions(vm.id)
+            actions = self.list_actions(vm.id)
+            result.append({
+                "method": vm.method,
+                "test_name": vm.test_name,
+                "description": vm.description,
+                "preconditions": [
+                    {
+                        "subject_qualified_name": c.subject_qualified_name,
+                        "operator": c.operator,
+                        "expected_value": c.expected_value,
+                        "object_qualified_name": c.object_qualified_name,
+                    }
+                    for c in conditions
+                    if c.phase == "pre"
+                ],
+                "actions": [
+                    {
+                        "description": a.description,
+                        "callee_qualified_name": a.callee_qualified_name,
+                        "caller_qualified_name": a.caller_qualified_name,
+                    }
+                    for a in actions
+                ],
+                "postconditions": [
+                    {
+                        "subject_qualified_name": c.subject_qualified_name,
+                        "operator": c.operator,
+                        "expected_value": c.expected_value,
+                        "object_qualified_name": c.object_qualified_name,
+                    }
+                    for c in conditions
+                    if c.phase == "post"
+                ],
+            })
+        return result
+
+    # -----------------------------------------------------------------------
     # Design node augmentation and validation
     # -----------------------------------------------------------------------
 

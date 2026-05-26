@@ -310,6 +310,89 @@ class TestActionCRUD:
         assert actions[0].order <= actions[1].order
 
 
+class TestGetVerificationsForLlr:
+    """Integration tests for get_verifications_for_llr."""
+
+    def test_returns_hydrated_dicts(self, neo4j_session):
+        """get_verifications_for_llr returns VMs with conditions and actions."""
+        from backend.db.neo4j.repositories.verification import VerificationRepository
+
+        _seed_design_node(neo4j_session, "calc::CalculatorEngine::compute")
+        hlr, llr = _seed_hlr_llr(neo4j_session)
+        repo = VerificationRepository(neo4j_session)
+        vm = repo.create_verification(
+            llr_id=llr.id, method="automated",
+            test_name="test_compute_returns_sum",
+            description="Verify that compute(5, 3, 'add') returns 8.",
+        )
+        repo.add_condition(
+            vm.id, phase="pre", order=0, operator="==",
+            expected_value="initialized", subject_qualified_name="calc::CalculatorEngine::state",
+        )
+        repo.add_action(
+            vm.id, order=0, description="Invoke CalculatorEngine.compute(5, 3, 'add')",
+            callee_qualified_name="calc::CalculatorEngine::compute",
+            caller_qualified_name="TestSuite",
+        )
+        repo.add_condition(
+            vm.id, phase="post", order=0, operator="==",
+            expected_value="8", subject_qualified_name="result",
+        )
+
+        result = repo.get_verifications_for_llr(llr.id)
+        assert len(result) == 1
+        v = result[0]
+        assert v["method"] == "automated"
+        assert v["test_name"] == "test_compute_returns_sum"
+        assert v["description"] == "Verify that compute(5, 3, 'add') returns 8."
+        assert len(v["preconditions"]) == 1
+        assert v["preconditions"][0]["subject_qualified_name"] == "calc::CalculatorEngine::state"
+        assert v["preconditions"][0]["operator"] == "=="
+        assert v["preconditions"][0]["expected_value"] == "initialized"
+        assert len(v["actions"]) == 1
+        assert v["actions"][0]["description"] == "Invoke CalculatorEngine.compute(5, 3, 'add')"
+        assert v["actions"][0]["callee_qualified_name"] == "calc::CalculatorEngine::compute"
+        assert len(v["postconditions"]) == 1
+        assert v["postconditions"][0]["subject_qualified_name"] == "result"
+        assert v["postconditions"][0]["expected_value"] == "8"
+
+    def test_returns_empty_list_when_no_verifications(self, neo4j_session):
+        """get_verifications_for_llr returns [] for an LLR with no verifications."""
+        from backend.db.neo4j.repositories.verification import VerificationRepository
+
+        hlr, llr = _seed_hlr_llr(neo4j_session)
+        repo = VerificationRepository(neo4j_session)
+        result = repo.get_verifications_for_llr(llr.id)
+        assert result == []
+
+    def test_multiple_verifications_for_one_llr(self, neo4j_session):
+        """get_verifications_for_llr returns all VMs for an LLR."""
+        from backend.db.neo4j.repositories.verification import VerificationRepository
+
+        hlr, llr = _seed_hlr_llr(neo4j_session)
+        repo = VerificationRepository(neo4j_session)
+        repo.create_verification(llr_id=llr.id, method="automated", test_name="test_a")
+        repo.create_verification(llr_id=llr.id, method="review", test_name="test_b")
+        result = repo.get_verifications_for_llr(llr.id)
+        assert len(result) == 2
+        methods = {v["method"] for v in result}
+        assert methods == {"automated", "review"}
+
+    def test_vm_with_no_conditions_or_actions(self, neo4j_session):
+        """get_verifications_for_llr returns stub VMs with empty lists."""
+        from backend.db.neo4j.repositories.verification import VerificationRepository
+
+        hlr, llr = _seed_hlr_llr(neo4j_session)
+        repo = VerificationRepository(neo4j_session)
+        repo.create_verification(llr_id=llr.id, method="automated", test_name="test_stub")
+        result = repo.get_verifications_for_llr(llr.id)
+        assert len(result) == 1
+        v = result[0]
+        assert v["preconditions"] == []
+        assert v["actions"] == []
+        assert v["postconditions"] == []
+
+
 class TestValidateReferences:
     """Integration tests for validate_references."""
 
