@@ -301,6 +301,112 @@ class TestCommitDesignAndVerifications:
         ))
         assert result["committed"] is True
 
+class TestQnameResolves:
+    def test_resolves_in_draft_lookup(self):
+        """_qname_resolves finds qname in draft lookup."""
+        from backend.ticketing_agent.design_verify.combined_tools import _qname_resolves
+        draft_lookup = {"ns::Calculator": {"kind": "class"}}
+        assert _qname_resolves("ns::Calculator", draft_lookup=draft_lookup) is True
+
+    def test_resolves_in_prior_lookup_values(self):
+        """_qname_resolves finds qname as a value in prior_class_lookup."""
+        from backend.ticketing_agent.design_verify.combined_tools import _qname_resolves
+        prior_lookup = {"Calculator": "ns::Calculator"}
+        assert _qname_resolves("ns::Calculator", prior_class_lookup=prior_lookup) is True
+
+    def test_resolves_in_prior_lookup_keys(self):
+        """_qname_resolves finds qname as a key in prior_class_lookup."""
+        from backend.ticketing_agent.design_verify.combined_tools import _qname_resolves
+        prior_lookup = {"Calculator": "ns::Calculator"}
+        assert _qname_resolves("Calculator", prior_class_lookup=prior_lookup) is True
+
+    def test_resolves_in_dep_lookup(self):
+        """_qname_resolves finds qname in dependency lookup."""
+        from backend.ticketing_agent.design_verify.combined_tools import _qname_resolves
+        dep_lookup = {"std::vector": "std::vector"}
+        assert _qname_resolves("std::vector", dep_lookup=dep_lookup) is True
+
+    def test_resolves_in_intercomponent(self):
+        """_qname_resolves finds qname in intercomponent classes."""
+        from backend.ticketing_agent.design_verify.combined_tools import _qname_resolves
+        ic = [{"qualified_name": "user_interface::Display"}]
+        assert _qname_resolves("user_interface::Display", intercomponent_classes=ic) is True
+
+    def test_returns_false_for_unknown(self):
+        """_qname_resolves returns False for unknown qnames."""
+        from backend.ticketing_agent.design_verify.combined_tools import _qname_resolves
+        assert _qname_resolves("ns::NonExistent") is False
+
+
+class TestSuggestQname:
+    def test_suggests_bare_name_match(self):
+        """_suggest_qname finds match by bare name in prior/dep lookup."""
+        from backend.ticketing_agent.design_verify.combined_tools import _suggest_qname
+        result = _suggest_qname(
+            "Calculator",
+            draft_lookup={},
+            prior_class_lookup={"Calculator": "calculation_engine::Calculator"},
+            dep_lookup={},
+            intercomponent_classes=[],
+        )
+        assert result == "calculation_engine::Calculator"
+
+    def test_suggests_member_name_match(self):
+        """_suggest_qname finds match by member name in draft lookup."""
+        from backend.ticketing_agent.design_verify.combined_tools import _suggest_qname
+        draft_lookup = {
+            "calculation_engine::Calculator": {"kind": "class"},
+            "calculation_engine::Calculator::add": {"kind": "method"},
+        }
+        result = _suggest_qname(
+            "add",
+            draft_lookup=draft_lookup,
+            prior_class_lookup={},
+            dep_lookup={},
+            intercomponent_classes=[],
+        )
+        assert result == "calculation_engine::Calculator::add"
+
+    def test_strips_stub_suffixes(self):
+        """_suggest_qname strips .output/.result/.return_value before matching."""
+        from backend.ticketing_agent.design_verify.combined_tools import _suggest_qname
+        result = _suggest_qname(
+            "Calculator.add.output",
+            draft_lookup={
+                "calculation_engine::Calculator::add": {"kind": "method"},
+            },
+            prior_class_lookup={},
+            dep_lookup={},
+            intercomponent_classes=[],
+        )
+        assert result == "calculation_engine::Calculator::add"
+
+    def test_returns_none_for_no_match(self):
+        """_suggest_qname returns None when no match found."""
+        from backend.ticketing_agent.design_verify.combined_tools import _suggest_qname
+        result = _suggest_qname(
+            "CompletelyUnknown",
+            draft_lookup={},
+            prior_class_lookup={},
+            dep_lookup={},
+            intercomponent_classes=[],
+        )
+        assert result is None
+
+    def test_substring_match(self):
+        """_suggest_qname finds partial matches via substring."""
+        from backend.ticketing_agent.design_verify.combined_tools import _suggest_qname
+        draft_lookup = {"calculation_engine::CalculationResult": {"kind": "class"}}
+        result = _suggest_qname(
+            "CalculationResult",
+            draft_lookup=draft_lookup,
+            prior_class_lookup={},
+            dep_lookup={},
+            intercomponent_classes=[],
+        )
+        assert result == "calculation_engine::CalculationResult"
+
+
 class TestDiscoveryToolDispatch:
     """Test that discovery tool calls route through the toolset correctly."""
 
