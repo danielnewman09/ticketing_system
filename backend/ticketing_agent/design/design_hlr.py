@@ -13,7 +13,7 @@ import os
 from backend.codebase.schemas import DesignSchema, OODesignSchema
 # from backend.ticketing_agent.design.design_oo import design_oo  # no longer called from pipeline
 # from backend.ticketing_agent.design.discover_classes import discover_classes  # no longer called from pipeline
-from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
+from backend.ticketing_agent.design.container_lookup import seed_container_lookup
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
 log = logging.getLogger("agents.design")
@@ -68,18 +68,6 @@ def design_hlr(
     # Discovery is now handled inside the design_and_verify loop.
     # The agent discovers dependencies on-the-fly using search_symbols,
     # get_compound, etc.
-
-    # --- Step 1.5: Seed standard containers from Neo4j ---
-    container_classes = []
-    if neo4j_session is not None:
-        container_lookup = seed_container_lookup(neo4j_session)
-        if container_lookup:
-            container_classes = get_container_class_info(neo4j_session)
-            log.info(
-                "  HLR %s: seeded %d container entries from Neo4j",
-                hlr_id,
-                len(container_lookup),
-            )
 
     # --- Build dependency_lookup for the combined loop ---
     # Discovery results come through the toolset at runtime.
