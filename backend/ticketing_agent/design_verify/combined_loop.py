@@ -18,7 +18,7 @@ from backend.ticketing_agent.design_verify.combined_tools import (
     ALL_TOOLS,
     make_combined_dispatcher,
 )
-from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
+from backend.ticketing_agent.design.container_lookup import seed_container_lookup
 from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
 
 log = logging.getLogger("agents.design_verify")
@@ -95,9 +95,9 @@ def design_and_verify(
     requirements_text = format_hlrs_for_prompt([hlr], llrs, include_component=True)
 
     # Build dependency lookup dict, seeded with standard containers from Neo4j
-    # This must happen BEFORE prompt-building so container_classes is available.
+    # Container names are seeded into dep_lookup for runtime resolution,
+    # but they are NOT listed in the prompt's dependency API section.
     dep_lookup = dict(dependency_lookup or {})
-    container_classes = []
     if neo4j_session is not None:
         container_lookup = seed_container_lookup(neo4j_session)
         if container_lookup:
@@ -109,7 +109,6 @@ def design_and_verify(
                 before,
                 len(dep_lookup),
             )
-            container_classes = get_container_class_info(neo4j_session)
 
     # Build prompt sections from context
     specializations_section = ""
@@ -118,12 +117,8 @@ def design_and_verify(
     namespace_section = build_namespace_section(component_namespace, sibling_namespaces or []) if component_namespace else ""
 
     dep_api_section = ""
-    all_dep_classes = list(dep_lookup.items())
-    if container_classes:
-        # Add container classes to the dependency context
-        all_dep_classes.extend((c["name"], c["qualified_name"]) for c in container_classes)
-    if all_dep_classes:
-        dep_classes = [{"qualified_name": qname, "name": bare} for bare, qname in all_dep_classes]
+    if dep_lookup:
+        dep_classes = [{"qualified_name": qname, "name": bare} for bare, qname in dep_lookup.items()]
         dep_api_section = build_dependency_api_section(dep_classes)
 
     as_built_section = ""
