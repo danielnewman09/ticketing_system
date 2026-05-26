@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 from backend.codebase.schemas import OODesignSchema
 from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema, VerificationActionSchema
 from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
+from backend.ticketing_agent.design_verify.combined_tools import make_combined_dispatcher
 
 
 def _minimal_design_dict():
@@ -165,3 +166,74 @@ def test_design_verify_warns_about_unqualified_caller():
     }
     warnings = _collect_verification_warnings(verifications)
     assert any("TestSuite" in w and "not a valid qualified name" in w for w in warnings)
+
+
+def test_draft_verifications_then_commit_workflow():
+    """Full workflow: draft design -> draft_verifications -> commit."""
+    dispatcher = make_combined_dispatcher(
+        prior_class_lookup={},
+        dependency_lookup=None,
+        intercomponent_classes=None,
+        neo4j_session=None,
+    )
+
+    # Step 1: Draft the design
+    draft_result = json.loads(dispatcher("draft_design", {"design": _minimal_design_dict()}))
+    assert draft_result["valid"] is True
+
+    # Step 2: Draft verifications with unresolved references
+    bad_verifs = {
+        "1": [{
+            "method": "automated",
+            "test_name": "test_add_bad_ref",
+            "description": "Test with placeholder reference",
+            "preconditions": [],
+            "actions": [{
+                "description": "Call add",
+                "callee_qualified_name": "Calculator.add",
+            }],
+            "postconditions": [{
+                "subject_qualified_name": "Calculator.add.output",
+                "operator": "==",
+                "expected_value": "5.0",
+            }],
+        }]
+    }
+    draft_verif_result = json.loads(dispatcher("draft_verifications", {"verifications": bad_verifs}))
+    assert draft_verif_result["valid"] is False
+    assert len(draft_verif_result["unresolved_details"]) >= 2  # callee + subject
+    # Should have suggestions
+    suggestions = [d for d in draft_verif_result["unresolved_details"] if "suggestion" in d]
+    assert len(suggestions) >= 1
+
+    # Step 3: Re-draft with resolved references
+    good_verifs = {
+        "1": [{
+            "method": "automated",
+            "test_name": "test_add",
+            "description": "Test addition",
+            "preconditions": [],
+            "actions": [{
+                "description": "Call add",
+                "callee_qualified_name": "calculation_engine::Calculator::add",
+            }],
+            "postconditions": [{
+                "subject_qualified_name": "calculation_engine::Calculator",
+                "operator": "not_null",
+                "expected_value": "exists",
+            }],
+        }]
+    }
+    draft_verif_result2 = json.loads(dispatcher("draft_verifications", {"verifications": good_verifs}))
+    assert draft_verif_result2["valid"] is True
+    assert draft_verif_result2["errors"] == []
+
+    # Step 4: Commit with the resolved verifications
+    commit_result = json.loads(dispatcher(
+        "commit_design_and_verifications",
+        {
+            "oo_design": _minimal_design_dict(),
+            "verifications": good_verifs,
+        },
+    ))
+    assert commit_result["committed"] is True
