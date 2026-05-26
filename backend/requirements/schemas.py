@@ -11,7 +11,7 @@ callee_qualified_name. The legacy member_qualified_name field is removed.
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 VERIFICATION_METHODS = ["automated", "review", "inspection"]
 
@@ -33,6 +33,13 @@ class VerificationConditionSchema(BaseModel):
     operator: str = "=="
     expected_value: str
     object_qualified_name: str = ""  # optional RIGHT_OPERAND edge reference
+
+    @field_validator("operator", mode="before")
+    @classmethod
+    def default_operator(cls, v):
+        if v is None or v == "":
+            return "=="
+        return v
 
 
 class VerificationActionSchema(BaseModel):

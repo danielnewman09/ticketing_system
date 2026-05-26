@@ -326,6 +326,35 @@ class TestVerificationConditionSchemaQualifiedNames:
         assert vc.object_qualified_name == ""
 
 
+class TestOperatorDefaultValidator:
+    def test_condition_schema_defaults_none_operator(self):
+        """VerificationConditionSchema defaults None operator to '=='."""
+        cond = VerificationConditionSchema(
+            subject_qualified_name="ns::Class::attr",
+            expected_value="5.0",
+            operator=None,
+        )
+        assert cond.operator == "=="
+
+    def test_condition_schema_defaults_empty_operator(self):
+        """VerificationConditionSchema defaults empty string operator to '=='."""
+        cond = VerificationConditionSchema(
+            subject_qualified_name="ns::Class::attr",
+            operator="",
+            expected_value="5.0",
+        )
+        assert cond.operator == "=="
+
+    def test_condition_schema_preserves_explicit_operator(self):
+        """VerificationConditionSchema preserves explicit non-default operators."""
+        cond = VerificationConditionSchema(
+            subject_qualified_name="ns::Class::attr",
+            operator="is_true",
+            expected_value="true",
+        )
+        assert cond.operator == "is_true"
+
+
 class TestVerificationActionSchemaQualifiedNames:
     def test_caller_and_callee(self):
         va = VerificationActionSchema(
