@@ -535,3 +535,219 @@ class TestDiscoveryToolDispatch:
         assert all("member_refid" not in r for r in slimmed)
         assert all("member_brief" not in r for r in slimmed)
         assert slimmed[0]["name"] == "Fl_Window"
+
+
+class TestDraftVerifications:
+    def test_draft_verifications_accepts_valid_references(self):
+        """draft_verifications accepts verifications with references that exist in the draft."""
+        dispatcher = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            neo4j_session=None,
+        )
+        # First draft a design so references can resolve
+        dispatcher("draft_design", {"design": _minimal_design_dict()})
+
+        result = json.loads(dispatcher("draft_verifications", {
+            "verifications": {
+                "1": [{
+                    "method": "automated",
+                    "test_name": "test_add",
+                    "description": "Test addition",
+                    "preconditions": [],
+                    "actions": [{
+                        "description": "Call add",
+                        "callee_qualified_name": "calculation_engine::Calculator::add",
+                    }],
+                    "postconditions": [{
+                        "subject_qualified_name": "calculation_engine::Calculator::lastResult",
+                        "operator": "==",
+                        "expected_value": "5.0",
+                    }],
+                }]
+            }
+        }))
+        assert result["valid"] is True
+        assert result["errors"] == []
+        assert "1" in result["verification_summary"]
+
+    def test_draft_verifications_rejects_bad_qnames(self):
+        """draft_verifications reports unresolved qname references."""
+        dispatcher = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            neo4j_session=None,
+        )
+        dispatcher("draft_design", {"design": _minimal_design_dict()})
+
+        result = json.loads(dispatcher("draft_verifications", {
+            "verifications": {
+                "1": [{
+                    "method": "automated",
+                    "test_name": "test_bad_ref",
+                    "description": "Test with bad reference",
+                    "preconditions": [{
+                        "subject_qualified_name": "nonexistent::GhostClass",
+                        "operator": "not_null",
+                        "expected_value": "exists",
+                    }],
+                    "actions": [],
+                    "postconditions": [],
+                }]
+            }
+        }))
+        assert result["valid"] is False
+        assert any("GhostClass" in e for e in result["errors"])
+        assert len(result["unresolved_details"]) > 0
+
+    def test_draft_verifications_suggests_correction(self):
+        """draft_verifications suggests corrections for near-miss qnames."""
+        dispatcher = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            neo4j_session=None,
+        )
+        dispatcher("draft_design", {"design": _minimal_design_dict()})
+
+        result = json.loads(dispatcher("draft_verifications", {
+            "verifications": {
+                "1": [{
+                    "method": "automated",
+                    "test_name": "test_suggestion",
+                    "description": "Test with near-miss reference",
+                    "preconditions": [{
+                        "subject_qualified_name": "Calculator",
+                        "operator": "not_null",
+                        "expected_value": "exists",
+                    }],
+                    "actions": [],
+                    "postconditions": [],
+                }]
+            }
+        }))
+        assert len(result["unresolved_details"]) > 0
+        detail = result["unresolved_details"][0]
+        assert detail["value"] == "Calculator"
+        assert "suggestion" in detail
+        assert "calculation_engine::Calculator" in detail["suggestion"]
+
+    def test_draft_verifications_warns_about_unqualified_caller(self):
+        """draft_verifications warns when caller_qualified_name is not a qname."""
+        dispatcher = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            neo4j_session=None,
+        )
+        dispatcher("draft_design", {"design": _minimal_design_dict()})
+
+        result = json.loads(dispatcher("draft_verifications", {
+            "verifications": {
+                "1": [{
+                    "method": "automated",
+                    "test_name": "test_caller",
+                    "description": "Test with unqualified caller",
+                    "preconditions": [],
+                    "actions": [{
+                        "description": "Call add",
+                        "callee_qualified_name": "calculation_engine::Calculator::add",
+                        "caller_qualified_name": "TestSuite",
+                    }],
+                    "postconditions": [],
+                }]
+            }
+        }))
+        assert any("TestSuite" in w for w in result["warnings"])
+
+    def test_draft_verifications_warns_about_enum_in_expected_value(self):
+        """draft_verifications warns when expected_value contains :: (possible design reference)."""
+        dispatcher = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            neo4j_session=None,
+        )
+        dispatcher("draft_design", {"design": _minimal_design_dict()})
+
+        result = json.loads(dispatcher("draft_verifications", {
+            "verifications": {
+                "1": [{
+                    "method": "automated",
+                    "test_name": "test_enum_ref",
+                    "description": "Test with enum in expected_value",
+                    "preconditions": [],
+                    "actions": [{
+                        "description": "Call add",
+                        "callee_qualified_name": "calculation_engine::Calculator::add",
+                    }],
+                    "postconditions": [{
+                        "subject_qualified_name": "calculation_engine::Calculator::lastResult",
+                        "operator": "==",
+                        "expected_value": "calculation_engine::CalculationError::invalid_input",
+                    }],
+                }]
+            }
+        }))
+        assert any("::" in w and "expected_value" in w for w in result["warnings"])
+
+    def test_draft_verifications_with_no_design_draft_warns(self):
+        """draft_verifications warns when no design draft exists."""
+        dispatcher = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            neo4j_session=None,
+        )
+        # No draft_design call — so no design draft exists
+
+        result = json.loads(dispatcher("draft_verifications", {
+            "verifications": {
+                "1": [{
+                    "method": "automated",
+                    "test_name": "test_no_draft",
+                    "description": "Test without draft",
+                    "preconditions": [],
+                    "actions": [{
+                        "description": "Call add",
+                        "callee_qualified_name": "calculation_engine::Calculator::add",
+                    }],
+                    "postconditions": [],
+                }]
+            }
+        }))
+        assert any("no design draft" in w.lower() for w in result["warnings"])
+
+    def test_draft_verifications_strips_stub_suffix(self):
+        """draft_verifications suggests corrections for stub-style references like 'CalculationEngine.add.output'."""
+        dispatcher = make_combined_dispatcher(
+            prior_class_lookup={},
+            dependency_lookup=None,
+            intercomponent_classes=None,
+            neo4j_session=None,
+        )
+        dispatcher("draft_design", {"design": _minimal_design_dict()})
+
+        result = json.loads(dispatcher("draft_verifications", {
+            "verifications": {
+                "1": [{
+                    "method": "automated",
+                    "test_name": "test_stub_ref",
+                    "description": "Test with stub-style reference",
+                    "preconditions": [],
+                    "actions": [],
+                    "postconditions": [{
+                        "subject_qualified_name": "Calculator.add.output",
+                        "operator": "==",
+                        "expected_value": "5.0",
+                    }],
+                }]
+            }
+        }))
+        # Should report unresolved with a suggestion
+        assert result["valid"] is False
+        details = result["unresolved_details"]
+        assert len(details) > 0
+        assert any("suggestion" in d for d in details)
