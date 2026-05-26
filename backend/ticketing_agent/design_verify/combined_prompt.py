@@ -108,8 +108,49 @@ Guidelines:
 - Reference ONLY real qualified names from the design context or your draft
 - If a verification needs a member that doesn't exist, add it to the design
   via draft_design before referencing it
-- Keep conditions specific and testable
+- After writing verification procedures, ALWAYS call draft_verifications
+  to validate that all references resolve before committing
+- If draft_verifications reports unresolved references, either add the
+  missing design member or correct the reference and re-draft
 - Process LLRs one at a time during verification
+- Leave caller_qualified_name empty if the caller is the test harness
+  (not a design element). Do NOT use "TestSuite" or other test class
+  names as caller qnames.
+
+Every condition MUST include an operator. The default is "==" if not
+specified, but be explicit:
+- Use "==" for equality checks (result_value == 5.0)
+- Use "is_true" / "is_false" for boolean checks (success is_true)
+- Use "not_null" for existence checks (engine not_null)
+- Use "contains" for collection membership
+
+### Resolving Verification Stubs
+
+The requirements include seeded verification stubs — preconditions, actions,
+and postconditions that describe test scenarios in plain terms but use
+placeholder references. Your job is to translate each stub into a fully
+resolved verification method that references actual design members.
+
+For each verification stub:
+1. Identify what design element each reference targets
+   - "result" → the return type or result attribute of the called method
+   - "error_signal" → the error/signal attribute or enum value
+   - "is_valid" → the boolean return or attribute indicating validity
+2. Replace placeholder references with qualified names from your draft
+   - "CalculationEngine.add" → "calculation_engine::CalculationEngine::add"
+   - "CalculationResult.result_value" → "calculation_engine::CalculationResult::result_value"
+3. Use draft_verifications to validate that every reference resolves
+4. If a reference can't resolve, either:
+   a. Add the missing member to your design via draft_design, OR
+   b. Use expected_value alone for literal values (don't fabricate qnames)
+
+Common patterns for resolving stubs:
+| Stub pattern | Resolution |
+|---|---|
+| `ClassName.method.output` | Use the method's return type: `ns::ReturnType::attribute` |
+| `result == X` | `ns::ResultClass::result_value == X` |
+| `error_signal == Y` | `ns::ResultClass::error_signal == Y` where error_signal is an enum attribute |
+| `caller_qualified_name: TestSuite` | Leave empty (omit) — the test framework is not a design element |
 
 <FORMAT-CONTRACT name="verification-key-format">
 The `verifications` field in `commit_design_and_verifications` MUST be a JSON
