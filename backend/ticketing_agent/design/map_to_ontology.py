@@ -135,13 +135,28 @@ def map_oo_to_ontology(
         return None
 
     def _add_depends_from_type(type_str: str, cls_qname: str, seen: set[str]):
-        """Scan a type string for dependency class names and add depends_on triples."""
+        """Scan a type string for dependency class names and add depends_on or references triples.
+
+        For external dependencies (not in class_lookup), adds depends_on triples.
+        For design-internal type references (in class_lookup), adds references triples
+        to ensure enums and other types are connected in the ontology graph.
+        """
         if not type_str:
             return
         for match in _TYPE_EXTRACT_RE.finditer(type_str):
             name = match.group(1)
             if name in class_lookup:
-                continue  # design-internal reference, not a dependency
+                # Design-internal reference: add a "references" edge so the
+                # target entity (e.g., an enum) is not disconnected in the
+                # ontology graph. Skip if a triple already exists between
+                # the same two entities to avoid duplicates from e.g.
+                # multiple attributes referencing the same type.
+                target_qname = class_lookup[name]
+                key = f"{cls_qname}->references->{target_qname}"
+                if key not in seen:
+                    seen.add(key)
+                    _add_triple(cls_qname, "references", target_qname)
+                continue
             if name in dep_lookup:
                 qname = dep_lookup[name]
                 key = f"{cls_qname}->{qname}"
