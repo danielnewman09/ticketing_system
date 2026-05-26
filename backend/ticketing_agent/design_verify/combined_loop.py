@@ -11,6 +11,7 @@ import os
 from llm_caller import call_tool_loop
 from backend.codebase.schemas import OODesignSchema
 from backend.requirements.schemas import VerificationSchema
+from backend.requirements.schemas import VerificationSchema
 from backend.requirements.formatting import format_hlr_dict, format_llrs_with_verifications_for_prompt
 from backend.db.neo4j.repositories.verification import VerificationRepository
 
@@ -23,6 +24,45 @@ from backend.ticketing_agent.design.container_lookup import seed_container_looku
 from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
 
 log = logging.getLogger("agents.design_verify")
+
+
+def _collect_verification_warnings(
+    verifications: dict[int, list[VerificationSchema]],
+) -> list[str]:
+    """Collect quality warnings from verification data.
+
+    Checks for common issues:
+    - Conditions with no operator (will default to ==)
+    - Empty preconditions (may indicate missing setup)
+    - Unqualified caller_qualified_name values
+    """
+    warnings = []
+    for llr_id, verifs in verifications.items():
+        for v in verifs:
+            test_label = v.test_name or v.method
+            # Check for empty preconditions
+            if not v.preconditions:
+                warnings.append(
+                    f"LLR {llr_id} '{test_label}': no preconditions specified"
+                )
+            # Check for conditions without operators
+            for cond in v.preconditions + v.postconditions:
+                if not cond.operator:
+                    warnings.append(
+                        f"LLR {llr_id} '{test_label}': condition on "
+                        f"'{cond.subject_qualified_name}' has no operator \u2014 "
+                        f"defaulting to '=='"
+                    )
+            # Check for unqualified caller references
+            for action in v.actions:
+                if action.caller_qualified_name and "::" not in action.caller_qualified_name:
+                    warnings.append(
+                        f"LLR {llr_id} '{test_label}': action caller "
+                        f"'{action.caller_qualified_name}' is not a valid "
+                        f"qualified name \u2014 leave empty if the caller is "
+                        f"the test harness"
+                    )
+    return warnings
 
 
 class DesignVerifyResult:
@@ -270,6 +310,9 @@ def design_and_verify(
     # Post-loop validation
     design_warnings = []
     verification_warnings = []
+
+    # Collect verification quality warnings
+    verification_warnings = _collect_verification_warnings(verifications)
 
     design_errors = _validate_oo_design(
         oo_design,

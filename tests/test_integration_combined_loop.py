@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from backend.codebase.schemas import OODesignSchema
-from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema
+from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema, VerificationActionSchema
 from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
 
 
@@ -143,3 +143,25 @@ def test_commit_tool_uses_string_llr_ids():
     ))
     assert commit_result["committed"] is True
     assert "1" in commit_result["verifications"]
+
+
+def test_design_verify_warns_about_unqualified_caller():
+    """design_and_verify adds warnings for caller_qualified_name without :: separators."""
+    from backend.ticketing_agent.design_verify.combined_loop import _collect_verification_warnings
+
+    verifications = {
+        1: [VerificationSchema(
+            method="automated",
+            test_name="test_call",
+            description="Test",
+            preconditions=[],
+            actions=[VerificationActionSchema(
+                description="Call method",
+                callee_qualified_name="calculation_engine::Calculator::add",
+                caller_qualified_name="TestSuite",
+            )],
+            postconditions=[],
+        )]
+    }
+    warnings = _collect_verification_warnings(verifications)
+    assert any("TestSuite" in w and "not a valid qualified name" in w for w in warnings)
