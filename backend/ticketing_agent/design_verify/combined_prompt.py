@@ -24,7 +24,6 @@ digraph design_verify_workflow {{
 
 {specializations_section}
 {namespace_section}
-{dependency_api_section}
 {as_built_section}
 {existing_classes_section}
 {intercomponent_section}
