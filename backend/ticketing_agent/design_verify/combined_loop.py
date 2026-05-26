@@ -64,10 +64,8 @@ def design_and_verify(
     Args:
         hlr: HLR dict with {id, description, component_name?}.
         llrs: LLR dicts for this HLR.
-        existing_verifications: Existing verification stubs for these LLRs.
         existing_classes: Classes already designed in the same component.
         intercomponent_classes: Public API classes from other components.
-        dependency_contexts: Dependency assessment keyed by HLR ID.
         component_namespace: Required namespace for this component.
         sibling_namespaces: Other component namespaces.
         prior_class_lookup: bare_name -> qualified_name for previously designed classes.

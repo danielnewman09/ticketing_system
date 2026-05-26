@@ -89,7 +89,7 @@ def design_hlr(
         llrs=llrs,
         existing_classes=existing_classes,
         intercomponent_classes=intercomponent_classes,
-        dependency_contexts=dependency_contexts,
+
         component_namespace=component_namespace,
         sibling_namespaces=sibling_namespaces,
         prior_class_lookup=prior_class_lookup,
