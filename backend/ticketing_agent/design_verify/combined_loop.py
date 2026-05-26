@@ -221,6 +221,20 @@ def design_and_verify(
 
     # Parse the final result
     oo_design = OODesignSchema.model_validate(result["oo_design"])
+
+    # Safety check: detect truncated responses where classes/enums/interfaces are missing
+    # This happens when the LLM's output is cut off mid-JSON, leaving only associations.
+    total_design_elements = len(oo_design.classes) + len(oo_design.enums) + len(oo_design.interfaces)
+    if total_design_elements == 0 and oo_design.associations:
+        raise ValueError(
+            f"design_and_verify: LLM response appears truncated — "
+            f"oo_design has {len(oo_design.associations)} associations but 0 "
+            f"classes/interfaces/enums. Associations reference undefined class names: "
+            f"{sorted({a.from_class for a in oo_design.associations} | {a.to_class for a in oo_design.associations})[:5]}. "
+            f"This typically means the commit_design_and_verifications output exceeded the "
+            f"token budget. Consider increasing max_tokens or simplifying the design."
+        )
+
     verifications = {}
     valid_llr_ids = {llr["id"] for llr in (llrs or [])}
 
