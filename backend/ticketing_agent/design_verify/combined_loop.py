@@ -11,7 +11,8 @@ import os
 from llm_caller import call_tool_loop
 from backend.codebase.schemas import OODesignSchema
 from backend.requirements.schemas import VerificationSchema
-from backend.requirements.formatting import format_hlrs_for_prompt
+from backend.requirements.formatting import format_hlr_dict, format_llrs_with_verifications_for_prompt
+from backend.db.neo4j.repositories.verification import VerificationRepository
 
 from backend.ticketing_agent.design_verify.combined_prompt import SYSTEM_PROMPT
 from backend.ticketing_agent.design_verify.combined_tools import (
@@ -92,7 +93,61 @@ def design_and_verify(
         build_namespace_section,
     )
 
-    requirements_text = format_hlrs_for_prompt([hlr], llrs, include_component=True)
+    # Format requirements with full verification stubs from decompose
+    llr_verifications: dict[int, list[dict]] = {}
+    if neo4j_session is not None and llrs:
+        ver_repo = VerificationRepository(neo4j_session)
+        for llr in llrs:
+            llr_id = llr["id"]
+            vms = ver_repo.list_verifications(llr_id)
+            if vms:
+                verifs_for_llr = []
+                for vm in vms:
+                    conditions = ver_repo.list_conditions(vm.id)
+                    actions = ver_repo.list_actions(vm.id)
+                    preconds = [
+                        {
+                            "subject_qualified_name": c.subject_qualified_name,
+                            "operator": c.operator,
+                            "expected_value": c.expected_value,
+                            "object_qualified_name": c.object_qualified_name,
+                        }
+                        for c in conditions
+                        if c.phase == "pre"
+                    ]
+                    postconds = [
+                        {
+                            "subject_qualified_name": c.subject_qualified_name,
+                            "operator": c.operator,
+                            "expected_value": c.expected_value,
+                            "object_qualified_name": c.object_qualified_name,
+                        }
+                        for c in conditions
+                        if c.phase == "post"
+                    ]
+                    action_dicts = [
+                        {
+                            "description": a.description,
+                            "callee_qualified_name": a.callee_qualified_name,
+                            "caller_qualified_name": a.caller_qualified_name,
+                        }
+                        for a in actions
+                    ]
+                    verifs_for_llr.append({
+                        "method": vm.method,
+                        "test_name": vm.test_name,
+                        "description": vm.description,
+                        "preconditions": preconds,
+                        "actions": action_dicts,
+                        "postconditions": postconds,
+                    })
+                llr_verifications[llr_id] = verifs_for_llr
+
+    requirements_text = format_llrs_with_verifications_for_prompt(llrs, llr_verifications)
+
+    # Prepend the HLR description
+    hlr_line = format_hlr_dict(hlr, include_component=True)
+    requirements_text = f"{hlr_line}\n\n{requirements_text}"
 
     # Build dependency lookup dict, seeded with standard containers from Neo4j
     # Container names are seeded into dep_lookup for runtime resolution,
@@ -168,20 +223,10 @@ def design_and_verify(
         if component_desc:
             component_hint += f"\n### Component Description\n\n{component_desc}\n"
 
-    # Format existing verification stubs
-    existing_verifs_text = ""
-    if existing_verifications:
-        lines = ["Existing verification stubs:"]
-        for v in existing_verifications:
-            lines.append(f"  - [{v['method']}] {v.get('test_name', '')}: {v.get('description', '')}")
-        existing_verifs_text = "\n".join(lines)
-
     user_content = (
         f"Design the object-oriented class structure and write verification procedures "
         f"for the following requirements:\n\n{requirements_text}{component_hint}"
     )
-    if existing_verifs_text:
-        user_content += f"\n\n{existing_verifs_text}"
 
     # Explicitly list the LLR IDs so the LLM knows the correct keys
     if llrs:
