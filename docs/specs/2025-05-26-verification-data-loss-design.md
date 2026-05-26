@@ -35,7 +35,7 @@ if neo4j_session is not None and llrs:
     for llr in llrs:
         verifs = ver_repo.get_verifications_for_llr(llr["id"])
         if verifs:
-            llr_verifications[llr]["id"]] = verifs
+            llr_verifications[llr["id"]] = verifs
 ```
 
 ## Files Changed
