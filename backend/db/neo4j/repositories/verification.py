@@ -270,7 +270,7 @@ class VerificationRepository:
 
         # Create :LEFT_OPERAND edge if subject :Design node exists
         if subject_qualified_name:
-            self._session.run(
+            result = self._session.run(
                 """
                 MATCH (c:Condition {id: $cid})
                 MATCH (d:Design {qualified_name: $qn})
@@ -278,10 +278,17 @@ class VerificationRepository:
                 """,
                 {"cid": next_id, "qn": subject_qualified_name},
             )
+            summary = result.consume().counters
+            if summary.relationships_created == 0:
+                log.debug(
+                    "No :LEFT_OPERAND edge created for condition %d: "
+                    ":Design node '%s' not found",
+                    next_id, subject_qualified_name,
+                )
 
         # Create :RIGHT_OPERAND edge if object :Design node exists
         if object_qualified_name:
-            self._session.run(
+            result = self._session.run(
                 """
                 MATCH (c:Condition {id: $cid})
                 MATCH (d:Design {qualified_name: $qn})
@@ -289,6 +296,13 @@ class VerificationRepository:
                 """,
                 {"cid": next_id, "qn": object_qualified_name},
             )
+            summary = result.consume().counters
+            if summary.relationships_created == 0:
+                log.debug(
+                    "No :RIGHT_OPERAND edge created for condition %d: "
+                    ":Design node '%s' not found",
+                    next_id, object_qualified_name,
+                )
 
         return ConditionNode(
             id=next_id,
@@ -377,7 +391,7 @@ class VerificationRepository:
 
         # Create :CALLER edge if referenced :Design node exists
         if caller_qualified_name:
-            self._session.run(
+            result = self._session.run(
                 """
                 MATCH (a:Action {id: $aid})
                 MATCH (d:Design {qualified_name: $qn})
@@ -385,10 +399,17 @@ class VerificationRepository:
                 """,
                 {"aid": next_id, "qn": caller_qualified_name},
             )
+            summary = result.consume().counters
+            if summary.relationships_created == 0:
+                log.debug(
+                    "No :CALLER edge created for action %d: "
+                    ":Design node '%s' not found",
+                    next_id, caller_qualified_name,
+                )
 
         # Create :CALLEE edge if referenced :Design node exists
         if callee_qualified_name:
-            self._session.run(
+            result = self._session.run(
                 """
                 MATCH (a:Action {id: $aid})
                 MATCH (d:Design {qualified_name: $qn})
@@ -396,6 +417,13 @@ class VerificationRepository:
                 """,
                 {"aid": next_id, "qn": callee_qualified_name},
             )
+            summary = result.consume().counters
+            if summary.relationships_created == 0:
+                log.debug(
+                    "No :CALLEE edge created for action %d: "
+                    ":Design node '%s' not found",
+                    next_id, callee_qualified_name,
+                )
 
         return ActionNode(
             id=next_id,
