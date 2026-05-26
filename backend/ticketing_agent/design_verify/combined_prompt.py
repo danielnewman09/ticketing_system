@@ -76,8 +76,6 @@ explicitly designed as methods in the design context or your draft.
 | Constructor reference (ClassName::ClassName) | No such method unless explicitly designed | Only reference constructors if they appear in the design |
 </FORMAT-CONTRACT>
 
-## Instructions
-
 ### For the design:
 - Reference ONLY qualified names from the design context, dependency APIs,
   intercomponent boundaries, or your own draft

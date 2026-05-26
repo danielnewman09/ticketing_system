@@ -28,8 +28,8 @@ def test_system_prompt_renders():
     # Should contain FORMAT-CONTRACT content
     assert "qualified-names" in rendered
     assert "verification-key-format" in rendered
-    # Should contain instructions
-    assert "Instructions" in rendered
+    # Should contain instruction content (no longer has a ## Instructions header)
+    assert "### For the design" in rendered
 
 
 def test_system_prompt_renders_with_sections():
