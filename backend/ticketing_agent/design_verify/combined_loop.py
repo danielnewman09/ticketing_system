@@ -172,8 +172,8 @@ def design_and_verify(
     namespace_section = build_namespace_section(component_namespace, sibling_namespaces or []) if component_namespace else ""
 
     dep_api_section = ""
-    if dep_lookup:
-        dep_classes = [{"qualified_name": qname, "name": bare} for bare, qname in dep_lookup.items()]
+    if dependency_lookup:
+        dep_classes = [{"qualified_name": qname, "name": bare} for bare, qname in dependency_lookup.items()]
         dep_api_section = build_dependency_api_section(dep_classes)
 
     as_built_section = ""
