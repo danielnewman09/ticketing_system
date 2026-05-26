@@ -35,3 +35,100 @@ def format_hlrs_for_prompt(hlrs: list[dict], llrs: list[dict] | None = None, inc
             for llr in unlinked:
                 lines.append(f"  {format_llr_dict(llr)}")
     return "\n".join(lines)
+
+
+def _format_condition(cond: dict) -> str:
+    """Format a single condition (pre or post) as a readable string."""
+    subject = cond.get("subject_qualified_name", "")
+    operator = cond.get("operator", "==")
+    expected = cond.get("expected_value", "")
+    obj = cond.get("object_qualified_name", "")
+    parts = [subject, operator]
+    if expected:
+        parts.append(expected)
+    if obj:
+        parts.append(f"(ref: {obj})")
+    return " ".join(parts)
+
+
+def _format_action(action: dict) -> str:
+    """Format a single action as a readable string."""
+    desc = action.get("description", "")
+    callee = action.get("callee_qualified_name", "")
+    caller = action.get("caller_qualified_name", "")
+    if caller and callee:
+        return f"{caller} → {callee}" + (f": {desc}" if desc else "")
+    elif callee:
+        return callee + (f": {desc}" if desc else "")
+    return desc
+
+
+def _format_verification(v: dict) -> list[str]:
+    """Format a single verification stub as indented lines."""
+    lines = []
+    method = v.get("method", "")
+    test_name = v.get("test_name", "")
+    desc = v.get("description", "")
+    title = f"[{method}]"
+    if test_name:
+        title += f" {test_name}"
+    lines.append(f"    {title}")
+    if desc:
+        lines.append(f"      {desc}")
+
+    preconditions = v.get("preconditions", [])
+    if preconditions:
+        lines.append("      Pre-conditions:")
+        for cond in preconditions:
+            lines.append(f"        {_format_condition(cond)}")
+    else:
+        lines.append("      Pre-conditions: (none)")
+
+    actions = v.get("actions", [])
+    if actions:
+        lines.append("      Actions:")
+        for action in actions:
+            lines.append(f"        {_format_action(action)}")
+    else:
+        lines.append("      Actions: (none)")
+
+    postconditions = v.get("postconditions", [])
+    if postconditions:
+        lines.append("      Post-conditions:")
+        for cond in postconditions:
+            lines.append(f"        {_format_condition(cond)}")
+    else:
+        lines.append("      Post-conditions: (none)")
+
+    return lines
+
+
+def format_llrs_with_verifications_for_prompt(
+    llrs: list[dict],
+    llr_verifications: dict[int, list[dict]],
+) -> str:
+    """Format LLRs with their full verification stubs for the design_verify prompt.
+
+    Args:
+        llrs: List of LLR dicts with at least id, description, hlr_id.
+        llr_verifications: Dict mapping LLR ID to list of verification dicts.
+            Each verification dict has: method, test_name, description,
+            preconditions, actions, postconditions. Each condition dict has:
+            subject_qualified_name, operator, expected_value, object_qualified_name.
+            Each action dict has: description, callee_qualified_name, caller_qualified_name.
+
+    Returns:
+        Formatted text suitable for inclusion in an agent prompt.
+    """
+    lines = []
+    for llr in llrs:
+        lines.append(f"LLR {llr['id']}: {llr['description']}")
+        verifs = llr_verifications.get(llr["id"], [])
+        if verifs:
+            lines.append("  Verifications:")
+            for v in verifs:
+                lines.extend(_format_verification(v))
+        else:
+            lines.append("  (No verification stubs)")
+        lines.append("")
+    return "\n".join(lines)
