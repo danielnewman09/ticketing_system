@@ -48,7 +48,9 @@ Produce:
   owning class via `composes`. Can participate in `invokes` relationships.
   Must have visibility set.
 - **function** — A free / module-level callable. Not owned by a class.
-- **enum** — A fixed set of named values. Contains enum_value children.
+- **enum** — A fixed set of named values. Contains enum_value children. When a
+  class holds a member variable of an enum type, the class should have a
+  `composes` triple to the enum.
 - **enum_value** — A member of an enum. Must be nested under its parent
   enum using qualified_name scoping (e.g., `core::Color::RED`).
 - **interface** — A contract that classes realize. Use only when multiple
@@ -84,6 +86,9 @@ apply: modules, free functions, classes themselves, interfaces, and enums.
 - Use inheritance (`generalizes`) where there is a clear is-a relationship
   (e.g., NumberButton generalizes Button). A container that aggregates or
   composes the base class implicitly covers all derived types.
+- When a method returns a design-internal type (class, enum, interface), add a
+  `returns` triple (method → type). When a method accepts a design-internal
+  type as a parameter, add a `has_argument` triple (method → type).
 - Keep the design minimal — only include entities needed by the requirements
 - Prefer attributes over classes for properties. Ask: "Does this entity have
   its own behavior or relationships?" If no, it is an attribute.

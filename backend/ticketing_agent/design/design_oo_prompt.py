@@ -77,7 +77,7 @@ Each enum needs: name, module, description, values.
 Relationships between design entities (classes, interfaces, or enums).
 Do not include attributes or methods — those are covered by composition.
 Do NOT manufacture associations just to fill this section.
-Kind is one of: associates, aggregates, depends_on, references, invokes.
+Kind is one of: associates, aggregates, composes, depends_on, references, returns, invokes.
 
 **aggregates** — The whole holds a collection of parts that can exist independently.
 **The `mechanism` field is REQUIRED for aggregates.** Specify the container type
@@ -93,10 +93,21 @@ Specify the `mechanism` field with the reference type when known
 This determines the header dependency (e.g., `std::unique_ptr` → `#include <memory>`).
 Example: `{{from_class: "CalculatorWindow", to_class: "CalculatorEngine", kind: "references", mechanism: "std::unique_ptr"}}`
 
+**composes** — A class has a member variable of the given entity type (value
+composition). Use when a class holds an instance of another design entity
+(enum, class, interface) as a direct member — not via pointer or container.
+The attribute still belongs in the class's attributes array; the association
+records the entity-to-entity relationship.
+Example: `{{from_class: "CalculationResult", to_class: "ErrorType", kind: "composes"}}`
+
+**returns** — A method returns a value of the given entity type. Records the
+entity-to-entity relationship for return types.
+Example: `{{from_class: "CalculationEngine", to_class: "CalculationResult", kind: "returns"}}`
+
 For `aggregates`, the `mechanism` field is REQUIRED and must specify the container
 type. If you don't know the exact container name, use `find_mechanism` to search
 the dependency graph. For `references`, the `mechanism` field is recommended but
-not required. For other kinds (`associates`, `depends_on`, `invokes`), leave
+not required. For other kinds (`associates`, `composes`, `depends_on`, `returns`, `invokes`), leave
 `mechanism` empty.
 
 <CONTRACT>
