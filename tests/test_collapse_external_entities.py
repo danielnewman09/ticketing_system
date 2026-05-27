@@ -208,8 +208,9 @@ class TestAggregatedEntityNoExternalEdges:
     """Aggregated entity nodes WITHOUT non-containment edges
     should be fully collapsed (removed from node list)."""
 
-    def test_aggregated_class_no_edges_fully_collapsed(self):
-        """An aggregated class with no external edges gets fully collapsed."""
+    def test_aggregated_class_no_edges_keeps_visible(self):
+        """An aggregated class from a non-module owner stays visible
+        (entity-to-entity composition relationship)."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Agg", "InnerClass", "class"),
@@ -221,14 +222,14 @@ class TestAggregatedEntityNoExternalEdges:
         out_nodes, out_edges = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        # No external edges → fully collapsed
-        assert "Agg" not in node_ids
+        assert "Agg" in node_ids
         # Shown in compartment
         owner = next(n for n in out_nodes if n["data"]["id"] == "Owner")
         assert "InnerClass" in owner["data"]["label"]
 
-    def test_aggregated_class_only_containment_edges_fully_collapsed(self):
-        """An aggregated class with only COMPOSES/CONTAINS edges gets collapsed."""
+    def test_aggregated_class_only_containment_edges_keeps_visible(self):
+        """An aggregated class with only COMPOSES/CONTAINS edges
+        from its owner stays visible."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Agg", "InnerClass", "class"),
@@ -242,9 +243,8 @@ class TestAggregatedEntityNoExternalEdges:
         out_nodes, _ = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        # Both collapsed
-        assert "Agg" not in node_ids
-        assert "m1" not in node_ids
+        assert "Agg" in node_ids
+        assert "m1" not in node_ids  # method still fully collapsed
 
 
 class TestDuplicateEdgeDedup:
@@ -287,9 +287,9 @@ class TestComposesNotAffected:
     """COMPOSES edges (attributes/methods) should not trigger
     the external-entity preservation logic."""
 
-    def test_composes_does_not_keep_entity(self):
-        """COMPOSES edge to a class node without other edges
-        should fully collapse it."""
+    def test_composes_keeps_entity_visible(self):
+        """COMPOSES edge to a class node should keep it visible as an
+        external node (entity-to-entity composition)."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Nested", "NestedClass", "class"),
@@ -301,7 +301,7 @@ class TestComposesNotAffected:
         out_nodes, _ = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        assert "Nested" not in node_ids
+        assert "Nested" in node_ids
 
     def test_composes_plus_depends_on_keeps_entity(self):
         """COMPOSES + DEPENDS_ON should still keep the entity visible."""
@@ -384,3 +384,96 @@ class TestRealWorldScenario:
         assert ("ui::CalcWin", "Fl_RBtn", "DEPENDS_ON") in edge_triples
         assert ("ui::CalcWin", "Fl_Group", "DEPENDS_ON") in edge_triples
         assert ("ui::CalcDisp", "Fl_Box", "DEPENDS_ON") in edge_triples
+
+class TestComposedEnumDualVisibility:
+    """When a class composes an enum (entity-to-entity composition), the
+    enum should stay visible as a separate node AND appear in the
+    class's UML compartment."""
+
+    def test_class_composes_enum_stays_visible(self):
+        """ErrorType composed by CalculationResult should remain as a
+        separate enum node with the COMPOSES edge visible."""
+        nodes = [
+            _make_node("CalcResult", "CalculationResult", "class"),
+            _make_node("ErrorType", "ErrorType", "enum"),
+        ]
+        edges = [
+            _make_edge("e1", "CalcResult", "ErrorType", "COMPOSES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        node_ids = {n["data"]["id"] for n in out_nodes}
+        assert "ErrorType" in node_ids, "Enum should remain visible as separate node"
+        assert "CalcResult" in node_ids
+
+        # COMPOSES edge should be visible
+        edge_labels = {
+            (e["data"]["source"], e["data"]["target"], e["data"]["label"])
+            for e in out_edges
+        }
+        assert ("CalcResult", "ErrorType", "COMPOSES") in edge_labels
+
+    def test_class_composes_enum_with_enum_values(self):
+        """An enum with its own enum_values, composed by a class, should
+        keep the enum visible with values collapsed into it."""
+        nodes = [
+            _make_node("CalcResult", "CalculationResult", "class"),
+            _make_node("ErrorType", "ErrorType", "enum"),
+            _make_node("ev1", "MALFORMED_STRING", "enum_value"),
+            _make_node("ev2", "NULL_INPUT", "enum_value"),
+        ]
+        edges = [
+            _make_edge("e1", "CalcResult", "ErrorType", "COMPOSES"),
+            _make_edge("e2", "ErrorType", "ev1", "COMPOSES"),
+            _make_edge("e3", "ErrorType", "ev2", "COMPOSES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        node_ids = {n["data"]["id"] for n in out_nodes}
+        # Enum stays visible
+        assert "ErrorType" in node_ids
+        # Enum values are collapsed into the enum
+        assert "ev1" not in node_ids
+        assert "ev2" not in node_ids
+
+    def test_module_composes_enum_uses_parent_not_external(self):
+        """A module composes an enum (namespace containment) — this should
+        use the parent field mechanism, NOT keep it as a separate node via
+        entity-composition preservation. Module is NOT in _OWNER_KINDS, so
+        collapse_members doesn't touch module→enum edges at all. The enum
+        stays visible simply because it's not being collapsed."""
+        nodes = [
+            _make_node("mod", "calc_engine", "module"),
+            _make_node("ErrorType", "ErrorType", "enum"),
+        ]
+        edges = [
+            _make_edge("e1", "mod", "ErrorType", "COMPOSES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        # Module is NOT in _OWNER_KINDS so the module→enum COMPOSES doesn't
+        # trigger collapse at all. The enum stays visible by default.
+        # The entity-composition preservation logic only applies when a
+        # non-module owner (class/interface/struct) composes an entity kind.
+        node_ids = {n["data"]["id"] for n in out_nodes}
+        assert "ErrorType" in node_ids  # Not collapsed at all — module isn't an owner kind
+        assert "mod" in node_ids
+
+    def test_class_composes_interface_stays_visible(self):
+        """Previously only classes with DEPENDS_ON stayed visible.
+        Now COMPOSES also triggers dual visibility for entity kinds."""
+        nodes = [
+            _make_node("Owner", "Owner", "class"),
+            _make_node("Iface", "IHandler", "interface"),
+        ]
+        edges = [
+            _make_edge("e1", "Owner", "Iface", "COMPOSES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        node_ids = {n["data"]["id"] for n in out_nodes}
+        assert "Iface" in node_ids

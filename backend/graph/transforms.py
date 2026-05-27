@@ -54,7 +54,7 @@ _CONTAINMENT_RELS = {"COMPOSES", "CONTAINS", "AGGREGATES"}
 # such a node is aggregated by an owner class AND it has non-
 # containment edges, we keep the node visible as an external node
 # in addition to showing it collapsed inside the owner's compartment.
-_ENTITY_KINDS = {"class", "interface", "struct"}
+_ENTITY_KINDS = {"class", "interface", "enum", "struct"}
 
 
 def _collect_collapsible(
@@ -145,7 +145,47 @@ def _collect_collapsible(
     # Don't remove entity nodes that have external edges
     remove_node_ids -= external_entity_ids
 
-    return collapsed, remove_node_ids, remove_edge_ids, external_entity_ids
+    # Identify entity nodes that are composed by another non-module entity.
+    # When a design entity (class, interface, enum, struct) is composed
+    # by another design entity (not a module), the composition relationship
+    # is meaningful at the entity level and the target should remain visible
+    # as a separate node in the graph alongside the collapsed representation.
+    entity_composed_by_owner: set[str] = set()
+    for e in edges:
+        d = e["data"]
+        if d["label"] not in _CONTAINMENT_RELS:
+            continue
+        target = node_by_id.get(d["target"])
+        source = node_by_id.get(d["source"])
+        if target is None or source is None:
+            continue
+        if source["data"].get("kind") == "module":
+            continue  # module containment → parent, not composition
+        if target["data"].get("kind") in _ENTITY_KINDS:
+            entity_composed_by_owner.add(d["target"])
+
+    # Don't remove entity nodes composed by another entity
+    remove_node_ids -= entity_composed_by_owner
+
+    # Don't remove containment edges to entity-composed nodes — the
+    # COMPOSES/AGGREGATES edge itself represents a meaningful relationship
+    # that should be visible in the graph.
+    for e in edges:
+        d = e["data"]
+        if d["label"] not in _CONTAINMENT_RELS:
+            continue
+        if d["target"] in entity_composed_by_owner:
+            remove_edge_ids.discard(d["id"])
+
+    # Also preserve containment edges to external entity nodes
+    for e in edges:
+        d = e["data"]
+        if d["label"] not in _CONTAINMENT_RELS:
+            continue
+        if d["target"] in external_entity_ids:
+            remove_edge_ids.discard(d["id"])
+
+    return collapsed, remove_node_ids, remove_edge_ids, external_entity_ids, entity_composed_by_owner
 
 
 def _format_member_line(m: dict, suffix: str = "") -> str:
@@ -239,7 +279,10 @@ def collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], 
     the entity node itself.
     """
     node_by_id: dict[str, dict] = {n["data"]["id"]: n for n in nodes}
-    collapsed, remove_node_ids, remove_edge_ids, external_entity_ids = _collect_collapsible(nodes, edges)
+    collapsed, remove_node_ids, remove_edge_ids, external_entity_ids, entity_composed_ids = _collect_collapsible(nodes, edges)
+
+    # Combined set of entity node IDs that should NOT be rerouted to their owner
+    preserved_entity_ids = external_entity_ids | entity_composed_ids
 
     if not collapsed:
         return nodes, edges
@@ -268,15 +311,15 @@ def collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], 
         src = d.get("source", "")
         tgt = d.get("target", "")
 
-        # For external entity nodes, keep their edges pointing to
+        # For external or entity-composed nodes, keep their edges pointing to
         # themselves (don't reroute to owner) so the external
         # relationship is visible in the diagram.
-        if src in external_entity_ids:
+        if src in preserved_entity_ids:
             new_src = src
         else:
             new_src = collapse_to_owner.get(src, src)
 
-        if tgt in external_entity_ids:
+        if tgt in preserved_entity_ids:
             new_tgt = tgt
         else:
             new_tgt = collapse_to_owner.get(tgt, tgt)
