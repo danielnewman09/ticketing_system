@@ -720,3 +720,139 @@ class TestReturnsEdge:
             and t.subject_qualified_name == "calc::Calculator::count"
         ]
         assert len(returns_triples) == 0
+
+
+class TestNoReferencesFromAttributeTypes:
+    """Design-internal type references in attribute types should produce
+    composes edges (from the attribute processing), NOT references edges
+    from _add_depends_from_type."""
+
+    def test_attribute_type_produces_composes_not_references(self):
+        from backend.codebase.schemas import EnumSchema
+
+        oo = OODesignSchema(
+            modules=["calc"],
+            enums=[
+                EnumSchema(
+                    name="ErrorType",
+                    module="calc",
+                    description="Errors",
+                    values=["NONE"],
+                ),
+            ],
+            classes=[
+                ClassSchema(
+                    name="Result",
+                    module="calc",
+                    attributes=[
+                        AttributeSchema(
+                            name="error",
+                            type_name="ErrorType",
+                            visibility="private",
+                            description="Error",
+                        ),
+                    ],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        # Should have class-level composes
+        composes = [
+            t for t in result.triples
+            if t.predicate == "composes"
+            and t.subject_qualified_name == "calc::Result"
+            and t.object_qualified_name == "calc::ErrorType"
+        ]
+        assert len(composes) == 1
+
+        # Should NOT have references from class to enum
+        references = [
+            t for t in result.triples
+            if t.predicate == "references"
+            and t.subject_qualified_name == "calc::Result"
+            and t.object_qualified_name == "calc::ErrorType"
+        ]
+        assert len(references) == 0, (
+            f"Expected no references edge, got {references}"
+        )
+
+    def test_method_return_type_produces_returns_not_references(self):
+        from backend.codebase.schemas import MethodSchema
+
+        oo = OODesignSchema(
+            modules=["calc"],
+            classes=[
+                ClassSchema(
+                    name="Engine",
+                    module="calc",
+                    attributes=[],
+                    methods=[
+                        MethodSchema(
+                            name="run",
+                            visibility="public",
+                            description="Run",
+                            return_type="Result",
+                        ),
+                    ],
+                ),
+                ClassSchema(
+                    name="Result",
+                    module="calc",
+                    attributes=[],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        # Should have returns edge from method
+        returns_edges = [
+            t for t in result.triples
+            if t.predicate == "returns"
+            and t.subject_qualified_name == "calc::Engine::run"
+            and t.object_qualified_name == "calc::Result"
+        ]
+        assert len(returns_edges) == 1
+
+        # Should NOT have references from class to class
+        references = [
+            t for t in result.triples
+            if t.predicate == "references"
+            and t.subject_qualified_name == "calc::Engine"
+            and t.object_qualified_name == "calc::Result"
+        ]
+        assert len(references) == 0
+
+    def test_external_dependency_still_produces_depends_on(self):
+        """External dependencies in attribute types should still produce
+        depends_on edges from _add_depends_from_type."""
+        oo = OODesignSchema(
+            modules=["ui"],
+            classes=[
+                ClassSchema(
+                    name="Window",
+                    module="ui",
+                    attributes=[
+                        AttributeSchema(
+                            name="button",
+                            type_name="Fl_Button*",
+                            visibility="private",
+                            description="Button",
+                        ),
+                    ],
+                    methods=[],
+                ),
+            ],
+        )
+        dep_lookup = {"Fl_Button": "Fl_Button"}
+        result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
+
+        dep_triples = [
+            t for t in result.triples
+            if t.predicate == "depends_on"
+            and t.subject_qualified_name == "ui::Window"
+            and t.object_qualified_name == "Fl_Button"
+        ]
+        assert len(dep_triples) == 1
