@@ -19,7 +19,7 @@ PREDICATE_TO_REL_TYPE = {
     "references": "REFERENCES",
     "invokes": "INVOKES",
     "has_argument": "HAS_ARGUMENT",
-    "has_type": "HAS_TYPE",
+    "returns": "RETURNS",
 }
 
 DEFAULT_PREDICATES = [
@@ -32,7 +32,7 @@ DEFAULT_PREDICATES = [
     ("references", "One entity holds a reference or pointer to another. Specify mechanism (e.g., std::unique_ptr, std::shared_ptr, raw_pointer, reference)"),
     ("invokes", "Weak association, signifying a caller-callee relationship"),
     ("has_argument", "A method accepts a parameter of the given type (method → type)"),
-    ("has_type", "An attribute or field is typed by the given entity (attribute → type)"),
+    ("returns", "A method returns a value of the given entity type (method → type)"),
 ]
 
 # ---------------------------------------------------------------------------

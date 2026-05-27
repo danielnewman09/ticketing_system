@@ -248,6 +248,8 @@ class Predicate(Base):
         ("generalizes", "Inheritance / is-a relationship"),
         ("realizes", "A class implements/realizes an interface or contract"),
         ("invokes", "Weak association, signififying a caller-callee relationship"),
+        ("has_argument", "A method accepts a parameter of the given type"),
+        ("returns", "A method returns a value of the given entity type"),
     ]
 
     @classmethod

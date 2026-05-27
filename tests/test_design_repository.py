@@ -78,7 +78,8 @@ class TestDesignConstants:
         assert PREDICATE_TO_REL_TYPE["composes"] == "COMPOSES"
         assert PREDICATE_TO_REL_TYPE["depends_on"] == "DEPENDS_ON"
         assert PREDICATE_TO_REL_TYPE["has_argument"] == "HAS_ARGUMENT"
-        assert PREDICATE_TO_REL_TYPE["has_type"] == "HAS_TYPE"
+        assert PREDICATE_TO_REL_TYPE["returns"] == "RETURNS"
+        assert "has_type" not in PREDICATE_TO_REL_TYPE
         assert len(PREDICATE_TO_REL_TYPE) == 10
 
     def test_default_predicates(self):
@@ -86,6 +87,9 @@ class TestDesignConstants:
 
         names = {name for name, _ in DEFAULT_PREDICATES}
         assert "composes" in names
+        assert "returns" in names
+        assert "has_argument" in names
+        assert "has_type" not in names
         assert "depends_on" in names
 
     def test_node_kind_values(self):
