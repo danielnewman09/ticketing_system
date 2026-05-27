@@ -25,6 +25,7 @@ def _build_design_node(d: dict) -> dict:
         "component_id": d.get("component_id"),
         "visibility": d.get("visibility", ""),
         "type_signature": d.get("type_signature", ""),
+        "argsstring": d.get("argsstring", ""),
         "layer": "design",
         "source_type": d.get("source_type", ""),
         "requirements": d.get("requirements", []),

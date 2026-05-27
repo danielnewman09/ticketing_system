@@ -13,6 +13,8 @@ from nicegui import ui
 from frontend.theme import (
     VERIFICATION_COLORS,
     KIND_COLORS,
+    EDGE_COLORS,
+    CHANGE_STATUS_COLORS,
     CLS_SECTION_HEADER,
     CLS_SECTION_SUBHEADER,
     CLS_BREADCRUMB_LINK,
@@ -273,34 +275,65 @@ def render_ontology_graph_controls(
 
 
 def render_ontology_graph_legend():
-    """Render the ontology-graph legend showing kind colors and special node types."""
-    with ui.row().classes("px-2 mb-2 gap-3 flex-wrap"):
-        for kind, color in sorted(KIND_COLORS.items()):
-            with ui.row().classes("items-center gap-1"):
-                ui.html(
-                    f'<div style="width:10px;height:10px;border-radius:50%;background:{color}"></div>'
-                )
-                ui.label(kind).classes("text-xs")
-        with ui.row().classes("items-center gap-1"):
-            ui.html(
-                '<div style="width:10px;height:10px;border-radius:50%;background:#e67e22;border:3px solid #e67e22"></div>'
-            )
-            ui.label("Requirement").classes("text-xs")
-        with ui.row().classes("items-center gap-1"):
-            ui.html(
-                '<div style="width:10px;height:10px;border-radius:50%;background:#009688;border:2px dashed #4db6ac"></div>'
-            )
-            ui.label("Dependency").classes("text-xs")
-        with ui.row().classes("items-center gap-1"):
-            ui.html(
-                '<div style="width:10px;height:10px;border-radius:50%;background:#555;border:2px dashed #009688"></div>'
-            )
-            ui.label("Deps (source)").classes("text-xs")
-        with ui.row().classes("items-center gap-1"):
-            ui.html(
-                '<div style="width:10px;height:10px;border-radius:50%;background:#555;border:2px dotted #3b82f6"></div>'
-            )
-            ui.label("As-built").classes("text-xs")
+    """Render the ontology-graph legend showing kind colors, edge types,
+    type-origin markers, layer indicators, and change-status colors."""
+    with ui.row().classes("px-2 mb-2 gap-4 flex-wrap items-start"):
+        # Node kinds
+        with ui.column().classes("gap-1"):
+            ui.label("Node Kinds").classes("text-xs font-bold text-gray-400 mb-1")
+            for kind, color in sorted(KIND_COLORS.items()):
+                with ui.row().classes("items-center gap-1"):
+                    ui.html(
+                        f'<div style="width:10px;height:10px;border-radius:50%;background:{color}"></div>'
+                    )
+                    ui.label(kind).classes("text-xs")
+
+        # Edge types
+        with ui.column().classes("gap-1"):
+            ui.label("Edge Types").classes("text-xs font-bold text-gray-400 mb-1")
+            for name, color in sorted(EDGE_COLORS.items()):
+                if name == "default":
+                    continue
+                with ui.row().classes("items-center gap-1"):
+                    ui.html(
+                        f'<div style="width:16px;height:2px;background:{color};margin:3px 0"></div>'
+                    )
+                    ui.label(name).classes("text-xs")
+
+        # Type-origin markers
+        with ui.column().classes("gap-1"):
+            ui.label("Type Origins").classes("text-xs font-bold text-gray-400 mb-1")
+            for marker, label in [("\u25cf", "Builtin"), ("\u25c6", "Linked design"), ("\u25b8", "Dependency")]:
+                with ui.row().classes("items-center gap-1"):
+                    ui.html(
+                        f'<span style="font-family:monospace;font-size:11px;color:#e2e8f0">{marker}</span>'
+                    )
+                    ui.label(label).classes("text-xs")
+
+        # Layer indicators
+        with ui.column().classes("gap-1"):
+            ui.label("Layers").classes("text-xs font-bold text-gray-400 mb-1")
+            for style_spec, label in [
+                ("background:#e67e22;border:3px solid #e67e22", "Requirement"),
+                ("background:#555;border:2px dotted #009688", "Dependency"),
+                ("background:#555;border:2px dashed #009688", "Deps (source)"),
+                ("background:#555;border:2px dotted #3b82f6", "As-built"),
+            ]:
+                with ui.row().classes("items-center gap-1"):
+                    ui.html(
+                        f'<div style="width:10px;height:10px;border-radius:50%;{style_spec}"></div>'
+                    )
+                    ui.label(label).classes("text-xs")
+
+        # Change status (future)
+        with ui.column().classes("gap-1"):
+            ui.label("Changes").classes("text-xs font-bold text-gray-400 mb-1")
+            for status, color in CHANGE_STATUS_COLORS.items():
+                with ui.row().classes("items-center gap-1"):
+                    ui.html(
+                        f'<div style="width:10px;height:10px;border-radius:50%;background:{color};box-shadow:0 0 4px {color}"></div>'
+                    )
+                    ui.label(status).classes("text-xs")
 
 
 def breadcrumb(*parts: tuple[str, str | None]):
@@ -335,6 +368,7 @@ async def render_cytoscape_graph(
     elements_json = json.dumps(elements)
     layout_name = f"window._cyLayout || '{config.layout}'" if config.animate else f"'{config.layout}'"
     animation_opts = "animate: true, animationDuration: 500" if config.animate else "animate: false"
+    layout_opts = f"{animation_opts}, nodeDimensionsIncludeLabels: true" if config.layout == "fcose" else animation_opts
     # Build style expression — only wrap in spread when extending with extra_styles
     if config.extra_styles:
         styles_expr = f"[...{base_styles}, {config.extra_styles}]"
@@ -353,9 +387,25 @@ async def render_cytoscape_graph(
                 container: container,
                 elements: {elements_json},
                 style: {styles_expr},
-                layout: {{ name: {layout_name}, {animation_opts} }},
+                layout: {{ name: {layout_name}, {layout_opts} }},
             }});
             window.{config.cy_var}.ready(function() {{ window.{config.cy_var}.fit(); }});
+            // === HTML labels for member-bearing UML boxes ===
+            if (window.{config.cy_var}.nodeHtmlLabel) {{
+                window.{config.cy_var}.nodeHtmlLabel([
+                    {{
+                        query: 'node[has_members="true"]',
+                        halign: 'center',
+                        valign: 'center',
+                        halignBox: 'center',
+                        valignBox: 'center',
+                        cssClass: 'uml-box-label',
+                        tpl: function(data) {{
+                            return data.html_label || data.label || '';
+                        }}
+                    }}
+                ]);
+            }}
             window.{config.cy_var}.on('tap', 'node', function(evt) {{
                 const data = evt.target.data();
                 if (data.qualified_name) {{

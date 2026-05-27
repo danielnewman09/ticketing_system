@@ -1,4 +1,14 @@
-"""Graph post-processing: member collapsing and namespace grouping for Cytoscape."""
+"""Graph post-processing: member collapsing and namespace grouping for Cytoscape.
+
+Member label formatting uses a PlantUML-inspired style with:
+- UML stereotypes (\u00abclass\u00bb, \u00abinterface\u00bb, \u00abenumeration\u00bb)
+- Visibility prefixes (+ public, # protected, - private)
+- Function argument lists shown inline
+- Inline type-origin markers: \u25cf builtin, \u25c6 linked design, \u25b8 dependency
+- Color-coded member-kind hints embedded in member data
+- Separator lines using box-drawing characters
+- Grouping: attributes \u2192 methods within each visibility compartment
+"""
 
 from __future__ import annotations
 
@@ -11,6 +21,196 @@ _VISIBILITY_ORDER = ["public", "protected", "private"]
 
 # Canonical order for member kinds within a visibility group
 _KIND_ORDER = {"attribute": 0, "method": 1, "enum_value": 2}
+
+# HTML label color scheme — used by the cytoscape-node-html-label extension
+_MEMBER_COLORS = {
+    "stereotype": "#a0aec0",    # muted gray-blue for <<class>> etc.
+    "classname": "#f7fafc",     # bright white for class name
+    "separator": "#4a5568",     # muted gray for ─── lines
+    "vis_public": "#68d391",    # green for +
+    "vis_protected": "#fbd38d", # amber for #
+    "vis_private": "#fc8181",    # red for -
+    "builtin_marker": "#63b3ed", # blue for ●
+    "linked_marker": "#d69e2e",  # gold for ◆
+    "dep_marker": "#4fd1c5",    # teal for ▸
+    "type_sig": "#a0aec0",      # gray for type signature text
+    "method_name": "#9ae6b4",   # green for method names
+    "attr_name": "#fbd38d",     # amber for attribute names
+    "enum_val": "#a0aec0",      # gray for enum values
+    "args": "#718096",          # dimmer gray for argument text
+}
+
+
+def _format_member_html(m: dict, suffix: str = "") -> str:
+    """Format a single member as an HTML span with colored elements.
+
+    Produces: <span class="vis">+ </span><span class="name">name</span><span class="args">(args)</span><span class="type">: ● Type</span>
+    """
+    import html as html_mod
+
+    mc = _MEMBER_COLORS
+    vis = _VISIBILITY_PREFIX.get(m["visibility"], " ")
+    vis_color = mc.get(f"vis_{m.get('visibility', 'public')}", mc["vis_public"])
+    vis_html = f'<span style="color:{vis_color}">{html_mod.escape(vis)}</span>'
+
+    kind = m.get("_kind", "")
+    name = html_mod.escape(m["name"])
+    name_color = mc["method_name"] if kind == "method" else mc["attr_name"] if kind == "attribute" else mc["enum_val"]
+    name_html = f'<span style="color:{name_color}">{name}</span>'
+
+    args = m.get("argsstring", "")
+    if args and suffix == "()":
+        suffix = html_mod.escape(args)
+    else:
+        suffix = html_mod.escape(suffix) if suffix else ""
+    args_html = f'<span style="color:{mc["args"]}">{suffix}</span>' if suffix else ""
+
+    type_sig = m.get("type_signature", "")
+    marker = _type_origin_marker(type_sig, m.get("layer", ""))
+    if type_sig:
+        marker_color = mc["builtin_marker"] if marker == "\u25cf " else mc["dep_marker"] if marker == "\u25b8 " else mc["linked_marker"]
+        marker_html = f'<span style="color:{marker_color}">{html_mod.escape(marker)}</span>'
+        type_html = f'<span style="color:{mc["type_sig"]}">{html_mod.escape(type_sig)}</span>'
+        type_part = f': {marker_html}{type_html}'
+    else:
+        type_part = ""
+
+    return f'{vis_html} {name_html}{args_html}{type_part}'
+
+
+def _build_uml_html(
+    class_name: str, by_kind: dict[str, list[dict]], is_dependency: bool, *, owner_kind: str = ""
+) -> str:
+    """Build a colored HTML label for the cytoscape-node-html-label extension.
+
+    Produces a div with styled spans for each member line, using the
+    _MEMBER_COLORS palette for visual distinction.
+    """
+    import html as html_mod
+
+    mc = _MEMBER_COLORS
+    lines = []
+
+    # Stereotype
+    _STEREOTYPES = {
+        "enum": "\u00ABenumeration\u00BB",
+        "interface": "\u00ABinterface\u00BB",
+        "class": "\u00ABclass\u00BB",
+    }
+    stereotype = _STEREOTYPES.get(owner_kind, "")
+    if stereotype:
+        lines.append(f'<div style="color:{mc["stereotype"]};font-size:9px;text-align:center">{html_mod.escape(stereotype)}</div>')
+
+    # Class name
+    lines.append(f'<div style="color:{mc["classname"]};font-weight:bold;text-align:center">{html_mod.escape(class_name)}</div>')
+
+    # Collect all members
+    all_members: list[dict] = []
+    for kind, members in by_kind.items():
+        suffix = "()" if kind == "method" else ""
+        for m in members:
+            all_members.append({**m, "_kind": kind, "_suffix": suffix})
+
+    if is_dependency:
+        all_members = _dedup_by_name(all_members)
+
+    # Group by visibility
+    visibility_groups: dict[str, list[dict]] = {}
+    for m in all_members:
+        vis = m.get("visibility", "") or "public"
+        if vis not in _VISIBILITY_ORDER:
+            vis = "public"
+        visibility_groups.setdefault(vis, []).append(m)
+
+    separator_html = f'<hr style="border:none;border-top:1px solid {mc["separator"]};margin:2px 0">'
+    thin_sep_html = f'<hr style="border:none;border-top:1px dashed {mc["separator"]};margin:1px 0">'
+
+    total_members = 0
+    for vis in _VISIBILITY_ORDER:
+        group = visibility_groups.get(vis, [])
+        if not group:
+            continue
+        enum_vals = [m for m in group if m.get("_kind") == "enum_value"]
+        attrs = [m for m in group if m.get("_kind") == "attribute"]
+        methods = [m for m in group if m.get("_kind") == "method"]
+        enum_vals.sort(key=lambda m: m["name"])
+        attrs.sort(key=lambda m: m["name"])
+        methods.sort(key=lambda m: m["name"])
+
+        lines.append(separator_html)
+        if enum_vals:
+            for m in enum_vals:
+                lines.append(f'<div>{_format_member_html(m, m.get("_suffix", ""))}</div>')
+            total_members += len(enum_vals)
+        if attrs:
+            for m in attrs:
+                lines.append(f'<div>{_format_member_html(m, m.get("_suffix", ""))}</div>')
+            total_members += len(attrs)
+        if methods and (attrs or enum_vals):
+            lines.append(thin_sep_html)
+        if methods:
+            for m in methods:
+                lines.append(f'<div>{_format_member_html(m, m.get("_suffix", ""))}</div>')
+            total_members += len(methods)
+
+    if total_members == 0 and all_members:
+        lines.append(separator_html)
+        m_sorted = sorted(all_members, key=lambda m: (_KIND_ORDER.get(m.get("_kind", ""), 99), m["name"]))
+        for m in m_sorted:
+            lines.append(f'<div>{_format_member_html(m, m.get("_suffix", ""))}</div>')
+        total_members = len(m_sorted)
+
+    wrapper = (
+        f'<div style="'
+        f'font-family:JetBrains Mono,monospace;'
+        f'font-size:9px;'
+        f'line-height:1.3;'
+        f'padding:0px;'
+        f'white-space:nowrap;'
+        f'">'
+    )
+    return wrapper + '\n'.join(lines) + '</div>'
+_BUILTIN_TYPES = frozenset({
+    "void", "bool", "int", "double", "float", "char", "long", "short",
+    "unsigned", "signed", "size_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t",
+    "int8_t", "int16_t", "int32_t", "int64_t",
+    "std::string", "std::vector", "std::map", "std::set",
+    "std::optional", "std::shared_ptr", "std::unique_ptr",
+    "std::pair", "std::array", "std::variant",
+    "str", "int", "float", "bool", "bytes", "list", "dict", "set",
+    "tuple", "Optional", "List", "Dict", "Set", "Any", "None",
+})
+
+# Template / parameterized type prefixes
+_TEMPLATE_PREFIXES = ("std::", "boost::", "absl::")
+
+
+def _is_builtin_type(type_sig: str) -> bool:
+    """Check if a type signature refers to a builtin / primitive type."""
+    if not type_sig:
+        return False
+    base = type_sig.strip().rstrip("&*").strip()
+    # Remove template arguments for std:: types
+    if "<" in base:
+        base = base[:base.index("<")].strip()
+    return base in _BUILTIN_TYPES or any(base.startswith(p) for p in _TEMPLATE_PREFIXES)
+
+
+def _type_origin_marker(type_sig: str, member_layer: str) -> str:
+    """Return an inline marker indicating where a type originates.
+
+    \u25cf  builtin / primitive (e.g. bool, int, std::string)
+    \u25c6  linked design type (same-project class/interface/enum)
+    \u25b8  dependency / external library type
+    (empty) when type information is unavailable
+    """
+    if not type_sig:
+        return ""
+    if _is_builtin_type(type_sig):
+        return "\u25cf "   # filled circle
+    if member_layer == "dependency":
+        return "\u25b8 "   # right-pointing triangle
+    return "\u25c6 "   # diamond for design-linked types
 
 
 def _dedup_by_name(members: list[dict]) -> list[dict]:
@@ -113,11 +313,23 @@ def _collect_collapsible(
             remove_edge_ids.add(d["id"])
             continue
 
+        # Entity kinds (class/interface/enum/struct) composed by a
+        # non-module owner should NOT be added as member lines in the
+        # UML compartment — their typed attributes already convey the
+        # reference.  They are still removed from the node list (unless
+        # they have external non-COMPOSES edges) and their COMPOSES edge
+        # is still removed.
+        if td.get("kind") in _ENTITY_KINDS:
+            remove_node_ids.add(d["target"])
+            remove_edge_ids.add(d["id"])
+            continue
+
         norm_kind = _KIND_NORMALIZE.get(td["kind"], td["kind"])
         collapsed.setdefault(d["source"], {}).setdefault(norm_kind, []).append(
             {
                 "name": td["label"],
                 "type_signature": td.get("type_signature", ""),
+                "argsstring": td.get("argsstring", ""),
                 "visibility": td.get("visibility", ""),
                 "qualified_name": td.get("qualified_name", ""),
                 "layer": td.get("layer", ""),
@@ -126,10 +338,10 @@ def _collect_collapsible(
         remove_node_ids.add(d["target"])
         remove_edge_ids.add(d["id"])
 
-    # Identify entity nodes (class/interface/struct) that have non-
+    # Identify entity nodes (class/interface/enum/struct) that have non-
     # containment external edges.  These should remain visible as
-    # external nodes so their DEPENDS_ON / GENERALIZES / etc. edges
-    # are shown, even though they're also collapsed into an owner.
+    # external nodes so their REFERENCES / DEPENDS_ON / GENERALIZES /
+    # etc. edges are shown.
     external_entity_ids: set[str] = set()
     for e in edges:
         d = e["data"]
@@ -145,77 +357,67 @@ def _collect_collapsible(
     # Don't remove entity nodes that have external edges
     remove_node_ids -= external_entity_ids
 
-    # Identify entity nodes that are composed by another non-module entity.
-    # When a design entity (class, interface, enum, struct) is composed
-    # by another design entity (not a module), the composition relationship
-    # is meaningful at the entity level and the target should remain visible
-    # as a separate node in the graph alongside the collapsed representation.
-    entity_composed_by_owner: set[str] = set()
+    # COMPOSES is an implicit relationship (like dependency injection)
+    # and should not be visible in the graph.  Preserve AGGREGATES and
+    # CONTAINS edges to external entity nodes, but NOT COMPOSES.
     for e in edges:
         d = e["data"]
         if d["label"] not in _CONTAINMENT_RELS:
             continue
-        target = node_by_id.get(d["target"])
-        source = node_by_id.get(d["source"])
-        if target is None or source is None:
-            continue
-        if source["data"].get("kind") == "module":
-            continue  # module containment → parent, not composition
-        if target["data"].get("kind") in _ENTITY_KINDS:
-            entity_composed_by_owner.add(d["target"])
-
-    # Don't remove entity nodes composed by another entity
-    remove_node_ids -= entity_composed_by_owner
-
-    # Don't remove containment edges to entity-composed nodes — the
-    # COMPOSES/AGGREGATES edge itself represents a meaningful relationship
-    # that should be visible in the graph.
-    for e in edges:
-        d = e["data"]
-        if d["label"] not in _CONTAINMENT_RELS:
-            continue
-        if d["target"] in entity_composed_by_owner:
-            remove_edge_ids.discard(d["id"])
-
-    # Also preserve containment edges to external entity nodes
-    for e in edges:
-        d = e["data"]
-        if d["label"] not in _CONTAINMENT_RELS:
-            continue
+        if d["label"] == "COMPOSES":
+            continue  # COMPOSES is never shown in the graph
         if d["target"] in external_entity_ids:
             remove_edge_ids.discard(d["id"])
 
-    return collapsed, remove_node_ids, remove_edge_ids, external_entity_ids, entity_composed_by_owner
+    return collapsed, remove_node_ids, remove_edge_ids, external_entity_ids
 
 
 def _format_member_line(m: dict, suffix: str = "") -> str:
-    """Format a single member as a UML-style line: visibility prefix + name + suffix + type."""
+    """Format a single member as a UML-style line with type-origin marker.
+
+    Format:  visibility prefix + name + args + suffix + : type_marker type
+    Example: + add(const string& a, const string& b): \u25c6 CalculationResult
+    """
     vis = _VISIBILITY_PREFIX.get(m["visibility"], " ")
-    sig = f": {m['type_signature']}" if m["type_signature"] else ""
-    return f"{vis} {m['name']}{suffix}{sig}"
+    args = m.get("argsstring", "")
+    # Only show args for methods (suffix already has "()" placeholder)
+    if args and suffix == "()":
+        suffix = args  # Replace bare () with actual argument list
+    type_sig = m.get("type_signature", "")
+    marker = _type_origin_marker(type_sig, m.get("layer", ""))
+    if type_sig:
+        return f"{vis} {m['name']}{suffix}: {marker}{type_sig}"
+    return f"{vis} {m['name']}{suffix}"
 
 
 def _build_uml_label(
     class_name: str, by_kind: dict[str, list[dict]], is_dependency: bool, *, owner_kind: str = ""
 ) -> tuple[str, int]:
-    """Build a UML-style class label grouped by visibility.
+    """Build a UML-style class label with stereotype, visibility grouping,
+    and member-kind visual sections.
 
-    Produces a label where public (+) members are above the divider
-    and private (-) / protected (#) members are below it:
-
-        ────────────
-        + public_method()
-        + public_attr: string
-        ────────────
-        - private_attr: int
-        # protected_method(): bool
+    Layout:
+        \u00abstereotype\u00bb          (if applicable)
+        ClassName
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500   (attribute section)
+        + attr: \u25cf int
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500   (method section)
+        + method(arg): \u25c6 Result
+        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500   (private section, if any)
+        - private_attr: \u25b8 SomeType
     """
-    separator = "\u2500" * max(len(class_name), 10)
+    separator = "\u2500" * max(len(class_name) + 2, 12)
     lines = [class_name]
 
-    # Add UML stereotype for enums
-    if owner_kind == "enum":
-        lines.insert(0, "\u00ABenumeration\u00BB")
+    # Add UML stereotype based on owner kind
+    _STEREOTYPES = {
+        "enum": "\u00ABenumeration\u00BB",
+        "interface": "\u00ABinterface\u00BB",
+        "class": "\u00ABclass\u00BB",
+    }
+    stereotype = _STEREOTYPES.get(owner_kind, "")
+    if stereotype:
+        lines.insert(0, stereotype)
 
     # Collect all members, tagging each with its kind for ordering
     all_members: list[dict] = []
@@ -240,18 +442,43 @@ def _build_uml_label(
         group = visibility_groups.get(vis, [])
         if not group:
             continue
-        # Sort within group: kind order first, then name
-        group.sort(key=lambda m: (_KIND_ORDER.get(m.get("_kind", ""), 99), m["name"]))
+
+        # Within each visibility, sub-group by kind: attributes first, then methods
+        attrs = [m for m in group if m.get("_kind") == "attribute"]
+        methods = [m for m in group if m.get("_kind") == "method"]
+        enum_vals = [m for m in group if m.get("_kind") == "enum_value"]
+
+        # Sort each sub-group alphabetically
+        attrs.sort(key=lambda m: m["name"])
+        methods.sort(key=lambda m: m["name"])
+        enum_vals.sort(key=lambda m: m["name"])
+
         lines.append(separator)
-        for m in group:
-            lines.append(_format_member_line(m, m.get("_suffix", "")))
-        total_members += len(group)
+
+        # Attributes section (for enum, these are enum values)
+        if enum_vals:
+            for m in enum_vals:
+                lines.append(_format_member_line(m, m.get("_suffix", "")))
+            total_members += len(enum_vals)
+
+        if attrs:
+            # Add kind sub-separator if we also have methods
+            for m in attrs:
+                lines.append(_format_member_line(m, m.get("_suffix", "")))
+            total_members += len(attrs)
+
+        # Methods section with thin sub-separator
+        if methods and (attrs or enum_vals):
+            lines.append("\u2500" * max(len(class_name) - 2, 8))  # thinner sub-separator
+        if methods:
+            for m in methods:
+                lines.append(_format_member_line(m, m.get("_suffix", "")))
+            total_members += len(methods)
 
     # If there were no visibility groups but we had members, add a single compartment
     if total_members == 0 and all_members:
         lines.append(separator)
-        for m in all_members:
-            m_sorted = sorted(all_members, key=lambda m: (_KIND_ORDER.get(m.get("_kind", ""), 99), m["name"]))
+        m_sorted = sorted(all_members, key=lambda m: (_KIND_ORDER.get(m.get("_kind", ""), 99), m["name"]))
         for m in m_sorted:
             lines.append(_format_member_line(m, m.get("_suffix", "")))
         total_members = len(m_sorted)
@@ -262,16 +489,20 @@ def _build_uml_label(
 def collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
     """Collapse members into their owning class/interface/enum nodes.
 
-    Collapses attributes, methods, enum_values, and aggregated classes
-    into their owner node's label as PlantUML-style compartment lists.
-    Enum nodes get a «enumeration» stereotype.  Aggregated classes show
-    as typed attributes in the owner's compartment.
+    Collapses attributes, methods, and enum_values into their owner
+    node's label as PlantUML-style compartment lists.  Enum nodes get
+    a «enumeration» stereotype.
 
-    Aggregated entity nodes (class/interface/struct) that also have
-    non-containment external edges (DEPENDS_ON, GENERALIZES, etc.)
-    are shown BOTH inside the owner's compartment AND as separate
-    external nodes, so their external relationships remain visible in
-    the diagram.
+    Entity nodes (class/interface/enum/struct) composed by a non-module
+    owner are NOT added as UML compartment lines — their typed attributes
+    (e.g. ``error_signal: CalculationError``) already convey the
+    reference, and the REFERENCES edge shows the external relationship.
+    COMPOSES edges are never shown in the graph (they are implicit, like
+    dependency injection).
+
+    Aggregated entity nodes that have non-COMPOSES external edges
+    (REFERENCES, DEPENDS_ON, GENERALIZES, etc.) are kept visible as
+    separate nodes so those relationships remain visible in the diagram.
 
     External edges from fully-collapsed nodes (attributes, methods,
     enum_values) are rerouted to the owner.  For entity nodes kept as
@@ -279,12 +510,12 @@ def collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], 
     the entity node itself.
     """
     node_by_id: dict[str, dict] = {n["data"]["id"]: n for n in nodes}
-    collapsed, remove_node_ids, remove_edge_ids, external_entity_ids, entity_composed_ids = _collect_collapsible(nodes, edges)
+    collapsed, remove_node_ids, remove_edge_ids, external_entity_ids = _collect_collapsible(nodes, edges)
 
-    # Combined set of entity node IDs that should NOT be rerouted to their owner
-    preserved_entity_ids = external_entity_ids | entity_composed_ids
+    # Entity node IDs whose edges should NOT be rerouted to their owner
+    preserved_entity_ids = external_entity_ids
 
-    if not collapsed:
+    if not collapsed and not remove_node_ids and not remove_edge_ids:
         return nodes, edges
 
     # Build mapping from collapsed node id → owner id
@@ -345,7 +576,11 @@ def collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], 
         label, member_count = _build_uml_label(
             od["label"], by_kind, is_dependency, owner_kind=od.get("kind", "")
         )
+        html_label = _build_uml_html(
+            od["label"], by_kind, is_dependency, owner_kind=od.get("kind", "")
+        )
         od["label"] = label
+        od["html_label"] = html_label
         od["has_members"] = "true"
         od["member_count"] = member_count
 
