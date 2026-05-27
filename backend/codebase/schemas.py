@@ -72,7 +72,7 @@ class InterfaceSchema(BaseModel):
 class AssociationSchema(BaseModel):
     from_class: str
     to_class: str
-    kind: Literal["associates", "aggregates", "depends_on", "references", "invokes"]
+    kind: Literal["associates", "aggregates", "composes", "depends_on", "references", "returns", "invokes"]
     description: str = ""
     mechanism: str = ""
     requirement_ids: list[str] = []  # tagged: "hlr:3", "llr:7" (also accepts "HLR 3", "LLR 7")

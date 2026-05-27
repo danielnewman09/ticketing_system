@@ -425,3 +425,24 @@ class TestNoDependencyLookup:
         # No dependency stub node
         random_nodes = [n for n in result.nodes if n.qualified_name == "RandomThing"]
         assert len(random_nodes) == 0
+
+class TestAssociationSchemaKinds:
+    """AssociationSchema.kind should accept composes and returns."""
+
+    def test_composes_association(self):
+        assoc = AssociationSchema(
+            from_class="CalculatorResult",
+            to_class="ErrorType",
+            kind="composes",
+            description="ErrorType member variable",
+        )
+        assert assoc.kind == "composes"
+
+    def test_returns_association(self):
+        assoc = AssociationSchema(
+            from_class="CalculatorEngine",
+            to_class="CalculationResult",
+            kind="returns",
+            description="Returns calculation result",
+        )
+        assert assoc.kind == "returns"
