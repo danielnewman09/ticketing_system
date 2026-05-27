@@ -283,9 +283,8 @@ def render_ontology_graph_legend():
             ui.label("Node Kinds").classes("text-xs font-bold text-gray-400 mb-1")
             for kind, color in sorted(KIND_COLORS.items()):
                 with ui.row().classes("items-center gap-1"):
-                    ui.html(
-                        f'<div style="width:10px;height:10px;border-radius:50%;background:{color}"></div>'
-                    )
+                    dot = ui.element("div")
+                    dot.style(f"width:10px;height:10px;border-radius:50%;background:{color}")
                     ui.label(kind).classes("text-xs")
 
         # Edge types
@@ -295,9 +294,8 @@ def render_ontology_graph_legend():
                 if name == "default":
                     continue
                 with ui.row().classes("items-center gap-1"):
-                    ui.html(
-                        f'<div style="width:16px;height:2px;background:{color};margin:3px 0"></div>'
-                    )
+                    line = ui.element("div")
+                    line.style(f"width:16px;height:2px;background:{color};margin:3px 0")
                     ui.label(name).classes("text-xs")
 
         # Type-origin markers
@@ -305,9 +303,9 @@ def render_ontology_graph_legend():
             ui.label("Type Origins").classes("text-xs font-bold text-gray-400 mb-1")
             for marker, label in [("\u25cf", "Builtin"), ("\u25c6", "Linked design"), ("\u25b8", "Dependency")]:
                 with ui.row().classes("items-center gap-1"):
-                    ui.html(
-                        f'<span style="font-family:monospace;font-size:11px;color:#e2e8f0">{marker}</span>'
-                    )
+                    marker_el = ui.element("span")
+                    marker_el.style("font-family:monospace;font-size:11px;color:#e2e8f0")
+                    marker_el._text = marker
                     ui.label(label).classes("text-xs")
 
         # Layer indicators
@@ -320,9 +318,8 @@ def render_ontology_graph_legend():
                 ("background:#555;border:2px dotted #3b82f6", "As-built"),
             ]:
                 with ui.row().classes("items-center gap-1"):
-                    ui.html(
-                        f'<div style="width:10px;height:10px;border-radius:50%;{style_spec}"></div>'
-                    )
+                    dot = ui.element("div")
+                    dot.style(f"width:10px;height:10px;border-radius:50%;{style_spec}")
                     ui.label(label).classes("text-xs")
 
         # Change status (future)
@@ -330,9 +327,8 @@ def render_ontology_graph_legend():
             ui.label("Changes").classes("text-xs font-bold text-gray-400 mb-1")
             for status, color in CHANGE_STATUS_COLORS.items():
                 with ui.row().classes("items-center gap-1"):
-                    ui.html(
-                        f'<div style="width:10px;height:10px;border-radius:50%;background:{color};box-shadow:0 0 4px {color}"></div>'
-                    )
+                    dot = ui.element("div")
+                    dot.style(f"width:10px;height:10px;border-radius:50%;background:{color};box-shadow:0 0 4px {color}")
                     ui.label(status).classes("text-xs")
 
 
