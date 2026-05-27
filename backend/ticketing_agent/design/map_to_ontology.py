@@ -359,13 +359,13 @@ def map_oo_to_ontology(
                         target_qname = class_lookup[type_name]
                         _add_triple(method_qname, "has_argument", target_qname)
 
-            # has_type edge: method → design-internal return type
+            # returns edge: method → design-internal return type
             if method.return_type:
                 for match in _TYPE_EXTRACT_RE.finditer(method.return_type):
                     type_name = match.group(1)
                     if type_name in class_lookup:
                         target_qname = class_lookup[type_name]
-                        _add_triple(method_qname, "has_type", target_qname)
+                        _add_triple(method_qname, "returns", target_qname)
 
         # Inheritance -> generalizes triples (with dependency resolution)
         for parent_name in cls.inherits_from:

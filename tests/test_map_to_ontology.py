@@ -610,3 +610,113 @@ class TestEnumInClassLookup:
             if "::" not in t.object_qualified_name.replace("core::", "")
         ]
         assert len(entity_composes) == 0
+
+
+class TestReturnsEdge:
+    """Methods returning design-internal types should get a returns edge."""
+
+    def test_method_returns_design_class(self):
+        from backend.codebase.schemas import MethodSchema
+
+        oo = OODesignSchema(
+            modules=["calc"],
+            classes=[
+                ClassSchema(
+                    name="Calculator",
+                    module="calc",
+                    attributes=[],
+                    methods=[
+                        MethodSchema(
+                            name="compute",
+                            visibility="public",
+                            description="Compute result",
+                            return_type="CalcResult",
+                        ),
+                    ],
+                ),
+                ClassSchema(
+                    name="CalcResult",
+                    module="calc",
+                    attributes=[],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        returns_triples = [
+            t for t in result.triples
+            if t.predicate == "returns"
+            and t.subject_qualified_name == "calc::Calculator::compute"
+            and t.object_qualified_name == "calc::CalcResult"
+        ]
+        assert len(returns_triples) == 1
+
+    def test_method_returns_design_enum(self):
+        from backend.codebase.schemas import EnumSchema, MethodSchema
+
+        oo = OODesignSchema(
+            modules=["calc"],
+            enums=[
+                EnumSchema(
+                    name="Status",
+                    module="calc",
+                    description="Status codes",
+                    values=["OK", "ERROR"],
+                ),
+            ],
+            classes=[
+                ClassSchema(
+                    name="Processor",
+                    module="calc",
+                    attributes=[],
+                    methods=[
+                        MethodSchema(
+                            name="check",
+                            visibility="public",
+                            description="Check status",
+                            return_type="Status",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        returns_triples = [
+            t for t in result.triples
+            if t.predicate == "returns"
+            and t.subject_qualified_name == "calc::Processor::check"
+            and t.object_qualified_name == "calc::Status"
+        ]
+        assert len(returns_triples) == 1
+
+    def test_no_returns_for_primitive_type(self):
+        from backend.codebase.schemas import MethodSchema
+
+        oo = OODesignSchema(
+            modules=["calc"],
+            classes=[
+                ClassSchema(
+                    name="Calculator",
+                    module="calc",
+                    attributes=[],
+                    methods=[
+                        MethodSchema(
+                            name="count",
+                            visibility="public",
+                            description="Count items",
+                            return_type="int",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        returns_triples = [
+            t for t in result.triples
+            if t.predicate == "returns"
+            and t.subject_qualified_name == "calc::Calculator::count"
+        ]
+        assert len(returns_triples) == 0
