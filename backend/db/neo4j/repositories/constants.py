@@ -18,6 +18,8 @@ PREDICATE_TO_REL_TYPE = {
     "realizes": "REALIZES",
     "references": "REFERENCES",
     "invokes": "INVOKES",
+    "has_argument": "HAS_ARGUMENT",
+    "has_type": "HAS_TYPE",
 }
 
 DEFAULT_PREDICATES = [
@@ -29,6 +31,8 @@ DEFAULT_PREDICATES = [
     ("realizes", "A class implements/realizes an interface or contract"),
     ("references", "One entity holds a reference or pointer to another. Specify mechanism (e.g., std::unique_ptr, std::shared_ptr, raw_pointer, reference)"),
     ("invokes", "Weak association, signifying a caller-callee relationship"),
+    ("has_argument", "A method accepts a parameter of the given type (method → type)"),
+    ("has_type", "An attribute or field is typed by the given entity (attribute → type)"),
 ]
 
 # ---------------------------------------------------------------------------

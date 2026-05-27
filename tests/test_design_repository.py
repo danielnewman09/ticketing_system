@@ -77,7 +77,9 @@ class TestDesignConstants:
 
         assert PREDICATE_TO_REL_TYPE["composes"] == "COMPOSES"
         assert PREDICATE_TO_REL_TYPE["depends_on"] == "DEPENDS_ON"
-        assert len(PREDICATE_TO_REL_TYPE) == 8
+        assert PREDICATE_TO_REL_TYPE["has_argument"] == "HAS_ARGUMENT"
+        assert PREDICATE_TO_REL_TYPE["has_type"] == "HAS_TYPE"
+        assert len(PREDICATE_TO_REL_TYPE) == 10
 
     def test_default_predicates(self):
         from backend.db.neo4j.repositories.constants import DEFAULT_PREDICATES

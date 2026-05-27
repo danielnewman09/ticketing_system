@@ -324,6 +324,14 @@ def map_oo_to_ontology(
             triple_idx = _add_triple(cls_qname, "composes", attr_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
+            # has_type edge: attribute → design-internal type (enum, class, interface)
+            if attr.type_name:
+                for match in _TYPE_EXTRACT_RE.finditer(attr.type_name):
+                    type_name = match.group(1)
+                    if type_name in class_lookup:
+                        target_qname = class_lookup[type_name]
+                        _add_triple(attr_qname, "has_type", target_qname)
+
         # Methods -> composes triples (source_type="member")
         for method in cls.methods:
             method_qname = f"{cls_qname}::{method.name}"
@@ -340,6 +348,22 @@ def map_oo_to_ontology(
             )
             triple_idx = _add_triple(cls_qname, "composes", method_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
+
+            # has_argument edges: method → design-internal types used as parameters
+            for param in method.parameters:
+                for match in _TYPE_EXTRACT_RE.finditer(param):
+                    type_name = match.group(1)
+                    if type_name in class_lookup:
+                        target_qname = class_lookup[type_name]
+                        _add_triple(method_qname, "has_argument", target_qname)
+
+            # has_type edge: method → design-internal return type
+            if method.return_type:
+                for match in _TYPE_EXTRACT_RE.finditer(method.return_type):
+                    type_name = match.group(1)
+                    if type_name in class_lookup:
+                        target_qname = class_lookup[type_name]
+                        _add_triple(method_qname, "has_type", target_qname)
 
         # Inheritance -> generalizes triples (with dependency resolution)
         for parent_name in cls.inherits_from:
