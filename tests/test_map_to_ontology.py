@@ -446,3 +446,167 @@ class TestAssociationSchemaKinds:
             description="Returns calculation result",
         )
         assert assoc.kind == "returns"
+
+
+class TestEnumInClassLookup:
+    """Enums should be added to class_lookup so attribute type
+    references to enums can be resolved."""
+
+    def test_class_composes_enum_from_attribute_type(self):
+        """When a class has an attribute typed by an enum, a class-level
+        composes edge should be emitted (class → enum)."""
+        from backend.codebase.schemas import EnumSchema, InterfaceSchema
+
+        oo = OODesignSchema(
+            modules=["calc_engine"],
+            enums=[
+                EnumSchema(
+                    name="ErrorType",
+                    module="calc_engine",
+                    description="Error types",
+                    values=["MALFORMED_STRING", "NULL_INPUT"],
+                ),
+            ],
+            classes=[
+                ClassSchema(
+                    name="CalculationResult",
+                    module="calc_engine",
+                    attributes=[
+                        AttributeSchema(
+                            name="error_signal",
+                            type_name="ErrorType",
+                            visibility="private",
+                            description="Error indicator",
+                        ),
+                    ],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        # Class-level composes edge: CalculationResult → ErrorType
+        composes_triples = [
+            t for t in result.triples
+            if t.predicate == "composes"
+            and t.subject_qualified_name == "calc_engine::CalculationResult"
+            and t.object_qualified_name == "calc_engine::ErrorType"
+        ]
+        assert len(composes_triples) == 1, (
+            f"Expected 1 class-level composes edge from CalculationResult to ErrorType, "
+            f"got {composes_triples}. "
+            f"All triples: {[(t.predicate, t.subject_qualified_name, t.object_qualified_name) for t in result.triples]}"
+        )
+
+    def test_class_composes_class_from_attribute_type(self):
+        """When a class has an attribute typed by another design class,
+        a class-level composes edge should be emitted."""
+        oo = OODesignSchema(
+            modules=["core"],
+            classes=[
+                ClassSchema(
+                    name="Engine",
+                    module="core",
+                    attributes=[],
+                    methods=[],
+                ),
+                ClassSchema(
+                    name="Controller",
+                    module="core",
+                    attributes=[
+                        AttributeSchema(
+                            name="engine",
+                            type_name="Engine",
+                            visibility="private",
+                            description="The engine",
+                        ),
+                    ],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        composes_triples = [
+            t for t in result.triples
+            if t.predicate == "composes"
+            and t.subject_qualified_name == "core::Controller"
+            and t.object_qualified_name == "core::Engine"
+        ]
+        assert len(composes_triples) == 1
+
+    def test_class_composes_interface_from_attribute_type(self):
+        """When a class has an attribute typed by a design interface,
+        a class-level composes edge should be emitted."""
+        from backend.codebase.schemas import InterfaceSchema
+
+        oo = OODesignSchema(
+            modules=["app"],
+            interfaces=[
+                InterfaceSchema(
+                    name="IHandler",
+                    module="app",
+                    description="Handler interface",
+                    methods=[],
+                ),
+            ],
+            classes=[
+                ClassSchema(
+                    name="Processor",
+                    module="app",
+                    attributes=[
+                        AttributeSchema(
+                            name="handler",
+                            type_name="IHandler",
+                            visibility="private",
+                            description="The handler",
+                        ),
+                    ],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        composes_triples = [
+            t for t in result.triples
+            if t.predicate == "composes"
+            and t.subject_qualified_name == "app::Processor"
+            and t.object_qualified_name == "app::IHandler"
+        ]
+        assert len(composes_triples) == 1
+
+    def test_no_composes_for_primitive_attribute_type(self):
+        """Primitive types (bool, int, string) should not produce composes edges."""
+        oo = OODesignSchema(
+            modules=["core"],
+            classes=[
+                ClassSchema(
+                    name="Config",
+                    module="core",
+                    attributes=[
+                        AttributeSchema(
+                            name="enabled",
+                            type_name="bool",
+                            visibility="public",
+                            description="Enabled flag",
+                        ),
+                    ],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+
+        composes_triples = [
+            t for t in result.triples
+            if t.predicate == "composes"
+            and t.subject_qualified_name == "core::Config"
+        ]
+        # Only the attribute containment composes (Config → Config::enabled)
+        # No class-level composes to a primitive
+        entity_composes = [
+            t for t in composes_triples
+            if "::" not in t.object_qualified_name.replace("core::", "")
+        ]
+        assert len(entity_composes) == 0

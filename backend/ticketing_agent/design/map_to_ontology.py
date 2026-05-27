@@ -293,6 +293,8 @@ def map_oo_to_ontology(
         class_lookup[cls.name] = _qualify(cls.module, cls.name)
     for iface in oo.interfaces:
         class_lookup[iface.name] = _qualify(iface.module, iface.name)
+    for enum in oo.enums:
+        class_lookup[enum.name] = _qualify(enum.module, enum.name)
 
     for cls in oo.classes:
         cls_qname = _qualify(cls.module, cls.name)
@@ -324,13 +326,13 @@ def map_oo_to_ontology(
             triple_idx = _add_triple(cls_qname, "composes", attr_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-            # has_type edge: attribute → design-internal type (enum, class, interface)
+            # composes edge: class → design-internal entity type (member variable composition)
             if attr.type_name:
                 for match in _TYPE_EXTRACT_RE.finditer(attr.type_name):
                     type_name = match.group(1)
                     if type_name in class_lookup:
                         target_qname = class_lookup[type_name]
-                        _add_triple(attr_qname, "has_type", target_qname)
+                        _add_triple(cls_qname, "composes", target_qname)
 
         # Methods -> composes triples (source_type="member")
         for method in cls.methods:
