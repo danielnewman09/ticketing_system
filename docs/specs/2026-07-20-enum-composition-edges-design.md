@@ -144,6 +144,13 @@ Result: `ErrorType` appears both as a typed attribute line inside
 `CalculationResult`'s UML compartment (`+ error_signal: ErrorType`) AND as a
 separate enum node in the graph with the `COMPOSES` edge visible.
 
+## Deduplication note
+
+When both the LLM agent and the deterministic mapper emit a `composes`
+edge between the same class and entity, the Neo4j `MERGE` in
+`DesignRepository.merge_triple` deduplicates by (source, target, type),
+so no duplicate edge is created. No special handling needed.
+
 ## Files changed
 
 - `backend/db/neo4j/repositories/constants.py` — add `returns`, remove `has_type`
