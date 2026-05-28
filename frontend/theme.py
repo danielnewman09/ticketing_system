@@ -84,6 +84,7 @@ LAYER_STYLES = {
 # Change-status colors — for future use when design modifies existing objects
 CHANGE_STATUS_COLORS = {
     "new": "#10b981",        # green border glow
+    "implemented": "#3b82f6",   # blue - already exists in codebase
     "modified": "#f59e0b",     # amber border glow
     "deleted": "#ef4444",      # red strikethrough / dashed
 }
@@ -413,6 +414,18 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'overlay-color': '#ef4444',
                 'overlay-opacity': 0.3,
                 'opacity': 0.6,
+            }}
+        }},
+        // ── Implemented (as-built) ────────────────────────────────────────
+        {{
+            selector: 'node[change_status="implemented"]',
+            style: {{
+                'border-width': 3,
+                'border-color': '#3b82f6',
+                'border-style': 'solid',
+                'overlay-padding': 3,
+                'overlay-color': '#3b82f6',
+                'overlay-opacity': 0.2,
             }}
         }},
         // ── Edges (global) ───────────────────────────────────────────────

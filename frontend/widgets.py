@@ -322,14 +322,15 @@ def render_ontology_graph_legend():
                     dot.style(f"width:10px;height:10px;border-radius:50%;{style_spec}")
                     ui.label(label).classes("text-xs")
 
-        # Change status (future)
+        # Change status
         with ui.column().classes("gap-1"):
-            ui.label("Changes").classes("text-xs font-bold text-gray-400 mb-1")
+            ui.label("Status").classes("text-xs font-bold text-gray-400 mb-1")
+            status_labels = {"new": "New (design intent)", "implemented": "As-built", "modified": "Modified", "deleted": "Deleted"}
             for status, color in CHANGE_STATUS_COLORS.items():
                 with ui.row().classes("items-center gap-1"):
                     dot = ui.element("div")
                     dot.style(f"width:10px;height:10px;border-radius:50%;background:{color};box-shadow:0 0 4px {color}")
-                    ui.label(status).classes("text-xs")
+                    ui.label(status_labels.get(status, status)).classes("text-xs")
 
 
 def breadcrumb(*parts: tuple[str, str | None]):

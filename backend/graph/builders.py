@@ -28,6 +28,7 @@ def _build_design_node(d: dict) -> dict:
         "argsstring": d.get("argsstring", ""),
         "layer": "design",
         "source_type": d.get("source_type", ""),
+        "change_status": d.get("change_status", "new"),
         "requirements": d.get("requirements", []),
         "is_hlr_highlight": d.get("is_hlr_highlight", ""),
     }
@@ -46,6 +47,7 @@ def _build_compound_node(d: dict, layer: str) -> dict:
         "argsstring": d.get("argsstring", ""),
         "source": d.get("source", "") if layer == "dependency" else "",
         "layer": layer,
+        "change_status": "implemented" if layer == "as-built" else "",
     }
 
 
@@ -61,6 +63,7 @@ def _build_dependency_node(d: dict) -> dict:
         "argsstring": d.get("argsstring", ""),
         "source": d.get("source", ""),
         "layer": "dependency",
+        "change_status": "",
     }
 
 
