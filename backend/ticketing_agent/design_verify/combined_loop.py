@@ -21,7 +21,7 @@ from backend.ticketing_agent.design_verify.combined_tools import (
     make_combined_dispatcher,
 )
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup
-from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 log = logging.getLogger("agents.design_verify")
 
@@ -121,8 +121,6 @@ def design_and_verify(
         DesignVerifyResult with oo_design, verifications, and any warnings.
     """
     from backend.ticketing_agent.design_verify.combined_prompt import (
-        build_specializations_section,
-        build_dependency_api_section,
         build_as_built_section,
         build_existing_classes_section,
         build_intercomponent_section,
@@ -236,7 +234,7 @@ def design_and_verify(
         final_tool_name="commit_design_and_verifications",
         tool_dispatcher=dispatcher,
         model=model,
-        max_tokens=16384,
+        max_tokens=65536,
         max_turns=75,
         prompt_log_file=prompt_log_file,
     )
@@ -314,7 +312,7 @@ def design_and_verify(
     # Collect verification quality warnings
     verification_warnings = _collect_verification_warnings(verifications)
 
-    design_errors = _validate_oo_design(
+    design_errors = validate_oo_design(
         oo_design,
         prior_class_lookup=prior_class_lookup or {},
         dependency_lookup=dep_lookup,
