@@ -1,1 +1,5 @@
-# Placeholder — will be updated with CombinedDispatcher export in Task 11
+"""Combined design+verify tool dispatcher package."""
+
+from backend.ticketing_agent.tools.design_verify.dispatcher import CombinedDispatcher
+
+__all__ = ["CombinedDispatcher"]
