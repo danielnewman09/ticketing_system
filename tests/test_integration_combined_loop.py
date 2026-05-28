@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 from backend.codebase.schemas import OODesignSchema
 from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema, VerificationActionSchema
 from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
-from backend.ticketing_agent.design_verify.combined_tools import make_combined_dispatcher
+from backend.ticketing_agent.tools.design_verify import CombinedDispatcher
 
 
 def _minimal_design_dict():
@@ -65,13 +65,13 @@ def _minimal_verification_dict():
 
 def test_combined_loop_commits_valid_design_and_verifications():
     """The combined loop can commit a valid design + verification pair."""
-    from backend.ticketing_agent.design_verify.combined_tools import make_combined_dispatcher
+    from backend.ticketing_agent.tools.design_verify import CombinedDispatcher
 
     hlr = {"id": 1, "description": "The calculator performs addition."}
     llrs = [{"id": 1, "description": "The engine shall add two numbers."}]
 
     # Simulate a tool loop where the agent first drafts a design, then commits
-    dispatcher = make_combined_dispatcher(
+    dispatcher = CombinedDispatcher(
         prior_class_lookup={},
         dependency_lookup=None,
         intercomponent_classes=None,
@@ -95,9 +95,9 @@ def test_combined_loop_commits_valid_design_and_verifications():
 
 def test_combined_loop_rejects_unresolved_references():
     """Commit rejects when verifications reference non-existent design elements."""
-    from backend.ticketing_agent.design_verify.combined_tools import make_combined_dispatcher
+    from backend.ticketing_agent.tools.design_verify import CombinedDispatcher
 
-    dispatcher = make_combined_dispatcher(
+    dispatcher = CombinedDispatcher(
         prior_class_lookup={},
         dependency_lookup=None,
         intercomponent_classes=None,
@@ -124,9 +124,9 @@ def test_combined_loop_rejects_unresolved_references():
 
 def test_commit_tool_uses_string_llr_ids():
     """Commit result always uses string LLR ID keys."""
-    from backend.ticketing_agent.design_verify.combined_tools import make_combined_dispatcher
+    from backend.ticketing_agent.tools.design_verify import CombinedDispatcher
 
-    dispatcher = make_combined_dispatcher(
+    dispatcher = CombinedDispatcher(
         prior_class_lookup={},
         dependency_lookup=None,
         intercomponent_classes=None,
@@ -170,7 +170,7 @@ def test_design_verify_warns_about_unqualified_caller():
 
 def test_draft_verifications_then_commit_workflow():
     """Full workflow: draft design -> draft_verifications -> commit."""
-    dispatcher = make_combined_dispatcher(
+    dispatcher = CombinedDispatcher(
         prior_class_lookup={},
         dependency_lookup=None,
         intercomponent_classes=None,
