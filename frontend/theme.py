@@ -381,51 +381,45 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'border-width': 2,
             }}
         }},
-        // ── Change-status styles (for future new/modified/deleted) ─────
+        // ── Change-status styles ──────────────────────────────────────
+        // Status is shown via a subtle background tint + dashed border overlay.
+        // Kind-colored solid border always shows as the inner border.
+        // Status dashed border sits outside as a visual indicator.
         {{
             selector: 'node[change_status="new"]',
             style: {{
-                'border-width': 3,
+                'border-width': 3.5,
                 'border-color': '#10b981',
-                'border-style': 'solid',
-                'overlay-padding': 4,
-                'overlay-color': '#10b981',
-                'overlay-opacity': 0.3,
+                'border-style': 'dashed',
+                'background-color': '#1e3a2e',
+            }}
+        }},
+        {{
+            selector: 'node[change_status="implemented"]',
+            style: {{
+                'border-width': 3.5,
+                'border-color': '#3b82f6',
+                'border-style': 'dashed',
+                'background-color': '#1e2d3b',
             }}
         }},
         {{
             selector: 'node[change_status="modified"]',
             style: {{
-                'border-width': 3,
+                'border-width': 3.5,
                 'border-color': '#f59e0b',
                 'border-style': 'dashed',
-                'overlay-padding': 3,
-                'overlay-color': '#f59e0b',
-                'overlay-opacity': 0.25,
+                'background-color': '#2e2a1e',
             }}
         }},
         {{
             selector: 'node[change_status="deleted"]',
             style: {{
-                'border-width': 3,
+                'border-width': 3.5,
                 'border-color': '#ef4444',
-                'border-style': 'double',
-                'overlay-padding': 4,
-                'overlay-color': '#ef4444',
-                'overlay-opacity': 0.3,
+                'border-style': 'dashed',
+                'background-color': '#2e1e1e',
                 'opacity': 0.6,
-            }}
-        }},
-        // ── Implemented (as-built) ────────────────────────────────────────
-        {{
-            selector: 'node[change_status="implemented"]',
-            style: {{
-                'border-width': 3,
-                'border-color': '#3b82f6',
-                'border-style': 'solid',
-                'overlay-padding': 3,
-                'overlay-color': '#3b82f6',
-                'overlay-opacity': 0.2,
             }}
         }},
         // ── Edges (global) ───────────────────────────────────────────────

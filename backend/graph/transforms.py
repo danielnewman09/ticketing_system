@@ -25,7 +25,7 @@ _KIND_ORDER = {"attribute": 0, "method": 1, "enum_value": 2}
 # HTML label color scheme — used by the cytoscape-node-html-label extension
 _MEMBER_COLORS = {
     "stereotype": "#a0aec0",    # muted gray-blue for <<class>> etc.
-    "classname": "#f7fafc",     # bright white for class name
+    "classname": "#f7fafc",     # bright white for class name (overridden by status)
     "separator": "#4a5568",     # muted gray for ─── lines
     "vis_public": "#68d391",    # green for +
     "vis_protected": "#fbd38d", # amber for #
@@ -38,6 +38,15 @@ _MEMBER_COLORS = {
     "attr_name": "#fbd38d",     # amber for attribute names
     "enum_val": "#a0aec0",      # gray for enum values
     "args": "#718096",          # dimmer gray for argument text
+}
+
+# Status-based colors for class names and borders
+_STATUS_COLORS_HTML = {
+    "new": "#6ee7b7",      # bright green (design intent, not yet implemented)
+    "implemented": "#93c5fd",  # bright blue (exists in codebase)
+    "modified": "#fcd34d",    # bright amber (changed design)
+    "deleted": "#fca5a5",     # bright red (removed design)
+    "": "#f7fafc",           # default white
 }
 
 
@@ -79,16 +88,19 @@ def _format_member_html(m: dict, suffix: str = "") -> str:
 
 
 def _build_uml_html(
-    class_name: str, by_kind: dict[str, list[dict]], is_dependency: bool, *, owner_kind: str = ""
+    class_name: str, by_kind: dict[str, list[dict]], is_dependency: bool, *, owner_kind: str = "", change_status: str = ""
 ) -> str:
     """Build a colored HTML label for the cytoscape-node-html-label extension.
 
     Produces a div with styled spans for each member line, using the
     _MEMBER_COLORS palette for visual distinction.
+
+    change_status colors the class/enumeration name to indicate design status.
     """
     import html as html_mod
 
     mc = _MEMBER_COLORS
+    name_color = _STATUS_COLORS_HTML.get(change_status, mc["classname"])
     lines = []
 
     # Stereotype
@@ -102,7 +114,7 @@ def _build_uml_html(
         lines.append(f'<div style="color:{mc["stereotype"]};font-size:9px;text-align:center">{html_mod.escape(stereotype)}</div>')
 
     # Class name
-    lines.append(f'<div style="color:{mc["classname"]};font-weight:bold;text-align:center">{html_mod.escape(class_name)}</div>')
+    lines.append(f'<div style="color:{name_color};font-weight:bold;text-align:center">{html_mod.escape(class_name)}</div>')
 
     # Collect all members
     all_members: list[dict] = []
@@ -577,7 +589,8 @@ def collapse_members(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], 
             od["label"], by_kind, is_dependency, owner_kind=od.get("kind", "")
         )
         html_label = _build_uml_html(
-            od["label"], by_kind, is_dependency, owner_kind=od.get("kind", "")
+            od["label"], by_kind, is_dependency, owner_kind=od.get("kind", ""),
+            change_status=od.get("change_status", "")
         )
         od["label"] = label
         od["html_label"] = html_label
