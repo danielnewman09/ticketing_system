@@ -158,6 +158,7 @@ Extracted from `combined_tools.py` and `design_oo_tools.py`. All dropped the `_`
 | `combined_tools._suggest_qname` | `helpers/qname.py` | `suggest_qname` |
 | `combined_tools._build_draft_lookup` | `helpers/draft_state.py` | `build_draft_lookup` |
 | `combined_tools._draft_summary` | `helpers/draft_state.py` | `draft_summary` |
+| `combined_tools` inline enum collision check | `helpers/draft_state.py` | `check_enum_collisions` |
 | `combined_tools._commit_tool_schema` | `helpers/commit_schema.py` | `commit_tool_schema` |
 | `combined_tools._slim_compound` | `helpers/discovery.py` | `slim_compound` |
 | `combined_tools._dispatch_discovery` | `helpers/discovery.py` | `discover_tool_dispatch` |
@@ -277,13 +278,13 @@ Similarly, `verify_llr_tools.py` becomes `tools/verify/dispatcher.py` with a `Ve
 |---|---|---|
 | `tools/__init__.py` | ~25 | ToolDispatcher base class |
 | `tools/helpers/qname.py` | ~80 | qname_resolves + suggest_qname |
-| `tools/helpers/draft_state.py` | ~80 | build_draft_lookup + draft_summary |
+| `tools/helpers/draft_state.py` | ~90 | build_draft_lookup, draft_summary, check_enum_collisions |
 | `tools/helpers/commit_schema.py` | ~25 | commit_tool_schema |
 | `tools/helpers/design_validation.py` | ~180 | validate_oo_design + extract_type_refs |
 | `tools/helpers/discovery.py` | ~50 | discover_tool_dispatch + slim_compound |
 | `tools/design_verify/dispatcher.py` | ~60 | CombinedDispatcher class |
-| `tools/design_verify/draft_design.py` | ~70 | Schema + handler + enum collision check |
-| `tools/design_verify/validate_design.py` | ~50 | Schema + handler + enum collision check |
+| `tools/design_verify/draft_design.py` | ~55 | Schema + handler |
+| `tools/design_verify/validate_design.py` | ~40 | Schema + handler |
 | `tools/design_verify/check_class_name.py` | ~65 | Schema + handler |
 | `tools/design_verify/find_mechanism.py` | ~70 | Schema + handler (Neo4j fallback) |
 | `tools/design_verify/validate_qualified_names.py` | ~55 | Schema + handler |
