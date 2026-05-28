@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 from backend.codebase.schemas import OODesignSchema, ClassSchema, AssociationSchema
-from backend.ticketing_agent.design.design_oo_tools import _validate_oo_design
+from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 
 def _make_design(associations=None, classes=None, class_attrs=None, class_methods=None):
@@ -34,7 +34,7 @@ class TestValidateOODesign:
         oo = _make_design(associations=[
             AssociationSchema(from_class="TestClass", to_class="PhantomClass", kind="depends_on", description="bad")
         ])
-        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
+        errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
         assert any("PhantomClass" in e for e in errors)
 
     def test_known_intercomponent_class_not_flagged(self):
@@ -42,7 +42,7 @@ class TestValidateOODesign:
             AssociationSchema(from_class="TestClass", to_class="ui::Display", kind="depends_on", description="ok")
         ])
         intercomp = [{"qualified_name": "ui::Display", "kind": "class", "description": "Display", "name": "Display", "methods": [], "attributes": []}]
-        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
+        errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
         assert errors == []
 
     def test_missing_intercomponent_association_flagged(self):
@@ -58,26 +58,26 @@ class TestValidateOODesign:
             )],
         )
         intercomp = [{"qualified_name": "ui::Display", "kind": "class", "description": "Display", "name": "Display", "methods": [], "attributes": []}]
-        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
+        errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
         assert any("Missing intercomponent" in e for e in errors)
 
     def test_valid_design_no_errors(self):
         oo = _make_design()
-        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
+        errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
         assert errors == []
 
     def test_dependency_lookup_target_not_flagged(self):
         oo = _make_design(associations=[
             AssociationSchema(from_class="TestClass", to_class="Fl_Window", kind="depends_on", description="dep")
         ])
-        errors = _validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={"Fl_Window": "fltk::Fl_Window"}, intercomponent_classes=None)
+        errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={"Fl_Window": "fltk::Fl_Window"}, intercomponent_classes=None)
         assert errors == []
 
     def test_prior_class_lookup_target_not_flagged(self):
         oo = _make_design(associations=[
             AssociationSchema(from_class="TestClass", to_class="PriorClass", kind="depends_on", description="prior")
         ])
-        errors = _validate_oo_design(oo, prior_class_lookup={"PriorClass": "ns::PriorClass"}, dependency_lookup=None, intercomponent_classes=None)
+        errors = validate_oo_design(oo, prior_class_lookup={"PriorClass": "ns::PriorClass"}, dependency_lookup=None, intercomponent_classes=None)
         assert errors == []
 
 

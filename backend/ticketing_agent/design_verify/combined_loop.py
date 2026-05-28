@@ -16,10 +16,7 @@ from backend.requirements.formatting import format_hlr_dict, format_llrs_with_ve
 from backend.db.neo4j.repositories.verification import VerificationRepository
 
 from backend.ticketing_agent.design_verify.combined_prompt import SYSTEM_PROMPT
-from backend.ticketing_agent.design_verify.combined_tools import (
-    ALL_TOOLS,
-    make_combined_dispatcher,
-)
+from backend.ticketing_agent.tools.design_verify import CombinedDispatcher
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
@@ -218,7 +215,7 @@ def design_and_verify(
     messages = [{"role": "user", "content": user_content}]
 
     # Build tool dispatcher with draft state + Neo4j
-    dispatcher = make_combined_dispatcher(
+    dispatcher = CombinedDispatcher(
         prior_class_lookup=prior_class_lookup or {},
         dependency_lookup=dep_lookup,
         intercomponent_classes=intercomponent_classes or [],
@@ -230,9 +227,9 @@ def design_and_verify(
     result = call_tool_loop(
         system=system,
         messages=messages,
-        tools=ALL_TOOLS,
+        tools=dispatcher.all_tool_schemas,
         final_tool_name="commit_design_and_verifications",
-        tool_dispatcher=dispatcher,
+        tool_dispatcher=dispatcher.dispatch,
         model=model,
         max_tokens=65536,
         max_turns=75,

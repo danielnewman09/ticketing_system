@@ -9,7 +9,18 @@ from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_
 from backend.ticketing_agent.tools.helpers.draft_state import build_draft_lookup
 from backend.ticketing_agent.tools.helpers.qname import qname_resolves, suggest_qname
 
-SCHEMA = commit_tool_schema()
+_input_schema = commit_tool_schema()
+SCHEMA = {
+    "name": "commit_design_and_verifications",
+    "description": (
+        "Commit the final OO design and all verification procedures. This "
+        "terminates the agent loop. Validates that all qualified names "
+        "reference real design elements and that the design is structurally "
+        "sound. If there are errors, returns them for the agent to fix "
+        "before retrying."
+    ),
+    "input_schema": _input_schema,
+}
 
 
 def handle(ctx, tool_input: dict) -> str:

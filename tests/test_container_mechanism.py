@@ -18,8 +18,8 @@ from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,
     FIND_MECHANISM_TOOL,
     make_design_dispatcher,
-    _validate_oo_design,
 )
+from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +300,7 @@ class TestAggregatesValidation:
             ],
         )
 
-        errors = _validate_oo_design(
+        errors = validate_oo_design(
             oo,
             prior_class_lookup={},
             dependency_lookup={"Widget": "test::Widget"},
@@ -329,7 +329,7 @@ class TestAggregatesValidation:
             ],
         )
 
-        errors = _validate_oo_design(
+        errors = validate_oo_design(
             oo,
             prior_class_lookup={},
             dependency_lookup={"Widget": "test::Widget", "std::vector": "std::vector"},
@@ -358,7 +358,7 @@ class TestAggregatesValidation:
             ],
         )
 
-        errors = _validate_oo_design(
+        errors = validate_oo_design(
             oo,
             prior_class_lookup={},
             dependency_lookup={"Widget": "test::Widget"},
@@ -387,7 +387,7 @@ class TestAggregatesValidation:
             ],
         )
 
-        errors = _validate_oo_design(
+        errors = validate_oo_design(
             oo,
             prior_class_lookup={},
             dependency_lookup={"Engine": "test::Engine"},

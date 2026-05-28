@@ -34,8 +34,8 @@ from backend.ticketing_agent.design.design_oo_prompt import (
 from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,
     make_design_dispatcher,
-    _validate_oo_design,
 )
+from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 log = logging.getLogger("agents.design")
 
@@ -181,7 +181,7 @@ def design_oo(
     schema = OODesignSchema.model_validate(result)
 
     # Post-loop sanity check: validate and log any remaining issues
-    errors = _validate_oo_design(
+    errors = validate_oo_design(
         schema,
         prior_class_lookup=prior_class_lookup or {},
         dependency_lookup=dep_lookup,
