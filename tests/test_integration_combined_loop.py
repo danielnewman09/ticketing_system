@@ -79,11 +79,11 @@ def test_combined_loop_commits_valid_design_and_verifications():
     )
 
     # Step 1: Draft the design
-    draft_result = json.loads(dispatcher("draft_design", {"design": _minimal_design_dict()}))
+    draft_result = json.loads(dispatcher.dispatch("draft_design", {"design": _minimal_design_dict()}))
     assert draft_result["valid"] is True
 
     # Step 2: Commit with verification
-    commit_result = json.loads(dispatcher(
+    commit_result = json.loads(dispatcher.dispatch(
         "commit_design_and_verifications",
         {
             "oo_design": _minimal_design_dict(),
@@ -105,13 +105,13 @@ def test_combined_loop_rejects_unresolved_references():
     )
 
     # Draft a design without the referenced class
-    dispatcher("draft_design", {"design": _minimal_design_dict()})
+    dispatcher.dispatch("draft_design", {"design": _minimal_design_dict()})
 
     # Try to commit with a verification referencing a non-existent class
     bad_verification = _minimal_verification_dict()
     bad_verification["preconditions"][0]["subject_qualified_name"] = "nonexistent::GhostClass"
 
-    commit_result = json.loads(dispatcher(
+    commit_result = json.loads(dispatcher.dispatch(
         "commit_design_and_verifications",
         {
             "oo_design": _minimal_design_dict(),
@@ -133,9 +133,9 @@ def test_commit_tool_uses_string_llr_ids():
         neo4j_session=None,
     )
 
-    dispatcher("draft_design", {"design": _minimal_design_dict()})
+    dispatcher.dispatch("draft_design", {"design": _minimal_design_dict()})
 
-    commit_result = json.loads(dispatcher(
+    commit_result = json.loads(dispatcher.dispatch(
         "commit_design_and_verifications",
         {
             "oo_design": _minimal_design_dict(),
@@ -178,7 +178,7 @@ def test_draft_verifications_then_commit_workflow():
     )
 
     # Step 1: Draft the design
-    draft_result = json.loads(dispatcher("draft_design", {"design": _minimal_design_dict()}))
+    draft_result = json.loads(dispatcher.dispatch("draft_design", {"design": _minimal_design_dict()}))
     assert draft_result["valid"] is True
 
     # Step 2: Draft verifications with unresolved references
@@ -199,7 +199,7 @@ def test_draft_verifications_then_commit_workflow():
             }],
         }]
     }
-    draft_verif_result = json.loads(dispatcher("draft_verifications", {"verifications": bad_verifs}))
+    draft_verif_result = json.loads(dispatcher.dispatch("draft_verifications", {"verifications": bad_verifs}))
     assert draft_verif_result["valid"] is False
     assert len(draft_verif_result["unresolved_details"]) >= 2  # callee + subject
     # Should have suggestions
@@ -224,12 +224,12 @@ def test_draft_verifications_then_commit_workflow():
             }],
         }]
     }
-    draft_verif_result2 = json.loads(dispatcher("draft_verifications", {"verifications": good_verifs}))
+    draft_verif_result2 = json.loads(dispatcher.dispatch("draft_verifications", {"verifications": good_verifs}))
     assert draft_verif_result2["valid"] is True
     assert draft_verif_result2["errors"] == []
 
     # Step 4: Commit with the resolved verifications
-    commit_result = json.loads(dispatcher(
+    commit_result = json.loads(dispatcher.dispatch(
         "commit_design_and_verifications",
         {
             "oo_design": _minimal_design_dict(),
