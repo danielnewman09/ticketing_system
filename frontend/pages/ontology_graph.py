@@ -58,13 +58,9 @@ async def ontology_graph_page():
     # CSS rules for the inner kind border on UML boxes.
     # The box-shadow:inset is set inline by _build_uml_html per node.
     # border-radius matches Cytoscape's roundrectangle shape.
-    # width/height:100% + box-sizing:border-box makes the inner div fill
-    # the node area, so the box-shadow border sits flush against the
-    # outer Cytoscape dashed border with no gap.
     ui.add_head_html(
         '<style>'
         '.uml-box-label { border-radius: 4px; }'
-        '.uml-box-label > div { width: 100%; height: 100%; box-sizing: border-box; }'
         '</style>'
     )
 
