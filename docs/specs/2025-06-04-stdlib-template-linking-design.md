@@ -230,7 +230,8 @@ A template class node (e.g. `std::vector`) gets a distinct UML treatment:
 - Inner border color: purple (`#9b59b6`) from `KIND_BORDER_COLORS` with a
   `"class_template"` entry
 
-Example label for `std::vector`:
+Example label for `std::vector` (type parameter info pulled from
+`TEMPLATE_PARAM` edges at render time, not from a node field):
 
 ```
 «class template»
@@ -307,15 +308,14 @@ Neo4j (`std::basic_string` → `<string>`).
 
 | File | What Changes |
 |---|---|
-| `backend/codebase/schemas.py` | Add `TypeRef` model, `template_params` to `OntologyNodeSchema`, `position`/`name`/`display_name` to `OntologyTripleSchema` |
+| `backend/codebase/schemas.py` | Add `TypeRef` model, add `position`/`name`/`display_name` to `OntologyTripleSchema` |
 | `backend/db/models/ontology.py` | Add `type_parameter` to `NODE_KINDS`, `type_argument` and `template_param` to `Predicate.DEFAULT_PREDICATES` |
 | `backend/ticketing_agent/design/map_to_ontology.py` | Replace `_TYPE_EXTRACT_RE` and `_add_depends_from_type` with `TypeRef` parser + registry. Create `TYPE_ARGUMENT`/`TEMPLATE_PARAM` edges. Resolve aliases. |
 | `backend/ticketing_agent/design/container_lookup.py` | New module: alias registry builder (Neo4j typedef query + hardcoded fallback) |
 | `backend/db/neo4j/queries/graph.py` | `fetch_design_graph` includes `TYPE_ARGUMENT` edges. Return `display_name` property. |
 | `backend/graph/transforms.py` | Template node rendering, alias display in member lines, `TYPE_ARGUMENT` edge styling, `type_parameter` node rendering, header indicator for stdlib nodes |
-| `backend/graph/builders.py` | Pass through `template_params`, `display_name`, alias properties from Neo4j to Cytoscape |
+| `backend/graph/builders.py` | Pass through `display_name`, alias properties, edge `position`/`name` from Neo4j to Cytoscape |
 | `frontend/data/ontology.py` | Handle `TYPE_ARGUMENT`/`TEMPLATE_PARAM` edges in graph data, return alias display names |
-| `backend/db/models/associations.py` | No changes expected — predicates live in Neo4j |
 
 ### Explicitly deferred
 
