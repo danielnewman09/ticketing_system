@@ -856,3 +856,185 @@ class TestNoReferencesFromAttributeTypes:
             and t.object_qualified_name == "Fl_Button"
         ]
         assert len(dep_triples) == 1
+
+
+class TestStdlibTypeLinking:
+    """Test that design methods link to stdlib dependency nodes via
+    has_argument/returns/TYPE_ARGUMENT edges."""
+
+    def test_method_with_std_string_creates_has_argument_edge(self):
+        """std::string in method args → has_argument edge to std::basic_string."""
+        oo = OODesignSchema(
+            modules=["calc"],
+            classes=[
+                ClassSchema(
+                    name="Calculator",
+                    module="calc",
+                    attributes=[],
+                    methods=[
+                        MethodSchema(
+                            name="add",
+                            visibility="public",
+                            parameters=["const std::string& operand1", "const std::string& operand2"],
+                            return_type="CalculationResult",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        dep_lookup = {"std::basic_string": "std::basic_string"}
+        alias_lookup = {"std::string": "std::basic_string"}
+        result = map_oo_to_ontology(
+            oo,
+            dependency_lookup=dep_lookup,
+            alias_lookup=alias_lookup,
+        )
+
+        # Should have has_argument edges from add to std::basic_string
+        has_arg = [
+            t for t in result.triples
+            if t.predicate == "has_argument"
+            and t.object_qualified_name == "std::basic_string"
+        ]
+        assert len(has_arg) >= 1, (
+            f"Expected has_argument edge to std::basic_string, "
+            f"got: {[t.object_qualified_name for t in result.triples if t.predicate == 'has_argument']}"
+        )
+
+        # The edge should carry display_name "std::string"
+        string_edges = [
+            t for t in result.triples
+            if t.object_qualified_name == "std::basic_string"
+            and t.display_name == "std::string"
+        ]
+        assert len(string_edges) >= 1, (
+            "Expected display_name='std::string' on edge to std::basic_string"
+        )
+
+    def test_method_returning_std_vector_creates_type_argument_edge(self):
+        """std::vector<std::string> in return type → returns edge to std::vector
+        + TYPE_ARGUMENT edge from std::vector to std::basic_string."""
+        oo = OODesignSchema(
+            modules=["calc"],
+            classes=[
+                ClassSchema(
+                    name="Parser",
+                    module="calc",
+                    attributes=[],
+                    methods=[
+                        MethodSchema(
+                            name="parse",
+                            visibility="public",
+                            parameters=["const std::string& expr"],
+                            return_type="std::vector<std::string>",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        dep_lookup = {
+            "std::basic_string": "std::basic_string",
+            "std::vector": "std::vector",
+        }
+        alias_lookup = {"std::string": "std::basic_string"}
+        result = map_oo_to_ontology(
+            oo,
+            dependency_lookup=dep_lookup,
+            alias_lookup=alias_lookup,
+        )
+
+        # Should have a returns edge from parse to std::vector
+        ret_edges = [
+            t for t in result.triples
+            if t.predicate == "returns"
+            and t.subject_qualified_name == "calc::Parser::parse"
+            and t.object_qualified_name == "std::vector"
+        ]
+        assert len(ret_edges) == 1, (
+            f"Expected returns edge to std::vector. "
+            f"All returns: {[(t.subject_qualified_name, t.object_qualified_name) for t in result.triples if t.predicate == 'returns']}"
+        )
+
+        # Should have TYPE_ARGUMENT edge from std::vector to std::basic_string
+        type_arg_edges = [
+            t for t in result.triples
+            if t.predicate == "type_argument"
+            and t.object_qualified_name == "std::basic_string"
+        ]
+        assert len(type_arg_edges) >= 1, (
+            f"Expected TYPE_ARGUMENT edge to std::basic_string. "
+            f"All type_argument: {[(t.subject_qualified_name, t.object_qualified_name) for t in result.triples if t.predicate == 'type_argument']}"
+        )
+
+        # The TYPE_ARGUMENT edge should have position=0
+        for edge in type_arg_edges:
+            if edge.subject_qualified_name == "std::vector":
+                assert edge.position == 0
+
+
+class TestExistingBehaviorPreserved:
+    """Ensure that existing dependency resolution still works after the refactoring."""
+
+    def test_design_internal_has_argument_still_works(self):
+        """A has_argument edge to a design-internal type should still be created."""
+        oo = OODesignSchema(
+            modules=["calc"],
+            classes=[
+                ClassSchema(
+                    name="Calculator",
+                    module="calc",
+                    attributes=[],
+                    methods=[
+                        MethodSchema(
+                            name="add",
+                            visibility="public",
+                            parameters=["const CalculationResult& result"],
+                            return_type="CalculationResult",
+                        ),
+                    ],
+                ),
+                ClassSchema(
+                    name="CalculationResult",
+                    module="calc",
+                    attributes=[],
+                    methods=[],
+                ),
+            ],
+        )
+        result = map_oo_to_ontology(oo)
+        has_arg = [
+            t for t in result.triples
+            if t.predicate == "has_argument"
+            and t.object_qualified_name == "calc::CalculationResult"
+        ]
+        assert len(has_arg) == 1
+
+    def test_depends_on_from_attribute_type_still_works(self):
+        """An attribute with a dependency type should still create depends_on."""
+        oo = OODesignSchema(
+            modules=["ui"],
+            classes=[
+                ClassSchema(
+                    name="Calculator",
+                    module="ui",
+                    attributes=[
+                        AttributeSchema(
+                            name="display",
+                            type_name="Fl_Output",
+                            visibility="private",
+                            description="The display",
+                        ),
+                    ],
+                    methods=[],
+                ),
+            ],
+        )
+        dep_lookup = {"Fl_Output": "Fl_Output"}
+        result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
+        dep_triples = [
+            t for t in result.triples
+            if t.predicate == "depends_on"
+            and t.subject_qualified_name == "ui::Calculator"
+            and t.object_qualified_name == "Fl_Output"
+        ]
+        assert len(dep_triples) == 1

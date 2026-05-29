@@ -20,6 +20,8 @@ PREDICATE_TO_REL_TYPE = {
     "invokes": "INVOKES",
     "has_argument": "HAS_ARGUMENT",
     "returns": "RETURNS",
+    "type_argument": "TYPE_ARGUMENT",
+    "template_param": "TEMPLATE_PARAM",
 }
 
 DEFAULT_PREDICATES = [
@@ -33,6 +35,8 @@ DEFAULT_PREDICATES = [
     ("invokes", "Weak association, signifying a caller-callee relationship"),
     ("has_argument", "A method accepts a parameter of the given type (method → type)"),
     ("returns", "A method returns a value of the given entity type (method → type)"),
+    ("type_argument", "A template accepts a type argument at a given position"),
+    ("template_param", "A template declares a type parameter slot"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -51,6 +55,7 @@ NODE_KINDS = [
     ("module", "Module"),
     ("primitive", "Primitive Type"),
     ("type_alias", "Type Alias"),
+    ("type_parameter", "Type Parameter"),
 ]
 
 NODE_KIND_VALUES = {k for k, _ in NODE_KINDS}

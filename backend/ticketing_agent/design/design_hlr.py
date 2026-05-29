@@ -13,7 +13,7 @@ import os
 from backend.codebase.schemas import DesignSchema, OODesignSchema
 # from backend.ticketing_agent.design.design_oo import design_oo  # no longer called from pipeline
 # from backend.ticketing_agent.design.discover_classes import discover_classes  # no longer called from pipeline
-from backend.ticketing_agent.design.container_lookup import seed_container_lookup
+from backend.ticketing_agent.design.container_lookup import seed_container_lookup, build_alias_lookup
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
 log = logging.getLogger("agents.design")
@@ -65,14 +65,16 @@ def design_hlr(
     # The agent discovers dependencies on-the-fly using search_symbols,
     # get_compound, etc.
 
-    # --- Build dependency_lookup for the combined loop ---
+    # --- Build dependency_lookup and alias_lookup for the combined loop ---
     # Discovery results come through the toolset at runtime.
     # We pre-seed standard containers since they aren't searchable.
     dep_lookup: dict[str, str] = {}
+    alias_lookup: dict[str, str] = {}
     if neo4j_session is not None:
         container_lookup = seed_container_lookup(neo4j_session)
         if container_lookup:
             dep_lookup.update(container_lookup)
+        alias_lookup = build_alias_lookup(neo4j_session)
 
     # --- Step 2: Combined design + verify (includes discovery) ---
     from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
@@ -110,6 +112,7 @@ def design_hlr(
         prior_class_lookup=prior_class_lookup,
         component_namespace=component_namespace,
         dependency_lookup=dependency_lookup,
+        alias_lookup=alias_lookup or None,
     )
 
     log.info(

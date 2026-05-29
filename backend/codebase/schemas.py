@@ -6,6 +6,7 @@ Two schema families:
 - Ontology schemas (Stage 2 output): nodes, triples, requirement links.
 """
 
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel
@@ -128,6 +129,9 @@ class OntologyTripleSchema(BaseModel):
     predicate: str  # Must match a Predicate.name in the database
     object_qualified_name: str
     mechanism: str = ""  # Container/smart-ptr type for aggregates/references
+    position: int | None = None  # For TYPE_ARGUMENT: parameter position (0-based)
+    name: str = ""  # For TEMPLATE_PARAM: parameter name (e.g. "T")
+    display_name: str = ""  # Alias display name (e.g. "std::string" for std::basic_string edge)
 
 
 class RequirementTripleLinkSchema(BaseModel):
@@ -139,6 +143,20 @@ class RequirementTripleLinkSchema(BaseModel):
     subject_qualified_name: str = ""
     predicate: str = ""
     object_qualified_name: str = ""
+
+
+@dataclass
+class TypeRef:
+    """Structured reference to a type extracted from a type signature string.
+
+    Handles qualified names (std::vector), template nesting
+    (std::vector<std::string>), and builtin detection (int, double, void).
+    """
+    name: str                       # "std::vector" or "Calculator"
+    template_args: list["TypeRef"]  # [] for non-templates, or nested TypeRefs
+    is_builtin: bool                # True for int, double, void, etc.
+    original_text: str              # "std::vector<const std::string&>"
+    qualifiers: list[str]           # ["const", "&", "*"] etc.
 
 
 class DesignSchema(BaseModel):

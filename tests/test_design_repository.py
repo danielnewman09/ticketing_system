@@ -80,7 +80,7 @@ class TestDesignConstants:
         assert PREDICATE_TO_REL_TYPE["has_argument"] == "HAS_ARGUMENT"
         assert PREDICATE_TO_REL_TYPE["returns"] == "RETURNS"
         assert "has_type" not in PREDICATE_TO_REL_TYPE
-        assert len(PREDICATE_TO_REL_TYPE) == 10
+        assert len(PREDICATE_TO_REL_TYPE) == 12
 
     def test_default_predicates(self):
         from backend.db.neo4j.repositories.constants import DEFAULT_PREDICATES
@@ -97,7 +97,7 @@ class TestDesignConstants:
 
         assert "class" in NODE_KIND_VALUES
         assert "method" in NODE_KIND_VALUES
-        assert len(NODE_KIND_VALUES) == 11
+        assert len(NODE_KIND_VALUES) == 12
 
 
 import os

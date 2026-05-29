@@ -145,6 +145,9 @@ class DesignRepository:
         predicate: str,
         object_qualified_name: str,
         mechanism: str = "",
+        position: int | None = None,
+        name: str = "",
+        display_name: str = "",
     ) -> None:
         """MERGE a typed relationship between two Design nodes.
 
@@ -157,39 +160,51 @@ class DesignRepository:
             object_qualified_name: Qualified name of the target node.
             mechanism: Optional mechanism property (e.g. "std::vector",
                 "std::unique_ptr") for aggregates/references relationships.
+            position: For TYPE_ARGUMENT: parameter position (0-based).
+            name: For TEMPLATE_PARAM: parameter name (e.g. "T").
+            display_name: Alias display name (e.g. "std::string" for
+                std::basic_string edge).
         """
         rel_type = PREDICATE_TO_REL_TYPE.get(predicate)
         if not rel_type:
             log.warning("Unknown predicate %r — skipping triple", predicate)
             return
 
+        # Build SET clause for extra properties
+        set_props = []
         if mechanism:
-            cypher = """
-            MATCH (s:Design {qualified_name: $subj})
-            OPTIONAL MATCH (o_design:Design {qualified_name: $obj})
-            OPTIONAL MATCH (o_compound:Compound {qualified_name: $obj})
-            WITH s, coalesce(o_design, o_compound) AS target
-            WHERE target IS NOT NULL
-            MERGE (s)-[r:REL_TYPE]->(target)
-            SET r.mechanism = $mechanism
-            """.replace("REL_TYPE", rel_type)
-            self._session.run(
-                cypher,
-                {"subj": subject_qualified_name, "obj": object_qualified_name, "mechanism": mechanism},
-            )
-        else:
-            cypher = f"""
-            MATCH (s:Design {{qualified_name: $subj}})
-            OPTIONAL MATCH (o_design:Design {{qualified_name: $obj}})
-            OPTIONAL MATCH (o_compound:Compound {{qualified_name: $obj}})
-            WITH s, coalesce(o_design, o_compound) AS target
-            WHERE target IS NOT NULL
-            MERGE (s)-[r:{rel_type}]->(target)
-            """
-            self._session.run(
-                cypher,
-                {"subj": subject_qualified_name, "obj": object_qualified_name},
-            )
+            set_props.append("r.mechanism = $mechanism")
+        if position is not None:
+            set_props.append("r.position = $position")
+        if name:
+            set_props.append("r.name = $name")
+        if display_name:
+            set_props.append("r.display_name = $display_name")
+        set_clause = "\n            " + "\n            ".join(set_props) if set_props else ""
+
+        cypher = """
+        MATCH (s:Design {qualified_name: $subj})
+        OPTIONAL MATCH (o_design:Design {qualified_name: $obj})
+        OPTIONAL MATCH (o_compound:Compound {qualified_name: $obj})
+        WITH s, coalesce(o_design, o_compound) AS target
+        WHERE target IS NOT NULL
+        MERGE (s)-[r:REL_TYPE]->(target)
+        """
+        if set_clause:
+            cypher += "\n        SET" + set_clause
+        cypher = cypher.replace("REL_TYPE", rel_type)
+
+        params = {"subj": subject_qualified_name, "obj": object_qualified_name}
+        if mechanism:
+            params["mechanism"] = mechanism
+        if position is not None:
+            params["position"] = position
+        if name:
+            params["name"] = name
+        if display_name:
+            params["display_name"] = display_name
+
+        self._session.run(cypher, params)
 
     # -----------------------------------------------------------------------
     # Bulk operations

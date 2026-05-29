@@ -29,6 +29,7 @@ NODE_KINDS = [
     ("module", "Module"),
     ("primitive", "Primitive Type"),
     ("type_alias", "Type Alias"),
+    ("type_parameter", "Type Parameter"),
 ]
 
 NODE_KIND_VALUES = {k for k, _ in NODE_KINDS}
@@ -250,6 +251,8 @@ class Predicate(Base):
         ("invokes", "Weak association, signififying a caller-callee relationship"),
         ("has_argument", "A method accepts a parameter of the given type"),
         ("returns", "A method returns a value of the given entity type"),
+        ("type_argument", "A template accepts a type argument at a given position"),
+        ("template_param", "A template declares a type parameter slot"),
     ]
 
     @classmethod

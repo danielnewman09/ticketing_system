@@ -56,6 +56,7 @@ KIND_BORDER_COLORS = {
     "struct": "#5b9bd5",
     "interface": "#9b59b6",
     "enum": "#e74c3c",
+    "class_template": "#9b59b6",  # Purple border for templates
 }
 
 # Status-colored outer border colors for UML boxes.
@@ -126,6 +127,7 @@ def _build_uml_html(
         "enum": "\u00ABenumeration\u00BB",
         "interface": "\u00ABinterface\u00BB",
         "class": "\u00ABclass\u00BB",
+        "class_template": "\u00ABclass template\u00BB",
     }
     stereotype = _STEREOTYPES.get(owner_kind, "")
     if stereotype:
@@ -209,9 +211,8 @@ _BUILTIN_TYPES = frozenset({
     "void", "bool", "int", "double", "float", "char", "long", "short",
     "unsigned", "signed", "size_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t",
     "int8_t", "int16_t", "int32_t", "int64_t",
-    "std::string", "std::vector", "std::map", "std::set",
-    "std::optional", "std::shared_ptr", "std::unique_ptr",
-    "std::pair", "std::array", "std::variant",
+    # std::string, std::vector, etc. are NO LONGER builtin — they resolve to
+    # dependency nodes via alias_lookup and TYPE_ARGUMENT edges.
     "str", "int", "float", "bool", "bytes", "list", "dict", "set",
     "tuple", "Optional", "List", "Dict", "Set", "Any", "None",
 })
@@ -449,6 +450,7 @@ def _build_uml_label(
         "enum": "\u00ABenumeration\u00BB",
         "interface": "\u00ABinterface\u00BB",
         "class": "\u00ABclass\u00BB",
+        "class_template": "\u00ABclass template\u00BB",
     }
     stereotype = _STEREOTYPES.get(owner_kind, "")
     if stereotype:

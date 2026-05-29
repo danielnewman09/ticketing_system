@@ -52,6 +52,7 @@ KIND_COLORS = {
     "primitive": "#95a5a6",
     "type_alias": "#e67e22",
     "variable": "#d4a843",
+    "type_parameter": "#a0aec0",
 }
 
 EDGE_COLORS = {
@@ -64,6 +65,8 @@ EDGE_COLORS = {
     "DEPENDS_ON": "#e59866",
     "AGGREGATES": "#af7ac5",
     "COMPOSES": "#7f8c8d",
+    "TYPE_ARGUMENT": "#9b59b6",
+    "TEMPLATE_PARAM": "#9b59b6",
     "default": "#555",
 }
 
@@ -489,6 +492,28 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'target-arrow-color': '{ec["AGGREGATES"]}',
                 'target-arrow-shape': 'diamond',
                 'width': 2,
+            }}
+        }},
+        // ── TYPE_ARGUMENT edges (template → type arg) ──────────────────
+        {{
+            selector: 'edge[label="TYPE_ARGUMENT"]',
+            style: {{
+                'line-color': '{ec["TYPE_ARGUMENT"]}',
+                'target-arrow-color': '{ec["TYPE_ARGUMENT"]}',
+                'target-arrow-shape': 'triangle',
+                'width': 2,
+                'line-style': 'solid',
+            }}
+        }},
+        // ── TEMPLATE_PARAM edges ─────────────────────────────────────────
+        {{
+            selector: 'edge[label="TEMPLATE_PARAM"]',
+            style: {{
+                'line-color': '{ec["TEMPLATE_PARAM"]}',
+                'target-arrow-color': '{ec["TEMPLATE_PARAM"]}',
+                'target-arrow-shape': 'triangle',
+                'width': 1,
+                'line-style': 'dashed',
             }}
         }},
         // ── Cross-layer edges ──────────────────────────────────────────

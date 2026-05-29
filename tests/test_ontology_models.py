@@ -396,6 +396,7 @@ class TestOntologyConstants:
             "module",
             "primitive",
             "type_alias",
+            "type_parameter",
         }
         assert NODE_KIND_VALUES == expected
 
