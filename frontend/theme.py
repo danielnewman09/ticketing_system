@@ -173,7 +173,9 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
     _member_label_height = f"""function(ele) {{
                 const label = ele.data('label') || '';
                 const lines = label.split('\\n');
-                return Math.max(lines.length * {member_font + 2} + 16, 20);
+                // Reduced per-line slope + larger constant gives short nodes enough
+                // room for headers/separators while tall nodes don't over-accumulate.
+                return Math.max(lines.length * {member_font + 1} + 22, 20);
             }}"""
 
     # Kind-specific border colors for member-bearing design nodes
