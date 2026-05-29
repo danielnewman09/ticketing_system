@@ -191,7 +191,7 @@ def _build_uml_html(
         f'white-space:nowrap;'
         f'border-radius:4px;'
         f'outline:2.5px solid {kind_border};'
-        f'outline-offset:-2.5px;'
+        f'outline-offset:0px;'
         f'">'
     )
     return wrapper + '\n'.join(lines) + '</div>'

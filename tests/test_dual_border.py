@@ -36,7 +36,7 @@ class TestBuildUmlHtmlInnerBorder:
             owner_kind="class", change_status="new"
         )
         assert "outline:2.5px solid #4a90d9" in html
-        assert "outline-offset:-2.5px" in html
+        assert "outline-offset:0px" in html
 
     def test_interface_inner_border(self):
         html = _build_uml_html(
@@ -44,7 +44,7 @@ class TestBuildUmlHtmlInnerBorder:
             owner_kind="interface", change_status=""
         )
         assert "outline:2.5px solid #9b59b6" in html
-        assert "outline-offset:-2.5px" in html
+        assert "outline-offset:0px" in html
 
     def test_enum_inner_border(self):
         html = _build_uml_html(
