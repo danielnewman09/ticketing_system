@@ -58,6 +58,15 @@ KIND_BORDER_COLORS = {
     "enum": "#e74c3c",
 }
 
+# Status-colored outer border colors for UML boxes.
+STATUS_BORDER_COLORS = {
+    "new": "#10b981",
+    "implemented": "#3b82f6",
+    "modified": "#f59e0b",
+    "deleted": "#ef4444",
+    "": "#4a5568",  # neutral gray default
+}
+
 
 def _format_member_html(m: dict, suffix: str = "") -> str:
     """Format a single member as an HTML span with colored elements.
@@ -182,16 +191,18 @@ def _build_uml_html(
         total_members = len(m_sorted)
 
     kind_border = KIND_BORDER_COLORS.get(owner_kind, "transparent")
+    status_border = STATUS_BORDER_COLORS.get(change_status, "#4a5568")
     wrapper = (
         f'<div style="'
         f'font-family:JetBrains Mono,monospace;'
         f'font-size:9px;'
         f'line-height:1.3;'
-        f'padding:0px;'
+        f'padding:2px;'
         f'white-space:nowrap;'
         f'border-radius:4px;'
+        f'border:3.5px dashed {status_border};'
         f'outline:2.5px solid {kind_border};'
-        f'outline-offset:0px;'
+        f'outline-offset:-2.5px;'
         f'">'
     )
     return wrapper + '\n'.join(lines) + '</div>'

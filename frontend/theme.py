@@ -168,7 +168,7 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 lines.forEach(l => {{ maxW = Math.max(maxW, ctx.measureText(l).width); }});
                 // Flat buffer on both axes for consistent gap around content.
                 // Buffer covers outline (2.5px) + small margin.
-                return Math.max(Math.ceil(maxW) + 8, 50);
+                return Math.max(Math.ceil(maxW * 1.05) + 8, 50);
             }}"""
     _member_label_height = f"""function(ele) {{
                 const label = ele.data('label') || '';
@@ -221,10 +221,10 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'text-justification': 'left',
                 'width': {_member_label_dim},
                 'height': {_member_label_height},
-                'padding': '0px',
-                'border-style': 'dashed',
-                'border-width': 3.5,
-                'border-color': '#4a5568',
+                'padding': '2px',
+                'border-style': 'none',
+                'border-width': 0,
+                'border-color': 'transparent',
                 'background-color': '#1e293b',
                 'color': '#e2e8f0',
                 'text-margin-y': 0,
@@ -369,39 +369,36 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
             }}
         }},
         // ── Change-status styles ──────────────────────────────────────
-        // Status is shown via a subtle background tint + dashed border overlay.
-        // ── Change-status styles ──────────────────────────────────────
-        // Status is shown via the outer dashed border color.
-        // The inner solid border (kind color) is rendered via box-shadow:inset
-        // in the HTML label by _build_uml_html(). Background is always neutral.
+        // For UML boxes (has_members), the outer dashed border is CSS-rendered
+        // in the HTML label. These selectors only affect simple circle nodes.
         {{
-            selector: 'node[change_status="new"]',
+            selector: 'node[change_status="new"][!has_members]',
             style: {{
-                'border-width': 3.5,
+                'border-width': 2,
                 'border-color': '#10b981',
                 'border-style': 'dashed',
             }}
         }},
         {{
-            selector: 'node[change_status="implemented"]',
+            selector: 'node[change_status="implemented"][!has_members]',
             style: {{
-                'border-width': 3.5,
+                'border-width': 2,
                 'border-color': '#3b82f6',
                 'border-style': 'dashed',
             }}
         }},
         {{
-            selector: 'node[change_status="modified"]',
+            selector: 'node[change_status="modified"][!has_members]',
             style: {{
-                'border-width': 3.5,
                 'border-color': '#f59e0b',
                 'border-style': 'dashed',
+                'border-width': 2,
             }}
         }},
         {{
-            selector: 'node[change_status="deleted"]',
+            selector: 'node[change_status="deleted"][!has_members]',
             style: {{
-                'border-width': 3.5,
+                'border-width': 2,
                 'border-color': '#ef4444',
                 'border-style': 'dashed',
                 'opacity': 0.6,
