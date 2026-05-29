@@ -403,6 +403,19 @@ async def render_cytoscape_graph(
                     }}
                 ]);
             }}
+            // After HTML labels render, measure them and resize nodes to fit.
+            setTimeout(function() {{
+                const cy = window.{config.cy_var};
+                const labelDivs = document.querySelectorAll('.uml-box-label');
+                cy.nodes('[has_members="true"]').forEach(function(node, i) {{
+                    const div = labelDivs[i];
+                    if (!div) return;
+                    const inner = div.firstElementChild || div;
+                    const w = inner.offsetWidth + 2;
+                    const h = inner.offsetHeight + 2;
+                    node.style({{ 'width': w + 'px', 'height': h + 'px' }});
+                }});
+            }}, 100);
             window.{config.cy_var}.on('tap', 'node', function(evt) {{
                 const data = evt.target.data();
                 if (data.qualified_name) {{
