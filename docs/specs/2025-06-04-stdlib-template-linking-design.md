@@ -113,12 +113,16 @@ cppreference nodes:
 ### Sources
 
 1. **Primary:** Query Neo4j for `Member` nodes with `kind='type_alias'`
-   from the cppreference data. Build the alias map from these.
+   from the cppreference data. Build the alias map from these. Additionally
+   check for known typedefs in the cppreference `Compound` nodes where the
+   class name matches a common alias pattern (e.g., `basic_string` with a
+   corresponding `string` typedef in the same header).
 
 2. **Fallback:** A hardcoded `STD_ALIAS_MAP` dict for common C++ typedefs
    that cppreference may not index cleanly. Covers `std::string`,
-   `std::wstring`, `std::u16string`, `std::u32string`, etc. This ensures
-   zero-gaps coverage for the types developers actually write.
+   `std::wstring`, `std::u16string`, `std::u32string`, `std::string_view`,
+   `std::wstring_view`, etc. This ensures zero-gaps coverage for the types
+   developers actually write.
 
 3. **Template stripping:** For `std::vector<std::string>`, parse the outer
    template name (`std::vector`) and resolve inner type arguments recursively.
@@ -154,7 +158,34 @@ Both are replaced by the `TypeRef` parser and resolution pipeline.
 
 ### New pipeline
 
-For each `TypeRef` extracted from a method/attribute type signature:
+### Type signature parser approach
+
+The parser needs to handle C++ type syntax without being a full compiler
+frontend. It extracts `TypeRef` structures from type signature strings like
+`const std::vector<std::string>&` using a recursive-descent approach:
+
+1. **Tokenize** — split on `::`, `<`, `>`, `,`, `*`, `&`, `const`, `volatile`
+2. **Parse qualified names** — `std::vector`, `calculation_engine::Calculator`
+3. **Parse template arguments** — recursively parse `<...>` contents
+4. **Strip qualifiers** — `const`, `&`, `*` are noted but don't affect the
+   type reference; `const std::string&` resolves to `std::string`
+
+This produces a `TypeRef` tree where nested templates like
+`std::map<std::string, double>` become:
+
+```python
+TypeRef(
+    name="std::map",
+    template_args=[
+        TypeRef(name="std::string", template_args=[], is_builtin=False, ...),
+        TypeRef(name="double", template_args=[], is_builtin=True, ...)
+    ],
+    is_builtin=False,
+    original_text="std::map<std::string, double>"
+)
+```
+
+For each `TypeRef` extracted from a method/attribute type:
 
 1. **Resolve alias** — Look up the name in the alias registry.
    `std::string` → `std::basic_string`.
