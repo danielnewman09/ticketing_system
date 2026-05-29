@@ -27,43 +27,45 @@ class TestKindBorderColors:
 
 
 class TestBuildUmlHtmlInnerBorder:
-    """_build_uml_html wraps content in a div with an inset box-shadow
-    for the inner kind border."""
+    """_build_uml_html wraps content in a div with an outline
+    for the inner kind border (outline-offset pulled inward)."""
 
     def test_class_inner_border(self):
         html = _build_uml_html(
             "Calculator", {}, is_dependency=False,
             owner_kind="class", change_status="new"
         )
-        assert "box-shadow:inset 0 0 0 2.5px #4a90d9" in html
+        assert "outline:2.5px solid #4a90d9" in html
+        assert "outline-offset:-2.5px" in html
 
     def test_interface_inner_border(self):
         html = _build_uml_html(
             "IHandler", {}, is_dependency=False,
             owner_kind="interface", change_status=""
         )
-        assert "box-shadow:inset 0 0 0 2.5px #9b59b6" in html
+        assert "outline:2.5px solid #9b59b6" in html
+        assert "outline-offset:-2.5px" in html
 
     def test_enum_inner_border(self):
         html = _build_uml_html(
             "Color", {}, is_dependency=False,
             owner_kind="enum", change_status="modified"
         )
-        assert "box-shadow:inset 0 0 0 2.5px #e74c3c" in html
+        assert "outline:2.5px solid #e74c3c" in html
 
     def test_unknown_kind_transparent_border(self):
         html = _build_uml_html(
             "mymodule", {}, is_dependency=False,
             owner_kind="module", change_status="new"
         )
-        assert "box-shadow:inset 0 0 0 2.5px transparent" in html
+        assert "outline:2.5px solid transparent" in html
 
     def test_empty_kind_transparent_border(self):
         html = _build_uml_html(
             "Thing", {}, is_dependency=False,
             owner_kind="", change_status=""
         )
-        assert "box-shadow:inset 0 0 0 2.5px transparent" in html
+        assert "outline:2.5px solid transparent" in html
 
     def test_wrapper_has_border_radius(self):
         html = _build_uml_html(
@@ -72,12 +74,12 @@ class TestBuildUmlHtmlInnerBorder:
         )
         assert "border-radius:4px" in html
 
-    def test_wrapper_has_padding(self):
+    def test_wrapper_has_zero_padding(self):
         html = _build_uml_html(
             "Calculator", {}, is_dependency=False,
             owner_kind="class", change_status="new"
         )
-        assert "padding:2px" in html
+        assert "padding:0px" in html
 
     def test_class_name_colored_by_status(self):
         """Class name text color still uses change_status, not kind color."""
@@ -94,4 +96,4 @@ class TestBuildUmlHtmlInnerBorder:
             "Fl_Button", {}, is_dependency=True,
             owner_kind="class", change_status=""
         )
-        assert "box-shadow:inset 0 0 0 2.5px" in html
+        assert "outline:2.5px solid" in html

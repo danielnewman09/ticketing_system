@@ -187,10 +187,11 @@ def _build_uml_html(
         f'font-family:JetBrains Mono,monospace;'
         f'font-size:9px;'
         f'line-height:1.3;'
-        f'padding:2px;'
+        f'padding:0px;'
         f'white-space:nowrap;'
         f'border-radius:4px;'
-        f'box-shadow:inset 0 0 0 2.5px {kind_border};'
+        f'outline:2.5px solid {kind_border};'
+        f'outline-offset:-2.5px;'
         f'">'
     )
     return wrapper + '\n'.join(lines) + '</div>'
