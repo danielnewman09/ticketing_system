@@ -228,7 +228,7 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'border-style': 'none',
                 'border-width': 0,
                 'border-color': 'transparent',
-                'background-color': '#1e293b',
+                'background-color': 'transparent',
                 'color': '#e2e8f0',
                 'text-margin-y': 0,
             }}
