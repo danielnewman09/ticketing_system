@@ -35,7 +35,7 @@ class TestBuildUmlHtmlInnerBorder:
             "Calculator", {}, is_dependency=False,
             owner_kind="class", change_status="new"
         )
-        assert "outline:5px solid #4a90d9" in html
+        assert "outline:2.5px solid #4a90d9" in html
         assert "outline-offset:0px" in html
 
     def test_interface_inner_border(self):
@@ -43,7 +43,7 @@ class TestBuildUmlHtmlInnerBorder:
             "IHandler", {}, is_dependency=False,
             owner_kind="interface", change_status=""
         )
-        assert "outline:5px solid #9b59b6" in html
+        assert "outline:2.5px solid #9b59b6" in html
         assert "outline-offset:0px" in html
 
     def test_enum_inner_border(self):
@@ -51,21 +51,21 @@ class TestBuildUmlHtmlInnerBorder:
             "Color", {}, is_dependency=False,
             owner_kind="enum", change_status="modified"
         )
-        assert "outline:5px solid #e74c3c" in html
+        assert "outline:2.5px solid #e74c3c" in html
 
     def test_unknown_kind_transparent_border(self):
         html = _build_uml_html(
             "mymodule", {}, is_dependency=False,
             owner_kind="module", change_status="new"
         )
-        assert "outline:5px solid transparent" in html
+        assert "outline:2.5px solid transparent" in html
 
     def test_empty_kind_transparent_border(self):
         html = _build_uml_html(
             "Thing", {}, is_dependency=False,
             owner_kind="", change_status=""
         )
-        assert "outline:5px solid transparent" in html
+        assert "outline:2.5px solid transparent" in html
 
     def test_wrapper_has_border_radius(self):
         html = _build_uml_html(
@@ -96,4 +96,4 @@ class TestBuildUmlHtmlInnerBorder:
             "Fl_Button", {}, is_dependency=True,
             owner_kind="class", change_status=""
         )
-        assert "outline:5px solid" in html
+        assert "outline:2.5px solid" in html
