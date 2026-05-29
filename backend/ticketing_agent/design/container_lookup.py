@@ -70,6 +70,59 @@ def seed_container_lookup(
     return lookup
 
 
+# Hardcoded fallback alias map for common C++ typedefs that cppreference
+# may not index as type_alias members.
+_STD_ALIAS_MAP: dict[str, str] = {
+    "std::string": "std::basic_string",
+    "std::wstring": "std::basic_string",
+    "std::u16string": "std::basic_string",
+    "std::u32string": "std::basic_string",
+    "std::string_view": "std::basic_string_view",
+    "std::wstring_view": "std::basic_string_view",
+    "std::u16string_view": "std::basic_string_view",
+    "std::u32string_view": "std::basic_string_view",
+}
+
+
+def build_alias_lookup(neo4j_session) -> dict[str, str]:
+    """Build an alias map from developer-friendly type names to their
+    underlying cppreference qualified names.
+
+    Queries Neo4j for type_alias members from the cppreference data,
+    then augments with a hardcoded fallback for common C++ typedefs.
+
+    Args:
+        neo4j_session: An active Neo4j session for querying.
+
+    Returns:
+        Dict mapping alias names to resolved qualified names.
+        E.g. {"std::string": "std::basic_string", ...}
+    """
+    alias_map: dict[str, str] = dict(_STD_ALIAS_MAP)
+
+    try:
+        result = neo4j_session.run(
+            "MATCH (m:Member {source: 'cppreference', kind: 'typedef'}) "
+            "RETURN m.qualified_name AS qn, m.name AS name"
+        )
+        for record in result:
+            qn = record["qn"]
+            name = record["name"]
+            if qn and name:
+                # The qualified name of the typedef is the alias
+                # Its parent class (derived from qualified name) is the target
+                if "::" in qn:
+                    parent = qn.rsplit("::", 1)[0]
+                    alias_name = f"{parent}::{name}"
+                else:
+                    alias_name = name
+                alias_map[alias_name] = qn
+    except Exception:
+        log.warning("Failed to query Neo4j for type aliases", exc_info=True)
+
+    return alias_map
+
+
 def get_container_class_info(
     neo4j_session,
     container_qnames: list[str] | None = None,
