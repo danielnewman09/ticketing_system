@@ -200,7 +200,6 @@ def _build_uml_html(
         f'padding:4px;'
         f'white-space:nowrap;'
         f'border-radius:5px;'
-        f'background-color:#1e293b;'
         f'border:4px dashed {status_border};'
         f'outline:3px solid {kind_border};'
         f'outline-offset:-7px;'
