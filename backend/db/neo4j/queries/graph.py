@@ -112,6 +112,58 @@ def fetch_design_graph(
 
         log.debug("After adding dependencies: %d raw edges, %d raw nodes", len(edges), len(nodes))
 
+        # TYPE_ARGUMENT edges from Design nodes to dependency Compound nodes
+        type_arg_result = session.run(
+            f"""
+            MATCH (s)-[r:TYPE_ARGUMENT]->(dep)
+            WHERE {where.replace("n:", "s:").replace("n.", "s.")}
+            RETURN s.qualified_name AS src, dep.qualified_name AS tgt,
+                   r.position AS position, r.display_name AS display_name, type(r) AS rel_type
+            """,
+            params,
+        )
+        for record in type_arg_result:
+            tgt = record["tgt"]
+            if tgt and tgt not in node_qns:
+                # Add the dependency node if not already present
+                dep_data = session.run(
+                    "MATCH (c {qualified_name: $qn}) RETURN c",
+                    {"qn": tgt},
+                ).single()
+                if dep_data:
+                    nodes.append(dict(dep_data["c"]))
+                    node_qns.add(tgt)
+            edges.append({
+                "source": record["src"],
+                "target": tgt or "",
+                "type": record["rel_type"],
+                "position": record["position"],
+                "display_name": record.get("display_name") or "",
+            })
+
+        log.debug("After adding TYPE_ARGUMENT edges: %d raw edges", len(edges))
+
+        # TEMPLATE_PARAM edges between Design nodes
+        template_param_result = session.run(
+            f"""
+            MATCH (s)-[r:TEMPLATE_PARAM]->(t:Design)
+            WHERE {where.replace("n:", "s:").replace("n.", "s.")}
+            RETURN s.qualified_name AS src, t.qualified_name AS tgt,
+                   r.position AS position, r.name AS name, type(r) AS rel_type
+            """,
+            params,
+        )
+        for record in template_param_result:
+            edges.append({
+                "source": record["src"],
+                "target": record["tgt"],
+                "type": record["rel_type"],
+                "position": record["position"],
+                "name": record.get("name") or "",
+            })
+
+        log.debug("After adding TEMPLATE_PARAM edges: %d raw edges", len(edges))
+
         # As-built compounds linked via IMPLEMENTED_BY
         as_built_result = session.run(
             f"""

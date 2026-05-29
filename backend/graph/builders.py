@@ -85,4 +85,7 @@ def build_cytoscape_edge(e: dict) -> dict:
         "target": e.get("target", ""),
         "label": label,
         "mechanism": mechanism,
+        "position": e.get("position"),
+        "name": e.get("name", ""),
+        "display_name": e.get("display_name", ""),
     }
