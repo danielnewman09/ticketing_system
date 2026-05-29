@@ -166,16 +166,17 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 const lines = label.split('\\n');
                 let maxW = 0;
                 lines.forEach(l => {{ maxW = Math.max(maxW, ctx.measureText(l).width); }});
-                // Flat buffer on both axes for consistent gap around content.
-                // Buffer covers outline (2.5px) + small margin.
-                return Math.max(Math.ceil(maxW * 1.05) + 16, 50);
+                // HTML rendering expands text width by ~1.35-1.45x due to syntax
+                // markup, type annotations, and member prefixes not in plain label.
+                return Math.max(Math.ceil(maxW * 1.45), 50);
             }}"""
     _member_label_height = f"""function(ele) {{
                 const label = ele.data('label') || '';
                 const lines = label.split('\\n');
-                // Reduced per-line slope + larger constant gives short nodes enough
-                // room for headers/separators while tall nodes don't over-accumulate.
-                return Math.max(lines.length * {member_font + 1} + 22, 20);
+                // ~15px per line covers 9px font × 1.3 line-height plus HTML
+                // markup expansion.  Flat +18 covers stereotype, class name, and
+                // hr separators that don't scale with line count.
+                return Math.max(lines.length * 15 + 18, 40);
             }}"""
 
     # Kind-specific border colors for member-bearing design nodes
