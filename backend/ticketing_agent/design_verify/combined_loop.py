@@ -117,7 +117,7 @@ def design_and_verify(
     Returns:
         DesignVerifyResult with oo_design, verifications, and any warnings.
     """
-    from backend.ticketing_agent.design_verify.combined_prompt import (
+    from backend.ticketing_agent.design.design_oo_prompt import (
         build_as_built_section,
         build_existing_classes_section,
         build_intercomponent_section,
