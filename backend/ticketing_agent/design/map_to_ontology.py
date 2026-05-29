@@ -1,5 +1,4 @@
-"""
-Stage 2: deterministic mapping from OO design to ontology nodes + triples.
+"""Stage 2: deterministic mapping from OO design to ontology nodes + triples.
 
 No LLM call — all mappings are mechanical.
 """
@@ -17,6 +16,7 @@ from backend.codebase.schemas import (
     OODesignSchema,
     RequirementTripleLinkSchema,
 )
+from backend.codebase.type_parser import parse_type_refs
 
 
 def _qualify(module: str, name: str) -> str:
@@ -44,6 +44,7 @@ def map_oo_to_ontology(
     prior_class_lookup: dict[str, str] | None = None,
     component_namespace: str = "",
     dependency_lookup: dict[str, str] | None = None,
+    alias_lookup: dict[str, str] | None = None,
 ) -> DesignSchema:
     """Map an OO design to ontology nodes, triples, and requirement links.
 
@@ -58,6 +59,9 @@ def map_oo_to_ontology(
             "Fl_Button") to their qualified_name in the dependency graph
             (e.g. "Fl_Button"). Used to resolve references to dependency
             classes so that triples can link to the correct target node.
+        alias_lookup: Mapping of type aliases (e.g. "std::string") to their
+            underlying qualified names (e.g. "std::basic_string"). Used to
+            resolve type references so that edges link to the real node.
     """
     nodes: list[OntologyNodeSchema] = []
     triples: list[OntologyTripleSchema] = []
@@ -108,7 +112,9 @@ def map_oo_to_ontology(
 
     # --- Dependency lookup (bare name -> qualified_name) ---
     dep_lookup: dict[str, str] = dict(dependency_lookup or {})
-    _TYPE_EXTRACT_RE = re.compile(r"\b([A-Z]\w+)\b")
+    alias_lookup_dict: dict[str, str] = dict(alias_lookup or {})
+
+    # --- Type resolution helpers ---
 
     def _resolve_ref(name: str) -> str | None:
         """Resolve a class/interface name to a qualified name.
@@ -134,37 +140,156 @@ def map_oo_to_ontology(
             return qname
         return None
 
-    def _add_depends_from_type(type_str: str, cls_qname: str, seen: set[str]):
-        """Scan a type string for dependency class names and add depends_on triples.
+    def _resolve_type_name(
+        name: str,
+    ) -> str | None:
+        """Resolve a type name through alias_lookup, class_lookup, and dep_lookup.
 
-        For external dependencies (not in class_lookup), adds depends_on triples.
-        Design-internal type references are handled by composes (attributes),
-        returns (method return types), and has_argument (method parameters)
-        in the main processing loops above.
+        Returns the qualified name if resolved, None if the type should be skipped
+        (e.g., void or unrecognized types). Creates dependency stub nodes as needed.
         """
-        if not type_str:
+        # Check alias first (e.g., std::string -> std::basic_string)
+        resolved = alias_lookup_dict.get(name, name)
+
+        # Check design-internal
+        if resolved in class_lookup:
+            return class_lookup[resolved]
+        # Also check by bare name
+        if name in class_lookup:
+            return class_lookup[name]
+
+        # Check dependency lookup
+        if resolved in dep_lookup:
+            qname = dep_lookup[resolved]
+            if qname not in node_index:
+                _add_node(
+                    "class",
+                    resolved,
+                    qname,
+                    is_intercomponent=True,
+                    description=f"External dependency: {qname}",
+                    source_type="dependency",
+                )
+            return qname
+        if name in dep_lookup:
+            qname = dep_lookup[name]
+            if qname not in node_index:
+                _add_node(
+                    "class",
+                    name,
+                    qname,
+                    is_intercomponent=True,
+                    description=f"External dependency: {qname}",
+                    source_type="dependency",
+                )
+            return qname
+
+        # Check by bare name (without namespace) for aliases
+        if "::" in name:
+            bare = name.rsplit("::", 1)[-1]
+            bare_resolved = alias_lookup_dict.get(name, name)
+            if bare_resolved in class_lookup:
+                return class_lookup[bare_resolved]
+            if bare_resolved in dep_lookup:
+                return dep_lookup[bare_resolved]
+
+        return None
+
+    def _add_type_argument_edge(
+        template_qname: str,
+        arg_qname: str,
+        position: int,
+        display_name: str,
+    ) -> int:
+        """Create a TYPE_ARGUMENT edge from a template to its type argument."""
+        t = OntologyTripleSchema(
+            subject_qualified_name=template_qname,
+            predicate="type_argument",
+            object_qualified_name=arg_qname,
+            position=position,
+            display_name=display_name,
+        )
+        triples.append(t)
+        return len(triples) - 1
+
+    def _resolve_type_refs(
+        type_text: str,
+        subject_qname: str,
+        predicate: str,
+        existing_depends: set[tuple[str, str]],
+    ) -> None:
+        """Parse type_text and create edges from subject to resolved types.
+
+        For simple types: creates subject --predicate--> resolved_type edges.
+        For template types: also creates TYPE_ARGUMENT edges from the outer
+        template to each inner type argument.
+
+        Uses alias_lookup to resolve aliases like std::string -> std::basic_string.
+        Sets display_name on edges where an alias was resolved.
+        """
+        if not type_text:
             return
-        for match in _TYPE_EXTRACT_RE.finditer(type_str):
-            name = match.group(1)
-            if name in class_lookup:
-                # Design-internal types are handled by composes/returns/has_argument
+
+        refs = parse_type_refs(type_text)
+        for ref in refs:
+            resolved_name = _resolve_type_name(ref.name)
+            if resolved_name is None:
+                continue  # Void or unrecognized type
+
+            # Determine if this was an alias resolution
+            resolved_display = ""
+            if ref.name in alias_lookup_dict and alias_lookup_dict[ref.name] != ref.name:
+                resolved_display = ref.name  # Show the alias name in the graph
+
+            # Create the subject --predicate--> object edge
+            idx = _add_triple(subject_qname, predicate, resolved_name)
+            if resolved_display:
+                triples[idx].display_name = resolved_display
+
+            # For template types, also create TYPE_ARGUMENT edges
+            for pos, arg_ref in enumerate(ref.template_args):
+                arg_resolved = _resolve_type_name(arg_ref.name)
+                if arg_resolved is None:
+                    continue
+                arg_display = ""
+                if arg_ref.name in alias_lookup_dict and alias_lookup_dict[arg_ref.name] != arg_ref.name:
+                    arg_display = arg_ref.name
+                _add_type_argument_edge(resolved_name, arg_resolved, pos, arg_display)
+
+    def _add_class_depends_from_type(
+        type_text: str,
+        cls_qname: str,
+        existing_depends: set[tuple[str, str]],
+    ) -> None:
+        """Parse type_text and add class-level depends_on for external types.
+
+        Like the old _add_depends_from_type but using the TypeRef parser.
+        Only adds depends_on for types found in dep_lookup (external dependencies),
+        not for design-internal types (handled by composes/has_argument/returns).
+        """
+        if not type_text:
+            return
+        refs = parse_type_refs(type_text)
+        for ref in refs:
+            resolved = _resolve_type_name(ref.name)
+            if resolved is None:
                 continue
-            if name in dep_lookup:
-                qname = dep_lookup[name]
-                key = f"{cls_qname}->{qname}"
-                if key not in seen:
-                    seen.add(key)
-                    # Ensure the dependency stub node exists
-                    if qname not in node_index:
-                        _add_node(
-                            "class",
-                            name,
-                            qname,
-                            is_intercomponent=True,
-                            description=f"External dependency: {qname}",
-                            source_type="dependency",
-                        )
-                    _add_triple(cls_qname, "depends_on", qname)
+            # Only add depends_on for external dependencies
+            if ref.name in dep_lookup:
+                key = (cls_qname, resolved)
+                if key not in existing_depends:
+                    _add_triple(cls_qname, "depends_on", resolved)
+                    existing_depends.add(key)
+            # Also check template arguments for external dependencies
+            for arg_ref in ref.template_args:
+                arg_resolved = _resolve_type_name(arg_ref.name)
+                if arg_resolved is None:
+                    continue
+                if arg_ref.name in dep_lookup:
+                    key = (cls_qname, arg_resolved)
+                    if key not in existing_depends:
+                        _add_triple(cls_qname, "depends_on", arg_resolved)
+                        existing_depends.add(key)
 
     # --- Correct modules to match component namespace ---
     if component_namespace:
@@ -288,6 +413,9 @@ def map_oo_to_ontology(
     for enum in oo.enums:
         class_lookup[enum.name] = _qualify(enum.module, enum.name)
 
+    # Track existing depends_on edges for dedup
+    _existing_depends: set[tuple[str, str]] = set()
+
     for cls in oo.classes:
         cls_qname = _qualify(cls.module, cls.name)
         _add_node(
@@ -319,8 +447,9 @@ def map_oo_to_ontology(
             _link_reqs(cls.requirement_ids, triple_idx)
 
             # composes edge: class → design-internal entity type (member variable composition)
+            # AND type resolution for external deps and TYPE_ARGUMENT edges
             if attr.type_name:
-                for match in _TYPE_EXTRACT_RE.finditer(attr.type_name):
+                for match in re.finditer(r"\b([A-Z]\w+)\b", attr.type_name):
                     type_name = match.group(1)
                     if type_name in class_lookup:
                         target_qname = class_lookup[type_name]
@@ -343,21 +472,25 @@ def map_oo_to_ontology(
             triple_idx = _add_triple(cls_qname, "composes", method_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-            # has_argument edges: method → design-internal types used as parameters
+            # has_argument edges: method → types used as parameters
             for param in method.parameters:
-                for match in _TYPE_EXTRACT_RE.finditer(param):
-                    type_name = match.group(1)
-                    if type_name in class_lookup:
-                        target_qname = class_lookup[type_name]
-                        _add_triple(method_qname, "has_argument", target_qname)
+                _resolve_type_refs(
+                    param, method_qname, "has_argument", _existing_depends,
+                )
 
-            # returns edge: method → design-internal return type
+            # returns edge: method → return type
             if method.return_type:
-                for match in _TYPE_EXTRACT_RE.finditer(method.return_type):
-                    type_name = match.group(1)
-                    if type_name in class_lookup:
-                        target_qname = class_lookup[type_name]
-                        _add_triple(method_qname, "returns", target_qname)
+                _resolve_type_refs(
+                    method.return_type, method_qname, "returns", _existing_depends,
+                )
+
+        # Class-level depends_on from attribute and method types (external deps)
+        for attr in cls.attributes:
+            _add_class_depends_from_type(attr.type_name, cls_qname, _existing_depends)
+        for method in cls.methods:
+            _add_class_depends_from_type(method.return_type, cls_qname, _existing_depends)
+            for param in method.parameters:
+                _add_class_depends_from_type(param, cls_qname, _existing_depends)
 
         # Inheritance -> generalizes triples (with dependency resolution)
         for parent_name in cls.inherits_from:
@@ -371,17 +504,6 @@ def map_oo_to_ontology(
             triple_idx = _add_triple(cls_qname, "realizes", iface_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-    # --- Dependency type inference from attribute types and return types ---
-    for cls in oo.classes:
-        cls_qname = _qualify(cls.module, cls.name)
-        seen_dep_types: set[str] = set()
-        for attr in cls.attributes:
-            _add_depends_from_type(attr.type_name, cls_qname, seen_dep_types)
-        for method in cls.methods:
-            _add_depends_from_type(method.return_type, cls_qname, seen_dep_types)
-            for param in method.parameters:
-                _add_depends_from_type(param, cls_qname, seen_dep_types)
-
     # --- Associations (with dependency resolution) ---
     for assoc in oo.associations:
         from_qname = _resolve_ref(assoc.from_class) or class_lookup.get(assoc.from_class, assoc.from_class)
@@ -394,27 +516,7 @@ def map_oo_to_ontology(
     #
     # The mechanism field on aggregates/references associations tells us
     # the concrete container or smart-pointer type, which implies a header
-    # dependency.  For example:
-    #   aggregates with mechanism="std::vector" → depends_on std::vector
-    #   references with mechanism="std::unique_ptr" → depends_on std::unique_ptr
-    #   references with mechanism="raw_pointer" → no additional dependency
-    #
-    # We also infer depends_on from the target class when it's an external
-    # dependency (even without a mechanism).
-    #
-    # Resolution order for mechanism:
-    #   1. Check dep_lookup (pre-seeded with containers from Neo4j)
-    #      → links to the real cppreference-indexed node
-    #   2. Fall back to _FALLBACK_CONTAINERS (creates stub node)
-    #      → only when Neo4j data is unavailable
-
-    # Fallback containers for when they're not in the dependency lookup.
-    # These create stub nodes as a safety net when cppreference data is
-    # not indexed.  When the container IS in dep_lookup, _resolve_ref will
-    # link to the real Neo4j node instead.
-    # Fallback for both containers and smart pointers.  Smart-pointer types
-    # are included here for REFERENCES mechanism support.  When the type IS
-    # in dep_lookup, _resolve_ref will link to the real Neo4j node instead.
+    # dependency.
     _FALLBACK_CONTAINERS = {
         "std::vector": "std::vector",
         "std::list": "std::list",
@@ -431,11 +533,10 @@ def map_oo_to_ontology(
         "std::shared_ptr": "std::shared_ptr",
         "std::weak_ptr": "std::weak_ptr",
     }
-    # Mechanisms that don't add a dependency (raw pointers and references
-    # don't require extra headers beyond what the pointed-to type needs).
+    # Mechanisms that don't add a dependency
     _NO_DEP_MECHANISMS = {"raw_pointer", "reference", "pointer"}
 
-    _existing_depends: set[tuple[str, str]] = set()
+    # Collect existing depends_on triples for dedup
     for t in triples:
         if t.predicate == "depends_on":
             _existing_depends.add((t.subject_qualified_name, t.object_qualified_name))
@@ -464,7 +565,7 @@ def map_oo_to_ontology(
                         )
                 elif assoc.mechanism in _FALLBACK_CONTAINERS:
                     # Fallback: create a stub node if the mechanism isn't in
-                    # the dependency lookup (e.g., cppreference data not indexed)
+                    # the dependency lookup
                     dep_qname = _FALLBACK_CONTAINERS[assoc.mechanism]
                     if (from_qname, dep_qname) not in _existing_depends:
                         if dep_qname not in node_index:
