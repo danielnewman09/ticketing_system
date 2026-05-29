@@ -168,12 +168,12 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 lines.forEach(l => {{ maxW = Math.max(maxW, ctx.measureText(l).width); }});
                 // Flat buffer on both axes for consistent gap around content.
                 // Buffer covers outline (2.5px) + small margin.
-                return Math.max(Math.ceil(maxW * 1.05) + 8, 50);
+                return Math.max(Math.ceil(maxW * 1.05) + 16, 50);
             }}"""
     _member_label_height = f"""function(ele) {{
                 const label = ele.data('label') || '';
                 const lines = label.split('\\n');
-                return Math.max(lines.length * {member_font + 2} + 8, 20);
+                return Math.max(lines.length * {member_font + 2} + 16, 20);
             }}"""
 
     # Kind-specific border colors for member-bearing design nodes
