@@ -49,6 +49,15 @@ _STATUS_COLORS_HTML = {
     "": "#f7fafc",           # default white
 }
 
+# Kind-colored inner border colors for UML boxes.
+# Used by _build_uml_html to render the inset box-shadow.
+KIND_BORDER_COLORS = {
+    "class": "#4a90d9",
+    "struct": "#5b9bd5",
+    "interface": "#9b59b6",
+    "enum": "#e74c3c",
+}
+
 
 def _format_member_html(m: dict, suffix: str = "") -> str:
     """Format a single member as an HTML span with colored elements.
@@ -172,13 +181,16 @@ def _build_uml_html(
             lines.append(f'<div>{_format_member_html(m, m.get("_suffix", ""))}</div>')
         total_members = len(m_sorted)
 
+    kind_border = KIND_BORDER_COLORS.get(owner_kind, "transparent")
     wrapper = (
         f'<div style="'
         f'font-family:JetBrains Mono,monospace;'
         f'font-size:9px;'
         f'line-height:1.3;'
-        f'padding:0px;'
+        f'padding:2px;'
         f'white-space:nowrap;'
+        f'border-radius:4px;'
+        f'box-shadow:inset 0 0 0 2.5px {kind_border};'
         f'">'
     )
     return wrapper + '\n'.join(lines) + '</div>'
