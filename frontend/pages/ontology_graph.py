@@ -51,9 +51,19 @@ async def ontology_graph_page():
     """Render the ontology-graph page: graph canvas, filter controls,
     legend, and a detail sidebar for the selected node."""
     apply_theme()
-    page_layout("Ontology Graph")
+    page_layout()
 
     add_cytoscape_cdn()
+
+    # CSS rule for the inner kind border on UML boxes.
+    # The box-shadow:inset is set inline by _build_uml_html per node,
+    # but border-radius needs to be applied here to match Cytoscape's
+    # roundrectangle shape.
+    ui.add_head_html(
+        '<style>'
+        '.uml-box-label { border-radius: 4px; }'
+        '</style>'
+    )
 
     # -- Graph config (page-level, used for both rendering and event names) --
     config = GraphConfig(size="large")
