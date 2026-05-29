@@ -446,14 +446,21 @@ def map_oo_to_ontology(
             triple_idx = _add_triple(cls_qname, "composes", attr_qname)
             _link_reqs(cls.requirement_ids, triple_idx)
 
-            # composes edge: class → design-internal entity type (member variable composition)
+            # references edge: class → design-internal entity type (attribute type reference)
             # AND type resolution for external deps and TYPE_ARGUMENT edges
+            #
+            # An attribute whose type is another class/interface/enum REFERENCES
+            # that type — it does not compose it.  COMPOSES is for ownership
+            # (class owns its members, enum owns its values).  Using COMPOSES
+            # here causes the graph collapse logic to hide entity nodes (like
+            # enums) that have no non-COMPOSES edges, removing them from the
+            # visual graph entirely.
             if attr.type_name:
                 for match in re.finditer(r"\b([A-Z]\w+)\b", attr.type_name):
                     type_name = match.group(1)
                     if type_name in class_lookup:
                         target_qname = class_lookup[type_name]
-                        _add_triple(cls_qname, "composes", target_qname)
+                        _add_triple(cls_qname, "references", target_qname)
 
         # Methods -> composes triples (source_type="member")
         for method in cls.methods:

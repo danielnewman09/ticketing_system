@@ -100,20 +100,10 @@ def step_decompose():
         for i, hlr in enumerate(hlrs, 1):
             print(f"  [{i}/{len(hlrs)}] {hlr.description[:65]}...")
 
-            other_hlrs = [
-                {
-                    "id": h.id,
-                    "description": h.description,
-                    "component__name": _get_component_name(h.component_id) if h.component_id else None,
-                }
-                for h in hlrs
-                if h.id != hlr.id
-            ]
             component_name = _get_component_name(hlr.component_id) if hlr.component_id else ""
 
             result = decompose(
                 hlr.description,
-                other_hlrs=other_hlrs,
                 component=component_name,
                 dependency_context=hlr.dependency_context,
                 prompt_log_file=os.path.join(LOGS_DIR, f"decompose_hlr{hlr.id}.md"),
@@ -234,18 +224,14 @@ def step_design():
                     )
                 )
 
-            dep_ctx = hlr.get("dependency_context")
-            dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
-
             # Design single HLR
             step_log.info("Designing HLR %d: %s", hlr_id, hlr['description'])
             try:
-                oo, ontology = design_hlr(
+                oo, ontology, verifs = design_hlr(
                     hlr=hlr,
                     llrs=hlr_llrs,
                     existing_classes=existing_classes or None,
                     intercomponent_classes=intercomponent_classes or None,
-                    dependency_contexts=dependency_contexts,
                     component_namespace=component_namespace,
                     sibling_namespaces=sibling_namespaces or None,
                     component_id=component_id,
@@ -425,9 +411,6 @@ def step_design_and_verify():
                     )
                 )
 
-            dep_ctx = hlr.get("dependency_context")
-            dependency_contexts = {hlr_id: dep_ctx} if dep_ctx else None
-
             component_namespace = hlr.get("component_namespace", "")
             sibling_namespaces = [
                 h.get("component_namespace", "")
@@ -443,7 +426,6 @@ def step_design_and_verify():
                     llrs=hlr_llrs,
                     existing_classes=existing_classes or None,
                     intercomponent_classes=intercomponent_classes or None,
-                    dependency_contexts=dependency_contexts,
                     component_namespace=component_namespace,
                     sibling_namespaces=sibling_namespaces or None,
                     component_id=component_id,
@@ -458,8 +440,9 @@ def step_design_and_verify():
                 raise
 
             step_log.info(
-                "HLR %d: %d classes, %d nodes, %d triples",
-                hlr_id, len(oo.classes), len(ontology.nodes), len(ontology.triples),
+                "HLR %d: %d classes, %d interfaces, %d enums, %d nodes, %d triples",
+                hlr_id, len(oo.classes), len(oo.interfaces), len(oo.enums),
+                len(ontology.nodes), len(ontology.triples),
             )
 
             # Accumulate from the verified design
@@ -527,10 +510,6 @@ def step_summary():
     print("=" * 60)
     print("SUMMARY")
     print("=" * 60)
-
-    from backend.db.neo4j.connection import Neo4jConnection
-    from backend.db.neo4j.repositories.verification import VerificationRepository
-    neo4j = Neo4jConnection()
 
     with get_neo4j().session() as ns:
         repo = RequirementRepository(ns)

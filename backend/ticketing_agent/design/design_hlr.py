@@ -116,10 +116,11 @@ def design_hlr(
     )
 
     log.info(
-        "  HLR %s: %d classes, %d interfaces, %d nodes, %d triples",
+        "  HLR %s: %d classes, %d interfaces, %d enums, %d nodes, %d triples",
         hlr_id,
         len(oo.classes),
         len(oo.interfaces),
+        len(oo.enums),
         len(ontology.nodes),
         len(ontology.triples),
     )
