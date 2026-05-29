@@ -403,6 +403,31 @@ async def render_cytoscape_graph(
                     }}
                 ]);
             }}
+            // === Size inner divs to fill node content area ===
+            // This ensures the box-shadow:inset (inner kind border) sits
+            // flush against the outer Cytoscape dashed border.
+            function sizeUmlLabels() {{
+                var cy = window.{config.cy_var};
+                if (!cy) return;
+                var container = document.getElementById('{config.container_id}');
+                if (!container) return;
+                var labels = container.querySelectorAll('.uml-box-label > div');
+                var memberNodes = cy.nodes('[has_members="true"]');
+                memberNodes.forEach(function(node, i) {{
+                    var div = labels[i];
+                    if (!div) return;
+                    var bw = parseFloat(node.style('border-width')) || 0;
+                    var pad = parseFloat(node.style('padding')) || 0;
+                    var w = node.renderedWidth() - 2 * bw - 2 * pad;
+                    var h = node.renderedHeight() - 2 * bw - 2 * pad;
+                    div.style.width = Math.max(w, 20) + 'px';
+                    div.style.height = Math.max(h, 20) + 'px';
+                }});
+            }}
+            // Run after initial render and on every layout change
+            setTimeout(sizeUmlLabels, 100);
+            cy.on('layoutstop', sizeUmlLabels);
+            cy.on('resize', sizeUmlLabels);
             window.{config.cy_var}.on('tap', 'node', function(evt) {{
                 const data = evt.target.data();
                 if (data.qualified_name) {{
