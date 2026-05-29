@@ -20,7 +20,7 @@ _PIPELINE_ITEMS = [
 ]
 
 
-def page_layout(title: str = ""):
+def page_layout():
     """Create the shared page shell with a left drawer nav."""
     with ui.header().classes("items-center justify-between px-6"):
         with ui.row().classes("items-center gap-4"):

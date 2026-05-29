@@ -166,15 +166,3 @@ Correct: "verifications": {{"1": [...]}}
 
 You MUST use the commit_design_and_verifications tool to return your final result.
 """
-
-
-# Re-use format helpers from design_oo_prompt
-from backend.ticketing_agent.design.design_oo_prompt import (
-    build_specializations_section,
-    build_dependency_api_section,
-    build_as_built_section,
-    build_existing_classes_section,
-    build_intercomponent_section,
-    build_namespace_section,
-    build_dependency_section,
-)

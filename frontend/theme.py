@@ -221,7 +221,7 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'text-justification': 'left',
                 'width': {_member_label_dim},
                 'height': {_member_label_height},
-                'padding': '-2px',
+                'padding': '{pad_members}px',
                 'border-style': 'dashed',
                 'border-width': 3.5,
                 'border-color': '#4a5568',

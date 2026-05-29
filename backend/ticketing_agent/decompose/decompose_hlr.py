@@ -308,7 +308,6 @@ def _format_dependency_context(dependency_context: dict) -> str:
 
 def decompose(
     description: str,
-    other_hlrs: list[dict] | None = None,
     component: str = "",
     dependency_context: dict | None = None,
     model: str = "",

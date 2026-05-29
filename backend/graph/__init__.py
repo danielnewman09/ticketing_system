@@ -10,6 +10,7 @@ __all__ = [
     "assign_namespace_parents",
     "tag_cross_layer",
     "format_cytoscape_graph",
+    "_remove_composes_edges",
 ]
 
 
@@ -43,6 +44,17 @@ def tag_cross_layer(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], l
     return nodes, edges
 
 
+def _remove_composes_edges(edges: list[dict]) -> list[dict]:
+    """Remove all remaining COMPOSES edges from the graph output.
+
+    COMPOSES is an implicit relationship (like dependency injection)
+    and should not be shown in the graph.  By the time this runs,
+    COMPOSES edges have already been used for collapsing members and
+    namespace parent assignment, so they are no longer needed.
+    """
+    return [e for e in edges if e["data"].get("label") != "COMPOSES"]
+
+
 def format_cytoscape_graph(raw: dict) -> dict:
     """Transform raw Neo4j query result into Cytoscape.js format.
 
@@ -54,10 +66,12 @@ def format_cytoscape_graph(raw: dict) -> dict:
     2. collapse_members — fold attributes/methods/enum_values into owner nodes.
     3. assign_namespace_parents — group nodes into namespace containers.
     4. tag_cross_layer — mark dependency/as-built nodes and cross-layer edges.
+    5. _remove_composes_edges — remove implicit COMPOSES edges from output.
     """
     nodes = [{"data": build_cytoscape_node(n)} for n in raw.get("nodes", [])]
     edges = [{"data": build_cytoscape_edge(e)} for e in raw.get("edges", [])]
     nodes, edges = collapse_members(nodes, edges)
     nodes, edges = assign_namespace_parents(nodes, edges)
     nodes, edges = tag_cross_layer(nodes, edges)
+    edges = _remove_composes_edges(edges)
     return {"nodes": nodes, "edges": edges}

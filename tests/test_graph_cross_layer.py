@@ -101,3 +101,39 @@ class TestDependencyNodeTagging:
         node = result["nodes"][0]
         assert node["data"].get("has_source") is None
         assert node["data"].get("is_as_built") is None
+
+
+class TestComposesEdgesAlwaysRemoved:
+    """COMPOSES edges should never appear in format_cytoscape_graph output."""
+
+    def test_composes_edges_removed_in_full_pipeline(self):
+        """format_cytoscape_graph removes all COMPOSES edges from output."""
+        raw = {
+            "nodes": [
+                {"qualified_name": "calc::Engine", "name": "Engine", "kind": "class", "layer": "design"},
+                {"qualified_name": "calc::Result", "name": "Result", "kind": "class", "layer": "design"},
+            ],
+            "edges": [
+                {"source": "calc::Engine", "target": "calc::Result", "type": "COMPOSES"},
+                {"source": "calc::Engine", "target": "calc::Result", "type": "REFERENCES"},
+            ],
+        }
+        result = format_cytoscape_graph(raw)
+        edge_labels = {e["data"]["label"] for e in result["edges"]}
+        assert "COMPOSES" not in edge_labels
+        assert "REFERENCES" in edge_labels
+
+    def test_module_composes_removed_after_namespace_assignment(self):
+        """Module COMPOSES edges used for namespace grouping are also removed."""
+        raw = {
+            "nodes": [
+                {"qualified_name": "calc", "name": "calc", "kind": "module", "layer": "design"},
+                {"qualified_name": "calc::Engine", "name": "Engine", "kind": "class", "layer": "design"},
+            ],
+            "edges": [
+                {"source": "calc", "target": "calc::Engine", "type": "COMPOSES"},
+            ],
+        }
+        result = format_cytoscape_graph(raw)
+        edge_labels = {e["data"]["label"] for e in result["edges"]}
+        assert "COMPOSES" not in edge_labels

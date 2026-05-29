@@ -22,11 +22,8 @@ log = logging.getLogger("agents.design")
 def design_hlr(
     hlr: dict,
     llrs: list[dict],
-    language: str = "",
     existing_classes: list[dict] | None = None,
     intercomponent_classes: list[dict] | None = None,
-    other_hlr_summaries: list[dict] | None = None,
-    dependency_contexts: dict[int, dict] | None = None,
     component_namespace: str = "",
     sibling_namespaces: list[str] | None = None,
     component_id: int | None = None,
@@ -41,7 +38,6 @@ def design_hlr(
     Args:
         hlr: HLR dict with ``{id, description, component_name?, ...}``.
         llrs: LLR dicts for this HLR.
-        language: Target programming language.
         existing_classes: In-memory classes from prior HLR designs in
             the same component (from ``_extract_existing_classes``).
         intercomponent_classes: In-memory public API classes from other

@@ -1,8 +1,15 @@
-"""Tests for collapse_members preserving external entity nodes with DEPENDS_ON edges.
+"""Tests for collapse_members preserving external entity nodes with non-COMPOSES edges.
 
-When an aggregated class/interface/struct also has non-containment edges
-(e.g. DEPENDS_ON, GENERALIZES), the node should remain visible in the
-graph alongside the collapsed compartment representation.
+When an aggregated class/interface/enum/struct also has non-containment,
+non-COMPOSES edges (e.g. REFERENCES, DEPENDS_ON, GENERALIZES), the node
+should remain visible in the graph.
+
+COMPOSES is an implicit relationship (like dependency injection) and
+should never appear as a visible edge in the graph.  Entity kinds
+(class/interface/enum/struct) composed by non-module owners are NOT
+added as line items in the owner's UML compartment — their typed
+attributes (e.g. ``error_signal: CalculationError``) already convey
+the reference.
 """
 
 import pytest
@@ -30,8 +37,9 @@ def _make_edge(edge_id: str, src: str, tgt: str, label: str) -> dict:
 
 
 class TestAggregatedEntityWithDependsOn:
-    """Aggregated entity nodes (class/interface/struct) with non-containment
-    edges are kept as external nodes alongside their collapsed representation."""
+    """Aggregated entity nodes (class/interface/enum/struct) with
+    non-COMPOSES non-containment edges are kept as external nodes.
+    They are NOT shown as UML compartment lines in the owner node."""
 
     def test_aggregated_class_with_depends_on_stays_visible(self):
         """Fl_Button aggregated by CalculatorWindow AND having DEPENDS_ON
@@ -48,14 +56,15 @@ class TestAggregatedEntityWithDependsOn:
         out_nodes, out_edges = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        # Fl_Button should still be visible
+        # Fl_Button should still be visible (has DEPENDS_ON edge)
         assert "FlBtn" in node_ids
         # CalculatorWindow should still be visible
         assert "CalcWin" in node_ids
-        # CalculatorWindow label should contain Fl_Button in its compartment
+        # CalculatorWindow label should NOT contain Fl_Button as a compartment
+        # line — entity kinds are not added to the owner's UML compartment
         calc = next(n for n in out_nodes if n["data"]["id"] == "CalcWin")
-        assert "Fl_Button" in calc["data"]["label"]
-        # DEPENDS_ON edge should be preserved
+        assert "Fl_Button" not in calc["data"]["label"]
+        # DEPENDS_ON edge should be preserved (not COMPOSES)
         edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
         assert ("CalcWin", "FlBtn", "DEPENDS_ON") in edge_labels
 
@@ -78,12 +87,12 @@ class TestAggregatedEntityWithDependsOn:
         node_ids = {n["data"]["id"] for n in out_nodes}
         # CalculatorDisplay should remain visible (has DEPENDS_ON)
         assert "CalcDisp" in node_ids
-        # Fl_Box should remain visible (target of DEPENDS_ON, also aggregated)
+        # Fl_Box should remain visible (target of DEPENDS_ON, also aggregated and has DEPENDS_ON)
         assert "FlBox" in node_ids
-        # CalculatorWindow should contain both in its compartment
+        # Entity kinds are NOT added as compartment lines in the owner
         calc = next(n for n in out_nodes if n["data"]["id"] == "CalcWin")
-        assert "CalculatorDisplay" in calc["data"]["label"]
-        assert "Fl_Box" in calc["data"]["label"]
+        assert "CalculatorDisplay" not in calc["data"]["label"]
+        assert "Fl_Box" not in calc["data"]["label"]
         # DEPENDS_ON edge from CalculatorDisplay to Fl_Box preserved
         edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
         assert ("CalcDisp", "FlBox", "DEPENDS_ON") in edge_labels
@@ -108,9 +117,9 @@ class TestAggregatedEntityWithDependsOn:
         # GENERALIZES edge preserved
         edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
         assert ("AggClass", "Base", "GENERALIZES") in edge_labels
-        # Also in owner compartment
+        # Entity kinds are NOT shown in owner compartment
         owner = next(n for n in out_nodes if n["data"]["id"] == "MyClass")
-        assert "AggregatedClass" in owner["data"]["label"]
+        assert "AggregatedClass" not in owner["data"]["label"]
 
     def test_interface_with_depends_on_stays_visible(self):
         """An aggregated interface with external edges stays visible."""
@@ -205,12 +214,14 @@ class TestAttributesStillCollapsed:
 
 
 class TestAggregatedEntityNoExternalEdges:
-    """Aggregated entity nodes WITHOUT non-containment edges
-    should be fully collapsed (removed from node list)."""
+    """Aggregated entity nodes WITHOUT non-COMPOSES non-containment edges
+    should be fully collapsed (removed from the graph).  COMPOSES is
+    implicit and does not justify keeping an entity visible."""
 
-    def test_aggregated_class_no_edges_keeps_visible(self):
-        """An aggregated class from a non-module owner stays visible
-        (entity-to-entity composition relationship)."""
+    def test_aggregated_class_no_edges_is_removed(self):
+        """An aggregated class with only AGGREGATES edge from the owner
+        and no other non-COMPOSES edges should be removed from the graph.
+        COMPOSES/AGGREGATES are implicit relationships."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Agg", "InnerClass", "class"),
@@ -222,14 +233,19 @@ class TestAggregatedEntityNoExternalEdges:
         out_nodes, out_edges = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        assert "Agg" in node_ids
-        # Shown in compartment
+        # InnerClass with only containment edge is removed
+        assert "Agg" not in node_ids
+        # Entity kinds are NOT added as compartment lines
         owner = next(n for n in out_nodes if n["data"]["id"] == "Owner")
-        assert "InnerClass" in owner["data"]["label"]
+        assert "InnerClass" not in owner["data"]["label"]
+        # No AGGREGATES edge preserved — COMPOSES/AGGREGATES are implicit
+        # (AGGREGATES to a non-external entity is removed)
+        edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
+        assert ("Owner", "Agg", "AGGREGATES") not in edge_labels
 
-    def test_aggregated_class_only_containment_edges_keeps_visible(self):
-        """An aggregated class with only COMPOSES/CONTAINS edges
-        from its owner stays visible."""
+    def test_aggregated_class_only_containment_edges_is_removed(self):
+        """An aggregated class with only COMPOSES/CONTAINS edges should
+        be removed from the graph."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Agg", "InnerClass", "class"),
@@ -243,7 +259,8 @@ class TestAggregatedEntityNoExternalEdges:
         out_nodes, _ = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        assert "Agg" in node_ids
+        # InnerClass with only containment edges is removed
+        assert "Agg" not in node_ids
         assert "m1" not in node_ids  # method still fully collapsed
 
 
@@ -283,13 +300,35 @@ class TestDuplicateEdgeDedup:
         assert "Agg" in dep_sources
 
 
-class TestComposesNotAffected:
-    """COMPOSES edges (attributes/methods) should not trigger
-    the external-entity preservation logic."""
+class TestComposesImplicit:
+    """COMPOSES is an implicit relationship and should never be visible
+    in the graph.  Composed entity kinds are not shown as UML compartment
+    lines in the owner."""
 
-    def test_composes_keeps_entity_visible(self):
-        """COMPOSES edge to a class node should keep it visible as an
-        external node (entity-to-entity composition)."""
+    def test_composes_entity_not_in_compartment(self):
+        """COMPOSES edge to a class node should NOT add it as a line
+        in the owner's UML compartment. Entity kinds are not shown
+        as member lines — their typed attributes convey the reference."""
+        nodes = [
+            _make_node("Owner", "Owner", "class"),
+            _make_node("Nested", "NestedClass", "class"),
+        ]
+        edges = [
+            _make_edge("e1", "Owner", "Nested", "COMPOSES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        node_ids = {n["data"]["id"] for n in out_nodes}
+        # Entity with only COMPOSES edges is removed (no external edges)
+        assert "Nested" not in node_ids
+        # No COMPOSES edge visible
+        edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
+        assert ("Owner", "Nested", "COMPOSES") not in edge_labels
+
+    def test_composes_entity_not_visible_without_external_edges(self):
+        """A composed entity with ONLY COMPOSES edges is removed from the graph.
+        COMPOSES is implicit and doesn't justify keeping the entity visible."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Nested", "NestedClass", "class"),
@@ -301,10 +340,11 @@ class TestComposesNotAffected:
         out_nodes, _ = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        assert "Nested" in node_ids
+        assert "Nested" not in node_ids
 
-    def test_composes_plus_depends_on_keeps_entity(self):
-        """COMPOSES + DEPENDS_ON should still keep the entity visible."""
+    def test_composes_plus_references_keeps_entity(self):
+        """COMPOSES + REFERENCES should keep the entity visible via
+        the REFERENCES edge, not via COMPOSES."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Nested", "NestedClass", "class"),
@@ -312,13 +352,22 @@ class TestComposesNotAffected:
         ]
         edges = [
             _make_edge("e1", "Owner", "Nested", "COMPOSES"),
-            _make_edge("e2", "Nested", "Dep", "DEPENDS_ON"),
+            _make_edge("e2", "Nested", "Dep", "REFERENCES"),
         ]
 
-        out_nodes, _ = collapse_members(nodes, edges)
+        out_nodes, out_edges = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
+        # Nested stays visible because of REFERENCES edge
         assert "Nested" in node_ids
+        # REFERENCES edge is visible
+        edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
+        assert ("Nested", "Dep", "REFERENCES") in edge_labels
+        # COMPOSES edge is NOT visible
+        assert ("Owner", "Nested", "COMPOSES") not in edge_labels
+        # Entity not shown as compartment line
+        owner = next(n for n in out_nodes if n["data"]["id"] == "Owner")
+        assert "NestedClass" not in owner["data"]["label"]
 
 
 class TestRealWorldScenario:
@@ -328,8 +377,8 @@ class TestRealWorldScenario:
         """Matches the real data in the system:
         CalculatorWindow AGGREGATES fl_button objects (Compound),
         also has DEPENDS_ON to them. The fl_button should appear
-        both in the collapsed compartment AND as an external node
-        with the DEPENDS_ON edge visible.
+        as an external node with the DEPENDS_ON edge visible, but
+        NOT as a compartment line in CalculatorWindow.
         """
         nodes = [
             _make_node("ui::CalcWin", "CalculatorWindow", "class"),
@@ -359,14 +408,14 @@ class TestRealWorldScenario:
 
         node_ids = {n["data"]["id"] for n in out_nodes}
 
-        # CalculatorWindow should show aggregated items in its compartment
+        # CalculatorWindow should NOT show entity kinds as compartment lines
         calc_win = next(n for n in out_nodes if n["data"]["id"] == "ui::CalcWin")
-        assert "CalculatorDisplay" in calc_win["data"]["label"]
-        assert "CalculatorController" in calc_win["data"]["label"]
-        assert "Fl_Button" in calc_win["data"]["label"]
-        assert "Fl_Box" in calc_win["data"]["label"]
+        assert "CalculatorDisplay" not in calc_win["data"]["label"]
+        assert "CalculatorController" not in calc_win["data"]["label"]
+        assert "Fl_Button" not in calc_win["data"]["label"]
+        assert "Fl_Box" not in calc_win["data"]["label"]
 
-        # All dependency nodes should remain visible (they have DEPENDS_ON edges)
+        # Dependency nodes with DEPENDS_ON edges should remain visible
         assert "Fl_Btn" in node_ids
         assert "Fl_RBtn" in node_ids
         assert "Fl_Box" in node_ids
@@ -374,6 +423,10 @@ class TestRealWorldScenario:
 
         # CalculatorDisplay should remain visible (has DEPENDS_ON to Fl_Box)
         assert "ui::CalcDisp" in node_ids
+
+        # CalculatorController has only AGGREGATES edges → removed
+        # (entity with only containment, no non-containment external edges)
+        assert "ui::CalcCtrl" not in node_ids
 
         # DEPENDS_ON edges should be visible
         edge_triples = {
@@ -385,14 +438,21 @@ class TestRealWorldScenario:
         assert ("ui::CalcWin", "Fl_Group", "DEPENDS_ON") in edge_triples
         assert ("ui::CalcDisp", "Fl_Box", "DEPENDS_ON") in edge_triples
 
-class TestComposedEnumDualVisibility:
-    """When a class composes an enum (entity-to-entity composition), the
-    enum should stay visible as a separate node AND appear in the
-    class's UML compartment."""
+        # AGGREGATES edges should NOT be visible for entities without
+        # non-containment external edges
+        assert ("ui::CalcWin", "ui::CalcCtrl", "AGGREGATES") not in edge_triples
 
-    def test_class_composes_enum_stays_visible(self):
-        """ErrorType composed by CalculationResult should remain as a
-        separate enum node with the COMPOSES edge visible."""
+
+class TestComposedEnumNotInCompartment:
+    """When a class composes an enum, the enum is NOT added as a
+    compartment line in the owner's UML label.  The enum should only
+    remain visible as a separate node if it has non-COMPOSES external
+    edges (REFERENCES, DEPENDS_ON, etc.)."""
+
+    def test_class_composes_enum_not_in_compartment(self):
+        """Enum composed by CalculationResult should NOT appear as a line
+        in CalculationResult's compartment. With only COMPOSES edges
+        and no external references, the enum is removed from the graph."""
         nodes = [
             _make_node("CalcResult", "CalculationResult", "class"),
             _make_node("ErrorType", "ErrorType", "enum"),
@@ -404,19 +464,56 @@ class TestComposedEnumDualVisibility:
         out_nodes, out_edges = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        assert "ErrorType" in node_ids, "Enum should remain visible as separate node"
+        # Enum with only COMPOSES edge is removed from the graph
+        assert "ErrorType" not in node_ids
         assert "CalcResult" in node_ids
 
-        # COMPOSES edge should be visible
+        # No COMPOSES edge visible
         edge_labels = {
             (e["data"]["source"], e["data"]["target"], e["data"]["label"])
             for e in out_edges
         }
-        assert ("CalcResult", "ErrorType", "COMPOSES") in edge_labels
+        assert ("CalcResult", "ErrorType", "COMPOSES") not in edge_labels
+
+        # Enum NOT shown as compartment line in owner
+        owner = next(n for n in out_nodes if n["data"]["id"] == "CalcResult")
+        assert "ErrorType" not in owner["data"]["label"]
+
+    def test_class_composes_enum_with_references_stays_visible(self):
+        """Enum composed by a class AND having REFERENCES edge should
+        stay visible (via external_entity_ids) but NOT appear as a
+        compartment line."""
+        nodes = [
+            _make_node("CalcResult", "CalculationResult", "class"),
+            _make_node("ErrorType", "CalculationError", "enum"),
+            _make_node("Ext", "ExternalDep", "class"),
+        ]
+        edges = [
+            _make_edge("e1", "CalcResult", "ErrorType", "COMPOSES"),
+            _make_edge("e2", "CalcResult", "ErrorType", "REFERENCES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        node_ids = {n["data"]["id"] for n in out_nodes}
+        # Enum stays visible because of REFERENCES edge
+        assert "ErrorType" in node_ids
+        # REFERENCES edge visible
+        edge_labels = {
+            (e["data"]["source"], e["data"]["target"], e["data"]["label"])
+            for e in out_edges
+        }
+        assert ("CalcResult", "ErrorType", "REFERENCES") in edge_labels
+        # COMPOSES edge NOT visible
+        assert ("CalcResult", "ErrorType", "COMPOSES") not in edge_labels
+        # Enum NOT shown as compartment line
+        owner = next(n for n in out_nodes if n["data"]["id"] == "CalcResult")
+        assert "CalculationError" not in owner["data"]["label"]
 
     def test_class_composes_enum_with_enum_values(self):
-        """An enum with its own enum_values, composed by a class, should
-        keep the enum visible with values collapsed into it."""
+        """An enum with its own enum_values, composed by a class without
+        external edges — the enum and its values are all removed from
+        the graph."""
         nodes = [
             _make_node("CalcResult", "CalculationResult", "class"),
             _make_node("ErrorType", "ErrorType", "enum"),
@@ -432,11 +529,52 @@ class TestComposedEnumDualVisibility:
         out_nodes, out_edges = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
-        # Enum stays visible
+        # Enum with only COMPOSES edges is removed
+        assert "ErrorType" not in node_ids
+        # Enum values are also collapsed (they belong to the removed enum)
+        assert "ev1" not in node_ids
+        assert "ev2" not in node_ids
+
+    def test_class_composes_enum_with_enum_values_and_references(self):
+        """An enum with enum_values, composed by a class, and also
+        having REFERENCES should stay visible with values collapsed
+        into it."""
+        nodes = [
+            _make_node("CalcResult", "CalculationResult", "class"),
+            _make_node("ErrorType", "CalculationError", "enum"),
+            _make_node("ev1", "MALFORMED_STRING", "enum_value"),
+            _make_node("ev2", "NULL_INPUT", "enum_value"),
+        ]
+        edges = [
+            _make_edge("e1", "CalcResult", "ErrorType", "COMPOSES"),
+            _make_edge("e2", "CalcResult", "ErrorType", "REFERENCES"),
+            _make_edge("e3", "ErrorType", "ev1", "COMPOSES"),
+            _make_edge("e4", "ErrorType", "ev2", "COMPOSES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        node_ids = {n["data"]["id"] for n in out_nodes}
+        # Enum stays visible (REFERENCES edge)
         assert "ErrorType" in node_ids
         # Enum values are collapsed into the enum
         assert "ev1" not in node_ids
         assert "ev2" not in node_ids
+        # Enum values ARE shown in the enum's label
+        enum_node = next(n for n in out_nodes if n["data"]["id"] == "ErrorType")
+        assert "MALFORMED_STRING" in enum_node["data"]["label"]
+        assert "NULL_INPUT" in enum_node["data"]["label"]
+        # REFERENCES edge visible
+        edge_labels = {
+            (e["data"]["source"], e["data"]["target"], e["data"]["label"])
+            for e in out_edges
+        }
+        assert ("CalcResult", "ErrorType", "REFERENCES") in edge_labels
+        # COMPOSES edge NOT visible
+        assert ("CalcResult", "ErrorType", "COMPOSES") not in edge_labels
+        # Entity NOT shown as compartment line in owner
+        owner = next(n for n in out_nodes if n["data"]["id"] == "CalcResult")
+        assert "CalculationError" not in owner["data"]["label"]
 
     def test_module_composes_enum_uses_parent_not_external(self):
         """A module composes an enum (namespace containment) — this should
@@ -456,15 +594,13 @@ class TestComposedEnumDualVisibility:
 
         # Module is NOT in _OWNER_KINDS so the module→enum COMPOSES doesn't
         # trigger collapse at all. The enum stays visible by default.
-        # The entity-composition preservation logic only applies when a
-        # non-module owner (class/interface/struct) composes an entity kind.
         node_ids = {n["data"]["id"] for n in out_nodes}
         assert "ErrorType" in node_ids  # Not collapsed at all — module isn't an owner kind
         assert "mod" in node_ids
 
-    def test_class_composes_interface_stays_visible(self):
-        """Previously only classes with DEPENDS_ON stayed visible.
-        Now COMPOSES also triggers dual visibility for entity kinds."""
+    def test_class_composes_interface_without_external_edges(self):
+        """An interface composed by a class with no other edges should be
+        removed from the graph (COMPOSES is implicit)."""
         nodes = [
             _make_node("Owner", "Owner", "class"),
             _make_node("Iface", "IHandler", "interface"),
@@ -476,4 +612,74 @@ class TestComposedEnumDualVisibility:
         out_nodes, out_edges = collapse_members(nodes, edges)
 
         node_ids = {n["data"]["id"] for n in out_nodes}
+        # Interface with only COMPOSES edge is removed
+        assert "Iface" not in node_ids
+        # No COMPOSES edge visible
+        edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
+        assert ("Owner", "Iface", "COMPOSES") not in edge_labels
+
+    def test_class_composes_interface_with_references_stays_visible(self):
+        """An interface composed by a class AND having REFERENCES should
+        stay visible (via external_entity_ids) but NOT appear as a
+        compartment line."""
+        nodes = [
+            _make_node("Owner", "Owner", "class"),
+            _make_node("Iface", "IHandler", "interface"),
+            _make_node("Dep", "ExternalDep", "class"),
+        ]
+        edges = [
+            _make_edge("e1", "Owner", "Iface", "COMPOSES"),
+            _make_edge("e2", "Iface", "Dep", "REFERENCES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        node_ids = {n["data"]["id"] for n in out_nodes}
         assert "Iface" in node_ids
+        # REFERENCES edge visible
+        edge_labels = {(e["data"]["source"], e["data"]["target"], e["data"]["label"]) for e in out_edges}
+        assert ("Iface", "Dep", "REFERENCES") in edge_labels
+        # COMPOSES edge NOT visible
+        assert ("Owner", "Iface", "COMPOSES") not in edge_labels
+
+
+class TestComposesEdgeRemoval:
+    """Verify that COMPOSES edges are never visible in the graph output,
+    even for scenarios where other edge types are preserved."""
+
+    def test_no_composes_edges_in_output(self):
+        """After collapse_members, no COMPOSES edges should appear in
+        the output edges list."""
+        nodes = [
+            _make_node("Owner", "Owner", "class"),
+            _make_node("Attr", "some_attr", "attribute"),
+            _make_node("Entity", "SomeEntity", "class"),
+            _make_node("Dep", "Dep", "class"),
+        ]
+        edges = [
+            _make_edge("e1", "Owner", "Attr", "COMPOSES"),
+            _make_edge("e2", "Owner", "Entity", "COMPOSES"),
+            _make_edge("e3", "Entity", "Dep", "REFERENCES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        edge_labels = {e["data"]["label"] for e in out_edges}
+        assert "COMPOSES" not in edge_labels
+        # REFERENCES should still be present
+        assert "REFERENCES" in edge_labels
+
+    def test_composes_between_two_entities_removed(self):
+        """COMPOSES edge between two entity nodes is never shown."""
+        nodes = [
+            _make_node("A", "ClassA", "class"),
+            _make_node("B", "ClassB", "class"),
+        ]
+        edges = [
+            _make_edge("e1", "A", "B", "COMPOSES"),
+        ]
+
+        out_nodes, out_edges = collapse_members(nodes, edges)
+
+        edge_labels = {e["data"]["label"] for e in out_edges}
+        assert "COMPOSES" not in edge_labels
