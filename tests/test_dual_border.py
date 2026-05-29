@@ -1,8 +1,7 @@
 """Tests for dual-border UML label rendering.
 
-Both borders are CSS-based:
-- Outer border: border:4px dashed <status_color> (lifecycle)
-- Inner border: outline:3px solid <kind_color> with outline-offset:-7px (entity kind)
+The outer border is rendered by Cytoscape (dashed, status-colored).
+The inner border is rendered via CSS outline on the HTML wrapper (solid, kind-colored).
 """
 
 import pytest
@@ -36,7 +35,10 @@ class TestKindBorderColors:
 
 
 class TestStatusBorderColors:
-    """STATUS_BORDER_COLORS maps change_status to outer border colors."""
+    """STATUS_BORDER_COLORS maps change_status to outer border colors.
+
+    These are used by Cytoscape selectors, not in the HTML wrapper directly.
+    """
 
     def test_new_color(self):
         assert STATUS_BORDER_COLORS["new"] == "#10b981"
@@ -54,9 +56,9 @@ class TestStatusBorderColors:
         assert STATUS_BORDER_COLORS[""] == "#4a5568"
 
 
-class TestBuildUmlHtmlDualBorder:
-    """_build_uml_html wraps content in a div with both CSS borders:
-    outer dashed (status) and inner solid outline (kind) with gap between."""
+class TestBuildUmlHtmlInnerBorder:
+    """_build_uml_html wraps content with a CSS outline for the inner kind border.
+    The outer dashed border is handled by Cytoscape node styling."""
 
     def test_class_inner_border(self):
         html = _build_uml_html(
@@ -64,21 +66,7 @@ class TestBuildUmlHtmlDualBorder:
             owner_kind="class", change_status="new"
         )
         assert "outline:3px solid #4a90d9" in html
-        assert "outline-offset:-7px" in html
-
-    def test_class_outer_border_status_new(self):
-        html = _build_uml_html(
-            "Calculator", {}, is_dependency=False,
-            owner_kind="class", change_status="new"
-        )
-        assert "border:4px dashed #10b981" in html
-
-    def test_class_outer_border_default_status(self):
-        html = _build_uml_html(
-            "Calculator", {}, is_dependency=False,
-            owner_kind="class", change_status=""
-        )
-        assert "border:4px dashed #4a5568" in html
+        assert "outline-offset:-2px" in html
 
     def test_interface_inner_border(self):
         html = _build_uml_html(
@@ -86,7 +74,7 @@ class TestBuildUmlHtmlDualBorder:
             owner_kind="interface", change_status=""
         )
         assert "outline:3px solid #9b59b6" in html
-        assert "outline-offset:-7px" in html
+        assert "outline-offset:-2px" in html
 
     def test_enum_inner_border(self):
         html = _build_uml_html(
@@ -94,7 +82,6 @@ class TestBuildUmlHtmlDualBorder:
             owner_kind="enum", change_status="modified"
         )
         assert "outline:3px solid #e74c3c" in html
-        assert "border:4px dashed #f59e0b" in html
 
     def test_unknown_kind_transparent_border(self):
         html = _build_uml_html(
@@ -102,7 +89,6 @@ class TestBuildUmlHtmlDualBorder:
             owner_kind="module", change_status="new"
         )
         assert "outline:3px solid transparent" in html
-        assert "border:4px dashed #10b981" in html
 
     def test_empty_kind_transparent_border(self):
         html = _build_uml_html(
@@ -110,7 +96,6 @@ class TestBuildUmlHtmlDualBorder:
             owner_kind="", change_status=""
         )
         assert "outline:3px solid transparent" in html
-        assert "border:4px dashed #4a5568" in html
 
     def test_wrapper_has_border_radius(self):
         html = _build_uml_html(
@@ -124,7 +109,16 @@ class TestBuildUmlHtmlDualBorder:
             "Calculator", {}, is_dependency=False,
             owner_kind="class", change_status="new"
         )
-        assert "padding:4px" in html
+        assert "padding:2px" in html
+
+    def test_no_css_dashed_border(self):
+        """Outer dashed border is handled by Cytoscape, not CSS."""
+        html = _build_uml_html(
+            "Calculator", {}, is_dependency=False,
+            owner_kind="class", change_status="new"
+        )
+        assert "border:4px dashed" not in html
+        assert "border-style" not in html
 
     def test_class_name_colored_by_status(self):
         """Class name text color still uses change_status, not kind color."""
@@ -132,14 +126,12 @@ class TestBuildUmlHtmlDualBorder:
             "Calculator", {}, is_dependency=False,
             owner_kind="class", change_status="modified"
         )
-        # _STATUS_COLORS_HTML["modified"] is "#fcd34d"
         assert "#fcd34d" in html
 
-    def test_dependency_box_still_has_borders(self):
-        """Dependency UML boxes still get both inner and outer borders."""
+    def test_dependency_box_still_has_inner_border(self):
+        """Dependency UML boxes still get the inner outline border."""
         html = _build_uml_html(
             "Fl_Button", {}, is_dependency=True,
             owner_kind="class", change_status=""
         )
         assert "outline:3px solid" in html
-        assert "border:4px dashed" in html

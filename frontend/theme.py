@@ -225,9 +225,9 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'width': {_member_label_dim},
                 'height': {_member_label_height},
                 'padding': '2px',
-                'border-style': 'none',
-                'border-width': 0,
-                'border-color': 'transparent',
+                'border-style': 'dashed',
+                'border-width': 4,
+                'border-color': '#4a5568',
                 'background-color': '#1e293b',
                 'color': '#e2e8f0',
                 'text-margin-y': 0,
@@ -372,38 +372,30 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
             }}
         }},
         // ── Change-status styles ──────────────────────────────────────
-        // For UML boxes (has_members), the outer dashed border is CSS-rendered
-        // in the HTML label. These selectors only affect simple circle nodes.
+        // Controls the outer dashed border color for both UML boxes and
+        // simple circle nodes.  UML boxes have border-width:4; circles have 2.
         {{
-            selector: 'node[change_status="new"][!has_members]',
+            selector: 'node[change_status="new"]',
             style: {{
-                'border-width': 2,
                 'border-color': '#10b981',
-                'border-style': 'dashed',
             }}
         }},
         {{
-            selector: 'node[change_status="implemented"][!has_members]',
+            selector: 'node[change_status="implemented"]',
             style: {{
-                'border-width': 2,
                 'border-color': '#3b82f6',
-                'border-style': 'dashed',
             }}
         }},
         {{
-            selector: 'node[change_status="modified"][!has_members]',
+            selector: 'node[change_status="modified"]',
             style: {{
                 'border-color': '#f59e0b',
-                'border-style': 'dashed',
-                'border-width': 2,
             }}
         }},
         {{
-            selector: 'node[change_status="deleted"][!has_members]',
+            selector: 'node[change_status="deleted"]',
             style: {{
-                'border-width': 2,
                 'border-color': '#ef4444',
-                'border-style': 'dashed',
                 'opacity': 0.6,
             }}
         }},
