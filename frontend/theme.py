@@ -221,9 +221,9 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'text-justification': 'left',
                 'width': {_member_label_dim},
                 'height': {_member_label_height},
-                'padding': '{pad_members}px',
-                'border-style': 'solid',
-                'border-width': 2.5,
+                'padding': '5px',
+                'border-style': 'dashed',
+                'border-width': 3.5,
                 'border-color': '#4a5568',
                 'background-color': '#1e293b',
                 'color': '#e2e8f0',
@@ -329,19 +329,6 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 style: {{ 'background-color': color, 'background-blacken': 0.25 }}
             }},
         ]),
-        // ── Kind-colored top-border accent for UML boxes ────────────────
-        // Adds a kind-colored left border to member nodes via a compound
-        // selector trick: classes can be added per kind later, but for
-        // now we give each kind its border color.
-        ...Object.entries({{
-            'class': '#4a90d9',
-            'struct': '#5b9bd5',
-            'interface': '{ec["INHERITS_FROM"]}',
-            'enum': '#e74c3c',
-        }}).map(([kind, bcolor]) => ({{
-            selector: 'node[has_members="true"][kind="' + kind + '"]',
-            style: {{ 'border-color': bcolor, 'border-width': 2.5 }}
-        }})),
         // ── Requirement highlight ────────────────────────────────────────
         {{
             selector: 'node[is_hlr_highlight = "true"]',
@@ -383,15 +370,16 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
         }},
         // ── Change-status styles ──────────────────────────────────────
         // Status is shown via a subtle background tint + dashed border overlay.
-        // Kind-colored solid border always shows as the inner border.
-        // Status dashed border sits outside as a visual indicator.
+        // ── Change-status styles ──────────────────────────────────────
+        // Status is shown via the outer dashed border color.
+        // The inner solid border (kind color) is rendered via box-shadow:inset
+        // in the HTML label by _build_uml_html(). Background is always neutral.
         {{
             selector: 'node[change_status="new"]',
             style: {{
                 'border-width': 3.5,
                 'border-color': '#10b981',
                 'border-style': 'dashed',
-                'background-color': '#1e3a2e',
             }}
         }},
         {{
@@ -400,7 +388,6 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'border-width': 3.5,
                 'border-color': '#3b82f6',
                 'border-style': 'dashed',
-                'background-color': '#1e2d3b',
             }}
         }},
         {{
@@ -409,7 +396,6 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'border-width': 3.5,
                 'border-color': '#f59e0b',
                 'border-style': 'dashed',
-                'background-color': '#2e2a1e',
             }}
         }},
         {{
@@ -418,7 +404,6 @@ def cytoscape_base_styles(*, size: str = "small") -> str:
                 'border-width': 3.5,
                 'border-color': '#ef4444',
                 'border-style': 'dashed',
-                'background-color': '#2e1e1e',
                 'opacity': 0.6,
             }}
         }},
