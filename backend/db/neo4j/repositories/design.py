@@ -158,7 +158,7 @@ class DesignRepository:
     def get_by_qualified_name(self, qualified_name: str) -> NodeModel | None:
         """Fetch a node by qualified_name. Returns None if not found.
 
-        Searches across :Compound, :Member, :Namespace, and :Design
+        Searches across :Compound, :Member, :Namespace
         (legacy) labels.
         """
         label_clause = _label_match("n")
@@ -188,7 +188,7 @@ class DesignRepository:
     ) -> list[NodeModel]:
         """Find nodes matching optional filters.
 
-        Searches across :Compound, :Member, :Namespace, and :Design
+        Searches across :Compound, :Member, :Namespace
         (legacy) labels.
 
         Args:
@@ -747,7 +747,7 @@ class DesignRepository:
     def delete_node(self, qualified_name: str) -> bool:
         """Delete a node and all its relationships. Returns True if deleted.
 
-        Matches across :Compound, :Member, :Namespace, and :Design labels.
+        Matches across :Compound, :Member, :Namespace labels.
         """
         label_clause = _label_match("n")
         result = self._session.run(
@@ -779,8 +779,7 @@ class DesignRepository:
     ) -> None:
         """MERGE a typed relationship between two codebase nodes.
 
-        Matches subject and object across :Compound, :Member, :Namespace,
-        and :Design (legacy) labels.
+        Matches subject and object across :Compound, :Member, :Namespace.
 
         Args:
             subject_qualified_name: Qualified name of the source node.
@@ -842,7 +841,7 @@ class DesignRepository:
     def clear_design_graph(self) -> bool:
         """Delete all codebase graph nodes and their relationships.
 
-        Removes :Compound, :Member, :Namespace, and legacy :Design nodes.
+        Removes :Compound, :Member, :Namespace nodes.
         """
         try:
             label_clause = _label_match("n")
@@ -856,7 +855,7 @@ class DesignRepository:
     def sync_implementation_status(self, qualified_name: str, status: str, source_file: str = "", test_file: str = "") -> None:
         """Update implementation_status on a node.
 
-        Matches across :Compound, :Member, :Namespace, and :Design labels.
+        Matches across :Compound, :Member, :Namespace labels.
         """
         label_clause = _label_match("n")
         self._session.run(

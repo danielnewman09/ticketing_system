@@ -279,7 +279,7 @@ class VerificationRepository:
                 # :LEFT_OPERAND edge exists and can be updated later
                 self._session.run(
                     """
-                    MERGE (d:Design {qualified_name: $qn})
+                    MERGE (d:Compound {qualified_name: $qn})
                     ON CREATE SET d.is_stub = true, d.kind = 'stub'
                     WITH d
                     MATCH (c:Condition {id: $cid})
@@ -296,7 +296,7 @@ class VerificationRepository:
                 result = self._session.run(
                     """
                     MATCH (c:Condition {id: $cid})
-                    MATCH (d:Design {qualified_name: $qn})
+                    MATCH (d {qualified_name: $qn})
                     MERGE (c)-[:LEFT_OPERAND]->(d)
                     """,
                     {"cid": next_id, "qn": subject_qualified_name},
@@ -316,7 +316,7 @@ class VerificationRepository:
             if is_notional:
                 self._session.run(
                     """
-                    MERGE (d:Design {qualified_name: $qn})
+                    MERGE (d:Compound {qualified_name: $qn})
                     ON CREATE SET d.is_stub = true, d.kind = 'stub'
                     WITH d
                     MATCH (c:Condition {id: $cid})
@@ -333,7 +333,7 @@ class VerificationRepository:
                 result = self._session.run(
                     """
                     MATCH (c:Condition {id: $cid})
-                    MATCH (d:Design {qualified_name: $qn})
+                    MATCH (d {qualified_name: $qn})
                     MERGE (c)-[:RIGHT_OPERAND]->(d)
                     """,
                     {"cid": next_id, "qn": object_qualified_name},
@@ -438,7 +438,7 @@ class VerificationRepository:
             if is_notional:
                 self._session.run(
                     """
-                    MERGE (d:Design {qualified_name: $qn})
+                    MERGE (d:Compound {qualified_name: $qn})
                     ON CREATE SET d.is_stub = true, d.kind = 'stub'
                     WITH d
                     MATCH (a:Action {id: $aid})
@@ -455,7 +455,7 @@ class VerificationRepository:
                 result = self._session.run(
                     """
                     MATCH (a:Action {id: $aid})
-                    MATCH (d:Design {qualified_name: $qn})
+                    MATCH (d {qualified_name: $qn})
                     MERGE (a)-[:CALLER]->(d)
                     """,
                     {"aid": next_id, "qn": caller_qualified_name},
@@ -475,7 +475,7 @@ class VerificationRepository:
             if is_notional:
                 self._session.run(
                     """
-                    MERGE (d:Design {qualified_name: $qn})
+                    MERGE (d:Compound {qualified_name: $qn})
                     ON CREATE SET d.is_stub = true, d.kind = 'stub'
                     WITH d
                     MATCH (a:Action {id: $aid})
@@ -492,7 +492,7 @@ class VerificationRepository:
                 result = self._session.run(
                     """
                     MATCH (a:Action {id: $aid})
-                    MATCH (d:Design {qualified_name: $qn})
+                    MATCH (d {qualified_name: $qn})
                     MERGE (a)-[:CALLEE]->(d)
                     """,
                     {"aid": next_id, "qn": callee_qualified_name},
@@ -604,7 +604,7 @@ class VerificationRepository:
             if not qn:
                 continue
             result = self._session.run(
-                "MATCH (d:Design {qualified_name: $qn}) RETURN count(d) AS cnt",
+                "MATCH (d {qualified_name: $qn}) RETURN count(d) AS cnt",
                 {"qn": qn},
             )
             if result.single()["cnt"] > 0:

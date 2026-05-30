@@ -387,7 +387,7 @@ def persist_verification(
     # temporary placeholders and should be removed.
     neo4j_session.run(
         """
-        MATCH (d:Design {is_stub: true})
+        MATCH (d:Compound {is_stub: true})
         WHERE NOT (d)--()
         DETACH DELETE d
         """
