@@ -60,9 +60,22 @@ class Neo4jConnection:
             log.warning("Neo4j not reachable — skipping constraint setup")
             return False
         statements = [
+            # New node label constraints
+            "CREATE CONSTRAINT compound_qualified_name IF NOT EXISTS FOR (n:Compound) REQUIRE n.qualified_name IS UNIQUE",
+            "CREATE CONSTRAINT member_qualified_name IF NOT EXISTS FOR (n:Member) REQUIRE n.qualified_name IS UNIQUE",
+            "CREATE CONSTRAINT namespace_qualified_name IF NOT EXISTS FOR (n:Namespace) REQUIRE n.qualified_name IS UNIQUE",
+            # Legacy Design constraint (kept for migration period)
             "CREATE CONSTRAINT design_qualified_name IF NOT EXISTS FOR (n:Design) REQUIRE n.qualified_name IS UNIQUE",
             "CREATE CONSTRAINT hlr_id IF NOT EXISTS FOR (n:HLR) REQUIRE n.id IS UNIQUE",
             "CREATE CONSTRAINT llr_id IF NOT EXISTS FOR (n:LLR) REQUIRE n.id IS UNIQUE",
+            # New indexes
+            "CREATE INDEX compound_layer IF NOT EXISTS FOR (n:Compound) ON (n.layer)",
+            "CREATE INDEX compound_kind IF NOT EXISTS FOR (n:Compound) ON (n.kind)",
+            "CREATE INDEX compound_component_id IF NOT EXISTS FOR (n:Compound) ON (n.component_id)",
+            "CREATE INDEX member_layer IF NOT EXISTS FOR (n:Member) ON (n.layer)",
+            "CREATE INDEX member_kind IF NOT EXISTS FOR (n:Member) ON (n.kind)",
+            "CREATE INDEX namespace_layer IF NOT EXISTS FOR (n:Namespace) ON (n.layer)",
+            # Legacy indexes (kept during migration)
             "CREATE INDEX design_kind IF NOT EXISTS FOR (n:Design) ON (n.kind)",
             "CREATE INDEX design_component_id IF NOT EXISTS FOR (n:Design) ON (n.component_id)",
             "CREATE CONSTRAINT verification_method_id IF NOT EXISTS FOR (n:VerificationMethod) REQUIRE n.id IS UNIQUE",
@@ -78,15 +91,23 @@ class Neo4jConnection:
     def ensure_design_constraints(self):
         """Create additional constraints and indexes for the design layer.
 
-        Called once at application startup. Extends the base constraints
-        with Phase 1 migration indexes for the repository layer.
+        Includes both new Compound/Member/Namespace indexes and legacy Design
+        indexes for migration compatibility.
         """
         if not self.verify_connectivity():
             log.warning("Neo4j not reachable — skipping design constraint setup")
             return False
         statements = [
+            # Legacy Design indexes (kept during migration)
             "CREATE INDEX design_source_type IF NOT EXISTS FOR (n:Design) ON (n.source_type)",
             "CREATE INDEX design_implementation_status IF NOT EXISTS FOR (n:Design) ON (n.implementation_status)",
+            "CREATE INDEX design_component_id IF NOT EXISTS FOR (n:Design) ON (n.component_id)",
+            # New layer-based indexes
+            "CREATE INDEX compound_layer IF NOT EXISTS FOR (n:Compound) ON (n.layer)",
+            "CREATE INDEX compound_implementation_status IF NOT EXISTS FOR (n:Compound) ON (n.implementation_status)",
+            "CREATE INDEX compound_component_id IF NOT EXISTS FOR (n:Compound) ON (n.component_id)",
+            "CREATE INDEX member_layer IF NOT EXISTS FOR (n:Member) ON (n.layer)",
+            "CREATE INDEX namespace_layer IF NOT EXISTS FOR (n:Namespace) ON (n.layer)",
         ]
         with self.session() as session:
             for stmt in statements:
