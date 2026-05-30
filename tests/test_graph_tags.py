@@ -17,7 +17,8 @@ def neo4j_session():
     driver = get_standalone_driver()
     session = driver.session(database="neo4j")
     yield session
-    session.run("MATCH (n:Design) DETACH DELETE n")
+    from backend.db.neo4j.repositories.design import DesignRepository
+    DesignRepository(session).clear_design_graph()
     session.run("MATCH (n:HLR) DETACH DELETE n")
     session.run("MATCH (n:LLR) DETACH DELETE n")
     session.close()

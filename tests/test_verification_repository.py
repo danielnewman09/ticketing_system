@@ -25,7 +25,7 @@ def neo4j_session():
     session.run("MATCH (n:Action) DETACH DELETE n")
     session.run("MATCH (n:HLR) DETACH DELETE n")
     session.run("MATCH (n:LLR) DETACH DELETE n")
-    session.run("MATCH (n:Design) DETACH DELETE n")
+    DesignRepository(session).clear_design_graph()
     yield session
     # Clean up after
     session.run("MATCH (n:VerificationMethod) DETACH DELETE n")
@@ -33,7 +33,7 @@ def neo4j_session():
     session.run("MATCH (n:Action) DETACH DELETE n")
     session.run("MATCH (n:HLR) DETACH DELETE n")
     session.run("MATCH (n:LLR) DETACH DELETE n")
-    session.run("MATCH (n:Design) DETACH DELETE n")
+    DesignRepository(session).clear_design_graph()
     session.close()
     driver.close()
 

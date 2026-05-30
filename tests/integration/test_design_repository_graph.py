@@ -3,23 +3,30 @@
 Requires a running Neo4j instance.
 """
 
+import os
+
 import pytest
 from backend.db.neo4j.repositories.design import DesignRepository
 from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
 
-
-def _get_neo4j_session():
-    """Get a Neo4j session for testing."""
-    from services.dependencies import get_neo4j
-    conn = get_neo4j()
-    return conn.session()
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_NEO4J_INTEGRATION") != "1",
+    reason="Set RUN_NEO4J_INTEGRATION=1 to run Neo4j integration tests",
+)
 
 
 @pytest.fixture
 def neo4j_session():
-    conn = _get_neo4j_session()
-    yield conn
-    conn.close()
+    """Provide a Neo4j session and clean up after each test."""
+    from backend.db.neo4j.connection import get_standalone_driver
+
+    driver = get_standalone_driver()
+    session = driver.session(database="neo4j")
+    repo = DesignRepository(session)
+    repo.clear_design_graph()
+    yield session
+    repo.clear_design_graph()
+    session.close()
 
 
 class TestGetCompoundGraph:
