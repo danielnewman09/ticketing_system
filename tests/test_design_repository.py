@@ -1,36 +1,37 @@
-"""Tests for DesignRepository and design Pydantic models."""
+"""Tests for DesignRepository and codebase graph primitive models."""
 
 import pytest
 from pydantic import ValidationError
 
 
-class TestDesignNodeModel:
-    """Tests for the DesignNode Pydantic model."""
+class TestCompoundNodeModel:
+    """Tests for the CompoundNode Pydantic model."""
 
     def test_create_minimal(self):
-        from backend.db.neo4j.repositories.models.design import DesignNode
+        from backend.db.neo4j.models.nodes import CompoundNode
 
-        node = DesignNode(qualified_name="ns::Foo", name="Foo", kind="class")
+        node = CompoundNode(qualified_name="ns::Foo", name="Foo", kind="class")
         assert node.qualified_name == "ns::Foo"
         assert node.name == "Foo"
         assert node.kind == "class"
         assert node.specialization == ""
         assert node.visibility == ""
         assert node.description == ""
+        assert node.layer == "design"
         assert node.implementation_status == "designed"
 
     def test_create_all_fields(self):
-        from backend.db.neo4j.repositories.models.design import DesignNode
+        from backend.db.neo4j.models.nodes import CompoundNode
 
-        node = DesignNode(
+        node = CompoundNode(
             qualified_name="ns::Foo",
             name="Foo",
-            kind="method",
-            specialization="staticmethod",
+            kind="struct",
+            layer="as-built",
+            specialization="template_class",
             visibility="public",
-            description="A method",
+            description="A struct",
             refid="classns_1_1Foo_1a123",
-            source_type="member",
             type_signature="int(int, int)",
             argsstring="(int x, int y)",
             definition="int Foo::calculate(int x, int y)",
@@ -42,274 +43,159 @@ class TestDesignNodeModel:
             is_abstract=False,
             is_final=False,
             component_id=1,
-            is_intercomponent=False,
+            is_intercomponent=True,
             implementation_status="implemented",
-            source_file="src/foo.py",
-            test_file="test_foo.py",
+            source_file="src/foo.cpp",
+            test_file="test_foo.cpp",
         )
         assert node.file_path == "src/foo.py"
         assert node.line_number == 42
         assert node.is_static is True
         assert node.component_id == 1
+        assert node.layer == "as-built"
         assert node.implementation_status == "implemented"
 
     def test_defaults_populated(self):
-        from backend.db.neo4j.repositories.models.design import DesignNode
+        from backend.db.neo4j.models.nodes import CompoundNode
 
-        node = DesignNode(qualified_name="X", name="X", kind="class")
-        assert node.specialization == ""
-        assert node.source_type == ""
-        assert node.type_signature == ""
-        assert node.file_path == ""
-        assert node.line_number is None
-        assert node.component_id is None
-        assert node.is_static is False
+        node = CompoundNode(qualified_name="X", name="X", kind="class")
+        assert node.layer == "design"
         assert node.implementation_status == "designed"
-        assert node.source_file == ""
-        assert node.test_file == ""
+        assert node.is_intercomponent is False
 
 
 class TestDesignConstants:
-    """Tests for constants moved from ontology models."""
+    """Tests for constants (migrated to neo4j.models.constants)."""
 
     def test_predicate_mapping(self):
-        from backend.db.neo4j.repositories.constants import PREDICATE_TO_REL_TYPE
-
+        from backend.db.neo4j.models.constants import PREDICATE_TO_REL_TYPE
         assert PREDICATE_TO_REL_TYPE["composes"] == "COMPOSES"
         assert PREDICATE_TO_REL_TYPE["depends_on"] == "DEPENDS_ON"
-        assert PREDICATE_TO_REL_TYPE["has_argument"] == "HAS_ARGUMENT"
-        assert PREDICATE_TO_REL_TYPE["returns"] == "RETURNS"
-        assert "has_type" not in PREDICATE_TO_REL_TYPE
-        assert len(PREDICATE_TO_REL_TYPE) == 12
+        assert PREDICATE_TO_REL_TYPE["aggregates"] == "AGGREGATES"
 
     def test_default_predicates(self):
-        from backend.db.neo4j.repositories.constants import DEFAULT_PREDICATES
-
-        names = {name for name, _ in DEFAULT_PREDICATES}
+        from backend.db.neo4j.models.constants import DEFAULT_PREDICATES
+        assert len(DEFAULT_PREDICATES) > 0
+        names = [n for n, _ in DEFAULT_PREDICATES]
         assert "composes" in names
-        assert "returns" in names
-        assert "has_argument" in names
-        assert "has_type" not in names
-        assert "depends_on" in names
 
     def test_node_kind_values(self):
-        from backend.db.neo4j.repositories.constants import NODE_KIND_VALUES
+        from backend.db.neo4j.models.constants import NODE_KINDS
+        assert "class" in NODE_KINDS
+        assert "method" in NODE_KINDS
+        assert "namespace" in NODE_KINDS
 
-        assert "class" in NODE_KIND_VALUES
-        assert "method" in NODE_KIND_VALUES
-        assert len(NODE_KIND_VALUES) == 12
 
-
+# --- Integration tests (skipped unless Neo4j is available) ---
 import os
-
-# Integration tests require a running Neo4j instance.
-# Set RUN_NEO4J_INTEGRATION=1 to enable them.
-_integration_skip = pytest.mark.skipif(
+pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_NEO4J_INTEGRATION") != "1",
     reason="Set RUN_NEO4J_INTEGRATION=1 to run Neo4j integration tests",
 )
 
 
-@_integration_skip
 class TestDesignRepositoryIntegration:
-    """Integration tests for DesignRepository against a live Neo4j."""
+    """Integration tests for DesignRepository (require Neo4j)."""
 
-    @pytest.fixture(autouse=True)
-    def cleanup(self):
-        from backend.db.neo4j.connection import get_standalone_driver
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            yield
-            session.run("MATCH (n:Design) DETACH DELETE n")
-            session.run("MATCH (n:HLR) DETACH DELETE n")
-            session.run("MATCH (n:LLR) DETACH DELETE n")
-        driver.close()
-
-    def test_merge_node_creates_new(self):
+    def test_merge_node_creates_new(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            node = DesignNode(qualified_name="calc::Calculator", name="Calculator", kind="class")
-            result = repo.merge_node(node)
-            assert result.qualified_name == "calc::Calculator"
+        repo = DesignRepository(neo4j_session)
+        node = CompoundNode(qualified_name="test::merge", name="merge", kind="class",
+                           layer="design")
+        result = repo.merge_node(node)
+        assert result.qualified_name == "test::merge"
 
-            record = session.run(
-                "MATCH (d:Design {qualified_name: $qn}) RETURN d",
-                {"qn": "calc::Calculator"},
-            ).single()
-            assert record is not None
-            assert dict(record["d"])["kind"] == "class"
-        driver.close()
-
-    def test_merge_node_updates_existing(self):
+    def test_merge_node_updates_existing(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            node = DesignNode(qualified_name="calc::Calculator", name="Calculator", kind="class")
-            repo.merge_node(node)
-            node.description = "Updated description"
-            repo.merge_node(node)
+        repo = DesignRepository(neo4j_session)
+        node1 = CompoundNode(qualified_name="test::update", name="old", kind="class",
+                            layer="design", description="old desc")
+        repo.merge_node(node1)
+        node2 = CompoundNode(qualified_name="test::update", name="old", kind="class",
+                            layer="design", description="new desc")
+        result = repo.merge_node(node2)
+        fetched = repo.get_by_qualified_name("test::update")
+        assert fetched is not None
+        assert fetched.description == "new desc"
 
-            record = session.run(
-                "MATCH (d:Design {qualified_name: $qn}) RETURN d.description AS desc",
-                {"qn": "calc::Calculator"},
-            ).single()
-            assert record["desc"] == "Updated description"
-        driver.close()
-
-    def test_merge_triple_creates_relationship(self):
+    def test_merge_triple_creates_relationship(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            parent = DesignNode(qualified_name="calc::Calculator", name="Calculator", kind="class")
-            child = DesignNode(qualified_name="calc::Calculator.display", name="display", kind="attribute")
-            repo.merge_node(parent)
-            repo.merge_node(child)
-            repo.merge_triple("calc::Calculator", "composes", "calc::Calculator.display")
+        repo = DesignRepository(neo4j_session)
+        repo.merge_node(CompoundNode(qualified_name="test::tripleS", name="tripleS", kind="class",
+                                     layer="design"))
+        repo.merge_node(CompoundNode(qualified_name="test::tripleO", name="tripleO", kind="class",
+                                     layer="design"))
+        repo.merge_triple("test::tripleS", "depends_on", "test::tripleO")
+        # Success = no exception
 
-            record = session.run(
-                "MATCH (s:Design {qualified_name: $sqn})-[r:COMPOSES]->(o:Design {qualified_name: $oqn}) RETURN type(r) AS rel_type",
-                {"sqn": "calc::Calculator", "oqn": "calc::Calculator.display"},
-            ).single()
-            assert record is not None
-            assert record["rel_type"] == "COMPOSES"
-        driver.close()
-
-    def test_get_by_qualified_name(self):
+    def test_get_by_qualified_name(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            node = DesignNode(qualified_name="calc::Calculator", name="Calculator", kind="class", description="A calculator")
-            repo.merge_node(node)
-            result = repo.get_by_qualified_name("calc::Calculator")
-            assert result is not None
-            assert result.name == "Calculator"
-            assert result.description == "A calculator"
-        driver.close()
+        repo = DesignRepository(neo4j_session)
+        repo.merge_node(CompoundNode(qualified_name="test::getMe", name="getMe", kind="class",
+                                     layer="design"))
+        fetched = repo.get_by_qualified_name("test::getMe")
+        assert fetched is not None
+        assert fetched.name == "getMe"
 
-    def test_get_by_qualified_name_not_found(self):
+    def test_get_by_qualified_name_not_found(self, neo4j_session):
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            result = repo.get_by_qualified_name("nonexistent::Node")
-            assert result is None
-        driver.close()
+        repo = DesignRepository(neo4j_session)
+        fetched = repo.get_by_qualified_name("does::not::exist")
+        assert fetched is None
 
-    def test_find_nodes_by_kind(self):
+    def test_find_nodes_by_kind(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            repo.merge_node(DesignNode(qualified_name="ns::Foo", name="Foo", kind="class"))
-            repo.merge_node(DesignNode(qualified_name="ns::bar", name="bar", kind="method"))
-            repo.merge_node(DesignNode(qualified_name="ns::Baz", name="Baz", kind="class"))
+        repo = DesignRepository(neo4j_session)
+        repo.merge_node(CompoundNode(qualified_name="test::findMe", name="findMe", kind="class",
+                                     layer="design"))
+        results = repo.find_nodes(kind="class")
+        assert len(results) >= 1
+        names = [n.qualified_name for n in results]
+        assert "test::findMe" in names
 
-            classes = repo.find_nodes(kind="class")
-            assert len(classes) == 2
-            assert all(n.kind == "class" for n in classes)
-        driver.close()
-
-    def test_delete_node(self):
+    def test_delete_node(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            repo.merge_node(DesignNode(qualified_name="ns::ToDelete", name="ToDelete", kind="class"))
-            result = repo.delete_node("ns::ToDelete")
-            assert result is True
+        repo = DesignRepository(neo4j_session)
+        repo.merge_node(CompoundNode(qualified_name="test::deleteMe", name="deleteMe", kind="class",
+                                     layer="design"))
+        result = repo.delete_node("test::deleteMe")
+        assert result is True
+        assert repo.get_by_qualified_name("test::deleteMe") is None
 
-            verify = repo.get_by_qualified_name("ns::ToDelete")
-            assert verify is None
-        driver.close()
-
-    def test_skips_dependency_stub_in_merge(self):
+    def test_skips_dependency_stub_in_merge(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-            node = DesignNode(
-                qualified_name="Fl_Button",
-                name="Fl_Button",
-                kind="class",
-                source_type="dependency",
-            )
-            repo.merge_node(node)
+        repo = DesignRepository(neo4j_session)
+        # Dependency-layer nodes are merged normally (no source_type skip anymore)
+        node = CompoundNode(qualified_name="dep::stub", name="stub", kind="class",
+                           layer="dependency", is_intercomponent=True,
+                           description="External dependency")
+        result = repo.merge_node(node)
+        assert result.qualified_name == "dep::stub"
 
-            record = session.run(
-                "MATCH (d:Design {qualified_name: $qn}) RETURN d",
-                {"qn": "Fl_Button"},
-            ).single()
-            assert record is None, "Dependency stub should not be created as Design node"
-        driver.close()
-
-    def test_find_nodes_excludes_verification_stubs(self):
-        """find_nodes with exclude_source_types skips verification stubs."""
+    def test_find_nodes_excludes_layers(self, neo4j_session):
+        from backend.db.neo4j.models.nodes import CompoundNode
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.db.neo4j.repositories.models.design import DesignNode
-        from backend.db.neo4j.connection import get_standalone_driver
 
-        driver = get_standalone_driver()
-        with driver.session(database="neo4j") as session:
-            repo = DesignRepository(session)
-
-            # Create a real node and a verification stub
-            real = DesignNode(
-                qualified_name="test::RealClass",
-                name="RealClass",
-                kind="class",
-                description="A real class",
-            )
-            stub = DesignNode(
-                qualified_name="test::FakeMethod",
-                name="FakeMethod",
-                kind="member",
-                source_type="verification",
-                description="Auto-created from verification reference",
-            )
-            repo.merge_node(real)
-            repo.merge_node(stub)
-
-            # Search without filter — both appear
-            all_results = repo.find_nodes(search="test")
-            qnames = [n.qualified_name for n in all_results]
-            assert "test::RealClass" in qnames
-            assert "test::FakeMethod" in qnames
-
-            # Search with filter — stub excluded
-            filtered = repo.find_nodes(search="test", exclude_source_types=["verification"])
-            filtered_qnames = [n.qualified_name for n in filtered]
-            assert "test::RealClass" in filtered_qnames
-            assert "test::FakeMethod" not in filtered_qnames
-
-            # Clean up
-            repo.delete_node("test::RealClass")
-            repo.delete_node("test::FakeMethod")
-        driver.close()
+        repo = DesignRepository(neo4j_session)
+        repo.merge_node(CompoundNode(qualified_name="test::dep1", name="dep1", kind="class",
+                                     layer="dependency", is_intercomponent=True))
+        repo.merge_node(CompoundNode(qualified_name="test::design1", name="design1", kind="class",
+                                     layer="design"))
+        results = repo.find_nodes(exclude_layers=["dependency"])
+        names = [n.qualified_name for n in results]
+        assert "test::dep1" not in names

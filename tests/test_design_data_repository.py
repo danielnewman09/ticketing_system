@@ -29,22 +29,22 @@ def neo4j_session():
 
 
 def _seed_design_nodes(neo4j_session):
-    """Seed some :Design nodes for testing."""
+    """Seed some codebase graph nodes for testing."""
+    from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
     from backend.db.neo4j.repositories.design import DesignRepository
-    from backend.db.neo4j.repositories.models.design import DesignNode
 
     repo = DesignRepository(neo4j_session)
 
     # Create a class with members
-    repo.merge_node(DesignNode(
+    repo.merge_node(CompoundNode(
         name="Calculator", qualified_name="calc::Calculator", kind="class",
         description="Main calculator class", component_id=1,
     ))
-    repo.merge_node(DesignNode(
+    repo.merge_node(MemberNode(
         name="result_", qualified_name="calc::Calculator::result_", kind="attribute",
         type_signature="double", visibility="private",
     ))
-    repo.merge_node(DesignNode(
+    repo.merge_node(MemberNode(
         name="add", qualified_name="calc::Calculator::add", kind="method",
         visibility="public", type_signature="double", argsstring="(double x, double y)",
     ))
@@ -53,18 +53,18 @@ def _seed_design_nodes(neo4j_session):
     repo.merge_triple("calc::Calculator", "composes", "calc::Calculator::add")
 
     # Create an interface
-    repo.merge_node(DesignNode(
+    repo.merge_node(CompoundNode(
         name="ICalculator", qualified_name="calc::ICalculator", kind="interface",
         description="Calculator interface", component_id=1,
     ))
-    repo.merge_node(DesignNode(
+    repo.merge_node(MemberNode(
         name="add", qualified_name="calc::ICalculator::add", kind="method",
         visibility="public", is_virtual=True,
     ))
     repo.merge_triple("calc::ICalculator", "composes", "calc::ICalculator::add")
 
     # Create an enum
-    repo.merge_node(DesignNode(
+    repo.merge_node(CompoundNode(
         name="Operation", qualified_name="calc::Operation", kind="enum",
         description="Supported operations", component_id=1,
     ))

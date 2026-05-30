@@ -49,12 +49,12 @@ def _seed_hlr_llr(neo4j_session):
 
 
 def _seed_design_node(neo4j_session, qualified_name="calc::Calculator", kind="class"):
-    """Create a :Design node for edge targets."""
+    """Create a CompoundNode for edge targets."""
+    from backend.db.neo4j.models.nodes import CompoundNode
     from backend.db.neo4j.repositories.design import DesignRepository
-    from backend.db.neo4j.repositories.models.design import DesignNode
 
     repo = DesignRepository(neo4j_session)
-    repo.merge_node(DesignNode(qualified_name=qualified_name, name=qualified_name.rsplit("::", 1)[-1], kind=kind))
+    repo.merge_node(CompoundNode(qualified_name=qualified_name, name=qualified_name.rsplit("::", 1)[-1], kind=kind))
 
 
 class TestVerificationMethodCRUD:
