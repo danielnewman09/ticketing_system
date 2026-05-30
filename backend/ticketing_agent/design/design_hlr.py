@@ -11,8 +11,6 @@ import logging
 import os
 
 from backend.codebase.schemas import DesignSchema, OODesignSchema
-# from backend.ticketing_agent.design.design_oo import design_oo  # no longer called from pipeline
-# from backend.ticketing_agent.design.discover_classes import discover_classes  # no longer called from pipeline
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, build_alias_lookup
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
