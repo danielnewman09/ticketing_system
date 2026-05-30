@@ -68,22 +68,22 @@ class TestDesignConstants:
     """Tests for constants (migrated to neo4j.models.constants)."""
 
     def test_predicate_mapping(self):
-        from backend.db.neo4j.models.constants import PREDICATE_TO_REL_TYPE
+        from codegraph.constants import PREDICATE_TO_REL_TYPE
         assert PREDICATE_TO_REL_TYPE["composes"] == "COMPOSES"
         assert PREDICATE_TO_REL_TYPE["depends_on"] == "DEPENDS_ON"
         assert PREDICATE_TO_REL_TYPE["aggregates"] == "AGGREGATES"
 
     def test_default_predicates(self):
-        from backend.db.neo4j.models.constants import DEFAULT_PREDICATES
+        from codegraph.constants import DEFAULT_PREDICATES
         assert len(DEFAULT_PREDICATES) > 0
         names = [n for n, _ in DEFAULT_PREDICATES]
         assert "composes" in names
 
     def test_node_kind_values(self):
-        from backend.db.neo4j.models.constants import NODE_KINDS
-        assert "class" in NODE_KINDS
-        assert "method" in NODE_KINDS
-        assert "namespace" in NODE_KINDS
+        from codegraph.constants import NODE_KIND_KEYS
+        assert "class" in NODE_KIND_KEYS
+        assert "method" in NODE_KIND_KEYS
+        assert "namespace" in NODE_KIND_KEYS
 
 
 # --- Integration tests (skipped unless Neo4j is available) ---

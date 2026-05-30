@@ -383,23 +383,23 @@ class TestDesignSchema:
 
 class TestNodeKindLiteral:
     def test_all_model_kinds_are_literal_members(self):
-        from backend.db.neo4j.models.constants import NODE_KINDS
+        from codegraph.constants import NODE_KIND_KEYS
 
-        for kind_name in NODE_KINDS:
+        for kind_name in NODE_KIND_KEYS:
             assert kind_name in NodeKind.__args__, f"{kind_name} not in NodeKind Literal"
 
 
 class TestVisibilityLiteral:
     def test_all_model_visibilities_are_literal_members(self):
-        from backend.db.neo4j.models.constants import VISIBILITY_CHOICES
+        from codegraph.constants import VISIBILITY_CHOICES
 
-        for vis_name in VISIBILITY_CHOICES:
+        for vis_key, _ in VISIBILITY_CHOICES:
             assert vis_name in Visibility.__args__, f"{vis_name} not in Visibility Literal"
 
 
 class TestSourceTypeLiteral:
     def test_all_model_source_types_are_literal_members(self):
-        from backend.db.neo4j.models.constants import SOURCE_TYPES
+        from codegraph.constants import SOURCE_TYPES
 
         for st_name, _ in SOURCE_TYPES:
             assert st_name in SourceType.__args__, f"{st_name} not in SourceType Literal"

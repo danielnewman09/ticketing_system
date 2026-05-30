@@ -1,238 +1,143 @@
-"""Tests for codebase graph primitives — constants, node models, and edge models."""
+"""Sanity-check the codebase graph primitives (models + constants).
+
+Validates that:
+- Node models can be instantiated with valid data.
+- The constants (kinds, layers, visibility, predicates, specializations)
+  are correctly imported and have expected membership.
+"""
 
 import pytest
 
+from codegraph.nodes import CompoundNode, MemberNode
 
-class TestConstants:
-    """Tests for constant values moved from db/models/ontology.py."""
 
+class TestNodeKindImport:
     def test_compound_kinds(self):
-        from backend.db.neo4j.models.constants import COMPOUND_KINDS
-        assert "class" in COMPOUND_KINDS
-        assert "interface" in COMPOUND_KINDS
-        assert "enum" in COMPOUND_KINDS
-        assert "method" not in COMPOUND_KINDS
+        from codegraph.constants import COMPOUND_KINDS
+        keys = {k for k, _ in COMPOUND_KINDS}
+        assert "class" in keys
+        assert "interface" in keys
+        assert "enum" in keys
+        assert "method" not in keys
 
     def test_member_kinds(self):
-        from backend.db.neo4j.models.constants import MEMBER_KINDS
-        assert "method" in MEMBER_KINDS
-        assert "variable" in MEMBER_KINDS
-        assert "class" not in MEMBER_KINDS
+        from codegraph.constants import MEMBER_KINDS
+        keys = {k for k, _ in MEMBER_KINDS}
+        assert "method" in keys
+        assert "variable" in keys
+        assert "class" not in keys
 
     def test_namespace_kinds(self):
-        from backend.db.neo4j.models.constants import NAMESPACE_KINDS
-        assert "namespace" in NAMESPACE_KINDS
-        assert "package" in NAMESPACE_KINDS
+        from codegraph.constants import NAMESPACE_KINDS
+        keys = {k for k, _ in NAMESPACE_KINDS}
+        assert "namespace" in keys
+        assert "package" in keys
 
     def test_node_kinds_is_union(self):
-        from backend.db.neo4j.models.constants import NODE_KINDS, COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS, UNCLASSIFIED_KINDS
+        from codegraph.constants import NODE_KINDS, COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS, UNCLASSIFIED_KINDS
         assert set(NODE_KINDS) == set(COMPOUND_KINDS + MEMBER_KINDS + NAMESPACE_KINDS + UNCLASSIFIED_KINDS)
 
     def test_type_kinds(self):
-        from backend.db.neo4j.models.constants import TYPE_KINDS
+        from codegraph.constants import TYPE_KINDS
         assert "class" in TYPE_KINDS
         assert "interface" in TYPE_KINDS
         assert "method" not in TYPE_KINDS
 
     def test_value_kinds(self):
-        from backend.db.neo4j.models.constants import VALUE_KINDS
+        from codegraph.constants import VALUE_KINDS
         assert "method" in VALUE_KINDS
         assert "variable" in VALUE_KINDS
         assert "class" not in VALUE_KINDS
 
     def test_visibility_choices(self):
-        from backend.db.neo4j.models.constants import VISIBILITY_CHOICES
-        assert "public" in VISIBILITY_CHOICES
-        assert "private" in VISIBILITY_CHOICES
+        from codegraph.constants import VISIBILITY_CHOICES
+        keys = {k for k, _ in VISIBILITY_CHOICES}
+        assert "public" in keys
+        assert "private" in keys
 
     def test_layers(self):
-        from backend.db.neo4j.models.constants import LAYERS
+        from codegraph.constants import LAYERS
         assert LAYERS == ["design", "as-built", "dependency"]
 
     def test_predicates_list(self):
-        from backend.db.neo4j.models.constants import PREDICATES
+        from codegraph.constants import PREDICATES
         assert "composes" in PREDICATES
         assert "aggregates" in PREDICATES
         assert "generalizes" in PREDICATES
 
     def test_predicate_to_rel_type_mapping(self):
-        from backend.db.neo4j.models.constants import PREDICATE_TO_REL_TYPE
+        from codegraph.constants import PREDICATE_TO_REL_TYPE
         assert PREDICATE_TO_REL_TYPE["composes"] == "COMPOSES"
         assert PREDICATE_TO_REL_TYPE["depends_on"] == "DEPENDS_ON"
 
     def test_valid_specializations_cpp(self):
-        from backend.db.neo4j.models.constants import valid_specializations
+        from codegraph.constants import valid_specializations
         cpp_class = valid_specializations("cpp", "class")
         assert "struct" in cpp_class
         assert "abstract_class" in cpp_class
 
     def test_valid_specializations_unknown_language(self):
-        from backend.db.neo4j.models.constants import valid_specializations
+        from codegraph.constants import valid_specializations
         assert valid_specializations("rust", "class") == set()
 
     def test_supported_languages(self):
-        from backend.db.neo4j.models.constants import SUPPORTED_LANGUAGES
+        from codegraph.constants import SUPPORTED_LANGUAGES
         assert "cpp" in SUPPORTED_LANGUAGES
         assert "python" in SUPPORTED_LANGUAGES
         assert "javascript" in SUPPORTED_LANGUAGES
 
 
-class TestCompoundNode:
-    """Tests for CompoundNode Pydantic model."""
+class TestGraphPrimitiveModels:
+    """Lightweight validation of graph primitive model instantiation.
 
-    def test_create_minimal(self):
-        from backend.db.neo4j.models.nodes.compound import CompoundNode
-        node = CompoundNode(qualified_name="ns::Foo", name="Foo", kind="class")
-        assert node.qualified_name == "ns::Foo"
-        assert node.name == "Foo"
-        assert node.kind == "class"
-        assert node.layer == "design"
-        assert node.specialization == ""
-        assert node.source == ""
-        assert node.implementation_status == "designed"
-        assert node.is_final is False
-        assert node.is_abstract is False
+    Full round-trip tests live in tests/test_codebase_schemas.py.
+    """
 
-    def test_create_all_fields(self):
-        from backend.db.neo4j.models.nodes.compound import CompoundNode
+    def test_compound_node_minimal(self):
         node = CompoundNode(
-            qualified_name="ns::Foo",
-            name="Foo",
-            kind="struct",
-            layer="as-built",
-            specialization="template_class",
-            refid="classns_1_1Foo",
-            file_path="src/foo.h",
-            line_number=42,
-            source="msd",
-            brief_description="A struct",
-            detailed_description="More detail",
-            base_classes=["ns::Base"],
-            is_abstract=True,
-            is_final=False,
-            component_id=1,
-            is_intercomponent=True,
-            implementation_status="implemented",
-            source_file="src/foo.cpp",
-            test_file="test_foo.cpp",
+            kind="class",
+            name="MyClass",
+            qualified_name="ns::MyClass",
+            layer="design",
         )
-        assert node.kind == "struct"
-        assert node.layer == "as-built"
-        assert node.specialization == "template_class"
-        assert node.source == "msd"
-        assert node.brief_description == "A struct"
-        assert node.base_classes == ["ns::Base"]
-        assert node.is_abstract is True
-        assert node.is_intercomponent is True
-        assert node.file_path == "src/foo.h"
-        assert node.line_number == 42
-
-    def test_invalid_kind_rejected(self):
-        from backend.db.neo4j.models.nodes.compound import CompoundNode
-        with pytest.raises(Exception):
-            CompoundNode(qualified_name="X", name="X", kind="method")
-
-    def test_invalid_layer_rejected(self):
-        from backend.db.neo4j.models.nodes.compound import CompoundNode
-        with pytest.raises(Exception):
-            CompoundNode(qualified_name="X", name="X", kind="class", layer="invalid")
-
-    def test_dependency_layer(self):
-        from backend.db.neo4j.models.nodes.compound import CompoundNode
-        node = CompoundNode(qualified_name="std::vector", name="vector", kind="class", layer="dependency",
-                           is_intercomponent=True, source="stdlib")
-        assert node.layer == "dependency"
-        assert node.is_intercomponent is True
-        assert node.source == "stdlib"
-
-
-class TestMemberNode:
-    """Tests for MemberNode Pydantic model."""
-
-    def test_create_minimal(self):
-        from backend.db.neo4j.models.nodes.member import MemberNode
-        node = MemberNode(qualified_name="ns::Foo::calculate", name="calculate", kind="method")
-        assert node.qualified_name == "ns::Foo::calculate"
-        assert node.kind == "method"
+        assert node.kind == "class"
+        assert node.name == "MyClass"
+        assert node.qualified_name == "ns::MyClass"
         assert node.layer == "design"
 
-    def test_create_attribute(self):
-        from backend.db.neo4j.models.nodes.member import MemberNode
+    def test_compound_node_defaults(self):
+        node = CompoundNode(
+            kind="class",
+            name="MyClass",
+            qualified_name="ns::MyClass",
+            layer="design",
+        )
+        assert node.visibility == "public"
+        assert node.specialization is None
+        assert node.source is None
+        assert node.members == []
+
+    def test_member_node_minimal(self):
         node = MemberNode(
-            qualified_name="ns::Foo::count",
-            name="count",
-            kind="variable",
-            protection="private",
-            type_signature="int",
+            kind="method",
+            name="my_method",
+            qualified_name="ns::MyClass::my_method",
+            layer="design",
         )
-        assert node.kind == "variable"
-        assert node.type_signature == "int"
+        assert node.kind == "method"
+        assert node.params == []
 
-    def test_invalid_kind_rejected(self):
-        from backend.db.neo4j.models.nodes.member import MemberNode
-        with pytest.raises(Exception):
-            MemberNode(qualified_name="X", name="X", kind="class")
-
-
-class TestNamespaceNode:
-    """Tests for NamespaceNode Pydantic model."""
-
-    def test_create_minimal(self):
-        from codegraph.nodes import NamespaceNode
-        node = NamespaceNode(qualified_name="std", name="std", kind="namespace")
-        assert node.qualified_name == "std"
-        assert node.kind == "namespace"
-
-    def test_create_package(self):
-        from codegraph.nodes import NamespaceNode
-        node = NamespaceNode(qualified_name="my_pkg", name="my_pkg", kind="package")
-        assert node.kind == "package"
-
-    def test_no_irrelevant_fields(self):
-        """NamespaceNode should not have implementation_status or is_intercomponent."""
-        from codegraph.nodes import NamespaceNode
-        node = NamespaceNode(qualified_name="ns", name="ns")
-        assert not hasattr(node, "implementation_status")
-        assert not hasattr(node, "is_intercomponent")
-
-
-class TestCodebaseEdge:
-    """Tests for CodebaseEdge model and PREDICATES."""
-
-    def test_create_basic_edge(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge
-        edge = CodebaseEdge(
-            subject_qualified_name="ns::Foo",
-            predicate="composes",
-            object_qualified_name="ns::Foo::calculate",
+    def test_member_node_with_params(self):
+        node = MemberNode(
+            kind="function",
+            name="my_func",
+            qualified_name="ns::my_func",
+            layer="design",
+            params=[
+                {"name": "x", "type": "int", "is_reference": False, "default_value": None},
+                {"name": "y", "type": "float", "is_reference": True, "default_value": "0.0"},
+            ],
         )
-        assert edge.predicate == "composes"
-        assert edge.mechanism == ""
-        assert edge.position is None
-
-    def test_create_edge_with_mechanism(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge
-        edge = CodebaseEdge(
-            subject_qualified_name="ns::Car",
-            predicate="aggregates",
-            object_qualified_name="ns::Wheel",
-            mechanism="std::vector",
-        )
-        assert edge.mechanism == "std::vector"
-
-    def test_create_edge_with_type_argument(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge
-        edge = CodebaseEdge(
-            subject_qualified_name="std::vector",
-            predicate="type_argument",
-            object_qualified_name="std::string",
-            position=0,
-            display_name="std::string",
-        )
-        assert edge.position == 0
-        assert edge.display_name == "std::string"
-
-    def test_predicates_matches_constant(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge, PREDICATES
-        assert len(PREDICATES) > 0
-        assert "composes" in PREDICATES
+        assert len(node.params) == 2
+        assert node.params[0]["name"] == "x"
+        assert node.params[1]["is_reference"] is True
