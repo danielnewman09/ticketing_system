@@ -1,0 +1,1 @@
+"""Neo4j codebase graph models — primitives for nodes, edges, and constants."""
