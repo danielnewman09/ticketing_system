@@ -4,18 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from backend.graph.builders import build_cytoscape_edge, build_cytoscape_node
 from backend.graph.transforms import (
     _assign_component_parents,
     _assign_inferred_parents,
     _build_uml_html,
     _build_uml_label,
-    _COLLAPSIBLE_KINDS,
     _ENTITY_KINDS,
-    _KIND_NORMALIZE,
-    _OWNER_KINDS,
-    assign_namespace_parents,
-    collapse_members,
 )
 
 if TYPE_CHECKING:
@@ -27,14 +21,8 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
-    "build_cytoscape_node",
-    "build_cytoscape_edge",
-    "collapse_members",
-    "assign_namespace_parents",
     "tag_cross_layer",
-    "format_cytoscape_graph",
     "format_ontology_graph",
-    "_remove_composes_edges",
 ]
 
 
@@ -66,26 +54,6 @@ def tag_cross_layer(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], l
             d["is_cross_layer"] = "true"
 
     return nodes, edges
-
-
-def _remove_composes_edges(edges: list[dict]) -> list[dict]:
-    """Remove all remaining COMPOSES edges from the graph output."""
-    return [e for e in edges if e["data"].get("label") != "COMPOSES"]
-
-
-def format_cytoscape_graph(raw: dict) -> dict:
-    """Transform raw Neo4j query result into Cytoscape.js format.
-
-    Input: {"nodes": [{flat properties}...], "edges": [{"source", "target", "type"}...]}
-    Output: {"nodes": [{"data": {...}}...], "edges": [{"data": {"id", "source", "target", "label"}}...]}
-    """
-    nodes = [{"data": build_cytoscape_node(n)} for n in raw.get("nodes", [])]
-    edges = [{"data": build_cytoscape_edge(e)} for e in raw.get("edges", [])]
-    nodes, edges = collapse_members(nodes, edges)
-    nodes, edges = assign_namespace_parents(nodes, edges)
-    nodes, edges = tag_cross_layer(nodes, edges)
-    edges = _remove_composes_edges(edges)
-    return {"nodes": nodes, "edges": edges}
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +129,7 @@ def _build_compound_cytoscape_node(
         "layer": layer,
         "source_type": getattr(node, "source_type", ""),
         "change_status": change_status,
+        "source": getattr(node, "source", ""),
         "requirements": [],
     }
 

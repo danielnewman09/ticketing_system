@@ -69,7 +69,7 @@ class OntologyGraph:
 
     def to_raw(self) -> dict:
         """Flatten the typed hierarchy into the raw dict shape consumed by
-        ``format_cytoscape_graph()``.
+        ``format_ontology_graph()``.
 
         Returns ``{"nodes": [...], "edges": [...]}`` where each node is a
         flat dict of Neo4j properties and each edge has ``source``,

@@ -17,11 +17,14 @@ log = logging.getLogger(__name__)
 def fetch_design_dependency_links_data(design_qnames: list[str]) -> dict:
     """Fetch cross-layer links between Design nodes and dependency Compounds."""
     try:
-        from backend.db.neo4j.queries import fetch_design_dependency_links
-        from backend.graph import format_cytoscape_graph
+        from services.dependencies import get_neo4j
+        from backend.db.neo4j.repositories.design import DesignRepository
+        from backend.graph import format_ontology_graph
 
-        raw = fetch_design_dependency_links(design_qnames)
-        return format_cytoscape_graph(raw)
+        with get_neo4j().session() as session:
+            repo = DesignRepository(session)
+            graph = repo.get_dependency_links(design_qnames)
+        return format_ontology_graph(graph)
     except Exception:
         log.warning("Neo4j design-dependency links query failed", exc_info=True)
         return {"nodes": [], "edges": []}
