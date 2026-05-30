@@ -66,7 +66,6 @@ class Neo4jConnection:
             "CREATE INDEX member_qualified_name IF NOT EXISTS FOR (n:Member) ON (n.qualified_name)",
             "CREATE INDEX namespace_qualified_name IF NOT EXISTS FOR (n:Namespace) ON (n.qualified_name)",
             # Legacy Design constraint (kept for migration period)
-            "CREATE CONSTRAINT design_qualified_name IF NOT EXISTS FOR (n:Design) REQUIRE n.qualified_name IS UNIQUE",
             "CREATE CONSTRAINT hlr_id IF NOT EXISTS FOR (n:HLR) REQUIRE n.id IS UNIQUE",
             "CREATE CONSTRAINT llr_id IF NOT EXISTS FOR (n:LLR) REQUIRE n.id IS UNIQUE",
             # New indexes
@@ -77,8 +76,6 @@ class Neo4jConnection:
             "CREATE INDEX member_kind IF NOT EXISTS FOR (n:Member) ON (n.kind)",
             "CREATE INDEX namespace_layer IF NOT EXISTS FOR (n:Namespace) ON (n.layer)",
             # Legacy indexes (kept during migration)
-            "CREATE INDEX design_kind IF NOT EXISTS FOR (n:Design) ON (n.kind)",
-            "CREATE INDEX design_component_id IF NOT EXISTS FOR (n:Design) ON (n.component_id)",
             "CREATE CONSTRAINT verification_method_id IF NOT EXISTS FOR (n:VerificationMethod) REQUIRE n.id IS UNIQUE",
             "CREATE CONSTRAINT condition_id IF NOT EXISTS FOR (n:Condition) REQUIRE n.id IS UNIQUE",
             "CREATE CONSTRAINT action_id IF NOT EXISTS FOR (n:Action) REQUIRE n.id IS UNIQUE",
@@ -102,10 +99,6 @@ class Neo4jConnection:
             log.warning("Neo4j not reachable — skipping design constraint setup")
             return False
         statements = [
-            # Legacy Design indexes (kept during migration)
-            "CREATE INDEX design_source_type IF NOT EXISTS FOR (n:Design) ON (n.source_type)",
-            "CREATE INDEX design_implementation_status IF NOT EXISTS FOR (n:Design) ON (n.implementation_status)",
-            "CREATE INDEX design_component_id IF NOT EXISTS FOR (n:Design) ON (n.component_id)",
             # New layer-based indexes
             "CREATE INDEX compound_layer IF NOT EXISTS FOR (n:Compound) ON (n.layer)",
             "CREATE INDEX compound_implementation_status IF NOT EXISTS FOR (n:Compound) ON (n.implementation_status)",

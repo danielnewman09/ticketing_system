@@ -2,7 +2,7 @@
 
 In Phase 2, HLR and LLR nodes are full Neo4j citizens with native id
 properties (no more sqlite_id bridge). Tags are enriched via TRACES_TO
-edges from :HLR and :LLR nodes to :Design nodes.
+edges from :HLR and :LLR nodes to design graph nodes.
 """
 
 from __future__ import annotations
@@ -67,7 +67,8 @@ def _enrich_via_cypher(
     result = session.run(
         """
         UNWIND $qns AS qn
-        MATCH (r)-[:TRACES_TO]->(d:Design {qualified_name: qn})
+        MATCH (r)-[:TRACES_TO]->(d {qualified_name: qn})
+        WHERE d:Compound OR d:Member OR d:Namespace
         WHERE r:HLR OR r:LLR
         RETURN d.qualified_name AS qn, r.id AS req_id, r.description AS req_desc,
                CASE WHEN r:HLR THEN 'HLR' ELSE 'LLR' END AS req_type
@@ -111,7 +112,8 @@ def tag_direct_nodes_only(
         nonlocal seed_qns
         result = sess.run(
             """
-            MATCH (hlr:HLR {id: $hid})-[:TRACES_TO]->(d:Design)
+            MATCH (hlr:HLR {id: $hid})-[:TRACES_TO]->(d)
+            WHERE d:Compound OR d:Member OR d:Namespace
             RETURN d.qualified_name AS qn
             """,
             {"hid": hlr_id},

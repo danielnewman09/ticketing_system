@@ -58,9 +58,14 @@ def fetch_requirements_data():
         total_verifications = ns.run(
             "MATCH (vm:VerificationMethod) RETURN count(vm) AS cnt"
         ).single()["cnt"]
-        total_nodes = ns.run("MATCH (d:Design) RETURN count(d) AS cnt").single()["cnt"]
+        total_nodes = ns.run(
+            "MATCH (d) WHERE d:Compound OR d:Member OR d:Namespace RETURN count(d) AS cnt"
+        ).single()["cnt"]
         total_triples = ns.run(
-            "MATCH (:Design)-[r]->(:Design) RETURN count(r) AS cnt"
+            "MATCH (s)-[r]->(t) "
+            "WHERE (s:Compound OR s:Member OR s:Namespace) "
+            "AND (t:Compound OR t:Member OR t:Namespace) "
+            "RETURN count(r) AS cnt"
         ).single()["cnt"]
 
     return {
@@ -217,9 +222,11 @@ def _fetch_hlr_triples(neo4j_session, hlr_id: int) -> list[dict]:
     try:
         result = neo4j_session.run(
             """
-            MATCH (hlr:HLR {id: $hid})-[:TRACES_TO]->(d:Design)
-            OPTIONAL MATCH (d)-[r]->(d2:Design)
-            WHERE type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
+            MATCH (hlr:HLR {id: $hid})-[:TRACES_TO]->(d)
+            WHERE d:Compound OR d:Member OR d:Namespace
+            OPTIONAL MATCH (d)-[r]->(d2)
+            WHERE d2:Compound OR d2:Member OR d2:Namespace
+              AND type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
             RETURN d.qualified_name AS subj, type(r) AS pred, d2.qualified_name AS obj
             """,
             {"hid": hlr_id},

@@ -283,7 +283,7 @@ _KIND_NORMALIZE = {
     "struct": "attribute",
 }
 
-_CONTAINMENT_RELS = {"COMPOSES", "CONTAINS", "AGGREGATES"}
+_CONTAINMENT_RELS = {"COMPOSES", "AGGREGATES"}
 
 # Kinds that represent design entities which may have their own
 # external relationships (DEPENDS_ON, GENERALIZES, etc.).  When

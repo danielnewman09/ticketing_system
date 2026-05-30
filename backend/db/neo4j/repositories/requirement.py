@@ -311,12 +311,13 @@ class RequirementRepository:
     # -----------------------------------------------------------------------
 
     def trace_to_design(self, hlr_id: int | None = None, llr_id: int | None = None, design_qualified_name: str = "") -> None:
-        """Create a TRACES_TO edge from an :HLR or :LLR node to a :Design node."""
+        """Create a TRACES_TO edge from an :HLR or :LLR node to a design graph node."""
         if hlr_id is not None:
             self._session.run(
                 """
                 MATCH (h:HLR {id: $id})
-                MATCH (d:Design {qualified_name: $qn})
+                MATCH (d {qualified_name: $qn})
+                WHERE d:Compound OR d:Member OR d:Namespace
                 MERGE (h)-[:TRACES_TO]->(d)
                 """,
                 {"id": hlr_id, "qn": design_qualified_name},
@@ -325,18 +326,20 @@ class RequirementRepository:
             self._session.run(
                 """
                 MATCH (l:LLR {id: $id})
-                MATCH (d:Design {qualified_name: $qn})
+                MATCH (d {qualified_name: $qn})
+                WHERE d:Compound OR d:Member OR d:Namespace
                 MERGE (l)-[:TRACES_TO]->(d)
                 """,
                 {"id": llr_id, "qn": design_qualified_name},
             )
 
     def untrace_from_design(self, hlr_id: int | None = None, llr_id: int | None = None, design_qualified_name: str = "") -> None:
-        """Remove a TRACES_TO edge from an :HLR or :LLR node to a :Design node."""
+        """Remove a TRACES_TO edge from an :HLR or :LLR node to a design graph node."""
         if hlr_id is not None:
             self._session.run(
                 """
-                MATCH (h:HLR {id: $id})-[r:TRACES_TO]->(d:Design {qualified_name: $qn})
+                MATCH (h:HLR {id: $id})-[r:TRACES_TO]->(d {qualified_name: $qn})
+                WHERE d:Compound OR d:Member OR d:Namespace
                 DELETE r
                 """,
                 {"id": hlr_id, "qn": design_qualified_name},
@@ -344,7 +347,8 @@ class RequirementRepository:
         elif llr_id is not None:
             self._session.run(
                 """
-                MATCH (l:LLR {id: $id})-[r:TRACES_TO]->(d:Design {qualified_name: $qn})
+                MATCH (l:LLR {id: $id})-[r:TRACES_TO]->(d {qualified_name: $qn})
+                WHERE d:Compound OR d:Member OR d:Namespace
                 DELETE r
                 """,
                 {"id": llr_id, "qn": design_qualified_name},
