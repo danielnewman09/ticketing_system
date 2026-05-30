@@ -173,3 +173,21 @@ def validate_oo_design(
             )
 
     return errors
+
+def check_enum_collisions(design: OODesignSchema, prior_class_lookup: dict[str, str]) -> list[str]:
+    """Warn if enum names collide with prior designs.
+
+    Returns a list of warning strings. Empty list means no collisions.
+    """
+    warnings = []
+    for enum in design.enums:
+        enum_qname = f"{enum.module}::{enum.name}" if enum.module else enum.name
+        if enum.name in prior_class_lookup:
+            existing_qname = prior_class_lookup[enum.name]
+            if existing_qname != enum_qname:
+                warnings.append(
+                    f"Enum '{enum.name}' already exists as '{existing_qname}' in a "
+                    f"prior design. Consider referencing the existing enum or "
+                    f"renaming yours to avoid confusion."
+                )
+    return warnings

@@ -7,7 +7,6 @@ tools registered. Maintains in-memory draft state between tool calls.
 from backend.codebase.schemas import OODesignSchema
 from backend.requirements.schemas import VerificationSchema
 from backend.ticketing_agent.tools import ToolDispatcher
-from backend.ticketing_agent.tools.helpers.draft_state import build_draft_lookup
 
 # Handler imports
 from backend.ticketing_agent.tools.design_verify.draft_design import (

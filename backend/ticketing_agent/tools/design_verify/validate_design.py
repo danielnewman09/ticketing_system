@@ -3,7 +3,7 @@
 import json
 
 from backend.codebase.schemas import OODesignSchema
-from backend.ticketing_agent.tools.helpers.draft_state import check_enum_collisions
+from backend.ticketing_agent.tools.helpers.design_validation import check_enum_collisions
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 SCHEMA = {

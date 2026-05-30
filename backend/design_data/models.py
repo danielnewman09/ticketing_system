@@ -291,3 +291,19 @@ class ClassDiagram(BaseModel):
             }
 
         return lookup
+
+    def to_summary(self) -> dict:
+        """Return a summary dict of this diagram for tool responses.
+
+        Returns counts of all top-level entities, attributes, and methods.
+        """
+        total_attrs = sum(len(c.attributes) for c in self.classes)
+        total_methods = sum(len(c.methods) for c in self.classes)
+        return {
+            "classes": len(self.classes),
+            "interfaces": len(self.interfaces),
+            "enums": len(self.enums),
+            "associations": len(self.associations),
+            "attributes": total_attrs,
+            "methods": total_methods,
+        }

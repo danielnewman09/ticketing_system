@@ -3,11 +3,8 @@
 import json
 
 from backend.codebase.schemas import OODesignSchema
-from backend.ticketing_agent.tools.helpers.draft_state import (
-    build_draft_lookup,
-    check_enum_collisions,
-    draft_summary,
-)
+from backend.design_data import class_diagram_from_oo_design
+from backend.ticketing_agent.tools.helpers.design_validation import check_enum_collisions
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 SCHEMA = {
@@ -50,11 +47,12 @@ def handle(ctx, tool_input: dict) -> str:
 
     # Store draft — mutable state on ctx
     ctx.draft_design = design
-    ctx.draft_lookup = build_draft_lookup(design)
+    diagram = class_diagram_from_oo_design(design)
+    ctx.draft_lookup = diagram.to_draft_lookup()
 
     return json.dumps({
         "valid": len(errors) == 0,
         "errors": errors,
         "warnings": warnings,
-        "draft_summary": draft_summary(design),
+        "draft_summary": diagram.to_summary(),
     })

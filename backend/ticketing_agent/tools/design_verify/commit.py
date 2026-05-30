@@ -6,7 +6,7 @@ from backend.codebase.schemas import DesignAndVerificationSchema
 from backend.db.neo4j.repositories.verification import _is_valid_verification_qname
 from backend.ticketing_agent.tools.helpers.commit_schema import commit_tool_schema
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
-from backend.ticketing_agent.tools.helpers.draft_state import build_draft_lookup
+from backend.design_data import class_diagram_from_oo_design
 from backend.ticketing_agent.tools.helpers.qname import qname_resolves, suggest_qname
 
 _input_schema = commit_tool_schema()
@@ -45,7 +45,7 @@ def handle(ctx, tool_input: dict) -> str:
     all_qnames = _collect_verification_qnames(schema, errors)
 
     # 3. Existence check for all referenced qnames
-    commit_lookup = build_draft_lookup(schema.oo_design)
+    commit_lookup = class_diagram_from_oo_design(schema.oo_design).to_draft_lookup()
     for qn in all_qnames:
         if qname_resolves(qn, commit_lookup, ctx.prior_class_lookup, ctx.dep_lookup, ctx.intercomponent_classes, ctx.neo4j_session):
             continue

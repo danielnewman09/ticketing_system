@@ -528,3 +528,104 @@ class TestClassDiagramToDraftLookup:
         lookup = diagram.to_draft_lookup()
         assert "calc::Operation" in lookup
         assert lookup["calc::Operation"]["kind"] == "enum"
+
+
+class TestClassDiagramToSummary:
+    """Tests for ClassDiagram.to_summary()."""
+
+    def test_summary_counts(self):
+        diagram = ClassDiagram(
+            module_names=["calc"],
+            classes=[
+                ClassNode(
+                    name="Calculator",
+                    qualified_name="calc::Calculator",
+                    kind="class",
+                    layer="design",
+                    description="Main calculator",
+                    attributes=[
+                        AttributeNode(
+                            name="result_",
+                            qualified_name="calc::Calculator::result_",
+                            kind="attribute",
+                            layer="design",
+                            description="Last result",
+                        ),
+                        AttributeNode(
+                            name="history",
+                            qualified_name="calc::Calculator::history",
+                            kind="attribute",
+                            layer="design",
+                            description="History of calculations",
+                        ),
+                    ],
+                    methods=[
+                        MethodNode(
+                            name="add",
+                            qualified_name="calc::Calculator::add",
+                            kind="method",
+                            layer="design",
+                            description="Add numbers",
+                        ),
+                        MethodNode(
+                            name="subtract",
+                            qualified_name="calc::Calculator::subtract",
+                            kind="method",
+                            layer="design",
+                            description="Subtract numbers",
+                        ),
+                    ],
+                ),
+            ],
+            interfaces=[
+                InterfaceNode(
+                    name="IComputable",
+                    qualified_name="calc::IComputable",
+                    kind="interface",
+                    layer="design",
+                    description="Computable interface",
+                    methods=[
+                        MethodNode(
+                            name="execute",
+                            qualified_name="calc::IComputable::execute",
+                            kind="method",
+                            layer="design",
+                            description="Execute computation",
+                        ),
+                    ],
+                ),
+            ],
+            enums=[
+                EnumNode(
+                    name="Op",
+                    qualified_name="calc::Op",
+                    kind="enum",
+                    layer="design",
+                    description="Operation types",
+                ),
+            ],
+            associations=[
+                Association(
+                    subject="calc::Calculator",
+                    predicate="aggregates",
+                    object="calc::Op",
+                ),
+            ],
+        )
+        summary = diagram.to_summary()
+        assert summary["classes"] == 1
+        assert summary["interfaces"] == 1
+        assert summary["enums"] == 1
+        assert summary["associations"] == 1
+        assert summary["attributes"] == 2
+        assert summary["methods"] == 2  # Only class methods counted
+
+    def test_empty_summary(self):
+        diagram = ClassDiagram()
+        summary = diagram.to_summary()
+        assert summary["classes"] == 0
+        assert summary["interfaces"] == 0
+        assert summary["enums"] == 0
+        assert summary["associations"] == 0
+        assert summary["attributes"] == 0
+        assert summary["methods"] == 0
