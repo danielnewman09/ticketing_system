@@ -12,6 +12,7 @@ from backend.design_data.models import (
     MethodNode,
     ModuleNode,
 )
+from backend.design_data.repository import DesignDataRepository
 from backend.design_data.transforms import (
     class_diagram_from_oo_design,
     oo_design_from_class_diagram,
@@ -22,6 +23,7 @@ __all__ = [
     "AttributeNode",
     "ClassDiagram",
     "ClassNode",
+    "DesignDataRepository",
     "DiagramNode",
     "EnumNode",
     "EnumValueNode",
