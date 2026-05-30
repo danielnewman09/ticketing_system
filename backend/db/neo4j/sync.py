@@ -26,13 +26,14 @@ log = logging.getLogger(__name__)
 
 
 def clear_design_graph():
-    """Delete all Design nodes (and their relationships) from Neo4j."""
+    """Delete all design graph nodes (and their relationships) from Neo4j."""
     from services.dependencies import get_neo4j
+    from backend.db.neo4j.repositories.design import DesignRepository
 
     try:
         with get_neo4j().session() as session:
-            session.run("MATCH (n:Design) DETACH DELETE n")
-        log.info("Cleared design graph from Neo4j")
+            repo = DesignRepository(session)
+            repo.clear_design_graph()
         return True
     except Exception:
         log.warning("Neo4j clear failed", exc_info=True)
@@ -50,7 +51,7 @@ def link_implemented_nodes(neo4j_session: Neo4jSession) -> int:
     Returns the number of IMPLEMENTED_BY relationships created.
     """
     result = neo4j_session.run("""
-    MATCH (d:Design)
+    MATCH (d:Compound)
     WHERE d.qualified_name IS NOT NULL AND d.qualified_name <> ''
     OPTIONAL MATCH (c:Compound {qualified_name: d.qualified_name})
     OPTIONAL MATCH (m:Member {qualified_name: d.qualified_name})
@@ -65,7 +66,7 @@ def link_implemented_nodes(neo4j_session: Neo4jSession) -> int:
 
     # Also try matching by refid
     result2 = neo4j_session.run("""
-    MATCH (d:Design)
+    MATCH (d:Compound)
     WHERE d.refid IS NOT NULL AND d.refid <> ''
     AND NOT EXISTS { (d)-[:IMPLEMENTED_BY]->() }
     OPTIONAL MATCH (c:Compound {refid: d.refid})
@@ -155,7 +156,7 @@ def sync_task(neo4j_session, task):
         neo4j_session.run(
             """
         MATCH (t:Task {sqlite_id: $tid})
-        MATCH (d:Design {qualified_name: $qname})
+        MATCH (d:Compound {qualified_name: $qname})
         MERGE (t)-[:IMPLEMENTING]->(d)
         """,
             {"tid": task.id, "qname": qname},
@@ -186,7 +187,7 @@ def sync_implementation_status(neo4j_session, node):
 
     neo4j_session.run(
         """
-    MATCH (d:Design {qualified_name: $qname})
+    MATCH (d:Compound {qualified_name: $qname})
     SET d.implementation_status = $status,
         d.source_file = $source_file,
         d.test_file = $test_file
