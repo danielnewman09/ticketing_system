@@ -21,7 +21,7 @@ class NamespaceNode(BaseModel):
     # --- Identity & classification ---
     qualified_name: str
     name: str
-    kind: Literal["namespace", "package"] = "namespace"
+    kind: Literal["namespace", "package", "module"] = "namespace"
     layer: Literal["design", "as-built", "dependency"] = "design"
     description: str = ""
 

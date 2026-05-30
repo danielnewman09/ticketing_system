@@ -34,10 +34,20 @@ MEMBER_KINDS: list[str] = [
 NAMESPACE_KINDS: list[str] = [
     "namespace",
     "package",
+    "module",  # Legacy: maps to :Namespace in Neo4j, prefer 'namespace' or 'package'
+]
+
+# Kinds not yet assigned to a Neo4j node label.
+# Kept for backward compatibility with codebase/schemas.py NodeKind Literal.
+UNCLASSIFIED_KINDS: list[str] = [
+    "function",
+    "primitive",
+    "type_alias",
+    "type_parameter",
 ]
 
 # All node kinds flattened (for validation, prompts, etc.)
-NODE_KINDS: list[str] = COMPOUND_KINDS + MEMBER_KINDS + NAMESPACE_KINDS
+NODE_KINDS: list[str] = COMPOUND_KINDS + MEMBER_KINDS + NAMESPACE_KINDS + UNCLASSIFIED_KINDS
 
 # ---------------------------------------------------------------------------
 # Semantic groupings

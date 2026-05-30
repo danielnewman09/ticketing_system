@@ -11,14 +11,15 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from backend.db.models.ontology import NODE_KINDS, SOURCE_TYPES, VISIBILITY_CHOICES
+from backend.db.neo4j.models.constants import NODE_KINDS, VISIBILITY_CHOICES
 from backend.requirements.schemas import VerificationSchema
 
 # Derived from the canonical NODE_KINDS list so there is one place to
-# add or remove kinds.
-NodeKind = Literal[tuple(k for k, _ in NODE_KINDS)]
-Visibility = Literal[tuple(v for v, _ in VISIBILITY_CHOICES)]
-SourceType = Literal[tuple(k for k, _ in SOURCE_TYPES)]
+# add or remove kinds.  The constants module uses flat string lists;
+# Literal types are derived by unpacking.
+NodeKind = Literal[tuple(NODE_KINDS)]
+Visibility = Literal[tuple(VISIBILITY_CHOICES)]
+SourceType = Literal["compound", "member", "namespace"]
 
 
 # ---------------------------------------------------------------------------
