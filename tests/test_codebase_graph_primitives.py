@@ -75,3 +75,120 @@ class TestConstants:
         assert "cpp" in SUPPORTED_LANGUAGES
         assert "python" in SUPPORTED_LANGUAGES
         assert "javascript" in SUPPORTED_LANGUAGES
+
+
+class TestCompoundNode:
+    """Tests for CompoundNode Pydantic model."""
+
+    def test_create_minimal(self):
+        from backend.db.neo4j.models.nodes.compound import CompoundNode
+        node = CompoundNode(qualified_name="ns::Foo", name="Foo", kind="class")
+        assert node.qualified_name == "ns::Foo"
+        assert node.name == "Foo"
+        assert node.kind == "class"
+        assert node.layer == "design"
+        assert node.specialization == ""
+        assert node.visibility == ""
+        assert node.description == ""
+        assert node.implementation_status == "designed"
+
+    def test_create_all_fields(self):
+        from backend.db.neo4j.models.nodes.compound import CompoundNode
+        node = CompoundNode(
+            qualified_name="ns::Foo",
+            name="Foo",
+            kind="struct",
+            layer="as-built",
+            specialization="template_class",
+            visibility="public",
+            description="A struct",
+            type_signature="int",
+            argsstring="(int x)",
+            definition="int Foo::calc(int x)",
+            refid="classns_1_1Foo",
+            file_path="src/foo.h",
+            line_number=42,
+            is_static=True,
+            is_const=False,
+            is_virtual=False,
+            is_abstract=False,
+            is_final=False,
+            component_id=1,
+            is_intercomponent=True,
+            implementation_status="implemented",
+            source_file="src/foo.cpp",
+            test_file="test_foo.cpp",
+        )
+        assert node.kind == "struct"
+        assert node.layer == "as-built"
+        assert node.is_static is True
+        assert node.is_intercomponent is True
+        assert node.file_path == "src/foo.h"
+        assert node.line_number == 42
+
+    def test_invalid_kind_rejected(self):
+        from backend.db.neo4j.models.nodes.compound import CompoundNode
+        with pytest.raises(Exception):
+            CompoundNode(qualified_name="X", name="X", kind="method")
+
+    def test_invalid_layer_rejected(self):
+        from backend.db.neo4j.models.nodes.compound import CompoundNode
+        with pytest.raises(Exception):
+            CompoundNode(qualified_name="X", name="X", kind="class", layer="invalid")
+
+    def test_dependency_layer(self):
+        from backend.db.neo4j.models.nodes.compound import CompoundNode
+        node = CompoundNode(qualified_name="std::vector", name="vector", kind="class", layer="dependency",
+                           is_intercomponent=True, description="Standard library: std::vector")
+        assert node.layer == "dependency"
+        assert node.is_intercomponent is True
+
+
+class TestMemberNode:
+    """Tests for MemberNode Pydantic model."""
+
+    def test_create_minimal(self):
+        from backend.db.neo4j.models.nodes.member import MemberNode
+        node = MemberNode(qualified_name="ns::Foo::calculate", name="calculate", kind="method")
+        assert node.qualified_name == "ns::Foo::calculate"
+        assert node.kind == "method"
+        assert node.layer == "design"
+
+    def test_create_attribute(self):
+        from backend.db.neo4j.models.nodes.member import MemberNode
+        node = MemberNode(
+            qualified_name="ns::Foo::count",
+            name="count",
+            kind="attribute",
+            visibility="private",
+            type_signature="int",
+        )
+        assert node.kind == "attribute"
+        assert node.type_signature == "int"
+
+    def test_invalid_kind_rejected(self):
+        from backend.db.neo4j.models.nodes.member import MemberNode
+        with pytest.raises(Exception):
+            MemberNode(qualified_name="X", name="X", kind="class")
+
+
+class TestNamespaceNode:
+    """Tests for NamespaceNode Pydantic model."""
+
+    def test_create_minimal(self):
+        from backend.db.neo4j.models.nodes.namespace import NamespaceNode
+        node = NamespaceNode(qualified_name="std", name="std", kind="namespace")
+        assert node.qualified_name == "std"
+        assert node.kind == "namespace"
+
+    def test_create_package(self):
+        from backend.db.neo4j.models.nodes.namespace import NamespaceNode
+        node = NamespaceNode(qualified_name="my_pkg", name="my_pkg", kind="package")
+        assert node.kind == "package"
+
+    def test_no_irrelevant_fields(self):
+        """NamespaceNode should not have implementation_status or is_intercomponent."""
+        from backend.db.neo4j.models.nodes.namespace import NamespaceNode
+        node = NamespaceNode(qualified_name="ns", name="ns")
+        assert not hasattr(node, "implementation_status")
+        assert not hasattr(node, "is_intercomponent")
