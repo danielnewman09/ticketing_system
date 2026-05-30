@@ -219,12 +219,13 @@ VALUE_KINDS = {"method", "attribute", "constant", "enum_value"}
 VISIBILITY_CHOICES = ["public", "private", "protected"]
 LAYERS = ["design", "as-built", "dependency"]
 
-LANGUAGE_SPECIALIZATIONS = { ... }  # Same as current, kept verbatim
+LANGUAGE_SPECIALIZATIONS = { ... }  # Moved verbatim from db/models/ontology.py — same dict structure
 SUPPORTED_LANGUAGES = set(LANGUAGE_SPECIALIZATIONS.keys())
 
-def valid_specializations(language, kind):
+def valid_specializations(language: str, kind: str) -> set[str]:
     """Return the set of valid specializations for a language + kind."""
-    ...
+    lang_spec = LANGUAGE_SPECIALIZATIONS.get(language, {})
+    return set(lang_spec.get(kind, []))
 ```
 
 ---
@@ -324,17 +325,32 @@ Files left intact for Phase 2:
 2. **Update `DesignRepository`** — modify `merge_node()` and read methods to use new models. Write `layer` property, dispatch node label by type.
 
 3. **Write Neo4j migration script** that:
-   - Adds `:Compound` labels to nodes with `source_type` in (compound, or missing/empty for top-level design nodes)
-   - Adds `:Member` labels to nodes with `source_type='member'`
-   - Adds `:Namespace` labels to nodes with `source_type='namespace'`
-   - Sets `layer` property: `source_type='dependency'` → `layer='dependency'`, `source_type='compound'` → `layer='as-built'`, `source_type='member'` with no component/design context → `layer='design'`, etc.
+   - Determines node type label from current `kind` + `source_type`:
+     - `kind` in (class, struct, template_class, interface, abstract_class, enum, enum_class) → `:Compound`
+     - `kind` in (method, attribute, constant, enum_value) → `:Member`
+     - `kind` in (namespace, module) → `:Namespace`
+   - Sets `layer` property:
+     - `source_type='dependency'` → `layer='dependency'`
+     - `source_type='compound'` and `refid` is non-empty → `layer='as-built'`
+     - `source_type='compound'` and `refid` is empty → `layer='design'`
+     - `source_type='member'` and parent compound has `layer='as-built'` → `layer='as-built'`
+     - `source_type='member'` and parent compound has `layer='design'` → `layer='design'`
+     - `source_type='namespace'` → `layer='design'` (namespaces are currently only design-layer)
+     - Missing/empty `source_type` → `layer='design'` (design-layer nodes had empty source_type)
    - Removes `source_type` property from all nodes
    - Removes `:Design` label from all nodes
    - Drops old `:Design` indexes, creates new per-type indexes
 
 4. **Add adapter functions** that convert new primitives to old shapes (`ClassDiagram`, `DiagramNode`, `OODesignSchema`, etc.) so existing pipeline and UI code keeps working.
 
-5. **Update `db/models/__init__.py`** — remove ontology ORM re-exports. Code that imported `NODE_KINDS` etc. from there should import from `db.neo4j.models.constants` instead.
+5. **Update `db/models/__init__.py`** — remove ontology ORM re-exports. Code that imported `NODE_KINDS` etc. from `db/models/__init__.py` should import from `db.neo4j.models.constants` instead.
+
+The following removed constants are no longer needed because their role is now served by `Literal` types on the models:
+- `NODE_KIND_VALUES` — replaced by the `Literal` types on `CompoundNode.kind`, `MemberNode.kind`, `NamespaceNode.kind`
+- `SOURCE_TYPE_VALUES` — replaced by node labels (`:Compound`, `:Member`, `:Namespace`)
+- `SOURCE_TYPES` (the list of tuples) — replaced by node labels
+
+Code that validated against `NODE_KIND_VALUES` should use `COMPOUND_KINDS`, `MEMBER_KINDS`, or `NAMESPACE_KINDS` instead, or validate against the `Literal` types directly.
 
 6. **Delete `db/models/ontology.py`** and `db/neo4j/repositories/models/design.py`.
 
