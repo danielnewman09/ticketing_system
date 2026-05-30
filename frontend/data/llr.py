@@ -152,8 +152,10 @@ def _fetch_llr_triples(neo4j_session, llr_id: int) -> list[dict]:
     try:
         result = neo4j_session.run(
             """
-            MATCH (l:LLR {id: $lid})-[:TRACES_TO]->(d:Design)
-            OPTIONAL MATCH (d)-[r]->(d2:Design)
+            MATCH (l:LLR {id: $lid})-[:TRACES_TO]->(d)
+            WHERE d:Compound OR d:Member OR d:Namespace
+            OPTIONAL MATCH (d)-[r]->(d2)
+            WHERE (d2:Compound OR d2:Member OR d2:Namespace)
             WHERE type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
             RETURN d.qualified_name AS subj, type(r) AS pred, d2.qualified_name AS obj
             """,
