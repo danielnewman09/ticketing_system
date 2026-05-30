@@ -192,3 +192,45 @@ class TestNamespaceNode:
         node = NamespaceNode(qualified_name="ns", name="ns")
         assert not hasattr(node, "implementation_status")
         assert not hasattr(node, "is_intercomponent")
+
+
+class TestCodebaseEdge:
+    """Tests for CodebaseEdge model and PREDICATES."""
+
+    def test_create_basic_edge(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge
+        edge = CodebaseEdge(
+            subject_qualified_name="ns::Foo",
+            predicate="composes",
+            object_qualified_name="ns::Foo::calculate",
+        )
+        assert edge.predicate == "composes"
+        assert edge.mechanism == ""
+        assert edge.position is None
+
+    def test_create_edge_with_mechanism(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge
+        edge = CodebaseEdge(
+            subject_qualified_name="ns::Car",
+            predicate="aggregates",
+            object_qualified_name="ns::Wheel",
+            mechanism="std::vector",
+        )
+        assert edge.mechanism == "std::vector"
+
+    def test_create_edge_with_type_argument(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge
+        edge = CodebaseEdge(
+            subject_qualified_name="std::vector",
+            predicate="type_argument",
+            object_qualified_name="std::string",
+            position=0,
+            display_name="std::string",
+        )
+        assert edge.position == 0
+        assert edge.display_name == "std::string"
+
+    def test_predicates_matches_constant(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge, PREDICATES
+        assert len(PREDICATES) > 0
+        assert "composes" in PREDICATES
