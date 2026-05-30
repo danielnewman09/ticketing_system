@@ -60,10 +60,11 @@ class Neo4jConnection:
             log.warning("Neo4j not reachable — skipping constraint setup")
             return False
         statements = [
-            # New node label constraints
-            "CREATE CONSTRAINT compound_qualified_name IF NOT EXISTS FOR (n:Compound) REQUIRE n.qualified_name IS UNIQUE",
-            "CREATE CONSTRAINT member_qualified_name IF NOT EXISTS FOR (n:Member) REQUIRE n.qualified_name IS UNIQUE",
-            "CREATE CONSTRAINT namespace_qualified_name IF NOT EXISTS FOR (n:Namespace) REQUIRE n.qualified_name IS UNIQUE",
+            # Use INDEX instead of CONSTRAINT — :Compound/:Member/:Namespace may
+            # already have data (e.g. cppreference) with existing indexes.
+            "CREATE INDEX compound_qualified_name IF NOT EXISTS FOR (n:Compound) ON (n.qualified_name)",
+            "CREATE INDEX member_qualified_name IF NOT EXISTS FOR (n:Member) ON (n.qualified_name)",
+            "CREATE INDEX namespace_qualified_name IF NOT EXISTS FOR (n:Namespace) ON (n.qualified_name)",
             # Legacy Design constraint (kept for migration period)
             "CREATE CONSTRAINT design_qualified_name IF NOT EXISTS FOR (n:Design) REQUIRE n.qualified_name IS UNIQUE",
             "CREATE CONSTRAINT hlr_id IF NOT EXISTS FOR (n:HLR) REQUIRE n.id IS UNIQUE",
@@ -84,7 +85,10 @@ class Neo4jConnection:
         ]
         with self.session() as session:
             for stmt in statements:
-                session.run(stmt)
+                try:
+                    session.run(stmt)
+                except Exception as e:
+                    log.debug("Index/constraint may already exist: %s", e)
         log.info("Neo4j constraints and indexes ensured")
         return True
 
@@ -111,7 +115,10 @@ class Neo4jConnection:
         ]
         with self.session() as session:
             for stmt in statements:
-                session.run(stmt)
+                try:
+                    session.run(stmt)
+                except Exception as e:
+                    log.debug("Index/constraint may already exist: %s", e)
         log.info("Neo4j design constraints and indexes ensured")
         return True
 
