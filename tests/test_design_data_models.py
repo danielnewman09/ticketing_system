@@ -1,0 +1,385 @@
+"""Tests for design_data read models."""
+
+import pytest
+from pydantic import ValidationError
+from backend.design_data.models import (
+    DiagramNode,
+    ClassNode,
+    InterfaceNode,
+    EnumNode,
+    ModuleNode,
+    AttributeNode,
+    MethodNode,
+    EnumValueNode,
+    Association,
+    ClassDiagram,
+)
+
+
+class TestDiagramNode:
+    def test_minimal_creation(self):
+        node = DiagramNode(
+            name="Calculator",
+            qualified_name="calc::Calculator",
+            kind="class",
+            layer="design",
+        )
+        assert node.name == "Calculator"
+        assert node.qualified_name == "calc::Calculator"
+        assert node.kind == "class"
+        assert node.layer == "design"
+        assert node.description == ""
+        assert node.visibility == ""
+        assert node.implementation_status == "designed"
+
+    def test_all_fields(self):
+        node = DiagramNode(
+            name="calculate",
+            qualified_name="calc::Calculator::calculate",
+            kind="method",
+            layer="as-built",
+            description="Adds two numbers",
+            visibility="public",
+            specialization="const_method",
+            component_id=3,
+            is_intercomponent=False,
+            type_signature="double(double, double)",
+            argsstring="(double x, double y)",
+            definition="double Calculator::calculate(double x, double y)",
+            source_type="member",
+            source="",
+            file_path="src/calculator.hpp",
+            line_number=42,
+            is_static=False,
+            is_const=True,
+            is_virtual=False,
+            is_abstract=False,
+            is_final=False,
+            implementation_status="implemented",
+            source_file="src/calculator.hpp",
+            test_file="test/test_calculator.cpp",
+        )
+        assert node.is_const is True
+        assert node.line_number == 42
+        assert node.implementation_status == "implemented"
+
+    def test_invalid_layer(self):
+        with pytest.raises(ValidationError):
+            DiagramNode(
+                name="X",
+                qualified_name="X",
+                kind="class",
+                layer="invalid",
+            )
+
+    def test_dependency_layer(self):
+        node = DiagramNode(
+            name="Fl_Button",
+            qualified_name="Fl_Button",
+            kind="class",
+            layer="dependency",
+            source="fltk",
+        )
+        assert node.layer == "dependency"
+        assert node.source == "fltk"
+
+
+class TestAttributeNode:
+    def test_creation(self):
+        attr = AttributeNode(
+            name="result_",
+            qualified_name="calc::Calculator::result_",
+            kind="attribute",
+            layer="design",
+            owner="calc::Calculator",
+            type_signature="double",
+            visibility="private",
+        )
+        assert attr.owner == "calc::Calculator"
+        assert attr.type_signature == "double"
+
+
+class TestMethodNode:
+    def test_creation(self):
+        method = MethodNode(
+            name="add",
+            qualified_name="calc::Calculator::add",
+            kind="method",
+            layer="design",
+            owner="calc::Calculator",
+            type_signature="double",
+            argsstring="(double x, double y)",
+            visibility="public",
+        )
+        assert method.owner == "calc::Calculator"
+        assert method.argsstring == "(double x, double y)"
+
+
+class TestEnumValueNode:
+    def test_creation(self):
+        val = EnumValueNode(
+            name="ADD",
+            qualified_name="calc::Operation::ADD",
+            kind="enum_value",
+            layer="design",
+            owner="calc::Operation",
+        )
+        assert val.owner == "calc::Operation"
+
+
+class TestClassNode:
+    def test_minimal(self):
+        cls = ClassNode(
+            name="Calculator",
+            qualified_name="calc::Calculator",
+            kind="class",
+            layer="design",
+            module="calc",
+        )
+        assert cls.module == "calc"
+        assert cls.attributes == []
+        assert cls.methods == []
+        assert cls.inherits_from == []
+        assert cls.realizes == []
+
+    def test_with_members(self):
+        cls = ClassNode(
+            name="Calculator",
+            qualified_name="calc::Calculator",
+            kind="class",
+            layer="design",
+            module="calc",
+            attributes=[
+                AttributeNode(
+                    name="result_",
+                    qualified_name="calc::Calculator::result_",
+                    kind="attribute",
+                    layer="design",
+                    owner="calc::Calculator",
+                    type_signature="double",
+                    visibility="private",
+                ),
+            ],
+            methods=[
+                MethodNode(
+                    name="add",
+                    qualified_name="calc::Calculator::add",
+                    kind="method",
+                    layer="design",
+                    owner="calc::Calculator",
+                    visibility="public",
+                ),
+            ],
+            inherits_from=["calc::ICalculator"],
+            realizes=["calc::IProcessor"],
+        )
+        assert len(cls.attributes) == 1
+        assert len(cls.methods) == 1
+        assert "calc::ICalculator" in cls.inherits_from
+
+    def test_as_built_class(self):
+        cls = ClassNode(
+            name="Calculator",
+            qualified_name="calc::Calculator",
+            kind="class",
+            layer="as-built",
+            module="calc",
+            file_path="src/calculator.hpp",
+            line_number=10,
+            implementation_status="implemented",
+        )
+        assert cls.layer == "as-built"
+        assert cls.line_number == 10
+
+
+class TestInterfaceNode:
+    def test_creation(self):
+        iface = InterfaceNode(
+            name="ICalculator",
+            qualified_name="calc::ICalculator",
+            kind="interface",
+            layer="design",
+            module="calc",
+            is_abstract=True,
+            methods=[
+                MethodNode(
+                    name="add",
+                    qualified_name="calc::ICalculator::add",
+                    kind="method",
+                    layer="design",
+                    owner="calc::ICalculator",
+                    is_virtual=True,
+                ),
+            ],
+        )
+        assert iface.is_abstract is True
+        assert len(iface.methods) == 1
+
+
+class TestEnumNode:
+    def test_creation(self):
+        enum = EnumNode(
+            name="Operation",
+            qualified_name="calc::Operation",
+            kind="enum",
+            layer="design",
+            module="calc",
+            values=[
+                EnumValueNode(
+                    name="ADD",
+                    qualified_name="calc::Operation::ADD",
+                    kind="enum_value",
+                    layer="design",
+                    owner="calc::Operation",
+                ),
+            ],
+        )
+        assert len(enum.values) == 1
+
+
+class TestModuleNode:
+    def test_creation(self):
+        mod = ModuleNode(
+            name="calc",
+            qualified_name="calc",
+            kind="module",
+            layer="design",
+        )
+
+
+class TestAssociation:
+    def test_minimal(self):
+        assoc = Association(
+            subject="calc::Calculator",
+            predicate="aggregates",
+            object="calc::Result",
+        )
+        assert assoc.subject == "calc::Calculator"
+        assert assoc.predicate == "aggregates"
+        assert assoc.mechanism == ""
+        assert assoc.description == ""
+
+    def test_with_mechanism(self):
+        assoc = Association(
+            subject="calc::Calculator",
+            predicate="references",
+            object="calc::Result",
+            mechanism="std::unique_ptr",
+            description="Calculator holds a unique_ptr to Result",
+        )
+        assert assoc.mechanism == "std::unique_ptr"
+
+
+class TestClassDiagram:
+    def test_minimal(self):
+        diagram = ClassDiagram()
+        assert diagram.classes == []
+        assert diagram.interfaces == []
+        assert diagram.enums == []
+        assert diagram.associations == []
+
+    def test_with_entities(self):
+        diagram = ClassDiagram(
+            module_names=["calc"],
+            classes=[
+                ClassNode(
+                    name="Calculator",
+                    qualified_name="calc::Calculator",
+                    kind="class",
+                    layer="design",
+                    module="calc",
+                ),
+            ],
+            interfaces=[
+                InterfaceNode(
+                    name="ICalculator",
+                    qualified_name="calc::ICalculator",
+                    kind="interface",
+                    layer="design",
+                    module="calc",
+                ),
+            ],
+            enums=[
+                EnumNode(
+                    name="Operation",
+                    qualified_name="calc::Operation",
+                    kind="enum",
+                    layer="design",
+                    module="calc",
+                ),
+            ],
+            associations=[
+                Association(
+                    subject="calc::Calculator",
+                    predicate="realizes",
+                    object="calc::ICalculator",
+                ),
+            ],
+        )
+        assert len(diagram.classes) == 1
+        assert len(diagram.interfaces) == 1
+        assert len(diagram.enums) == 1
+        assert len(diagram.associations) == 1
+
+    def test_get_entity(self):
+        calc = ClassNode(
+            name="Calculator",
+            qualified_name="calc::Calculator",
+            kind="class",
+            layer="design",
+            module="calc",
+        )
+        iface = InterfaceNode(
+            name="ICalculator",
+            qualified_name="calc::ICalculator",
+            kind="interface",
+            layer="design",
+            module="calc",
+        )
+        diagram = ClassDiagram(
+            classes=[calc],
+            interfaces=[iface],
+        )
+        assert diagram.get_entity("calc::Calculator") is calc
+        assert diagram.get_entity("calc::ICalculator") is iface
+        assert diagram.get_entity("nonexistent") is None
+
+    def test_associations_for(self):
+        diagram = ClassDiagram(
+            classes=[
+                ClassNode(name="A", qualified_name="ns::A", kind="class", layer="design", module="ns"),
+                ClassNode(name="B", qualified_name="ns::B", kind="class", layer="design", module="ns"),
+            ],
+            associations=[
+                Association(subject="ns::A", predicate="depends_on", object="ns::B"),
+                Association(subject="ns::A", predicate="aggregates", object="ns::C"),
+                Association(subject="ns::B", predicate="references", object="ns::A"),
+            ],
+        )
+        a_assocs = diagram.associations_for("ns::A")
+        assert len(a_assocs) == 2
+        predicates = {a.predicate for a in a_assocs}
+        assert predicates == {"depends_on", "aggregates"}
+
+    def test_associations_involving(self):
+        diagram = ClassDiagram(
+            associations=[
+                Association(subject="ns::A", predicate="depends_on", object="ns::B"),
+                Association(subject="ns::B", predicate="references", object="ns::A"),
+                Association(subject="ns::C", predicate="aggregates", object="ns::D"),
+            ],
+        )
+        a_involving = diagram.associations_involving("ns::A")
+        assert len(a_involving) == 2
+
+    def test_classes_in_module(self):
+        diagram = ClassDiagram(
+            classes=[
+                ClassNode(name="A", qualified_name="calc::A", kind="class", layer="design", module="calc"),
+                ClassNode(name="B", qualified_name="calc::B", kind="class", layer="design", module="calc"),
+                ClassNode(name="C", qualified_name="ui::Window", kind="class", layer="design", module="ui"),
+            ],
+        )
+        calc_classes = diagram.classes_in_module("calc")
+        assert len(calc_classes) == 2
+        assert all(c.module == "calc" for c in calc_classes)
