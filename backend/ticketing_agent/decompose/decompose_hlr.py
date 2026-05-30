@@ -418,13 +418,21 @@ def decompose(
         prompt_log_file=prompt_log_file,
     )
 
-    # Recover from models that return nested JSON as a string (DeepSeek does this)
+    # Recover from models that return nested JSON as a string (DeepSeek does this).
+    # Some backends double-stringify: the tool args are a JSON string rather than
+    # a parsed object, or the low_level_requirements value is a serialized list.
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+            log.info("Deserialized entire result from JSON string")
+        except json.JSONDecodeError:
+            pass
     if isinstance(result, dict) and isinstance(result.get("low_level_requirements"), str):
         try:
             result["low_level_requirements"] = json.loads(result["low_level_requirements"])
             log.info("Deserialized low_level_requirements from JSON string")
         except json.JSONDecodeError:
-            pass
+            log.warning("Failed to parse low_level_requirements as JSON: %.200s", result["low_level_requirements"])
 
     # Recover from models that embed <parameter=...> XML tags inside JSON values
     if isinstance(result, dict) and "low_level_requirements" not in result:
