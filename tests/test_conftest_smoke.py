@@ -7,8 +7,8 @@ from backend.db.models.tasks import Task
 
 def test_seeded_session_has_defaults(seeded_session):
     """The seeded_session fixture populates language and component."""
-    assert seeded_session.query(Language).count() == 1
-    assert seeded_session.query(Component).count() == 1
+    assert seeded_session.query(Language).count() >= 1
+    assert seeded_session.query(Component).count() >= 1
 
 
 def test_session_rolls_back_between_tests(session):

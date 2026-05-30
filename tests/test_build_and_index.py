@@ -21,10 +21,12 @@ class TestProjectMetadata:
 
     def test_get_or_create_project_meta(self):
         """ProjectMeta singleton row can be looked up."""
-        from backend.db import init_db, get_session
+        from backend.db import init_db, get_session, get_main_engine
+        from backend.db.base import Base
         from backend.db.models import ProjectMeta
 
         init_db()
+        Base.metadata.create_all(get_main_engine())
         with get_session() as session:
             # Simulate the _get_or_create_project_meta logic
             meta = session.query(ProjectMeta).filter_by(id=1).first()
@@ -38,12 +40,13 @@ class TestProjectMetadata:
 
     def test_set_and_get_project_meta(self):
         """Project name and working directory round-trip through SQLite."""
-        from backend.db import init_db, get_session
+        from backend.db import init_db, get_session, get_main_engine
+        from backend.db.base import Base
         from backend.db.models import ProjectMeta
 
-        # This test uses the actual helpers but requires DB
-        # We'll test the logic in isolation
+        # Use the actual helpers but require DB setup
         init_db()
+        Base.metadata.create_all(get_main_engine())
         with get_session() as session:
             meta = session.query(ProjectMeta).filter_by(id=1).first()
             if not meta:
