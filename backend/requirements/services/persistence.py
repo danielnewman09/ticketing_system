@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
 from backend.db.neo4j.repositories.models.design import DesignNode
+from backend.design_data.repository import DesignDataRepository
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.db.neo4j.repositories.verification import VerificationRepository
 from backend.requirements.schemas import LowLevelRequirementSchema, VerificationSchema
@@ -129,6 +130,26 @@ def build_verification_context(neo4j_session: "Neo4jSession") -> list[dict]:
         }
 
     return sorted(contexts.values(), key=lambda c: c["qualified_name"])
+
+
+def build_verification_context_from_diagram(neo4j_session: "Neo4jSession", component_id: int | None = None) -> list[dict]:
+    """Build verification context using the design_data module.
+
+    This is the preferred replacement for build_verification_context().
+    Uses DesignDataRepository to query Neo4j and return typed ClassDiagram
+    objects, then extracts verification dicts.
+
+    Args:
+        neo4j_session: A Neo4j session.
+        component_id: Optional component filter.
+
+    Returns:
+        List of dicts with verification context (same format as
+        build_verification_context()).
+    """
+    repo = DesignDataRepository(neo4j_session)
+    diagram = repo.get_class_diagram(component_id=component_id)
+    return diagram.to_verification_dicts()
 
 
 # ---------------------------------------------------------------------------

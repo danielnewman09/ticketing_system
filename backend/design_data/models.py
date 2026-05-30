@@ -162,3 +162,132 @@ class ClassDiagram(BaseModel):
     def classes_in_module(self, module: str) -> list[ClassNode]:
         """Return classes belonging to a specific module."""
         return [c for c in self.classes if c.module == module]
+
+    def to_verification_dicts(self) -> list[dict]:
+        """Produce verification context dicts compatible with build_verification_context().
+
+        Each dict has: qualified_name, kind, description, attributes, methods,
+        relationships.
+        """
+        results = []
+
+        for cls in self.classes:
+            attrs = [
+                {
+                    "name": attr.name,
+                    "qualified_name": attr.qualified_name,
+                    "kind": "attribute",
+                    "visibility": attr.visibility,
+                    "type_signature": attr.type_signature,
+                    "description": attr.description,
+                }
+                for attr in cls.attributes
+            ]
+            methods = [
+                {
+                    "name": method.name,
+                    "qualified_name": method.qualified_name,
+                    "kind": "method",
+                    "visibility": method.visibility,
+                    "type_signature": method.type_signature,
+                    "argsstring": method.argsstring,
+                    "description": method.description,
+                }
+                for method in cls.methods
+            ]
+            relationships = [
+                {
+                    "predicate": assoc.predicate,
+                    "target": assoc.object,
+                    "target_name": assoc.object.rsplit("::", 1)[-1],
+                }
+                for assoc in self.associations
+                if assoc.subject == cls.qualified_name
+            ]
+            results.append({
+                "qualified_name": cls.qualified_name,
+                "kind": cls.specialization or cls.kind,
+                "description": cls.description,
+                "attributes": sorted(attrs, key=lambda a: a["name"]),
+                "methods": sorted(methods, key=lambda m: m["name"]),
+                "relationships": relationships,
+            })
+
+        for iface in self.interfaces:
+            methods = [
+                {
+                    "name": method.name,
+                    "qualified_name": method.qualified_name,
+                    "kind": "method",
+                    "visibility": method.visibility,
+                    "type_signature": method.type_signature,
+                    "argsstring": method.argsstring,
+                    "description": method.description,
+                }
+                for method in iface.methods
+            ]
+            results.append({
+                "qualified_name": iface.qualified_name,
+                "kind": iface.kind,
+                "description": iface.description,
+                "attributes": [],
+                "methods": sorted(methods, key=lambda m: m["name"]),
+                "relationships": [],
+            })
+
+        return sorted(results, key=lambda c: c["qualified_name"])
+
+    def to_draft_lookup(self) -> dict[str, dict]:
+        """Produce a lookup dict for draft design state.
+
+        Returns qualified_name -> {qualified_name, kind, description, source: 'draft'}
+        for all classes, interfaces, enums, their attributes, and methods.
+        """
+        lookup: dict[str, dict] = {}
+
+        for cls in self.classes:
+            lookup[cls.qualified_name] = {
+                "qualified_name": cls.qualified_name,
+                "kind": "class",
+                "description": cls.description,
+                "source": "draft",
+            }
+            for attr in cls.attributes:
+                lookup[attr.qualified_name] = {
+                    "qualified_name": attr.qualified_name,
+                    "kind": "attribute",
+                    "description": attr.description,
+                    "source": "draft",
+                }
+            for method in cls.methods:
+                lookup[method.qualified_name] = {
+                    "qualified_name": method.qualified_name,
+                    "kind": "method",
+                    "description": method.description,
+                    "source": "draft",
+                }
+
+        for iface in self.interfaces:
+            lookup[iface.qualified_name] = {
+                "qualified_name": iface.qualified_name,
+                "kind": "interface",
+                "description": iface.description,
+                "source": "draft",
+            }
+            for method in iface.methods:
+                lookup[method.qualified_name] = {
+                    "qualified_name": method.qualified_name,
+                    "kind": "method",
+                    "description": method.description,
+                    "source": "draft",
+                }
+
+        for enum in self.enums:
+            lookup[enum.qualified_name] = {
+                "qualified_name": enum.qualified_name,
+                "kind": "enum",
+                "description": enum.description,
+                "source": "draft",
+            }
+
+        return lookup

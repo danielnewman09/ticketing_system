@@ -383,3 +383,148 @@ class TestClassDiagram:
         calc_classes = diagram.classes_in_module("calc")
         assert len(calc_classes) == 2
         assert all(c.module == "calc" for c in calc_classes)
+
+
+class TestClassDiagramToVerificationDicts:
+    def test_class_context_dicts(self):
+        diagram = ClassDiagram(
+            module_names=["calc"],
+            classes=[
+                ClassNode(
+                    name="Calculator",
+                    qualified_name="calc::Calculator",
+                    kind="class",
+                    layer="design",
+                    module="calc",
+                    description="Main calculator",
+                    attributes=[
+                        AttributeNode(
+                            name="result_",
+                            qualified_name="calc::Calculator::result_",
+                            kind="attribute",
+                            layer="design",
+                            owner="calc::Calculator",
+                            type_signature="double",
+                            visibility="private",
+                        ),
+                    ],
+                    methods=[
+                        MethodNode(
+                            name="add",
+                            qualified_name="calc::Calculator::add",
+                            kind="method",
+                            layer="design",
+                            owner="calc::Calculator",
+                            type_signature="double",
+                            visibility="public",
+                        ),
+                    ],
+                ),
+            ],
+            associations=[
+                Association(
+                    subject="calc::Calculator",
+                    predicate="aggregates",
+                    object="calc::Result",
+                ),
+            ],
+        )
+        dicts = diagram.to_verification_dicts()
+        assert len(dicts) == 1
+        calc_dict = dicts[0]
+        assert calc_dict["qualified_name"] == "calc::Calculator"
+        assert calc_dict["kind"] == "class"
+        assert len(calc_dict["attributes"]) == 1
+        assert len(calc_dict["methods"]) == 1
+        assert len(calc_dict["relationships"]) == 1
+        assert calc_dict["relationships"][0]["predicate"] == "aggregates"
+
+    def test_interface_in_verification_dicts(self):
+        diagram = ClassDiagram(
+            interfaces=[
+                InterfaceNode(
+                    name="ICalc",
+                    qualified_name="calc::ICalc",
+                    kind="interface",
+                    layer="design",
+                    module="calc",
+                    methods=[
+                        MethodNode(
+                            name="compute",
+                            qualified_name="calc::ICalc::compute",
+                            kind="method",
+                            layer="design",
+                            owner="calc::ICalc",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        dicts = diagram.to_verification_dicts()
+        assert len(dicts) == 1
+        iface_dict = dicts[0]
+        assert iface_dict["qualified_name"] == "calc::ICalc"
+        assert iface_dict["kind"] == "interface"
+        assert len(iface_dict["methods"]) == 1
+        assert iface_dict["attributes"] == []
+
+
+class TestClassDiagramToDraftLookup:
+    def test_lookup_with_classes_and_members(self):
+        diagram = ClassDiagram(
+            classes=[
+                ClassNode(
+                    name="Calculator",
+                    qualified_name="calc::Calculator",
+                    kind="class",
+                    layer="design",
+                    module="calc",
+                    description="Main calculator",
+                    attributes=[
+                        AttributeNode(
+                            name="result_",
+                            qualified_name="calc::Calculator::result_",
+                            kind="attribute",
+                            layer="design",
+                            owner="calc::Calculator",
+                            description="Last result",
+                        ),
+                    ],
+                    methods=[
+                        MethodNode(
+                            name="add",
+                            qualified_name="calc::Calculator::add",
+                            kind="method",
+                            layer="design",
+                            owner="calc::Calculator",
+                            description="Add two numbers",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        lookup = diagram.to_draft_lookup()
+        assert "calc::Calculator" in lookup
+        assert lookup["calc::Calculator"]["kind"] == "class"
+        assert lookup["calc::Calculator"]["source"] == "draft"
+        assert "calc::Calculator::result_" in lookup
+        assert lookup["calc::Calculator::result_"]["kind"] == "attribute"
+        assert "calc::Calculator::add" in lookup
+        assert lookup["calc::Calculator::add"]["kind"] == "method"
+
+    def test_lookup_with_enums(self):
+        diagram = ClassDiagram(
+            enums=[
+                EnumNode(
+                    name="Operation",
+                    qualified_name="calc::Operation",
+                    kind="enum",
+                    layer="design",
+                    module="calc",
+                    description="Supported ops",
+                ),
+            ],
+        )
+        lookup = diagram.to_draft_lookup()
+        assert "calc::Operation" in lookup
+        assert lookup["calc::Operation"]["kind"] == "enum"
