@@ -91,11 +91,11 @@ Assertions on the system state that must hold before the test action.
 Each precondition has a subject (what is being checked), an operator,
 and an expected value.
 
-[Good] subject: "Engine", operator: "is_true", expected: "initialized"
-[Good] subject: "Engine.last_result", operator: "==", expected: "null"
-[Bad] subject: "calculation_engine::CalculatorEngine::is_initialized"
+[Good] subject_qualified_name: "Engine", operator: "is_true", expected: "initialized"
+[Good] subject_qualified_name: "Engine.last_result", operator: "==", expected: "null"
+[Bad] subject_qualified_name: "calculation_engine::CalculatorEngine::is_initialized"
   → Qualified design name — no design exists at this stage
-[Bad] subject: "", operator: "==", expected: ""
+[Bad] subject_qualified_name: "", operator: "==", expected: ""
   → Empty — provides no information to downstream agents
 [Bad] (no preconditions at all)
   → Even a simple "system is initialized" pre tells the verify agent
@@ -107,14 +107,14 @@ human-readable description of what happens and, where applicable,
 a notional target (what operation is invoked).
 
 [Good] description: "Invoke the add operation with operands 10 and 20",
-       callee: "Engine.add"
+       callee_qualified_name: "Engine.add"
 [Good] description: "Submit a non-numeric string as the first operand",
-       callee: "Engine.add"
+       callee_qualified_name: "Engine.add"
 [Good] description: "Invoke the divide operation with operands 10 and 0",
-       callee: "Engine.divide"
+       callee_qualified_name: "Engine.divide"
 [Bad] description: "Call the method",
   → Which method? With what inputs? Not specific enough.
-[Bad] callee: "calculation_engine::CalculatorEngine::add"
+[Bad] callee_qualified_name: "calculation_engine::CalculatorEngine::add"
   → Qualified design name — not available at this stage.
   Use a notional reference like "Engine.add" instead.
 
@@ -122,13 +122,13 @@ a notional target (what operation is invoked).
 Assertions on the expected system state after the actions. Same
 format as preconditions.
 
-[Good] subject: "Engine.result", operator: "==", expected: "30"
-[Good] subject: "Engine.error_signal", operator: "==", expected: "InvalidInput"
-[Good] subject: "Engine.is_success", operator: "is_false"
-[Bad] subject: "calculation_engine::CalculationResult::result_value"
+[Good] subject_qualified_name: "Engine.result", operator: "==", expected: "30"
+[Good] subject_qualified_name: "Engine.error_signal", operator: "==", expected: "InvalidInput"
+[Good] subject_qualified_name: "Engine.is_success", operator: "is_false"
+[Bad] subject_qualified_name: "calculation_engine::CalculationResult::result_value"
   → Qualified design name — no design exists at this stage.
   Use a notional reference like "Engine.result" instead.
-[Bad] subject: "", operator: "==", expected: "correct result"
+[Bad] subject_qualified_name: "", operator: "==", expected: "correct result"
   → Not observable — what is the specific expected value?
 [Bad] (no postconditions at all)
   → Without postconditions, the verification has no pass/fail criteria.
@@ -211,13 +211,13 @@ test_name: test_add_returns_sum_of_two_valid_operands
 description: Invoke the addition operation with numeric operands and
   verify the returned result is their sum.
 preconditions:
-  - subject: Engine.is_initialized, operator: is_true, expected: true
+  - subject_qualified_name: Engine.is_initialized, operator: is_true, expected: true
 actions:
   - description: Invoke the add operation with operands 10 and 20,
-    callee: Engine.add
+    callee_qualified_name: Engine.add
 postconditions:
-  - subject: Engine.result, operator: ==, expected: "30"
-  - subject: Engine.is_success, operator: is_true, expected: true
+  - subject_qualified_name: Engine.result, operator: ==, expected: "30"
+  - subject_qualified_name: Engine.is_success, operator: is_true, expected: true
 </Good>
 
 ### Error-path verification
@@ -231,13 +231,13 @@ test_name: test_add_rejects_non_numeric_operand
 description: Invoke the addition operation with a non-numeric operand
   and verify the error signal indicates invalid input.
 preconditions:
-  - subject: Engine.is_initialized, operator: is_true, expected: true
+  - subject_qualified_name: Engine.is_initialized, operator: is_true, expected: true
 actions:
   - description: Invoke the add operation with a non-numeric string
-    operand, callee: Engine.add
+    operand, callee_qualified_name: Engine.add
 postconditions:
-  - subject: Engine.error_signal, operator: ==, expected: InvalidInput
-  - subject: Engine.is_success, operator: is_false, expected: false
+  - subject_qualified_name: Engine.error_signal, operator: ==, expected: InvalidInput
+  - subject_qualified_name: Engine.is_success, operator: is_false, expected: false
 </Good>
 
 ### Empty verification stubs — WRONG
