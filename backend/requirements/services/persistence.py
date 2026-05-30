@@ -70,6 +70,10 @@ class VerificationResult:
 def build_verification_context(neo4j_session: "Neo4jSession") -> list[dict]:
     """Build structured class-level context for the verification agent.
 
+    .. deprecated::
+        Use :func:`build_verification_context_from_diagram` instead, which routes
+        through the design_data module and returns typed models.
+
     Queries Neo4j :Design nodes only. Returns a list of class/interface
     dicts with attributes, methods, and relationships.
     """
