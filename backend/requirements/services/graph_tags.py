@@ -68,8 +68,8 @@ def _enrich_via_cypher(
         """
         UNWIND $qns AS qn
         MATCH (r)-[:TRACES_TO]->(d {qualified_name: qn})
-        WHERE d:Compound OR d:Member OR d:Namespace
-        WHERE r:HLR OR r:LLR
+        WHERE (d:Compound OR d:Member OR d:Namespace)
+          AND (r:HLR OR r:LLR)
         RETURN d.qualified_name AS qn, r.id AS req_id, r.description AS req_desc,
                CASE WHEN r:HLR THEN 'HLR' ELSE 'LLR' END AS req_type
         """,

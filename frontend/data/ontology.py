@@ -101,7 +101,7 @@ def fetch_ontology_graph_data(
     """
     try:
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.graph import format_cytoscape_graph
+        from backend.graph import format_ontology_graph
         from backend.requirements.services.graph_tags import enrich_with_requirement_tags
 
         with get_neo4j().session() as session:
@@ -112,9 +112,8 @@ def fetch_ontology_graph_data(
                 search=search,
                 component_id=component_id,
             )
-            raw = graph.to_raw()
 
-        formatted = format_cytoscape_graph(raw)
+        formatted = format_ontology_graph(graph)
 
         # Enrich with requirement tags (design layer only)
         if layer == "design" and requirement_tags != "none":
@@ -147,15 +146,14 @@ def fetch_hlr_graph_data(
     """
     try:
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.graph import format_cytoscape_graph
+        from backend.graph import format_ontology_graph
         from backend.requirements.services.graph_tags import tag_direct_nodes_only
 
         with get_neo4j().session() as session:
             repo = DesignRepository(session)
             graph = repo.get_hlr_subgraph(hlr_id, component_id)
-            raw = graph.to_raw()
 
-        formatted = format_cytoscape_graph(raw)
+        formatted = format_ontology_graph(graph)
 
         if requirement_tags != "none":
             tag_direct_nodes_only(formatted["nodes"], hlr_id)
@@ -170,14 +168,13 @@ def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
     """Fetch the 1-hop neighbourhood graph with collapsed members."""
     try:
         from backend.db.neo4j.repositories.design import DesignRepository
-        from backend.graph import format_cytoscape_graph
+        from backend.graph import format_ontology_graph
 
         with get_neo4j().session() as session:
             repo = DesignRepository(session)
             graph = repo.get_neighbourhood_graph(qualified_name)
-            raw = graph.to_raw()
 
-        return format_cytoscape_graph(raw)
+        return format_ontology_graph(graph)
     except Exception:
         log.warning("Neo4j neighbourhood query failed", exc_info=True)
         return {"nodes": [], "edges": []}
