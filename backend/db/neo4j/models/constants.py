@@ -1,94 +1,47 @@
 """Constants for the Neo4j codebase graph layer.
 
-Moved from backend.db.models.ontology during graph primitives restructuring.
-These constants define the vocabulary of predicates, node kinds,
-and specializations used by the design repository and Cypher queries.
-
-Node kinds are now organized by Neo4j node label:
-  - COMPOUND_KINDS: entities that own members (classes, interfaces, enums)
-  - MEMBER_KINDS: entities owned by compounds (methods, attributes, enum values)
-  - NAMESPACE_KINDS: grouping entities (namespaces, packages)
+Core vocabulary (kinds, layers, predicates, schema DDL) is imported from
+the ``codegraph`` shared library.  Ticketing-system extensions and
+language-specific specializations are defined here.
 """
 
-# ---------------------------------------------------------------------------
-# Node kinds — organized by Neo4j label
-# ---------------------------------------------------------------------------
+from codegraph.constants import (
+    COMPOUND_KINDS,
+    CONSTRAINTS_AND_INDEXES,
+    LAYERS,
+    MEMBER_KINDS,
+    NAMESPACE_KINDS,
+    PREDICATES,
+    PREDICATE_TO_REL_TYPE,
+    VISIBILITY_CHOICES,
+)
 
-COMPOUND_KINDS: list[str] = [
-    "class",
-    "struct",
-    "template_class",
-    "interface",
-    "abstract_class",
-    "enum",
-    "enum_class",
-]
-
-MEMBER_KINDS: list[str] = [
-    "method",
-    "attribute",
-    "constant",
-    "enum_value",
-]
-
-NAMESPACE_KINDS: list[str] = [
-    "namespace",
-    "package",
-    "module",  # Legacy: maps to :Namespace in Neo4j, prefer 'namespace' or 'package'
-]
-
-# Kinds not yet assigned to a Neo4j node label.
-# Kept for backward compatibility with codebase/schemas.py NodeKind Literal.
+# Build the unified NODE_KINDS list.  Core kinds come from codegraph;
+# UNCLASSIFIED_KINDS are ticketing-system concepts not yet assigned a
+# Neo4j node label.
 UNCLASSIFIED_KINDS: list[str] = [
-    "function",
     "primitive",
     "type_alias",
     "type_parameter",
 ]
 
-# All node kinds flattened (for validation, prompts, etc.)
-NODE_KINDS: list[str] = COMPOUND_KINDS + MEMBER_KINDS + NAMESPACE_KINDS + UNCLASSIFIED_KINDS
+NODE_KINDS: list[str] = (
+    list(COMPOUND_KINDS) + list(MEMBER_KINDS) + list(NAMESPACE_KINDS) + UNCLASSIFIED_KINDS
+)
 
 # ---------------------------------------------------------------------------
-# Semantic groupings
+# Semantic groupings (ticketing-system specific)
 # ---------------------------------------------------------------------------
 
-TYPE_KINDS: set[str] = {"class", "struct", "template_class", "interface", "abstract_class", "enum", "enum_class"}
-VALUE_KINDS: set[str] = {"method", "attribute", "constant", "enum_value"}
-
-# ---------------------------------------------------------------------------
-# Visibility / access specifiers
-# ---------------------------------------------------------------------------
-
-VISIBILITY_CHOICES: list[str] = ["public", "private", "protected"]
-
-# ---------------------------------------------------------------------------
-# Layers — where a node originates from
-# ---------------------------------------------------------------------------
-
-LAYERS: list[str] = ["design", "as-built", "dependency"]
-
-# ---------------------------------------------------------------------------
-# Predicates — mapping lowercase names to UPPER_SNAKE_CASE Neo4j rel types
-# ---------------------------------------------------------------------------
-
-PREDICATE_TO_REL_TYPE: dict[str, str] = {
-    "associates": "ASSOCIATES",
-    "aggregates": "AGGREGATES",
-    "composes": "COMPOSES",
-    "depends_on": "DEPENDS_ON",
-    "generalizes": "GENERALIZES",
-    "realizes": "REALIZES",
-    "references": "REFERENCES",
-    "invokes": "INVOKES",
-    "has_argument": "HAS_ARGUMENT",
-    "returns": "RETURNS",
-    "type_argument": "TYPE_ARGUMENT",
-    "template_param": "TEMPLATE_PARAM",
-    "implements": "IMPLEMENTS",
+TYPE_KINDS: set[str] = {
+    "class", "struct", "template_class", "interface", "abstract_class",
+    "enum", "enum_class", "union",
 }
+VALUE_KINDS: set[str] = {"method", "variable", "define", "enumvalue", "function"}
 
-PREDICATES: list[str] = list(PREDICATE_TO_REL_TYPE.keys())
+# ---------------------------------------------------------------------------
+# Predicate documentation (ticketing-system extension)
+# ---------------------------------------------------------------------------
 
 DEFAULT_PREDICATES: list[tuple[str, str]] = [
     ("associates", "General association between two entities"),
@@ -139,7 +92,7 @@ LANGUAGE_SPECIALIZATIONS: dict[str, dict[str, list[str]]] = {
         "function": [
             "template_function",
         ],
-        "constant": [
+        "define": [
             "constexpr",
             "const",
         ],
@@ -175,7 +128,7 @@ LANGUAGE_SPECIALIZATIONS: dict[str, dict[str, list[str]]] = {
             "protocol",
             "abc",
         ],
-        "constant": [
+        "define": [
             "final",
         ],
         "module": [

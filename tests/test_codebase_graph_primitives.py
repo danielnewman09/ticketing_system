@@ -16,7 +16,7 @@ class TestConstants:
     def test_member_kinds(self):
         from backend.db.neo4j.models.constants import MEMBER_KINDS
         assert "method" in MEMBER_KINDS
-        assert "attribute" in MEMBER_KINDS
+        assert "variable" in MEMBER_KINDS
         assert "class" not in MEMBER_KINDS
 
     def test_namespace_kinds(self):
@@ -37,7 +37,7 @@ class TestConstants:
     def test_value_kinds(self):
         from backend.db.neo4j.models.constants import VALUE_KINDS
         assert "method" in VALUE_KINDS
-        assert "attribute" in VALUE_KINDS
+        assert "variable" in VALUE_KINDS
         assert "class" not in VALUE_KINDS
 
     def test_visibility_choices(self):
@@ -88,7 +88,7 @@ class TestCompoundNode:
         assert node.kind == "class"
         assert node.layer == "design"
         assert node.specialization == ""
-        assert node.visibility == ""
+        assert node.protection == ""
         assert node.description == ""
         assert node.implementation_status == "designed"
 
@@ -100,7 +100,7 @@ class TestCompoundNode:
             kind="struct",
             layer="as-built",
             specialization="template_class",
-            visibility="public",
+            protection="public",
             description="A struct",
             type_signature="int",
             argsstring="(int x)",
@@ -159,11 +159,11 @@ class TestMemberNode:
         node = MemberNode(
             qualified_name="ns::Foo::count",
             name="count",
-            kind="attribute",
-            visibility="private",
+            kind="variable",
+            protection="private",
             type_signature="int",
         )
-        assert node.kind == "attribute"
+        assert node.kind == "variable"
         assert node.type_signature == "int"
 
     def test_invalid_kind_rejected(self):

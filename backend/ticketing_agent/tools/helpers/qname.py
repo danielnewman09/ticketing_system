@@ -69,7 +69,7 @@ def suggest_qname(
     # Strategy 2: member name match in draft
     for qname, info in draft_lookup.items():
         kind = info.get("kind", "")
-        if kind in ("method", "attribute") and qname.endswith(f"::{bare}"):
+        if kind in ("method", "variable") and qname.endswith(f"::{bare}"):
             return qname
 
     # Strategy 3: class/interface/enum name match in draft

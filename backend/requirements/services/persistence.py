@@ -72,7 +72,7 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
         kind=kind,
         layer=layer,
         specialization=node_data.specialization or "",
-        visibility=node_data.visibility or "",
+        protection=node_data.visibility or "",
         description=node_data.description or "",
         type_signature=node_data.type_signature or "",
         argsstring=node_data.argsstring or "",

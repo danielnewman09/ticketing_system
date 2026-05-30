@@ -44,11 +44,10 @@ DEFAULT_PREDICATES = [
 # ---------------------------------------------------------------------------
 
 NODE_KINDS = [
-    ("attribute", "Attribute"),
     ("class", "Class"),
-    ("constant", "Constant"),
+    ("define", "Define"),
     ("enum", "Enum"),
-    ("enum_value", "Enum Value"),
+    ("enumvalue", "Enum Value"),
     ("function", "Function"),
     ("interface", "Interface"),
     ("method", "Method"),
@@ -56,6 +55,7 @@ NODE_KINDS = [
     ("primitive", "Primitive Type"),
     ("type_alias", "Type Alias"),
     ("type_parameter", "Type Parameter"),
+    ("variable", "Variable"),
 ]
 
 NODE_KIND_VALUES = {k for k, _ in NODE_KINDS}
@@ -75,7 +75,7 @@ VISIBILITY_CHOICES = [
 # ---------------------------------------------------------------------------
 
 TYPE_KINDS = {"class", "interface", "enum", "type_alias"}
-VALUE_KINDS = {"enum_value", "function", "method", "attribute", "constant"}
+VALUE_KINDS = {"enumvalue", "function", "method", "variable", "define"}
 
 # ---------------------------------------------------------------------------
 # Codebase source types
@@ -112,7 +112,7 @@ LANGUAGE_SPECIALIZATIONS = {
         "function": [
             "template_function",
         ],
-        "constant": [
+        "define": [
             "constexpr",
             "const",
         ],
@@ -148,7 +148,7 @@ LANGUAGE_SPECIALIZATIONS = {
             "protocol",
             "abc",
         ],
-        "constant": [
+        "define": [
             "final",
         ],
         "module": [

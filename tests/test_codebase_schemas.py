@@ -276,7 +276,7 @@ class TestOntologyNodeSchema:
 
     def test_valid_kinds(self):
         # NodeKind is derived from NODE_KINDS — test a representative sample
-        for kind_name in ("class", "method", "attribute", "enum", "interface"):
+        for kind_name in ("class", "method", "variable", "enum", "interface"):
             n = OntologyNodeSchema(kind=kind_name, name="X", qualified_name="X")
             assert n.kind == kind_name
 

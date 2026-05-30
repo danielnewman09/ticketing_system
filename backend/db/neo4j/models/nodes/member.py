@@ -1,53 +1,26 @@
 """MemberNode — :Member in Neo4j.
 
-Members are owned by compounds — methods and attributes on classes,
-values inside enums, constants inside namespaces. The `kind` field refines
+Members are owned by compounds — methods and variables on classes,
+values inside enums, defines inside namespaces. The `kind` field refines
 the specific member type. The `layer` field indicates origin.
+
+Ticketing-system extensions (component_id, is_abstract, is_final) are added
+on top of the ``codegraph`` base model.
 """
 
 from __future__ import annotations
 
-from typing import Literal
-
-from pydantic import BaseModel
+from codegraph.nodes import MemberNode as BaseMemberNode
 
 
-class MemberNode(BaseModel):
+class MemberNode(BaseMemberNode):
     """A member entity in the codebase graph (:Member in Neo4j).
 
-    Members are owned by compounds — methods and attributes on classes,
-    values inside enums, constants inside namespaces.
-
-    The `kind` field refines the specific member type. The `layer` field
-    indicates origin.
+    Inherits core fields from ``codegraph.nodes.MemberNode`` and adds
+    ticketing-system-specific fields for project context.
     """
 
-    # --- Identity & classification ---
-    qualified_name: str
-    name: str
-    kind: Literal["method", "attribute", "constant", "enum_value", "function"]
-    layer: Literal["design", "as-built", "dependency"] = "design"
-    visibility: Literal["public", "private", "protected", ""] = ""
-    description: str = ""
-
-    # --- Code-level detail ---
-    type_signature: str = ""
-    argsstring: str = ""
-    definition: str = ""
-
-    # --- Source location ---
-    refid: str = ""
-    file_path: str = ""
-    line_number: int | None = None
-
-    # --- Flags ---
-    is_static: bool = False
-    is_const: bool = False
-    is_virtual: bool = False
+    # --- Ticketing-system extensions ---
     is_abstract: bool = False
     is_final: bool = False
-
-    # --- Project context ---
     component_id: int | None = None
-
-    model_config = {"from_attributes": True}

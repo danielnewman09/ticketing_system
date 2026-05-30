@@ -3,41 +3,11 @@
 Stored in Neo4j as a typed relationship with the predicate name
 uppercased (e.g. 'composes' → COMPOSES). Identified by subject +
 predicate + object.
+
+Re-exports from ``codegraph`` shared library.
 """
 
-from __future__ import annotations
+from codegraph.edges import CodebaseEdge
+from codegraph.constants import PREDICATES
 
-from pydantic import BaseModel
-
-PREDICATES: list[str] = [
-    "composes",
-    "aggregates",
-    "references",
-    "depends_on",
-    "associates",
-    "invokes",
-    "returns",
-    "generalizes",
-    "realizes",
-    "implements",
-    "has_argument",
-    "type_argument",
-    "template_param",
-]
-
-
-class CodebaseEdge(BaseModel):
-    """A directed relationship between two codebase nodes.
-
-    Stored in Neo4j as a typed relationship with the predicate name
-    uppercased (e.g. 'composes' → COMPOSES). Identified by subject +
-    predicate + object.
-    """
-
-    subject_qualified_name: str
-    predicate: str   # Must be one of PREDICATES
-    object_qualified_name: str
-    mechanism: str = ""           # Container type (e.g. "std::vector" for aggregates)
-    position: int | None = None   # Position for type_argument edges (0-based)
-    name: str = ""                # Parameter name for template_param edges
-    display_name: str = ""        # Alias display name (e.g. "std::string" for std::basic_string)
+__all__ = ["CodebaseEdge", "PREDICATES"]

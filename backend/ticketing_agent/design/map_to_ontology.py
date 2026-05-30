@@ -399,7 +399,7 @@ def map_oo_to_ontology(
             _add_triple(enum.module, "composes", enum_qname)
         for value in enum.values:
             val_qname = f"{enum_qname}::{value}"
-            _add_node("enum_value", value, val_qname, source_type="member")
+            _add_node("enumvalue", value, val_qname, source_type="member")
             _add_triple(enum_qname, "composes", val_qname)
 
     # --- Classes ---
@@ -435,7 +435,7 @@ def map_oo_to_ontology(
         for attr in cls.attributes:
             attr_qname = f"{cls_qname}::{attr.name}"
             _add_node(
-                "attribute",
+                "variable",
                 attr.name,
                 attr_qname,
                 visibility=attr.visibility,
