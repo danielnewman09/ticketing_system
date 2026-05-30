@@ -12,6 +12,7 @@ import logging
 import os
 
 from backend.codebase.schemas import DesignSchema, OODesignSchema
+from backend.design_data import class_diagram_from_oo_design
 from backend.ticketing_agent.design.design_hlr import design_hlr
 from backend.ticketing_agent.design.order_hlrs import order_hlrs
 
@@ -34,6 +35,8 @@ def _get_comp_ns(component_id: int | None) -> str:
 
 def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
     """Extract class summaries from an OO design for the existing_classes prompt.
+
+    # TODO: Replace with design_data module once prompt builders accept ClassNode directly
 
     Returns list of dicts matching the format expected by
     _build_existing_classes_section.
@@ -114,6 +117,8 @@ def _extract_intercomponent_context(
     source_component_id: int | None,
 ) -> list[dict]:
     """Extract public API classes from an OO design for intercomponent context.
+
+    # TODO: Replace with design_data module once prompt builders accept ClassNode directly
 
     Only includes classes/interfaces with is_intercomponent=True.
     """
@@ -285,7 +290,14 @@ def design_all_hlrs(
             )
 
             # Accumulate
-            accumulated_class_lookup.update(_build_class_lookup(oo))
+            # Accumulate using design_data module
+            prev_diagram = class_diagram_from_oo_design(oo, component_id=component_id)
+            for cls in prev_diagram.classes:
+                accumulated_class_lookup[cls.name] = cls.qualified_name
+            for iface in prev_diagram.interfaces:
+                accumulated_class_lookup[iface.name] = iface.qualified_name
+            for enum in prev_diagram.enums:
+                accumulated_class_lookup[enum.name] = enum.qualified_name
             designed[hlr_id] = (oo, component_id, component_name)
             results.append((hlr, oo, ontology))
     finally:
