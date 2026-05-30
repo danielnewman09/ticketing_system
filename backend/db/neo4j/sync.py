@@ -167,19 +167,19 @@ def sync_implementation_status(neo4j_session, node):
     """Update a Design node's implementation status in Neo4j.
 
     Phase 1: accepts either an OntologyNode (with .qualified_name,
-    .implementation_status, .source_file, .test_file) or a
-    (qualified_name, status, source_file, test_file) tuple.
+    .implementation_status, .file_path, .test_file) or a
+    (qualified_name, status, file_path, test_file) tuple.
     """
     # Handle both ORM objects and simple dicts/tuples
     if hasattr(node, "qualified_name"):
         qname = node.qualified_name
         status = node.implementation_status
-        source_file = getattr(node, "source_file", "") or ""
+        source_file = getattr(node, "file_path", "") or ""
         test_file = getattr(node, "test_file", "") or ""
     elif isinstance(node, dict):
         qname = node["qualified_name"]
         status = node["implementation_status"]
-        source_file = node.get("source_file", "")
+        source_file = node.get("file_path", "")
         test_file = node.get("test_file", "")
     else:
         log.warning("sync_implementation_status: unrecognised node type %s", type(node))
@@ -189,7 +189,7 @@ def sync_implementation_status(neo4j_session, node):
         """
     MATCH (d:Compound {qualified_name: $qname})
     SET d.implementation_status = $status,
-        d.source_file = $source_file,
+        d.file_path = $source_file,
         d.test_file = $test_file
     """,
         {
