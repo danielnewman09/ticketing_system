@@ -158,13 +158,13 @@ def run_pipeline(
     log.info("Phase 3: Generating verification methods...")
     from backend.ticketing_agent.verify.verify_llr import verify
     from backend.requirements.services.persistence import (
-        build_verification_context,
+        build_verification_context_from_diagram,
         persist_verification,
     )
 
     with get_neo4j().session() as ns:
         ver_repo = VerificationRepository(ns)
-        class_contexts = build_verification_context(ns)
+        class_contexts = build_verification_context_from_diagram(ns)
 
         for llr in all_llrs_neo4j:
             existing_vms = ver_repo.list_verifications(llr.id)

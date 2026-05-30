@@ -189,7 +189,7 @@ if __name__ == "__main__":
 
     from backend.db.neo4j.repositories.requirement import RequirementRepository
     from backend.db.neo4j.repositories.verification import VerificationRepository
-    from backend.requirements.services.persistence import build_verification_context
+    from backend.requirements.services.persistence import build_verification_context_from_diagram
     from services.dependencies import get_neo4j
 
     llr_id = int(sys.argv[1]) if len(sys.argv) > 1 else None
@@ -212,7 +212,7 @@ if __name__ == "__main__":
             for vm in existing_vms
         ]
 
-        class_contexts = build_verification_context(ns)
+        class_contexts = build_verification_context_from_diagram(ns)
 
         result = verify(llr_dict, existing, class_contexts, neo4j_session=ns)
 
