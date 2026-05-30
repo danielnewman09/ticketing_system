@@ -16,7 +16,6 @@ from typing import Union
 
 from neo4j import Session as Neo4jSession
 
-from backend.db.neo4j.models.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
 from backend.db.neo4j.models.edges import CodebaseEdge
 from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
 from backend.db.neo4j.models.graph import (
@@ -25,7 +24,16 @@ from backend.db.neo4j.models.graph import (
     NamespaceGraph,
     OntologyGraph,
 )
-from backend.db.neo4j.repositories.constants import PREDICATE_TO_REL_TYPE
+from codegraph.constants import (
+    COMPOUND_KINDS,
+    MEMBER_KINDS,
+    NAMESPACE_KINDS,
+    PREDICATE_TO_REL_TYPE,
+)
+
+COMPOUND_KIND_KEYS = {k for k, _ in COMPOUND_KINDS}
+MEMBER_KIND_KEYS = {k for k, _ in MEMBER_KINDS}
+NAMESPACE_KIND_KEYS = {k for k, _ in NAMESPACE_KINDS}
 
 # Type alias for any codebase graph node
 NodeModel = Union[CompoundNode, MemberNode, NamespaceNode]
@@ -35,11 +43,11 @@ log = logging.getLogger(__name__)
 
 def _determine_node_type(kind: str) -> type[CompoundNode | MemberNode | NamespaceNode]:
     """Return the correct model class for a given kind value."""
-    if kind in COMPOUND_KINDS:
+    if kind in COMPOUND_KIND_KEYS:
         return CompoundNode
-    elif kind in MEMBER_KINDS:
+    elif kind in MEMBER_KIND_KEYS:
         return MemberNode
-    elif kind in NAMESPACE_KINDS:
+    elif kind in NAMESPACE_KIND_KEYS:
         return NamespaceNode
     else:
         # Default to Compound for unknown kinds
@@ -49,11 +57,11 @@ def _determine_node_type(kind: str) -> type[CompoundNode | MemberNode | Namespac
 
 def _determine_label(kind: str) -> str:
     """Return the Neo4j label for a given kind value."""
-    if kind in COMPOUND_KINDS:
+    if kind in COMPOUND_KIND_KEYS:
         return "Compound"
-    elif kind in MEMBER_KINDS:
+    elif kind in MEMBER_KIND_KEYS:
         return "Member"
-    elif kind in NAMESPACE_KINDS:
+    elif kind in NAMESPACE_KIND_KEYS:
         return "Namespace"
     else:
         return "Compound"
