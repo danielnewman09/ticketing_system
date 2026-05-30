@@ -12,6 +12,10 @@ from backend.design_data.models import (
     MethodNode,
     ModuleNode,
 )
+from backend.design_data.transforms import (
+    class_diagram_from_oo_design,
+    oo_design_from_class_diagram,
+)
 
 __all__ = [
     "Association",
@@ -24,4 +28,6 @@ __all__ = [
     "InterfaceNode",
     "MethodNode",
     "ModuleNode",
+    "class_diagram_from_oo_design",
+    "oo_design_from_class_diagram",
 ]
