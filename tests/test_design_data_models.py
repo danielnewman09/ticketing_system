@@ -629,3 +629,48 @@ class TestClassDiagramToSummary:
         assert summary["associations"] == 0
         assert summary["attributes"] == 0
         assert summary["methods"] == 0
+
+class TestClassDiagramToClassLookup:
+    """Tests for ClassDiagram.to_class_lookup()."""
+
+    def test_lookup_with_classes(self):
+        from backend.design_data.models import ClassNode, InterfaceNode, EnumNode
+        diagram = ClassDiagram(
+            classes=[
+                ClassNode(
+                    name="Calculator",
+                    qualified_name="calc::Calculator",
+                    kind="class",
+                    layer="design",
+                    module="calc",
+                ),
+            ],
+            interfaces=[
+                InterfaceNode(
+                    name="IComputable",
+                    qualified_name="calc::IComputable",
+                    kind="interface",
+                    layer="design",
+                    module="calc",
+                ),
+            ],
+            enums=[
+                EnumNode(
+                    name="Op",
+                    qualified_name="calc::Op",
+                    kind="enum",
+                    layer="design",
+                    module="calc",
+                ),
+            ],
+        )
+        lookup = diagram.to_class_lookup()
+        assert lookup["Calculator"] == "calc::Calculator"
+        assert lookup["IComputable"] == "calc::IComputable"
+        assert lookup["Op"] == "calc::Op"
+
+    def test_empty_lookup(self):
+        from backend.design_data.models import ClassDiagram
+        diagram = ClassDiagram()
+        lookup = diagram.to_class_lookup()
+        assert lookup == {}

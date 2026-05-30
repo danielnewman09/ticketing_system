@@ -126,8 +126,8 @@ def step_design():
     step_log = logging.getLogger("pipeline.design")
 
     from backend.ticketing_agent.design.design_hlr import design_hlr
+    from backend.design_data import class_diagram_from_oo_design
     from backend.ticketing_agent.design.design_per_hlr import (
-        _build_class_lookup,
         _extract_existing_classes,
         _extract_intercomponent_context,
     )
@@ -258,7 +258,7 @@ def step_design():
                         print(f"    CROSS-COMPONENT: {assoc.from_class} -> {to_cls} ({assoc.relationship})")
 
             # Accumulate
-            accumulated_class_lookup.update(_build_class_lookup(oo))
+            accumulated_class_lookup.update(class_diagram_from_oo_design(oo).to_class_lookup())
             designed[hlr_id] = (oo, component_id, component_name)
 
             # Persist
@@ -295,8 +295,8 @@ def step_design_and_verify():
     print("  Designing and verifying each HLR in dependency order...\n")
     step_log = logging.getLogger("pipeline.design_verify")
 
+    from backend.design_data import class_diagram_from_oo_design
     from backend.ticketing_agent.design.design_per_hlr import (
-        _build_class_lookup,
         _extract_existing_classes,
         _extract_intercomponent_context,
     )
@@ -446,7 +446,7 @@ def step_design_and_verify():
             )
 
             # Accumulate from the verified design
-            accumulated_class_lookup.update(_build_class_lookup(oo))
+            accumulated_class_lookup.update(class_diagram_from_oo_design(oo).to_class_lookup())
             designed[hlr_id] = (oo, component_id, component_name)
 
             # Print nodes

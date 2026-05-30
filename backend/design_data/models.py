@@ -307,3 +307,19 @@ class ClassDiagram(BaseModel):
             "attributes": total_attrs,
             "methods": total_methods,
         }
+
+    def to_class_lookup(self) -> dict[str, str]:
+        """Build a short_name -> qualified_name mapping from the diagram.
+
+        Enables cross-HLR reference resolution: given a class short name
+        like 'Calculator', resolves to 'calc::Calculator'. Replaces the
+        former _build_class_lookup helper.
+        """
+        lookup: dict[str, str] = {}
+        for cls in self.classes:
+            lookup[cls.name] = cls.qualified_name
+        for iface in self.interfaces:
+            lookup[iface.name] = iface.qualified_name
+        for enum in self.enums:
+            lookup[enum.name] = enum.qualified_name
+        return lookup
