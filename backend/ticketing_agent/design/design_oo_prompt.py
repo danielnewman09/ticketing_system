@@ -3,7 +3,7 @@ Prompt templates and section builders for the design_oo agent.
 """
 
 from backend.codebase.schemas import OODesignSchema
-from backend.db.neo4j.models.constants import LANGUAGE_SPECIALIZATIONS
+from codegraph.constants import LANGUAGE_SPECIALIZATIONS
 
 # ---------------------------------------------------------------------------
 # System prompt template

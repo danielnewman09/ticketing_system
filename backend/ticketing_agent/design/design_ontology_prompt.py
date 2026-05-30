@@ -2,7 +2,7 @@
 Prompt templates and section builders for the design_ontology agent.
 """
 
-from backend.db.neo4j.models.constants import LANGUAGE_SPECIALIZATIONS
+from codegraph.constants import LANGUAGE_SPECIALIZATIONS
 
 SYSTEM_PROMPT = """\
 You are a software design agent. Given a set of decomposed requirements

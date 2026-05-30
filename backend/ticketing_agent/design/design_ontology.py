@@ -13,8 +13,7 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 import json
 
 from llm_caller import call_tool
-from backend.db.neo4j.repositories.constants import DEFAULT_PREDICATES
-from backend.db.neo4j.models.constants import NODE_KINDS
+from codegraph.constants import DEFAULT_PREDICATES, NODE_KIND_KEYS
 from backend.codebase.schemas import DesignSchema
 from backend.requirements.formatting import format_hlrs_for_prompt
 
@@ -49,7 +48,7 @@ def design(
     predicate_names = [name for name, _ in DEFAULT_PREDICATES]
     system_prompt = SYSTEM_PROMPT.format(
         predicates=", ".join(predicate_names),
-        node_kinds=", ".join(f'"{k}"' for k in sorted(NODE_KINDS)),
+        node_kinds=", ".join(f'"{k}"' for k in sorted(NODE_KIND_KEYS)),
         specializations_section=build_specializations_section(language),
     )
 
