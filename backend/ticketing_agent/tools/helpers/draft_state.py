@@ -1,6 +1,7 @@
 """Draft design state helpers."""
 
 from backend.codebase.schemas import OODesignSchema
+from backend.design_data import class_diagram_from_oo_design
 
 
 def build_draft_lookup(design: OODesignSchema) -> dict[str, dict]:
@@ -9,71 +10,20 @@ def build_draft_lookup(design: OODesignSchema) -> dict[str, dict]:
     Returns qualified_name -> {qualified_name, kind, description, source: 'draft'}
     for all classes, interfaces, enums, their attributes, and methods.
     """
-    lookup: dict[str, dict] = {}
-
-    for cls in design.classes:
-        qname = f"{cls.module}::{cls.name}" if cls.module else cls.name
-        lookup[qname] = {
-            "qualified_name": qname,
-            "kind": "class",
-            "description": cls.description,
-            "source": "draft",
-        }
-        for attr in cls.attributes:
-            attr_qname = f"{qname}::{attr.name}"
-            lookup[attr_qname] = {
-                "qualified_name": attr_qname,
-                "kind": "attribute",
-                "description": attr.description,
-                "source": "draft",
-            }
-        for method in cls.methods:
-            method_qname = f"{qname}::{method.name}"
-            lookup[method_qname] = {
-                "qualified_name": method_qname,
-                "kind": "method",
-                "description": method.description,
-                "source": "draft",
-            }
-
-    for iface in design.interfaces:
-        qname = f"{iface.module}::{iface.name}" if iface.module else iface.name
-        lookup[qname] = {
-            "qualified_name": qname,
-            "kind": "interface",
-            "description": iface.description,
-            "source": "draft",
-        }
-        for method in iface.methods:
-            method_qname = f"{qname}::{method.name}"
-            lookup[method_qname] = {
-                "qualified_name": method_qname,
-                "kind": "method",
-                "description": method.description,
-                "source": "draft",
-            }
-
-    for enum in design.enums:
-        qname = f"{enum.module}::{enum.name}" if enum.module else enum.name
-        lookup[qname] = {
-            "qualified_name": qname,
-            "kind": "enum",
-            "description": enum.description,
-            "source": "draft",
-        }
-
-    return lookup
+    diagram = class_diagram_from_oo_design(design)
+    return diagram.to_draft_lookup()
 
 
 def draft_summary(design: OODesignSchema) -> dict:
     """Return a summary dict of the draft design for tool responses."""
-    total_attrs = sum(len(cls.attributes) for cls in design.classes)
-    total_methods = sum(len(cls.methods) for cls in design.classes)
+    diagram = class_diagram_from_oo_design(design)
+    total_attrs = sum(len(c.attributes) for c in diagram.classes)
+    total_methods = sum(len(c.methods) for c in diagram.classes)
     return {
-        "classes": len(design.classes),
-        "interfaces": len(design.interfaces),
-        "enums": len(design.enums),
-        "associations": len(design.associations),
+        "classes": len(diagram.classes),
+        "interfaces": len(diagram.interfaces),
+        "enums": len(diagram.enums),
+        "associations": len(diagram.associations),
         "attributes": total_attrs,
         "methods": total_methods,
     }
