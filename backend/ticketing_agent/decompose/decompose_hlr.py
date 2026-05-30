@@ -418,6 +418,14 @@ def decompose(
         prompt_log_file=prompt_log_file,
     )
 
+    # Recover from models that return nested JSON as a string (DeepSeek does this)
+    if isinstance(result, dict) and isinstance(result.get("low_level_requirements"), str):
+        try:
+            result["low_level_requirements"] = json.loads(result["low_level_requirements"])
+            log.info("Deserialized low_level_requirements from JSON string")
+        except json.JSONDecodeError:
+            pass
+
     # Recover from models that embed <parameter=...> XML tags inside JSON values
     if isinstance(result, dict) and "low_level_requirements" not in result:
         recovered = _recover_mixed_xml_json(result)
