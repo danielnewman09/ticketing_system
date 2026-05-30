@@ -67,79 +67,9 @@ class VerificationResult:
 # ---------------------------------------------------------------------------
 
 
-def build_verification_context(neo4j_session: "Neo4jSession") -> list[dict]:
-    """Build structured class-level context for the verification agent.
-
-    .. deprecated::
-        Use :func:`build_verification_context_from_diagram` instead, which routes
-        through the design_data module and returns typed models.
-
-    Queries Neo4j :Design nodes only. Returns a list of class/interface
-    dicts with attributes, methods, and relationships.
-    """
-    contexts: dict[str, dict] = {}
-
-    result = neo4j_session.run("""
-        MATCH (parent:Design)
-        WHERE parent.kind IN ['class', 'interface', 'struct', 'type_alias']
-        OPTIONAL MATCH (parent)-[:COMPOSES]->(member:Design)
-        OPTIONAL MATCH (parent)-[r]->(target:Design)
-        WHERE type(r) <> 'COMPOSES' AND type(r) <> 'IMPLEMENTED_BY' AND type(r) <> 'TRACES_TO'
-        RETURN parent, collect(DISTINCT member) AS members,
-               collect(DISTINCT {pred: type(r), tgt_qn: target.qualified_name, tgt_name: target.name}) AS rels
-    """)
-    for record in result:
-        p = dict(record["parent"])
-        qn = p.get("qualified_name", "")
-        if not qn:
-            continue
-
-        attrs = []
-        methods = []
-        for m in (record["members"] or []):
-            if m is None:
-                continue
-            md = dict(m)
-            member = {
-                "name": md.get("name", ""),
-                "qualified_name": md.get("qualified_name", ""),
-                "kind": md.get("kind", ""),
-                "visibility": md.get("visibility", ""),
-                "type_signature": md.get("type_signature", ""),
-                "argsstring": md.get("argsstring", ""),
-                "description": md.get("description", ""),
-            }
-            if md.get("kind") in ("attribute", "constant"):
-                attrs.append(member)
-            else:
-                methods.append(member)
-
-        relationships = []
-        for rel in (record["rels"] or []):
-            if rel is None or rel.get("pred") is None:
-                continue
-            relationships.append({
-                "predicate": rel["pred"],
-                "target": rel.get("tgt_qn", ""),
-                "target_name": rel.get("tgt_name", ""),
-            })
-
-        contexts[qn] = {
-            "qualified_name": qn,
-            "kind": p.get("kind", ""),
-            "description": p.get("description", ""),
-            "attributes": sorted(attrs, key=lambda a: a["name"]),
-            "methods": sorted(methods, key=lambda m: m["name"]),
-            "relationships": relationships,
-        }
-
-    return sorted(contexts.values(), key=lambda c: c["qualified_name"])
-
-
 def build_verification_context_from_diagram(neo4j_session: "Neo4jSession", component_id: int | None = None) -> list[dict]:
     """Build verification context using the design_data module.
 
-    This is the preferred replacement for build_verification_context().
     Uses DesignDataRepository to query Neo4j and return typed ClassDiagram
     objects, then extracts verification dicts.
 
@@ -148,8 +78,7 @@ def build_verification_context_from_diagram(neo4j_session: "Neo4jSession", compo
         component_id: Optional component filter.
 
     Returns:
-        List of dicts with verification context (same format as
-        build_verification_context()).
+        List of dicts with verification context.
     """
     repo = DesignDataRepository(neo4j_session)
     diagram = repo.get_class_diagram(component_id=component_id)
