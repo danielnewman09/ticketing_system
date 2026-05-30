@@ -49,7 +49,7 @@ _ASSOCIATION_PREDICATES = {
 
 
 class DesignDataRepository:
-    """Read-only repository returning typed models from Neo4j :Design nodes.
+    """Read-only repository returning typed models from Neo4j :Compound nodes with layer='design'.
 
     Each method accepts a Neo4j session and returns hydrated model objects
     suitable for agent prompts, verification context, or draft lookups.
@@ -76,8 +76,8 @@ class DesignDataRepository:
         Returns:
             A ClassDiagram with all matching entities and associations.
         """
-        conditions = ["d:Design"]
-        params: dict = {}
+        conditions = ["d:Compound", "d.layer = $layer"]
+        params: dict = {"layer": layer or "design"}
 
         if component_id is not None:
             conditions.append("d.component_id = $comp_id")
@@ -102,7 +102,7 @@ class DesignDataRepository:
         MATCH (d)
         WHERE {where}
           AND d.kind IN ['class', 'struct', 'template_class', 'interface', 'abstract_class', 'enum', 'enum_class', 'namespace', 'module']
-        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
         WITH d, collect(DISTINCT member) AS members
         RETURN d, members
         """
@@ -173,7 +173,7 @@ class DesignDataRepository:
         """
         params: dict = {"hlr_id": hlr_id}
         conditions = [
-            "d:Design",
+            "d:Compound", "d.layer = 'design'",
             "d.kind IN ['class', 'struct', 'template_class', 'interface', 'abstract_class', 'enum', 'enum_class']",
         ]
         if component_id is not None:
@@ -194,12 +194,12 @@ class DesignDataRepository:
             }}
             OR
             EXISTS {{
-              MATCH (hlr)-[:TRACES_TO]->(parent:Design)-[:COMPOSES]->(d)
+              MATCH (hlr)-[:TRACES_TO]->(parent:Compound)-[:COMPOSES]->(d)
             }}
             OR
             d.component_id = $comp_id
           )
-        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
         WITH d, collect(DISTINCT member) AS members
         RETURN d, members
         """
@@ -208,9 +208,9 @@ class DesignDataRepository:
         else:
             # Without component filter, just find entities linked to HLR
             cypher_simple = """
-            MATCH (hlr:HLR {id: $hlr_id})-[:TRACES_TO]->(d:Design)
+            MATCH (hlr:HLR {id: $hlr_id})-[:TRACES_TO]->(d:Compound)
             WHERE d.kind IN ['class', 'struct', 'template_class', 'interface', 'abstract_class', 'enum', 'enum_class']
-            OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+            OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
             WITH d, collect(DISTINCT member) AS members
             RETURN d, members
             """
@@ -257,9 +257,10 @@ class DesignDataRepository:
     def get_class(self, qualified_name: str) -> ClassNode | None:
         """Fetch a single class with hydrated members."""
         cypher = """
-        MATCH (d:Design {qualified_name: $qn})
+        MATCH (d:Compound {qualified_name: $qn})
         WHERE d.kind IN ['class', 'struct', 'template_class']
-        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+        AND d.layer = 'design'
+        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
         RETURN d, collect(DISTINCT member) AS members
         """
         result = self._session.run(cypher, {"qn": qualified_name})
@@ -273,9 +274,10 @@ class DesignDataRepository:
     def get_interface(self, qualified_name: str) -> InterfaceNode | None:
         """Fetch a single interface with hydrated methods."""
         cypher = """
-        MATCH (d:Design {qualified_name: $qn})
+        MATCH (d:Compound {qualified_name: $qn})
         WHERE d.kind IN ['interface', 'abstract_class']
-        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+        AND d.layer = 'design'
+        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
         RETURN d, collect(DISTINCT member) AS members
         """
         result = self._session.run(cypher, {"qn": qualified_name})
@@ -289,9 +291,10 @@ class DesignDataRepository:
     def get_enum(self, qualified_name: str) -> EnumNode | None:
         """Fetch a single enum with hydrated values."""
         cypher = """
-        MATCH (d:Design {qualified_name: $qn})
+        MATCH (d:Compound {qualified_name: $qn})
         WHERE d.kind IN ['enum', 'enum_class']
-        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+        AND d.layer = 'design'
+        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
         RETURN d, collect(DISTINCT member) AS members
         """
         result = self._session.run(cypher, {"qn": qualified_name})
@@ -312,10 +315,11 @@ class DesignDataRepository:
         Useful for building prompt context about existing designs.
         """
         cypher = """
-        MATCH (d:Design)
+        MATCH (d:Compound)
         WHERE d.kind IN ['class', 'struct', 'template_class']
           AND d.component_id = $comp_id
-        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+          AND d.layer = 'design'
+        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
         WITH d, collect(DISTINCT member) AS members
         RETURN d, members
         """
@@ -334,10 +338,11 @@ class DesignDataRepository:
         for is_intercomponent=True entities in a component.
         """
         cypher = """
-        MATCH (d:Design)
+        MATCH (d:Compound)
         WHERE d.is_intercomponent = true AND d.component_id = $comp_id
           AND d.kind IN ['class', 'struct', 'template_class', 'interface', 'abstract_class']
-        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Design)
+          AND d.layer = 'design'
+        OPTIONAL MATCH (d)-[:COMPOSES]->(member:Member)
         WHERE member.kind = 'method' AND member.visibility = 'public'
         RETURN d, collect(DISTINCT member) AS members
         """
@@ -497,17 +502,17 @@ class DesignDataRepository:
         WHERE {where}
           AND type(r) IN ['AGGREGATES', 'COMPOSES', 'REFERENCES', 'DEPENDS_ON', 'ASSOCIATES',
                           'INVOKES', 'RETURNS', 'REALIZES', 'INHERITS_FROM', 'IMPLEMENTS']
-          AND (o:Design OR o:Compound)
+          AND (o:Compound OR o:Namespace)
         RETURN s.qualified_name AS subject, type(r) AS rel_type,
                o.qualified_name AS object, r.mechanism AS mechanism, r.description AS description
         """
         # Re-map conditions for o node as well
         # Actually simpler: find all relationships between Design nodes
         cypher = """
-        MATCH (s:Design)-[r]->(o)
+        MATCH '(s:Compound)'-[r]->(o)
         WHERE type(r) IN ['AGGREGATES', 'COMPOSES', 'REFERENCES', 'DEPENDS_ON', 'ASSOCIATES',
                           'INVOKES', 'RETURNS', 'REALIZES', 'INHERITS_FROM', 'IMPLEMENTS']
-          AND (o:Design OR o:Compound)
+          AND (o:Compound OR o:Namespace)
         RETURN s.qualified_name AS subject, type(r) AS rel_type,
                o.qualified_name AS object, r.mechanism AS mechanism, r.description AS description
         """
