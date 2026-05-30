@@ -69,12 +69,23 @@ def _props_to_node(props: dict) -> NodeModel | None:
         return None
 
 
+_DESIGN_NODE_LABELS: list[str] = ["Compound", "Member", "Namespace"]
+
+
+def _label_match(alias: str = "n") -> str:
+    """Build a Neo4j label-matching clause for codebase graph nodes.
+
+    Example: ``_label_match("d")`` returns
+    ``"(d:Compound OR d:Member OR d:Namespace)"``
+    """
+    return f"({' OR '.join(f'{alias}:{l}' for l in _DESIGN_NODE_LABELS)})"
+
+
 class DesignRepository:
     """CRUD operations for codebase graph nodes and their relationships.
 
-    Supports both the new label scheme (:Compound, :Member, :Namespace
-    with `layer` property) and the legacy :Design label for backward
-    compatibility during migration.
+    Uses the :Compound, :Member, :Namespace labels with ``layer``
+    property for filtering design-intent vs. as-built vs. dependency.
 
     Each method accepts a Neo4j session and performs Cypher queries
     directly. The caller is responsible for transaction management.
@@ -129,11 +140,12 @@ class DesignRepository:
         Searches across :Compound, :Member, :Namespace, and :Design
         (legacy) labels.
         """
+        label_clause = _label_match("n")
         result = self._session.run(
-            """
+            f"""
             MATCH (n)
             WHERE n.qualified_name = $qn
-              AND (n:Compound OR n:Member OR n:Namespace OR n:Design)
+              AND {label_clause}
             RETURN n
             """,
             {"qn": qualified_name},
@@ -167,7 +179,7 @@ class DesignRepository:
             exclude_source_types: Legacy — maps to exclude_layers
                 for backward compatibility.
         """
-        conditions = ["(n:Compound OR n:Member OR n:Namespace OR n:Design)"]
+        conditions = [_label_match("n")]
         params: dict = {}
 
         if kind:
@@ -210,11 +222,12 @@ class DesignRepository:
 
         Matches across :Compound, :Member, :Namespace, and :Design labels.
         """
+        label_clause = _label_match("n")
         result = self._session.run(
-            """
+            f"""
             MATCH (n)
             WHERE n.qualified_name = $qn
-              AND (n:Compound OR n:Member OR n:Namespace OR n:Design)
+              AND {label_clause}
             DETACH DELETE n
             RETURN count(n) AS cnt
             """,
@@ -270,14 +283,13 @@ class DesignRepository:
             set_props.append("r.display_name = $display_name")
         set_clause = "\n            " + "\n            ".join(set_props) if set_props else ""
 
-        cypher = """
+        subj_clause = _label_match("s")
+        obj_clause = _label_match("target")
+        cypher = f"""
         MATCH (s)
-        WHERE s.qualified_name = $subj AND (s:Compound OR s:Member OR s:Namespace OR s:Design)
-        OPTIONAL MATCH (o_new)
-        WHERE o_new.qualified_name = $obj AND (o_new:Compound OR o_new:Member OR o_new:Namespace)
-        OPTIONAL MATCH (o_legacy:Design {qualified_name: $obj})
-        WITH s, coalesce(o_new, o_legacy) AS target
-        WHERE target IS NOT NULL
+        WHERE s.qualified_name = $subj AND {subj_clause}
+        MATCH (target)
+        WHERE target.qualified_name = $obj AND {obj_clause}
         MERGE (s)-[r:REL_TYPE]->(target)
         """
         if set_clause:
@@ -306,7 +318,8 @@ class DesignRepository:
         Removes :Compound, :Member, :Namespace, and legacy :Design nodes.
         """
         try:
-            self._session.run("MATCH (n) WHERE n:Compound OR n:Member OR n:Namespace OR n:Design DETACH DELETE n")
+            label_clause = _label_match("n")
+            self._session.run(f"MATCH (n) WHERE {label_clause} DETACH DELETE n")
             log.info("Cleared design graph from Neo4j")
             return True
         except Exception:
@@ -318,11 +331,12 @@ class DesignRepository:
 
         Matches across :Compound, :Member, :Namespace, and :Design labels.
         """
+        label_clause = _label_match("n")
         self._session.run(
-            """
+            f"""
             MATCH (n)
             WHERE n.qualified_name = $qn
-              AND (n:Compound OR n:Member OR n:Namespace OR n:Design)
+              AND {label_clause}
             SET n.implementation_status = $status,
                 n.source_file = $source_file,
                 n.test_file = $test_file
