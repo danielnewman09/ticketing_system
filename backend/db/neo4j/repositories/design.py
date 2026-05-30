@@ -370,6 +370,380 @@ class DesignRepository:
             namespaces=[],
         )
 
+    def get_ontology_graph(
+        self,
+        *,
+        layer: str = "design",
+        kind_filter: str | None = None,
+        search: str | None = None,
+        component_id: int | None = None,
+    ) -> OntologyGraph:
+        """Fetch the full ontology graph for the given layer.
+
+        Returns an OntologyGraph with all namespaces, their compounds,
+        unparented compounds, and cross-cutting edges.
+        """
+        # Build filter conditions for compounds
+        conditions = ["c.layer = $layer"]
+        params: dict = {"layer": layer}
+
+        if kind_filter:
+            conditions.append("c.kind = $kind")
+            params["kind"] = kind_filter
+        if component_id is not None:
+            conditions.append("c.component_id = $comp_id")
+            params["comp_id"] = component_id
+        if search:
+            conditions.append(
+                "(c.name CONTAINS $search OR c.qualified_name CONTAINS $search)"
+            )
+            params["search"] = search
+
+        where = " AND ".join(conditions)
+
+        result = self._session.run(
+            f"""
+            MATCH (c:Compound)
+            WHERE {where}
+            OPTIONAL MATCH (c)-[:COMPOSES]->(m:Member)
+            OPTIONAL MATCH (c)-[r_out]->(tgt)
+              WHERE type(r_out) <> 'COMPOSES'
+                AND (tgt:Compound OR tgt:Namespace)
+            OPTIONAL MATCH (src)-[r_in]->(c)
+              WHERE NOT src:Member
+            RETURN c,
+                   collect(DISTINCT m) AS members,
+                   collect(DISTINCT {{rel: type(r_out),
+                       source_qn: c.qualified_name,
+                       target_qn: tgt.qualified_name}}) AS outs,
+                   collect(DISTINCT {{rel: type(r_in),
+                       source_qn: src.qualified_name,
+                       target_qn: c.qualified_name}}) AS ins
+            ORDER BY c.qualified_name
+            """,
+            params,
+        )
+
+        compound_graphs: dict[str, CompoundGraph] = {}
+        for record in result:
+            c = record["c"]
+            if c is None:
+                continue
+            c_props = dict(c)
+            c_qn = c_props.get("qualified_name", "")
+
+            members: list[MemberNode] = []
+            for m in (record["members"] or []):
+                if m is None:
+                    continue
+                try:
+                    members.append(MemberNode(**dict(m)))
+                except Exception:
+                    pass
+
+            edges_out: list[GraphEdge] = []
+            for e in (record["outs"] or []):
+                if e is None or e.get("rel") is None:
+                    continue
+                edges_out.append(_hydrate_graph_edge(
+                    e["rel"], e.get("source_qn", ""), e.get("target_qn", ""),
+                ))
+
+            edges_in: list[GraphEdge] = []
+            for e in (record["ins"] or []):
+                if e is None or e.get("rel") is None:
+                    continue
+                edges_in.append(_hydrate_graph_edge(
+                    e["rel"], e.get("source_qn", ""), e.get("target_qn", ""),
+                ))
+
+            compound = CompoundNode(**c_props)
+            cg = CompoundGraph(
+                node=compound,
+                members=members,
+                edges_out=edges_out,
+                edges_in=edges_in,
+            )
+            compound_graphs[c_qn] = cg
+
+        # Fetch namespaces with layer filter
+        ns_result = self._session.run(
+            """
+            MATCH (n:Namespace)
+            WHERE n.layer = $layer
+            OPTIONAL MATCH (n)-[:COMPOSES]->(c:Compound)
+            RETURN n, collect(DISTINCT c) AS compounds
+            ORDER BY n.qualified_name
+            """,
+            {"layer": layer},
+        )
+
+        ns_graphs: dict[str, NamespaceGraph] = {}
+        ns_owned_compound_qns: set[str] = set()
+        for record in ns_result:
+            n = record["n"]
+            if n is None:
+                continue
+            ns_props = dict(n)
+            ns_qn = ns_props.get("qualified_name", "")
+            ns_node = NamespaceNode(**ns_props)
+
+            ns_compounds: list[CompoundGraph] = []
+            for c in (record["compounds"] or []):
+                if c is None:
+                    continue
+                c_qn = c.get("qualified_name", "")
+                ns_owned_compound_qns.add(c_qn)
+                if c_qn in compound_graphs:
+                    ns_compounds.append(compound_graphs[c_qn])
+
+            ns_graphs[ns_qn] = NamespaceGraph(
+                node=ns_node,
+                compounds=ns_compounds,
+                namespaces=[],
+            )
+
+        unparented: list[CompoundGraph] = [
+            cg for qn, cg in compound_graphs.items()
+            if qn not in ns_owned_compound_qns
+        ]
+
+        cross_edges: list[GraphEdge] = []
+        edge_seen: set[tuple[str, str, str]] = set()
+        for cg in compound_graphs.values():
+            for ge in cg.edges_out:
+                key = (ge.source_qualified_name, ge.target_qualified_name, ge.predicate)
+                if key not in edge_seen:
+                    edge_seen.add(key)
+                    cross_edges.append(ge)
+
+        return OntologyGraph(
+            namespaces=list(ns_graphs.values()),
+            compounds=unparented,
+            edges=cross_edges,
+        )
+
+    def get_hlr_subgraph(
+        self, hlr_id: int, component_id: int | None = None
+    ) -> OntologyGraph:
+        """Fetch the design subgraph around an HLR.
+
+        Finds seed design nodes via TRACES_TO from the HLR, then fetches
+        a 1-hop neighbourhood of compounds and their members.
+        """
+        seed_result = self._session.run(
+            f"""
+            MATCH (hlr:HLR {{id: $hid}})-[:TRACES_TO]->(d)
+            WHERE {_label_match("d")}
+            RETURN d.qualified_name AS qn
+            """,
+            {"hid": hlr_id},
+        )
+        seed_qns = [r["qn"] for r in seed_result if r["qn"]]
+        if not seed_qns:
+            log.warning("HLR %d has no linked nodes via TRACES_TO", hlr_id)
+            return OntologyGraph()
+
+        return self._get_neighbourhood_from_seeds(seed_qns, component_id)
+
+    def get_neighbourhood_graph(self, qualified_name: str) -> OntologyGraph:
+        """Fetch the 1-hop neighbourhood of a node as an OntologyGraph."""
+        return self._get_neighbourhood_from_seeds([qualified_name])
+
+    def _get_neighbourhood_from_seeds(
+        self, seed_qns: list[str], component_id: int | None = None
+    ) -> OntologyGraph:
+        """Build an OntologyGraph from seed qualified names."""
+        label_clause = _label_match("d")
+
+        result = self._session.run(
+            f"UNWIND $qns AS qn MATCH (d) WHERE d.qualified_name = qn AND {label_clause} RETURN d",
+            {"qns": seed_qns},
+        )
+        compound_graphs: dict[str, CompoundGraph] = {}
+        for record in result:
+            d = record["d"]
+            if d is None:
+                continue
+            qn = d.get("qualified_name", "")
+            cg = self.get_compound_graph(qn)
+            if cg:
+                compound_graphs[qn] = cg
+
+        edge_out = self._session.run(
+            """
+            UNWIND $qns AS qn
+            MATCH (s {qualified_name: qn})-[r]->(t)
+            WHERE type(r) <> 'COMPOSES'
+              AND (t:Compound OR t:Namespace)
+            RETURN s.qualified_name AS src, t.qualified_name AS tgt,
+                   type(r) AS rel_type
+            """,
+            {"qns": seed_qns},
+        )
+        for record in edge_out:
+            src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
+            if tgt and tgt not in compound_graphs:
+                cg = self.get_compound_graph(tgt)
+                if cg:
+                    compound_graphs[tgt] = cg
+            if src in compound_graphs:
+                compound_graphs[src].edges_out.append(
+                    _hydrate_graph_edge(rel, src, tgt or "")
+                )
+
+        edge_in = self._session.run(
+            """
+            UNWIND $qns AS qn
+            MATCH (s)-[r]->(t {qualified_name: qn})
+            WHERE type(r) <> 'COMPOSES'
+              AND NOT s:Member
+              AND s.qualified_name <> t.qualified_name
+            RETURN s.qualified_name AS src, t.qualified_name AS tgt,
+                   type(r) AS rel_type
+            """,
+            {"qns": seed_qns},
+        )
+        for record in edge_in:
+            src, tgt, rel = record["src"], record["tgt"], record["rel_type"]
+            if src and src not in compound_graphs:
+                cg = self.get_compound_graph(src)
+                if cg:
+                    compound_graphs[src] = cg
+            if tgt in compound_graphs:
+                compound_graphs[tgt].edges_in.append(
+                    _hydrate_graph_edge(rel, src or "", tgt)
+                )
+
+        if component_id is not None:
+            comp_result = self._session.run(
+                """
+                MATCH (c:Compound {component_id: $cid})
+                RETURN c.qualified_name AS qn
+                """,
+                {"cid": component_id},
+            )
+            for record in comp_result:
+                qn = record["qn"]
+                if qn and qn not in compound_graphs:
+                    cg = self.get_compound_graph(qn)
+                    if cg:
+                        compound_graphs[qn] = cg
+
+        return OntologyGraph(compounds=list(compound_graphs.values()))
+
+    def get_graph_stats(self) -> dict:
+        """Return node counts by kind, edge counts by predicate."""
+        label_clause = _label_match("d")
+
+        kind_result = self._session.run(
+            f"MATCH (d) WHERE {label_clause} RETURN d.kind AS kind, count(d) AS cnt"
+        )
+        kind_counts: dict[str, int] = {}
+        total_nodes = 0
+        for record in kind_result:
+            k = record["kind"] or "unknown"
+            cnt = record["cnt"]
+            kind_counts[k] = cnt
+            total_nodes += cnt
+
+        nodes_result = self._session.run(
+            f"""
+            MATCH (d) WHERE {label_clause}
+            RETURN d.qualified_name AS qn, d.name AS name,
+                   d.kind AS kind, d.component_id AS cid
+            ORDER BY d.qualified_name LIMIT 200
+            """
+        )
+        nodes = []
+        for record in nodes_result:
+            nodes.append({
+                "name": record["name"],
+                "kind": record["kind"],
+                "qualified_name": record["qn"],
+                "component_id": record["cid"],
+            })
+
+        edge_result = self._session.run(
+            f"""
+            MATCH (s)-[r]->(t)
+            WHERE {_label_match('s')} AND {_label_match('t')}
+            RETURN count(r) AS cnt
+            """
+        )
+        total_edges = edge_result.single()["cnt"]
+
+        pred_result = self._session.run(
+            f"""
+            MATCH (s)-[r]->(t)
+            WHERE {_label_match('s')} AND {_label_match('t')}
+            RETURN count(DISTINCT type(r)) AS cnt
+            """
+        )
+        total_predicates = pred_result.single()["cnt"]
+
+        return {
+            "nodes": nodes,
+            "kind_counts": kind_counts,
+            "total_nodes": total_nodes,
+            "total_edges": total_edges,
+            "total_predicates": total_predicates,
+        }
+
+    def get_dependency_links(self, design_qnames: list[str]) -> OntologyGraph:
+        """Find dependency Compounds linked to given design qualified names."""
+        if not design_qnames:
+            return OntologyGraph()
+
+        label_clause = _label_match("d")
+
+        result = self._session.run(
+            f"""
+            UNWIND $qnames AS qn
+            MATCH (d) WHERE d.qualified_name = qn AND {label_clause}
+            OPTIONAL MATCH (d)-[r]->(dep:Compound)
+            WHERE dep.layer = 'dependency'
+            RETURN d, collect(DISTINCT {{dep: dep, rel: type(r)}}) AS dep_links
+            """,
+            {"qnames": design_qnames},
+        )
+
+        compounds: list[CompoundGraph] = []
+        seen_qns: set[str] = set()
+        edges: list[GraphEdge] = []
+
+        for record in result:
+            d = record["d"]
+            if d is None:
+                continue
+            d_qn = d.get("qualified_name", "")
+            if d_qn not in seen_qns:
+                seen_qns.add(d_qn)
+                d_props = dict(d)
+                compounds.append(CompoundGraph(
+                    node=CompoundNode(**d_props),
+                ))
+
+            for item in (record["dep_links"] or []):
+                if item is None or item.get("dep") is None:
+                    continue
+                dep = item["dep"]
+                dep_qn = dep.get("qualified_name", "")
+                dep_props = dict(dep)
+                if dep_qn not in seen_qns:
+                    seen_qns.add(dep_qn)
+                    try:
+                        compounds.append(CompoundGraph(
+                            node=CompoundNode(**dep_props),
+                        ))
+                    except Exception:
+                        pass
+                edges.append(_hydrate_graph_edge(
+                    item["rel"], d_qn, dep_qn,
+                ))
+
+        return OntologyGraph(compounds=compounds, edges=edges)
+
     def delete_node(self, qualified_name: str) -> bool:
         """Delete a node and all its relationships. Returns True if deleted.
 
