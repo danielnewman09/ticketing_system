@@ -5,7 +5,7 @@ Seeds HLRs for a calculator application in Neo4j.
 
 Usage:
     source .venv/bin/activate
-    python scripts/04_benchmark_calculator.py
+    python scripts/05_benchmark_calculator.py
 """
 
 import os

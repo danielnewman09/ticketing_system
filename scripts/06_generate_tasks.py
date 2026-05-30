@@ -6,7 +6,7 @@ then generates implementation tasks linked to design nodes and verifications.
 
 Usage:
     source .venv/bin/activate
-    python scripts/05_generate_tasks.py [--hlr-id ID] [--model MODEL]
+    python scripts/06_generate_tasks.py [--hlr-id ID] [--model MODEL]
 """
 
 import os

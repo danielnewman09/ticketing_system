@@ -8,7 +8,6 @@ def test_system_prompt_renders():
     rendered = SYSTEM_PROMPT.format(
         specializations_section="",
         namespace_section="",
-        dependency_api_section="",
         as_built_section="",
         existing_classes_section="",
         intercomponent_section="",
@@ -37,11 +36,12 @@ def test_system_prompt_renders_with_sections():
     rendered = SYSTEM_PROMPT.format(
         specializations_section="## Specializations\n- C++",
         namespace_section="The required namespace is: `calculation_engine`",
-        dependency_api_section="## Dependency API\n### class: `std::vector`",
         as_built_section="",
         existing_classes_section="",
         intercomponent_section="",
     )
     assert "Specializations" in rendered
     assert "calculation_engine" in rendered
-    assert "std::vector" in rendered
+    # Verify the new guidance sections are present
+    assert "Enum values in conditions" in rendered
+    assert "Do NOT restructure your design to match verification stub references" in rendered

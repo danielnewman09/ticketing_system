@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """
-Flush all data: SQLite tables, Neo4j design graph, and logs.
+Flush all data: SQLite tables, Neo4j design graph, logs, and project directory.
 
 Can be run standalone or imported as a library function.
 
 Usage:
     python scripts/flush_db.py
+    python scripts/flush_db.py --keep-project  # keep the project directory on disk
 """
 
 import os
@@ -23,19 +24,28 @@ REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
 
 
-def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
+def flush_all(clear_logs: bool = True, clear_project_dir: bool = True):
     """Flush SQLite tables, Neo4j design graph, and optionally logs/project dir.
 
     Args:
         clear_logs: If True, clear and recreate the logs directory.
-        clear_project_dir: If non-empty, remove this directory.
+        clear_project_dir: If True, remove the project directory from disk
+            using the name and working_directory stored in ProjectMeta.
     """
     from services.dependencies import init_neo4j, close_neo4j
     from backend.db import init_db, get_session, get_main_engine
     from backend.db.base import Base
     from backend.db.models import Predicate
-    from backend.db.vec import ensure_vec_table
-    from backend.db.neo4j.sync import clear_design_graph
+
+    # Read project metadata before dropping tables so we know what to clean up
+    project_dir = ""
+    if clear_project_dir:
+        from backend.db.models import ProjectMeta
+        init_db()
+        with get_session() as session:
+            meta = session.query(ProjectMeta).filter_by(id=1).first()
+            if meta and meta.name and meta.working_directory:
+                project_dir = os.path.join(meta.working_directory, meta.name)
 
     init_neo4j()
 
@@ -43,12 +53,15 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
     engine = get_main_engine()
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+
+    from backend.db.vec import ensure_vec_table
     ensure_vec_table()
 
     with get_session() as session:
         Predicate.ensure_defaults(session)
 
     # Clear Neo4j design graph (preserves cppreference data)
+    from backend.db.neo4j.sync import clear_design_graph
     clear_design_graph()
 
     # Clear HLR/LLR nodes too (Phase 2 primary store)
@@ -76,11 +89,21 @@ def flush_all(clear_logs: bool = True, clear_project_dir: str = ""):
             shutil.rmtree(LOGS_DIR)
         os.makedirs(LOGS_DIR, exist_ok=True)
 
-    if clear_project_dir and os.path.exists(clear_project_dir):
-        shutil.rmtree(clear_project_dir)
+    if clear_project_dir and project_dir and os.path.exists(project_dir):
+        shutil.rmtree(project_dir)
+        print(f"  Removed project directory: {project_dir}")
 
 
 if __name__ == "__main__":
-    flush_all()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Flush all data: SQLite, Neo4j, logs, and project directory.")
+    parser.add_argument(
+        "--keep-project", action="store_true",
+        help="Keep the project directory on disk (only flush DB and logs)",
+    )
+    args = parser.parse_args()
+
+    flush_all(clear_project_dir=not args.keep_project)
     print("Database flushed (SQLite + Neo4j design graph).")
     print(f"Logs cleared: {LOGS_DIR}")

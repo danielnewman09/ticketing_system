@@ -76,5 +76,48 @@ def handle(ctx, tool_input: dict) -> str:
             result_entry["exists"] = found_in_draft
             result_entry["source"] = "draft" if found_in_draft else None
 
+        # Detect enum value references: if the qname looks like
+        # ns::EnumType::ValueName and the parent (ns::EnumType) exists
+        # as an enum in the draft but the value is not a member,
+        # it's an enum constant reference — valid format but not a
+        # resolvable member. The caller should use expected_value instead.
+        if (
+            not result_entry["exists"]
+            and result_entry["valid"]
+            and "::" in resolved_qn
+        ):
+            parts = resolved_qn.rsplit("::", 1)
+            if len(parts) == 2:
+                parent_qn, member_name = parts
+                # Check if parent is an enum in the draft
+                parent_info = ctx.draft_lookup.get(parent_qn)
+                if parent_info and parent_info.get("kind") == "enum":
+                    result_entry["exists"] = True
+                    result_entry["source"] = "enum_value"
+                    result_entry["note"] = (
+                        f"'{member_name}' is an enum value of '{parent_qn}'. "
+                        "Enum values are not individual design members — "
+                        "use the attribute that holds the enum type as "
+                        "subject_qualified_name and put the enum value "
+                        "in expected_value instead."
+                    )
+                # Check if parent is an enum in Neo4j
+                elif ctx.neo4j_session is not None and not parent_info:
+                    from backend.db.neo4j.repositories.design import DesignRepository as DR
+                    nrepo = DR(ctx.neo4j_session)
+                    parent_nodes = nrepo.find_nodes(search=parent_qn, exclude_source_types=["verification"])
+                    for pn in parent_nodes:
+                        if pn.qualified_name == parent_qn and pn.node_type == "enum":
+                            result_entry["exists"] = True
+                            result_entry["source"] = "enum_value"
+                            result_entry["note"] = (
+                                f"'{member_name}' is an enum value of '{parent_qn}'. "
+                                "Enum values are not individual design members — "
+                                "use the attribute that holds the enum type as "
+                                "subject_qualified_name and put the enum value "
+                                "in expected_value instead."
+                            )
+                            break
+
         results.append(result_entry)
     return json.dumps({"results": results})

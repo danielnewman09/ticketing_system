@@ -152,6 +152,42 @@ Common patterns for resolving stubs:
 | `error_signal == Y` | `ns::ResultClass::error_signal == Y` where error_signal is an enum attribute |
 | `caller_qualified_name: TestSuite` | Leave empty (omit) — the test framework is not a design element |
 
+**Enum values in conditions:** When comparing against an enum value (e.g.,
+`InvalidInput`, `DivisionByZero`, `None`), reference the enum **attribute** as
+`subject_qualified_name` and put the enum **value** in `expected_value`. Do NOT use
+enum values as `subject_qualified_name` or `object_qualified_name`.
+
+Example:
+```json
+{{"subject_qualified_name": "calculation_engine::CalculationEngine::error_signal", "operator": "==", "expected_value": "InvalidInput"}}
+```
+NOT:
+```json
+{{"subject_qualified_name": "calculation_engine::CalculationError::InvalidInput", ...}}
+```
+
+When `validate_qualified_names` reports `exists: false` for an enum member like
+`ns::EnumType::SomeValue`, this is expected — enum values are not individual
+nodes in the design. Use `expected_value` for the enum value instead, and
+reference the attribute that holds the enum type as the `subject_qualified_name`.
+
+**Do NOT restructure your design to match verification stub references.** The
+verification stubs use conceptual names like `Engine.result` and
+`Engine.is_success` to describe test scenarios. When mapping these to your
+design:
+- If `compute()` returns a result object, map `Engine.result` to the return
+type's attribute (e.g., `CalculationResult::result_value`), NOT by duplicating
+that attribute on the engine class itself.
+- Do NOT flatten a well-structured return type onto the calling class just
+because the stub references it as `Engine.<property>`.
+- Prefer designs where methods return values over designs that store results
+in mutable internal state. A method like `compute() → CalculationResult` is
+better than `compute() → void` with results stored as engine attributes.
+- Keep the `CalculationResult` class as the authoritative data holder for
+computation outcomes. If the engine needs a `last_result` attribute, it
+should be of type `CalculationResult`, not a set of parallel primitive
+attributes that duplicate the result class.
+
 <FORMAT-CONTRACT name="verification-key-format">
 The `verifications` field in `commit_design_and_verifications` MUST be a JSON
 object keyed by LLR ID (integer), NOT by test name or description.

@@ -365,6 +365,19 @@ def persist_verification(
     for vm in existing_vms:
         repo.delete_verification(vm.id)
 
+    # Clean up orphaned stub :Design nodes left behind by notional references
+    # from the decompose phase.  When Condition/Action nodes are deleted
+    # above, stub Design nodes (is_stub=true) that only had edges from those
+    # deleted nodes become isolated.  They've served their purpose as
+    # temporary placeholders and should be removed.
+    neo4j_session.run(
+        """
+        MATCH (d:Design {is_stub: true})
+        WHERE NOT (d)--()
+        DETACH DELETE d
+        """
+    )
+
     # Create new verifications
     for v in verifications:
         vm = repo.create_verification(

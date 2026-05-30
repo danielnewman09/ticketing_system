@@ -268,41 +268,83 @@ class VerificationRepository:
             },
         )
 
-        # Create :LEFT_OPERAND edge if subject :Design node exists
+        # Create :LEFT_OPERAND edge if subject :Design node exists.
+        # If the qualified name is notional (no :: separator, e.g. "Engine.result"),
+        # create a :Design stub node so the edge can be resolved later when
+        # the design-verify agent commits resolved qualified names.
         if subject_qualified_name:
-            result = self._session.run(
-                """
-                MATCH (c:Condition {id: $cid})
-                MATCH (d:Design {qualified_name: $qn})
-                MERGE (c)-[:LEFT_OPERAND]->(d)
-                """,
-                {"cid": next_id, "qn": subject_qualified_name},
-            )
-            summary = result.consume().counters
-            if summary.relationships_created == 0:
-                log.debug(
-                    "No :LEFT_OPERAND edge created for condition %d: "
-                    ":Design node '%s' not found",
-                    next_id, subject_qualified_name,
+            is_notional = "::" not in subject_qualified_name
+            if is_notional:
+                # Create a stub :Design node for the notional reference so the
+                # :LEFT_OPERAND edge exists and can be updated later
+                self._session.run(
+                    """
+                    MERGE (d:Design {qualified_name: $qn})
+                    ON CREATE SET d.is_stub = true, d.kind = 'stub'
+                    WITH d
+                    MATCH (c:Condition {id: $cid})
+                    MERGE (c)-[:LEFT_OPERAND]->(d)
+                    """,
+                    {"cid": next_id, "qn": subject_qualified_name},
                 )
+                log.debug(
+                    "Created stub :Design node and :LEFT_OPERAND edge for "
+                    "notional reference '%s' (condition %d)",
+                    subject_qualified_name, next_id,
+                )
+            else:
+                result = self._session.run(
+                    """
+                    MATCH (c:Condition {id: $cid})
+                    MATCH (d:Design {qualified_name: $qn})
+                    MERGE (c)-[:LEFT_OPERAND]->(d)
+                    """,
+                    {"cid": next_id, "qn": subject_qualified_name},
+                )
+                summary = result.consume().counters
+                if summary.relationships_created == 0:
+                    log.debug(
+                        "No :LEFT_OPERAND edge created for condition %d: "
+                        ":Design node '%s' not found",
+                        next_id, subject_qualified_name,
+                    )
 
-        # Create :RIGHT_OPERAND edge if object :Design node exists
+        # Create :RIGHT_OPERAND edge if object :Design node exists.
+        # Same notional-reference handling as :LEFT_OPERAND.
         if object_qualified_name:
-            result = self._session.run(
-                """
-                MATCH (c:Condition {id: $cid})
-                MATCH (d:Design {qualified_name: $qn})
-                MERGE (c)-[:RIGHT_OPERAND]->(d)
-                """,
-                {"cid": next_id, "qn": object_qualified_name},
-            )
-            summary = result.consume().counters
-            if summary.relationships_created == 0:
-                log.debug(
-                    "No :RIGHT_OPERAND edge created for condition %d: "
-                    ":Design node '%s' not found",
-                    next_id, object_qualified_name,
+            is_notional = "::" not in object_qualified_name
+            if is_notional:
+                self._session.run(
+                    """
+                    MERGE (d:Design {qualified_name: $qn})
+                    ON CREATE SET d.is_stub = true, d.kind = 'stub'
+                    WITH d
+                    MATCH (c:Condition {id: $cid})
+                    MERGE (c)-[:RIGHT_OPERAND]->(d)
+                    """,
+                    {"cid": next_id, "qn": object_qualified_name},
                 )
+                log.debug(
+                    "Created stub :Design node and :RIGHT_OPERAND edge for "
+                    "notional reference '%s' (condition %d)",
+                    object_qualified_name, next_id,
+                )
+            else:
+                result = self._session.run(
+                    """
+                    MATCH (c:Condition {id: $cid})
+                    MATCH (d:Design {qualified_name: $qn})
+                    MERGE (c)-[:RIGHT_OPERAND]->(d)
+                    """,
+                    {"cid": next_id, "qn": object_qualified_name},
+                )
+                summary = result.consume().counters
+                if summary.relationships_created == 0:
+                    log.debug(
+                        "No :RIGHT_OPERAND edge created for condition %d: "
+                        ":Design node '%s' not found",
+                        next_id, object_qualified_name,
+                    )
 
         return ConditionNode(
             id=next_id,
@@ -389,41 +431,79 @@ class VerificationRepository:
             },
         )
 
-        # Create :CALLER edge if referenced :Design node exists
+        # Create :CALLER edge if referenced :Design node exists.
+        # Notional references (no :: separator) get stub nodes for later resolution.
         if caller_qualified_name:
-            result = self._session.run(
-                """
-                MATCH (a:Action {id: $aid})
-                MATCH (d:Design {qualified_name: $qn})
-                MERGE (a)-[:CALLER]->(d)
-                """,
-                {"aid": next_id, "qn": caller_qualified_name},
-            )
-            summary = result.consume().counters
-            if summary.relationships_created == 0:
-                log.debug(
-                    "No :CALLER edge created for action %d: "
-                    ":Design node '%s' not found",
-                    next_id, caller_qualified_name,
+            is_notional = "::" not in caller_qualified_name
+            if is_notional:
+                self._session.run(
+                    """
+                    MERGE (d:Design {qualified_name: $qn})
+                    ON CREATE SET d.is_stub = true, d.kind = 'stub'
+                    WITH d
+                    MATCH (a:Action {id: $aid})
+                    MERGE (a)-[:CALLER]->(d)
+                    """,
+                    {"aid": next_id, "qn": caller_qualified_name},
                 )
+                log.debug(
+                    "Created stub :Design node and :CALLER edge for "
+                    "notional reference '%s' (action %d)",
+                    caller_qualified_name, next_id,
+                )
+            else:
+                result = self._session.run(
+                    """
+                    MATCH (a:Action {id: $aid})
+                    MATCH (d:Design {qualified_name: $qn})
+                    MERGE (a)-[:CALLER]->(d)
+                    """,
+                    {"aid": next_id, "qn": caller_qualified_name},
+                )
+                summary = result.consume().counters
+                if summary.relationships_created == 0:
+                    log.debug(
+                        "No :CALLER edge created for action %d: "
+                        ":Design node '%s' not found",
+                        next_id, caller_qualified_name,
+                    )
 
-        # Create :CALLEE edge if referenced :Design node exists
+        # Create :CALLEE edge if referenced :Design node exists.
+        # Notional references (no :: separator) get stub nodes for later resolution.
         if callee_qualified_name:
-            result = self._session.run(
-                """
-                MATCH (a:Action {id: $aid})
-                MATCH (d:Design {qualified_name: $qn})
-                MERGE (a)-[:CALLEE]->(d)
-                """,
-                {"aid": next_id, "qn": callee_qualified_name},
-            )
-            summary = result.consume().counters
-            if summary.relationships_created == 0:
-                log.debug(
-                    "No :CALLEE edge created for action %d: "
-                    ":Design node '%s' not found",
-                    next_id, callee_qualified_name,
+            is_notional = "::" not in callee_qualified_name
+            if is_notional:
+                self._session.run(
+                    """
+                    MERGE (d:Design {qualified_name: $qn})
+                    ON CREATE SET d.is_stub = true, d.kind = 'stub'
+                    WITH d
+                    MATCH (a:Action {id: $aid})
+                    MERGE (a)-[:CALLEE]->(d)
+                    """,
+                    {"aid": next_id, "qn": callee_qualified_name},
                 )
+                log.debug(
+                    "Created stub :Design node and :CALLEE edge for "
+                    "notional reference '%s' (action %d)",
+                    callee_qualified_name, next_id,
+                )
+            else:
+                result = self._session.run(
+                    """
+                    MATCH (a:Action {id: $aid})
+                    MATCH (d:Design {qualified_name: $qn})
+                    MERGE (a)-[:CALLEE]->(d)
+                    """,
+                    {"aid": next_id, "qn": callee_qualified_name},
+                )
+                summary = result.consume().counters
+                if summary.relationships_created == 0:
+                    log.debug(
+                        "No :CALLEE edge created for action %d: "
+                        ":Design node '%s' not found",
+                        next_id, callee_qualified_name,
+                    )
 
         return ActionNode(
             id=next_id,

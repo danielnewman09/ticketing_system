@@ -6,10 +6,14 @@ Can be used standalone (CLI) or imported by Django views/management commands.
 """
 
 import json
+import logging
+import re
 
 from llm_caller import call_tool
 from backend.requirements.formatting import format_hlr_dict
 from backend.requirements.schemas import DecomposedRequirementSchema as DecomposedRequirement
+
+log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """\
 You are a requirements engineering agent. Your job is to decompose a
@@ -306,6 +310,77 @@ def _format_dependency_context(dependency_context: dict) -> str:
     return "\n".join(lines)
 
 
+def _recover_mixed_xml_json(result: dict) -> dict:
+    """Recover when an LLM embeds <parameter=...> XML tags inside a JSON string value.
+
+    Some models (especially smaller quantized ones) produce tool calls like:
+        {"description": "...actual text...</description>\n<parameter=low_level_requirements>\n[...]"}
+    instead of proper JSON with separate top-level keys.
+
+    This function detects that pattern and extracts the embedded JSON arrays,
+    promoting them to top-level keys in the result dict.
+    """
+    recovered = {}
+    for key, value in result.items():
+        if not isinstance(value, str) or '<parameter=' not in value:
+            recovered[key] = value
+            continue
+
+        # Try to find and extract each <parameter=name>...</> block
+        # Pattern: value may contain the actual text for 'key', followed by
+        # </key>\n<parameter=other_key>\n[json_array_or_object]
+        #
+        # The description text for the original key ends at </description> or
+        # at the first <parameter= tag.
+
+        # Extract the clean value for this key (before any XML tags)
+        # Look for </key_name> end tag or <parameter= start tag
+        clean_value = value
+        end_tag = f'</{key}>'
+        end_tag_idx = value.find(end_tag)
+        if end_tag_idx >= 0:
+            clean_value = value[:end_tag_idx].strip()
+        else:
+            # No closing tag — strip everything from the first <parameter=
+            param_idx = value.find('<parameter=')
+            if param_idx >= 0:
+                clean_value = value[:param_idx].strip()
+
+        recovered[key] = clean_value
+
+        # Now extract all <parameter=name>...</> or <parameter=name>\n[json] blocks
+        param_pattern = re.compile(
+            r'<parameter=(\w+)>\s*(.*?)(?=\Z|<parameter=\w+>)',
+            re.DOTALL,
+        )
+        for match in param_pattern.finditer(value):
+            param_name = match.group(1)
+            param_value_str = match.group(2).strip()
+            # Remove trailing closing tags like </description> that might be left
+            closing_tag = f'</{param_name}>'
+            if param_value_str.endswith(closing_tag):
+                param_value_str = param_value_str[: -len(closing_tag)].strip()
+
+            try:
+                parsed = json.loads(param_value_str)
+                recovered[param_name] = parsed
+                log.info(
+                    "Recovered embedded parameter '%s' from XML-in-JSON "
+                    "(type: %s, length: %d)",
+                    param_name, type(parsed).__name__,
+                    len(parsed) if isinstance(parsed, (list, dict, str)) else 0,
+                )
+            except json.JSONDecodeError:
+                log.warning(
+                    "Could not parse embedded parameter '%s' as JSON, "
+                    "storing as string",
+                    param_name,
+                )
+                recovered[param_name] = param_value_str
+
+    return recovered
+
+
 def decompose(
     description: str,
     component: str = "",
@@ -342,6 +417,15 @@ def decompose(
         max_tokens=32768,
         prompt_log_file=prompt_log_file,
     )
+
+    # Recover from models that embed <parameter=...> XML tags inside JSON values
+    if isinstance(result, dict) and "low_level_requirements" not in result:
+        recovered = _recover_mixed_xml_json(result)
+        if "low_level_requirements" in recovered:
+            log.info(
+                "Recovered low_level_requirements from embedded XML in description"
+            )
+            result = recovered
 
     return DecomposedRequirement.model_validate(result)
 

@@ -208,7 +208,7 @@ class TestConditionCRUD:
         assert result.single()["cnt"] == 1
 
     def test_add_condition_no_design_node_skips_edge(self, neo4j_session):
-        """If the referenced :Design node doesn't exist, the condition is created but no edge."""
+        """If the referenced :Design node doesn't exist and has :: separator, the condition is created but no edge."""
         from backend.db.neo4j.repositories.verification import VerificationRepository
 
         hlr, llr = _seed_hlr_llr(neo4j_session)
@@ -217,11 +217,35 @@ class TestConditionCRUD:
         cond = repo.add_condition(vm.id, phase="pre", subject_qualified_name="NonExistent::member", operator="==", expected_value="0")
         assert cond is not None
         assert cond.subject_qualified_name == "NonExistent::member"
-        # No edge should exist
+        # No edge should exist for unresolved qualified names with ::
         result = neo4j_session.run(
             "MATCH (c:Condition)-[:LEFT_OPERAND]->(:Design) RETURN count(*) AS cnt",
         )
         assert result.single()["cnt"] == 0
+
+    def test_add_condition_notional_reference_creates_stub_edge(self, neo4j_session):
+        """If the reference is notional (no :: separator like 'Engine.result'), create a stub :Design node and edge."""
+        from backend.db.neo4j.repositories.verification import VerificationRepository
+
+        hlr, llr = _seed_hlr_llr(neo4j_session)
+        repo = VerificationRepository(neo4j_session)
+        vm = repo.create_verification(llr_id=llr.id, method="automated")
+        cond = repo.add_condition(vm.id, phase="pre", subject_qualified_name="Engine.result", operator="==", expected_value="15")
+        assert cond is not None
+        assert cond.subject_qualified_name == "Engine.result"
+        # Stub :Design node and :LEFT_OPERAND edge should be created
+        result = neo4j_session.run(
+            "MATCH (d:Design {qualified_name: 'Engine.result'}) RETURN d.is_stub AS is_stub, d.kind AS kind",
+        )
+        record = result.single()
+        assert record is not None
+        assert record["is_stub"] is True
+        assert record["kind"] == "stub"
+        # Edge should exist from Condition to stub Design node
+        result = neo4j_session.run(
+            "MATCH (c:Condition)-[:LEFT_OPERAND]->(d:Design {qualified_name: 'Engine.result'}) RETURN count(*) AS cnt",
+        )
+        assert result.single()["cnt"] == 1
 
     def test_list_conditions_by_phase(self, neo4j_session):
         from backend.db.neo4j.repositories.verification import VerificationRepository

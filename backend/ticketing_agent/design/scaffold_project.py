@@ -69,8 +69,8 @@ def scaffold_project(
     extra_dependencies: list[str] | None = None,
     cpp_standard: int = 20,
     model: str = "",
-    max_tokens: int = 4096,
-    max_turns: int = 50,
+    max_tokens: int = 65536,
+    max_turns: int = 100,
     prompt_log_file: str = "",
 ) -> dict:
     """Scaffold a project via the LLM tool loop in two phases.
