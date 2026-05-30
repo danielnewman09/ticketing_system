@@ -91,25 +91,6 @@ def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
     return results
 
 
-def _build_class_lookup(oo: OODesignSchema) -> dict[str, str]:
-    """Build a name -> qualified_name mapping from an OO design.
-
-    Used to seed map_oo_to_ontology's class_lookup so cross-HLR
-    references (inheritance, associations, etc.) resolve correctly.
-    """
-    lookup: dict[str, str] = {}
-    for cls in oo.classes:
-        qname = f"{cls.module}::{cls.name}" if cls.module else cls.name
-        lookup[cls.name] = qname
-    for iface in oo.interfaces:
-        qname = f"{iface.module}::{iface.name}" if iface.module else iface.name
-        lookup[iface.name] = qname
-    for enum in oo.enums:
-        qname = f"{enum.module}::{enum.name}" if enum.module else enum.name
-        lookup[enum.name] = qname
-    return lookup
-
-
 def _extract_intercomponent_context(
     oo: OODesignSchema,
     component_name: str,
