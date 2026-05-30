@@ -112,48 +112,6 @@ def list_ontology() -> str:
 
 
 @mcp.tool()
-def get_graph_metrics() -> str:
-    """Compute structural metrics for the requirements-ontology graph."""
-    from backend.ticketing_agent.review.challenge_design import (
-        compute_graph_metrics,
-        format_metrics_for_prompt,
-    )
-
-    with get_neo4j().session() as ns:
-        repo = RequirementRepository(ns)
-        hlrs = [{"id": h.id, "description": h.description} for h in repo.list_hlrs()]
-        llrs = [{"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id} for l in repo.list_llrs()]
-
-    with get_session() as session:
-        nodes = [
-            {
-                "id": n.id,
-                "qualified_name": n.qualified_name,
-                "kind": n.kind,
-                "description": n.description,
-            }
-            for n in session.query(OntologyNode).all()
-        ]
-
-        triples = []
-        for t in session.query(OntologyTriple).all():
-            triples.append(
-                {
-                    "id": t.id,
-                    "subject_qualified_name": t.subject.qualified_name,
-                    "predicate": t.predicate.name,
-                    "object_qualified_name": t.object.qualified_name,
-                }
-            )
-
-        hlr_triples = {}
-        llr_triples = {}
-
-    metrics = compute_graph_metrics(hlrs, llrs, nodes, triples, hlr_triples, llr_triples)
-    return format_metrics_for_prompt(metrics)
-
-
-@mcp.tool()
 def list_component_dependencies(component_id: int) -> str:
     """List all dependencies available for a component's language."""
     with get_session() as session:
