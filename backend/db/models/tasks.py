@@ -12,7 +12,6 @@ from backend.db.base import Base
 
 if TYPE_CHECKING:
     from backend.db.models.components import Component
-    from backend.db.models.ontology import OntologyNode
 
 
 class Task(Base):
@@ -83,13 +82,8 @@ class TaskDesignNode(Base):
     ontology_node_qualified_name: Mapped[str] = mapped_column(
         String(500), nullable=False, server_default=""
     )
-    # FK kept for backward compatibility — will be removed when ontology_nodes table is dropped
-    ontology_node_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("ontology_nodes.id", ondelete="SET NULL"), nullable=True
-    )
 
     task: Mapped[Task] = relationship("Task", back_populates="design_nodes")
-    ontology_node: Mapped[Optional["OntologyNode"]] = relationship("OntologyNode")
 
 
 class TaskVerification(Base):

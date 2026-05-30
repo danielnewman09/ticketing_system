@@ -35,7 +35,6 @@ def flush_all(clear_logs: bool = True, clear_project_dir: bool = True):
     from services.dependencies import init_neo4j, close_neo4j
     from backend.db import init_db, get_session, get_main_engine
     from backend.db.base import Base
-    from backend.db.models import Predicate
 
     # Read project metadata before dropping tables so we know what to clean up
     project_dir = ""
@@ -58,7 +57,7 @@ def flush_all(clear_logs: bool = True, clear_project_dir: bool = True):
     ensure_vec_table()
 
     with get_session() as session:
-        Predicate.ensure_defaults(session)
+        pass  # Predicate seeding removed — predicates live in Neo4j via DEFAULT_PREDICATES
 
     # Clear Neo4j design graph (preserves cppreference data)
     from backend.db.neo4j.sync import clear_design_graph

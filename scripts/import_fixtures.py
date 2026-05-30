@@ -42,9 +42,6 @@ def import_sqlite():
         Dependency,
         DependencyManager,
         Language,
-        OntologyNode,
-        OntologyTriple,
-        Predicate,
         dependency_components,
     )
 
@@ -58,16 +55,13 @@ def import_sqlite():
         session.execute(dependency_components.delete())
         session.query(Dependency).delete()
         session.query(DependencyManager).delete()
-        session.query(OntologyTriple).delete()
-        session.query(OntologyNode).delete()
+        # OntologyNodes/Triples removed in Phase 4 — skip
+        session.query(TaskDesignNode).delete()
         session.query(Component).delete()
         session.query(Language).delete()
-        session.query(Predicate).delete()
         session.flush()
 
-        # --- Reference data ---
-        for row in data.get("predicates", []):
-            session.add(Predicate(id=row["id"], name=row["name"], description=row.get("description")))
+        # Predicates now live in constants (DEFAULT_PREDICATES in neo4j.models.constants)
 
         for row in data.get("languages", []):
             session.add(Language(id=row["id"], name=row["name"], version=row.get("version")))
@@ -108,43 +102,7 @@ def import_sqlite():
             )
 
         # HLR/LLR data is now in Neo4j (Phase 2) — skip loading into SQLite
-
-        # --- Ontology ---
-        for row in data.get("ontology_nodes", []):
-            session.add(OntologyNode(
-                id=row["id"],
-                qualified_name=row["qualified_name"],
-                name=row.get("name", ""),
-                kind=row.get("kind", ""),
-                specialization=row.get("specialization", ""),
-                visibility=row.get("visibility", ""),
-                description=row.get("description", ""),
-                refid=row.get("refid", ""),
-                component_id=row.get("component_id"),
-                is_intercomponent=row.get("is_intercomponent", False),
-                source_type=row.get("source_type", ""),
-                type_signature=row.get("type_signature", ""),
-                argsstring=row.get("argsstring", ""),
-                definition=row.get("definition", ""),
-                file_path=row.get("file_path", ""),
-                line_number=row.get("line_number"),
-                is_static=row.get("is_static", False),
-                is_const=row.get("is_const", False),
-                is_virtual=row.get("is_virtual", False),
-                is_abstract=row.get("is_abstract", False),
-                is_final=row.get("is_final", False),
-            ))
-
-        session.flush()
-
-        for row in data.get("ontology_triples", []):
-            session.add(OntologyTriple(
-                id=row["id"],
-                subject_id=row["subject_id"],
-                predicate_id=row["predicate_id"],
-                object_id=row["object_id"],
-            ))
-
+        # OntologyNodes/Triples removed in Phase 4 — data lives in Neo4j via DesignRepository
         # Verification data is now in Neo4j (Phase 3) — skip loading into SQLite
 
     hlr_count = len(data.get("high_level_requirements", []))

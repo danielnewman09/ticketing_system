@@ -35,7 +35,6 @@ dependency_components = Table(
 )
 
 if TYPE_CHECKING:
-    from backend.db.models.ontology import OntologyNode
     from backend.db.models.tickets import Ticket
 
 
@@ -65,9 +64,6 @@ class Component(Base):
     )
 
     # Reverse relationships
-    ontology_nodes: Mapped[list[OntologyNode]] = relationship(
-        "OntologyNode", back_populates="component"
-    )
     dependencies: Mapped[list[Dependency]] = relationship(
         "Dependency",
         secondary=dependency_components,

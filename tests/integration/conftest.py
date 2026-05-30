@@ -23,9 +23,6 @@ from backend.db.models import (
     Dependency,
     DependencyManager,
     Language,
-    OntologyNode,
-    OntologyTriple,
-    Predicate,
 )
 
 import backend.db.models  # noqa: F401 — ensure all tables are registered
@@ -70,9 +67,6 @@ def loaded_session():
 def _load_fixture_data(session, data):
     """Load fixture data dict into the given session."""
     # Reference data
-    for row in data.get("predicates", []):
-        session.add(Predicate(id=row["id"], name=row["name"], description=row.get("description")))
-
     for row in data.get("languages", []):
         session.add(Language(id=row["id"], name=row["name"], version=row.get("version")))
 
@@ -111,46 +105,6 @@ def _load_fixture_data(session, data):
         )
 
     # HLR/LLR data is now in Neo4j (Phase 2) — skip loading into SQLite
-
-    # Ontology
-    for row in data.get("ontology_nodes", []):
-        session.add(OntologyNode(
-            id=row["id"],
-            qualified_name=row["qualified_name"],
-            name=row.get("name", ""),
-            kind=row.get("kind", ""),
-            specialization=row.get("specialization", ""),
-            visibility=row.get("visibility", ""),
-            description=row.get("description", ""),
-            refid=row.get("refid", ""),
-            component_id=row.get("component_id"),
-            is_intercomponent=row.get("is_intercomponent", False),
-            source_type=row.get("source_type", ""),
-            type_signature=row.get("type_signature", ""),
-            argsstring=row.get("argsstring", ""),
-            definition=row.get("definition", ""),
-            file_path=row.get("file_path", ""),
-            line_number=row.get("line_number"),
-            is_static=row.get("is_static", False),
-            is_const=row.get("is_const", False),
-            is_virtual=row.get("is_virtual", False),
-            is_abstract=row.get("is_abstract", False),
-            is_final=row.get("is_final", False),
-        ))
-
-    session.flush()
-
-    for row in data.get("ontology_triples", []):
-        session.add(OntologyTriple(
-            id=row["id"],
-            subject_id=row["subject_id"],
-            predicate_id=row["predicate_id"],
-            object_id=row["object_id"],
-        ))
-
-    session.flush()
-
-    # HLR/LLR M2M relationships with OntologyNode removed (Phase 2)
-
-    # Phase 3: Verification data lives in Neo4j — skip loading into SQLite
+    # OntologyNodes/Triples/Predicates removed in Phase 4 — skip loading into SQLite
+    # Verification data is now in Neo4j (Phase 3) — skip loading into SQLite
 

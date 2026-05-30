@@ -28,15 +28,11 @@ from backend.requirements.services.persistence import persist_design
 @pytest.fixture
 def db_session():
     from backend.db import init_db, get_session
-    from backend.db.models import OntologyNode, OntologyTriple, Predicate
 
     init_db()
     with get_session() as session:
-        # Clean up for isolation
-        session.query(OntologyTriple).delete()
-        session.query(OntologyNode).delete()
-        Predicate.ensure_defaults(session)
-        session.flush()
+        # OntologyNode/OntologyTriple ORM models removed in Phase 4.
+        # Design data now lives in Neo4j via DesignRepository.
         yield session
 
 
