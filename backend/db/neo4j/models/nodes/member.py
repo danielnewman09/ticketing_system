@@ -25,7 +25,7 @@ class MemberNode(BaseModel):
     # --- Identity & classification ---
     qualified_name: str
     name: str
-    kind: Literal["method", "attribute", "constant", "enum_value"]
+    kind: Literal["method", "attribute", "constant", "enum_value", "function"]
     layer: Literal["design", "as-built", "dependency"] = "design"
     visibility: Literal["public", "private", "protected", ""] = ""
     description: str = ""
