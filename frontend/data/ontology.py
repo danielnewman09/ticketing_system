@@ -15,30 +15,20 @@ from services.dependencies import get_neo4j
 log = logging.getLogger(__name__)
 
 
+def _label_match_direct(alias: str = "n") -> str:
+    """Build label-match clause without import from repository (avoid circular)."""
+    return f"({alias}:Compound OR {alias}:Member OR {alias}:Namespace)"
+
+
 def fetch_ontology_data():
-    """Fetch all data needed for ontology page.
+    """Fetch all data needed for ontology page via DesignRepository."""
+    from backend.db.neo4j.repositories.design import DesignRepository
 
-    Uses Cypher for design node stats instead of SQLAlchemy queries.
-    HLR/LLR counts still come from SQLite until Phase 2.
-    """
     with get_neo4j().session() as session:
-        # Design node stats from Neo4j
-        kind_result = session.run(
-            "MATCH (d:Design) RETURN d.kind AS kind, count(d) AS cnt"
-        )
-        kind_counts = {}
-        total_nodes = 0
-        for record in kind_result:
-            kind = record["kind"] or "unknown"
-            cnt = record["cnt"]
-            kind_counts[kind] = cnt
-            total_nodes += cnt
+        repo = DesignRepository(session)
+        stats = repo.get_graph_stats()
 
-        nodes_result = session.run(
-            "MATCH (d:Design) RETURN d.qualified_name AS qn, d.name AS name, "
-            "d.kind AS kind, d.component_id AS cid ORDER BY d.qualified_name LIMIT 200"
-        )
-        # Resolve component names — still need SQLite for this in Phase 1
+        # Resolve component names (still needs SQLite)
         component_map: dict[int, str] = {}
         try:
             from backend.db import get_session
@@ -50,35 +40,21 @@ def fetch_ontology_data():
             pass
 
         nodes = []
-        for record in nodes_result:
-            cid = record["cid"]
+        for n in stats.get("nodes", []):
+            cid = n.get("component_id")
             nodes.append({
-                "name": record["name"],
-                "kind": record["kind"],
-                "qualified_name": record["qn"],
+                "name": n["name"],
+                "kind": n["kind"],
+                "qualified_name": n["qualified_name"],
                 "component": component_map.get(cid, "-") if cid else "-",
             })
 
-        # Triple and predicate counts from Neo4j
-        triple_result = session.run(
-            "MATCH (:Design)-[r]->(:Design) RETURN count(r) AS cnt"
-        )
-        triple_rec = triple_result.single()
-        total_triples = triple_rec["cnt"] if triple_rec else 0
-
-        # Count distinct relationship types as "predicates"
-        pred_result = session.run(
-            "MATCH (:Design)-[r]->(:Design) RETURN count(DISTINCT type(r)) AS cnt"
-        )
-        pred_rec = pred_result.single()
-        total_predicates = pred_rec["cnt"] if pred_rec else 0
-
     return {
         "nodes": nodes,
-        "kind_counts": kind_counts,
-        "total_nodes": total_nodes,
-        "total_triples": total_triples,
-        "total_predicates": total_predicates,
+        "kind_counts": stats["kind_counts"],
+        "total_nodes": stats["total_nodes"],
+        "total_triples": stats["total_edges"],
+        "total_predicates": stats["total_predicates"],
     }
 
 
@@ -124,18 +100,19 @@ def fetch_ontology_graph_data(
             cross-layer edges from the result (design-only graph).
     """
     try:
-        from backend.db.neo4j.queries import fetch_design_graph
-        from backend.db.neo4j.queries import fetch_dependency_compounds
-        from backend.db.neo4j.queries import fetch_codebase_compounds
+        from backend.db.neo4j.repositories.design import DesignRepository
         from backend.graph import format_cytoscape_graph
         from backend.requirements.services.graph_tags import enrich_with_requirement_tags
 
-        if layer == "design":
-            raw = fetch_design_graph(kind_filter, search, component_id)
-        elif layer == "dependency":
-            raw = fetch_dependency_compounds(search, source_filter)
-        else:
-            raw = fetch_codebase_compounds(search)
+        with get_neo4j().session() as session:
+            repo = DesignRepository(session)
+            graph = repo.get_ontology_graph(
+                layer=layer,
+                kind_filter=kind_filter,
+                search=search,
+                component_id=component_id,
+            )
+            raw = graph.to_raw()
 
         formatted = format_cytoscape_graph(raw)
 
@@ -169,11 +146,15 @@ def fetch_hlr_graph_data(
         requirement_tags: "none" for bare topology, "hlr" for HLR highlight + badges.
     """
     try:
-        from backend.db.neo4j.queries import fetch_hlr_subgraph
+        from backend.db.neo4j.repositories.design import DesignRepository
         from backend.graph import format_cytoscape_graph
         from backend.requirements.services.graph_tags import tag_direct_nodes_only
 
-        raw = fetch_hlr_subgraph(hlr_id, component_id)
+        with get_neo4j().session() as session:
+            repo = DesignRepository(session)
+            graph = repo.get_hlr_subgraph(hlr_id, component_id)
+            raw = graph.to_raw()
+
         formatted = format_cytoscape_graph(raw)
 
         if requirement_tags != "none":
@@ -188,10 +169,14 @@ def fetch_hlr_graph_data(
 def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
     """Fetch the 1-hop neighbourhood graph with collapsed members."""
     try:
-        from backend.db.neo4j.queries import fetch_neighbourhood_graph
+        from backend.db.neo4j.repositories.design import DesignRepository
         from backend.graph import format_cytoscape_graph
 
-        raw = fetch_neighbourhood_graph(qualified_name)
+        with get_neo4j().session() as session:
+            repo = DesignRepository(session)
+            graph = repo.get_neighbourhood_graph(qualified_name)
+            raw = graph.to_raw()
+
         return format_cytoscape_graph(raw)
     except Exception:
         log.warning("Neo4j neighbourhood query failed", exc_info=True)
@@ -205,9 +190,33 @@ def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     requirement tags from TRACES_TO edges.
     """
     try:
-        from backend.db.neo4j.queries import fetch_node_detail
+        from backend.db.neo4j.repositories.design import DesignRepository
 
-        return fetch_node_detail(qualified_name)
+        with get_neo4j().session() as session:
+            repo = DesignRepository(session)
+            cg = repo.get_compound_graph(qualified_name)
+
+        if cg is None:
+            return None
+
+        # Convert CompoundGraph to the dict shape expected by the frontend
+        return {
+            "properties": cg.node.model_dump(),
+            "outgoing": [
+                {"rel": e.predicate, "target_qn": e.target_qualified_name,
+                 "target_name": "", "target_labels": ["Compound"]}
+                for e in cg.edges_out
+            ],
+            "incoming": [
+                {"rel": e.predicate, "source_qn": e.source_qualified_name,
+                 "source_name": "", "source_labels": ["Compound"]}
+                for e in cg.edges_in
+            ],
+            "implemented_by": [],
+            "members": [m.model_dump() for m in cg.members],
+            "codebase_members": [],
+            "available_types": [],
+        }
     except Exception:
         log.warning("Neo4j node detail query failed", exc_info=True)
         return None
@@ -263,19 +272,21 @@ def fetch_node_detail_full(qualified_name: str) -> dict | None:
     requirements = []
     try:
         with get_neo4j().session() as ns:
+            label_clause = _label_match_direct("d")
             result = ns.run(
-                """
-                MATCH (r)-[:TRACES_TO]->(d:Design {qualified_name: $qn})
-                WHERE r:HLR OR r:LLR
-                RETURN labels(r) AS labels, r.id AS id, r.description AS desc
+                f"""
+                MATCH (r)-[:TRACES_TO]->(d {{qualified_name: $qn}})
+                WHERE (r:HLR OR r:LLR) AND ({label_clause})
+                RETURN labels(r) AS labels, r.id AS id,
+                       r.description AS desc
                 """,
                 {"qn": qualified_name},
             )
             for record in result:
-                label = "HLR" if "HLR" in record["labels"] else "LLR"
+                label_type = "HLR" if "HLR" in record["labels"] else "LLR"
                 requirements.append({
                     "id": record["id"],
-                    "type": label,
+                    "type": label_type,
                     "description": (record["desc"] or "")[:80],
                 })
     except Exception:
@@ -297,11 +308,11 @@ def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
 
 
 def update_member_type(qualified_name: str, type_signature: str) -> bool:
-    """Update type_signature on a design node in Neo4j (primary store)."""
+    """Update type_signature on a design member node in Neo4j (primary store)."""
     try:
         with get_neo4j().session() as ns:
             ns.run(
-                "MATCH (n:Design {qualified_name: $qn}) SET n.type_signature = $ts",
+                "MATCH (n:Member {qualified_name: $qn}) SET n.type_signature = $ts",
                 {"qn": qualified_name, "ts": type_signature},
             )
         return True
