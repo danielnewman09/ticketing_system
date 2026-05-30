@@ -30,10 +30,6 @@ load_dotenv()
 
 from services.dependencies import init_neo4j, close_neo4j, get_neo4j
 from backend.db import init_db, get_session
-from backend.db.models import (
-    OntologyNode,
-    OntologyTriple,
-)
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
