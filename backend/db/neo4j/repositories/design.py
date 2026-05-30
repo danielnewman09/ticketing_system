@@ -259,6 +259,7 @@ class DesignRepository:
             OPTIONAL MATCH (c)-[r_out]->(tgt)
               WHERE type(r_out) <> 'COMPOSES'
                 AND (tgt:Compound OR tgt:Namespace)
+                AND tgt.layer = $layer
             OPTIONAL MATCH (src)-[r_in]->(c)
               WHERE NOT src:Member
             OPTIONAL MATCH (c)-[:COMPOSES]->(nested:Compound)
@@ -409,6 +410,7 @@ class DesignRepository:
             OPTIONAL MATCH (c)-[r_out]->(tgt)
               WHERE type(r_out) <> 'COMPOSES'
                 AND (tgt:Compound OR tgt:Namespace)
+                AND tgt.layer = $layer
             OPTIONAL MATCH (src)-[r_in]->(c)
               WHERE NOT src:Member
             RETURN c,

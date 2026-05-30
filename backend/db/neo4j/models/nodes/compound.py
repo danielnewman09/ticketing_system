@@ -24,16 +24,17 @@ class CompoundNode(BaseCompoundNode):
     Inherits core fields from ``codegraph.nodes.CompoundNode`` and adds
     ticketing-system-specific fields for project context and implementation
     tracking.
+
+    Member-specific attributes (type_signature, argsstring, definition,
+    is_static, is_const, is_virtual) live on :Member nodes only — they
+    are already present on ``codegraph.nodes.MemberNode`` and are
+    intentionally excluded here.
     """
+
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
     # --- Ticketing-system extensions ---
     specialization: str = ""
-    type_signature: str = ""
-    argsstring: str = ""
-    definition: str = ""
-    is_static: bool = False
-    is_const: bool = False
-    is_virtual: bool = False
     component_id: int | None = None
     is_intercomponent: bool = False
     implementation_status: Literal[

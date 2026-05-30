@@ -97,7 +97,7 @@ def _build_compound_cytoscape_node(
     owner_kind = getattr(node, "kind", "")
     layer = getattr(node, "layer", "design")
     is_dep = layer == "dependency"
-    change_status = getattr(node, "change_status", "") or "new"
+    change_status = "new"  # design-intent nodes start as "new"
 
     # Group members by canonical UML kind, skipping entity kinds.
     by_kind: dict[str, list[dict]] = {}
@@ -124,12 +124,9 @@ def _build_compound_cytoscape_node(
         "description": getattr(node, "description", ""),
         "component_id": getattr(node, "component_id", None),
         "visibility": getattr(node, "protection", ""),
-        "type_signature": getattr(node, "type_signature", ""),
-        "argsstring": getattr(node, "argsstring", ""),
         "layer": layer,
-        "source_type": getattr(node, "source_type", ""),
-        "change_status": change_status,
         "source": getattr(node, "source", ""),
+        "change_status": change_status,
         "requirements": [],
     }
 

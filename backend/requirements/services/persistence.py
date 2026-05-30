@@ -58,7 +58,9 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
     """Convert an OntologyNodeSchema to the correct typed node model.
 
     Dispatches to CompoundNode, MemberNode, or NamespaceNode based on kind.
-    Maps source_type to layer.
+    Maps source_type to layer.  Only passes fields that belong to each
+    node type — member-specific attributes (type_signature, argsstring,
+    is_static, etc.) are only set on :Member nodes.
     """
     kind = node_data.kind
     layer = _map_source_type_to_layer(
@@ -66,44 +68,60 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
         getattr(node_data, 'refid', '') or '',
     )
 
-    common = dict(
+    # Fields shared by all three node types.
+    shared = dict(
         qualified_name=node_data.qualified_name,
         name=node_data.name,
         kind=kind,
         layer=layer,
-        specialization=node_data.specialization or "",
-        protection=node_data.visibility or "",
-        description=node_data.description or "",
-        type_signature=node_data.type_signature or "",
-        argsstring=node_data.argsstring or "",
-        definition=node_data.definition or "",
         refid=getattr(node_data, 'refid', '') or "",
-        file_path=node_data.file_path or "",
-        line_number=node_data.line_number,
-        is_static=node_data.is_static or False,
-        is_const=node_data.is_const or False,
-        is_virtual=node_data.is_virtual or False,
-        is_abstract=node_data.is_abstract or False,
-        is_final=node_data.is_final or False,
-        component_id=node_data.component_id,
+        description=node_data.description or "",
+        source=getattr(node_data, 'source', '') or "",
     )
 
     if kind in COMPOUND_KINDS:
         return CompoundNode(
-            **common,
+            **shared,
+            specialization=node_data.specialization or "",
+            protection=node_data.visibility or "",
+            file_path=node_data.file_path or "",
+            line_number=node_data.line_number,
+            is_abstract=node_data.is_abstract or False,
+            is_final=node_data.is_final or False,
+            component_id=node_data.component_id,
             is_intercomponent=node_data.is_intercomponent or False,
             implementation_status=getattr(node_data, 'implementation_status', 'designed') or 'designed',
             source_file=getattr(node_data, 'source_file', '') or '',
             test_file=getattr(node_data, 'test_file', '') or '',
         )
     elif kind in MEMBER_KINDS:
-        return MemberNode(**common)
+        return MemberNode(
+            **shared,
+            protection=node_data.visibility or "",
+            type_signature=node_data.type_signature or "",
+            argsstring=node_data.argsstring or "",
+            definition=node_data.definition or "",
+            file_path=node_data.file_path or "",
+            line_number=node_data.line_number,
+            is_static=node_data.is_static or False,
+            is_const=node_data.is_const or False,
+            is_virtual=node_data.is_virtual or False,
+            is_abstract=node_data.is_abstract or False,
+            is_final=node_data.is_final or False,
+            component_id=node_data.component_id,
+        )
     elif kind in NAMESPACE_KINDS:
-        return NamespaceNode(**common)
+        return NamespaceNode(
+            **shared,
+            file_path=node_data.file_path or "",
+            component_id=node_data.component_id,
+        )
     else:
         # Default to Compound for unknown kinds
         return CompoundNode(
-            **common,
+            **shared,
+            specialization=node_data.specialization or "",
+            component_id=node_data.component_id,
             is_intercomponent=node_data.is_intercomponent or False,
             implementation_status="designed",
             source_file="",

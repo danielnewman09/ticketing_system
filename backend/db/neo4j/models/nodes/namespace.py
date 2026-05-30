@@ -13,6 +13,8 @@ from codegraph.nodes import NamespaceNode as BaseNamespaceNode
 
 
 class NamespaceNode(BaseNamespaceNode):
+    model_config = {"from_attributes": True, "extra": "ignore"}
+
     """A namespace entity in the codebase graph (:Namespace in Neo4j).
 
     Inherits core fields from ``codegraph.nodes.NamespaceNode`` and adds

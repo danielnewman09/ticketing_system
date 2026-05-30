@@ -88,9 +88,10 @@ class TestCompoundNode:
         assert node.kind == "class"
         assert node.layer == "design"
         assert node.specialization == ""
-        assert node.protection == ""
-        assert node.description == ""
+        assert node.source == ""
         assert node.implementation_status == "designed"
+        assert node.is_final is False
+        assert node.is_abstract is False
 
     def test_create_all_fields(self):
         from backend.db.neo4j.models.nodes.compound import CompoundNode
@@ -100,18 +101,14 @@ class TestCompoundNode:
             kind="struct",
             layer="as-built",
             specialization="template_class",
-            protection="public",
-            description="A struct",
-            type_signature="int",
-            argsstring="(int x)",
-            definition="int Foo::calc(int x)",
             refid="classns_1_1Foo",
             file_path="src/foo.h",
             line_number=42,
-            is_static=True,
-            is_const=False,
-            is_virtual=False,
-            is_abstract=False,
+            source="msd",
+            brief_description="A struct",
+            detailed_description="More detail",
+            base_classes=["ns::Base"],
+            is_abstract=True,
             is_final=False,
             component_id=1,
             is_intercomponent=True,
@@ -121,7 +118,11 @@ class TestCompoundNode:
         )
         assert node.kind == "struct"
         assert node.layer == "as-built"
-        assert node.is_static is True
+        assert node.specialization == "template_class"
+        assert node.source == "msd"
+        assert node.brief_description == "A struct"
+        assert node.base_classes == ["ns::Base"]
+        assert node.is_abstract is True
         assert node.is_intercomponent is True
         assert node.file_path == "src/foo.h"
         assert node.line_number == 42
@@ -139,9 +140,10 @@ class TestCompoundNode:
     def test_dependency_layer(self):
         from backend.db.neo4j.models.nodes.compound import CompoundNode
         node = CompoundNode(qualified_name="std::vector", name="vector", kind="class", layer="dependency",
-                           is_intercomponent=True, description="Standard library: std::vector")
+                           is_intercomponent=True, source="stdlib")
         assert node.layer == "dependency"
         assert node.is_intercomponent is True
+        assert node.source == "stdlib"
 
 
 class TestMemberNode:

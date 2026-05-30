@@ -14,6 +14,8 @@ from codegraph.nodes import MemberNode as BaseMemberNode
 
 
 class MemberNode(BaseMemberNode):
+    model_config = {"from_attributes": True, "extra": "ignore"}
+
     """A member entity in the codebase graph (:Member in Neo4j).
 
     Inherits core fields from ``codegraph.nodes.MemberNode`` and adds
