@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING
 
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
-from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
+from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
+from codegraph.nodes import NamespaceNode
 from backend.db.neo4j.models.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
 from backend.design_data.repository import DesignDataRepository
 from backend.db.neo4j.repositories.requirement import RequirementRepository
@@ -91,7 +92,6 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
             component_id=node_data.component_id,
             is_intercomponent=node_data.is_intercomponent or False,
             implementation_status=getattr(node_data, 'implementation_status', 'designed') or 'designed',
-            source_file=getattr(node_data, 'source_file', '') or '',
             test_file=getattr(node_data, 'test_file', '') or '',
         )
     elif kind in MEMBER_KINDS:
@@ -106,14 +106,11 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
             is_static=node_data.is_static or False,
             is_const=node_data.is_const or False,
             is_virtual=node_data.is_virtual or False,
-            is_abstract=node_data.is_abstract or False,
-            is_final=node_data.is_final or False,
             component_id=node_data.component_id,
         )
     elif kind in NAMESPACE_KINDS:
         return NamespaceNode(
             **shared,
-            file_path=node_data.file_path or "",
             component_id=node_data.component_id,
         )
     else:
@@ -124,7 +121,6 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
             component_id=node_data.component_id,
             is_intercomponent=node_data.is_intercomponent or False,
             implementation_status="designed",
-            source_file="",
             test_file="",
         )
 
