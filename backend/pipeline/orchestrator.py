@@ -32,6 +32,20 @@ def _get_component_name(component_id: int | None) -> str | None:
         return None
 
 
+
+
+def _merge_diagrams(base, new):
+    """Merge new diagram into base, returning a fresh ClassDiagram with rebuilt index."""
+    from backend.design_data.models import ClassDiagram
+    return ClassDiagram(
+        module_names=list(dict.fromkeys(base.module_names + new.module_names)),
+        classes=base.classes + new.classes,
+        interfaces=base.interfaces + new.interfaces,
+        enums=base.enums + new.enums,
+        associations=base.associations + new.associations,
+    )
+
+
 @dataclass
 class PipelineResult:
     """Aggregated results from a full pipeline run."""
@@ -193,9 +207,11 @@ def run_pipeline(
     from backend.ticketing_agent.design.design_hlr import design_hlr
     from backend.requirements.services.persistence import persist_design
     from backend.db.neo4j.repositories.models import DesignNode
+    from backend.design_data import class_diagram_from_oo_design, oo_design_from_class_diagram
+    from backend.design_data.models import ClassDiagram
 
     qname_to_node: dict[str, DesignNode] = {}
-    all_oo_classes: list[dict] = []
+    accumulated_diagram = ClassDiagram()
 
     for hlr in hlrs_neo4j:
         hlr_dict = {
@@ -221,24 +237,8 @@ def run_pipeline(
         result.design_nodes += len(ontology.nodes)
         result.design_triples += len(ontology.triples)
 
-        for cls in oo.classes:
-            all_oo_classes.append(
-                {
-                    "name": cls.name,
-                    "module": cls.module,
-                    "attributes": [
-                        {"name": a.name, "type_name": a.type_name} for a in cls.attributes
-                    ],
-                    "methods": [
-                        {
-                            "name": m.name,
-                            "parameters": m.parameters,
-                            "return_type": m.return_type,
-                        }
-                        for m in cls.methods
-                    ],
-                }
-            )
+        diagram = class_diagram_from_oo_design(oo, component_id=hlr.component_id)
+        accumulated_diagram = _merge_diagrams(accumulated_diagram, diagram)
 
         # Persist design to Neo4j
         with get_neo4j().session() as neo4j_session:
@@ -273,9 +273,13 @@ def run_pipeline(
         llrs_for_hlr = req_repo.list_llrs(hlr_id=hlr.id)
 
         comp_name = _get_component_name(hlr.component_id) or ""
+
+        # Filter accumulated schema by component module for task generation
+        all_oo_schema = oo_design_from_class_diagram(accumulated_diagram)
+        all_oo_dict = all_oo_schema.model_dump()
         hlr_classes = [
-            c for c in all_oo_classes if c.get("module") == comp_name
-        ] or all_oo_classes[:3]
+            c for c in all_oo_dict["classes"] if c.get("module") == comp_name
+        ] or all_oo_dict["classes"][:3]
 
         batch = generate_tasks(
             hlr=hlr_dict,
@@ -301,8 +305,10 @@ def run_pipeline(
     log.info("Phase 6: Generating skeleton...")
     from backend.ticketing_agent.generate_skeleton import generate_skeleton
 
+    all_oo_schema = oo_design_from_class_diagram(accumulated_diagram)
+
     skeleton_results = generate_skeleton(
-        oo_design={"classes": all_oo_classes},
+        oo_design=all_oo_schema,
         workspace_dir=workspace_dir,
     )
     result.skeleton_files = [r.file_path for r in skeleton_results]
@@ -391,7 +397,7 @@ def run_pipeline(
             source_files.append(str(p))
 
     design_report = check_design_against_code(
-        oo_design={"classes": all_oo_classes},
+        oo_design=all_oo_schema.model_dump(),
         source_files=source_files,
     )
     if not design_report.clean:
