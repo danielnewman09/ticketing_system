@@ -36,11 +36,14 @@ def flush_all(clear_logs: bool = True, clear_project_dir: bool = True):
     from backend.db import init_db, get_session, get_main_engine
     from backend.db.base import Base
 
+    init_db()
+    engine = get_main_engine()
+    Base.metadata.create_all(engine)
+
     # Read project metadata before dropping tables so we know what to clean up
     project_dir = ""
     if clear_project_dir:
         from backend.db.models import ProjectMeta
-        init_db()
         with get_session() as session:
             meta = session.query(ProjectMeta).filter_by(id=1).first()
             if meta and meta.name and meta.working_directory:
@@ -48,8 +51,7 @@ def flush_all(clear_logs: bool = True, clear_project_dir: bool = True):
 
     init_neo4j()
 
-    init_db()
-    engine = get_main_engine()
+    # Now drop everything for a clean slate
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
