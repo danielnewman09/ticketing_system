@@ -19,7 +19,11 @@ from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
 from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
 from codegraph.nodes import NamespaceNode
-from backend.db.neo4j.models.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
+from codegraph.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
+
+COMPOUND_KIND_KEYS = {k for k, _ in COMPOUND_KINDS}
+MEMBER_KIND_KEYS = {k for k, _ in MEMBER_KINDS}
+NAMESPACE_KIND_KEYS = {k for k, _ in NAMESPACE_KINDS}
 from backend.design_data.repository import DesignDataRepository
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.db.neo4j.repositories.verification import VerificationRepository
@@ -80,7 +84,7 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
         source=getattr(node_data, 'source', '') or "",
     )
 
-    if kind in COMPOUND_KINDS:
+    if kind in COMPOUND_KIND_KEYS:
         return CompoundNode(
             **shared,
             specialization=node_data.specialization or "",
@@ -94,7 +98,7 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
             implementation_status=getattr(node_data, 'implementation_status', 'designed') or 'designed',
             test_file=getattr(node_data, 'test_file', '') or '',
         )
-    elif kind in MEMBER_KINDS:
+    elif kind in MEMBER_KIND_KEYS:
         return MemberNode(
             **shared,
             protection=node_data.visibility or "",
@@ -108,7 +112,7 @@ def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceN
             is_virtual=node_data.is_virtual or False,
             component_id=node_data.component_id,
         )
-    elif kind in NAMESPACE_KINDS:
+    elif kind in NAMESPACE_KIND_KEYS:
         return NamespaceNode(
             **shared,
             component_id=node_data.component_id,
