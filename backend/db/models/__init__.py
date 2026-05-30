@@ -47,17 +47,6 @@ from backend.db.models.tickets import (
     TicketReference,
 )
 from backend.db.models.project import ProjectMeta
-from backend.db.models.codebase import (
-    CodebaseBase,
-    CodebaseFile,
-    Compound,
-    Include,
-    Member,
-    Metadata,
-    Namespace,
-    Parameter,
-    SymbolRef,
-)
 from backend.db.models.tasks import (
     Task,
     TaskDesignNode,
@@ -104,16 +93,6 @@ __all__ = [
     "TicketReference",
     # Project
     "ProjectMeta",
-    # Codebase (external, read-only)
-    "CodebaseBase",
-    "CodebaseFile",
-    "Compound",
-    "Include",
-    "Member",
-    "Metadata",
-    "Namespace",
-    "Parameter",
-    "SymbolRef",
     # Tasks
     "Task",
     "TaskDesignNode",

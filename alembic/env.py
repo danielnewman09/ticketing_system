@@ -21,9 +21,6 @@ target_metadata = Base.metadata
 
 # Tables to exclude from autogenerate (codebase DB tables, Django leftovers)
 EXCLUDE_TABLES = {
-    # Codebase DB tables (managed externally)
-    "compounds", "members", "parameters", "symbol_refs",
-    "files", "namespaces", "includes", "metadata",
     # Django system tables
     "auth_group", "auth_group_permissions", "auth_permission",
     "auth_user", "auth_user_groups", "auth_user_user_permissions",
