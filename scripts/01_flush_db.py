@@ -24,6 +24,45 @@ REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
 
 
+def _nuke_neo4j():
+    """Delete ALL nodes, relationships, constraints, and indexes from Neo4j."""
+    from backend.db.neo4j.connection import Neo4jConnection
+
+    print("Nuking Neo4j - this will delete EVERYTHING (nodes, constraints, indexes)...")
+    conn = Neo4jConnection()
+    if not conn.verify_connectivity():
+        print("  Neo4j not reachable - skipping")
+        return
+
+    driver = conn.get_driver()
+    with driver.session(database="neo4j") as session:
+        # Drop all constraints
+        result = session.run("SHOW CONSTRAINTS")
+        constraints = [record["name"] for record in result]
+        for name in constraints:
+            try:
+                session.run(f"DROP CONSTRAINT {name}")
+                print(f"  Dropped constraint: {name}")
+            except Exception as e:
+                print(f"  Failed to drop constraint {name}: {e}")
+
+        # Drop all indexes
+        result = session.run("SHOW INDEXES")
+        indexes = [record["name"] for record in result]
+        for name in indexes:
+            try:
+                session.run(f"DROP INDEX {name}")
+                print(f"  Dropped index: {name}")
+            except Exception as e:
+                print(f"  Failed to drop index {name}: {e}")
+
+        # Delete all nodes and relationships
+        session.run("MATCH (n) DETACH DELETE n")
+        print(f"  Deleted all nodes and relationships")
+
+    conn.close()
+    print("Neo4j nuked.")
+
 def flush_all(clear_logs: bool = True, clear_project_dir: bool = True):
     """Flush SQLite tables, Neo4j design graph, and optionally logs/project dir.
 
@@ -117,43 +156,3 @@ if __name__ == "__main__":
     flush_all(clear_project_dir=not args.keep_project)
     print("Database flushed (SQLite + Neo4j design graph).")
     print(f"Logs cleared: {LOGS_DIR}")
-
-
-def _nuke_neo4j():
-    """Delete ALL nodes, relationships, constraints, and indexes from Neo4j."""
-    from backend.db.neo4j.connection import Neo4jConnection
-
-    print("Nuking Neo4j - this will delete EVERYTHING (nodes, constraints, indexes)...")
-    conn = Neo4jConnection()
-    if not conn.verify_connectivity():
-        print("  Neo4j not reachable - skipping")
-        return
-
-    driver = conn.get_driver()
-    with driver.session(database="neo4j") as session:
-        # Drop all constraints
-        result = session.run("SHOW CONSTRAINTS")
-        constraints = [record["name"] for record in result]
-        for name in constraints:
-            try:
-                session.run(f"DROP CONSTRAINT {name}")
-                print(f"  Dropped constraint: {name}")
-            except Exception as e:
-                print(f"  Failed to drop constraint {name}: {e}")
-
-        # Drop all indexes
-        result = session.run("SHOW INDEXES")
-        indexes = [record["name"] for record in result]
-        for name in indexes:
-            try:
-                session.run(f"DROP INDEX {name}")
-                print(f"  Dropped index: {name}")
-            except Exception as e:
-                print(f"  Failed to drop index {name}: {e}")
-
-        # Delete all nodes and relationships
-        session.run("MATCH (n) DETACH DELETE n")
-        print(f"  Deleted all nodes and relationships")
-
-    conn.close()
-    print("Neo4j nuked.")
