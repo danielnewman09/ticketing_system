@@ -19,7 +19,9 @@ from backend.db.neo4j.queries import (
     fetch_node_detail,
 )
 from backend.db.neo4j.repositories import DesignRepository, RequirementRepository, VerificationRepository
-from backend.db.neo4j.repositories.models import DesignNode, DesignTripleUpdate, HLRNode, LLRNode, VerificationMethodNode, ConditionNode, ActionNode
+from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
+from backend.db.neo4j.models.edges import CodebaseEdge
+from backend.db.neo4j.repositories.models import HLRNode, LLRNode, VerificationMethodNode, ConditionNode, ActionNode
 
 __all__ = [
     "Neo4jConnection",
@@ -33,8 +35,10 @@ __all__ = [
     "DesignRepository",
     "RequirementRepository",
     "VerificationRepository",
-    "DesignNode",
-    "DesignTripleUpdate",
+    "CompoundNode",
+    "MemberNode",
+    "NamespaceNode",
+    "CodebaseEdge",
     "HLRNode",
     "LLRNode",
     "VerificationMethodNode",

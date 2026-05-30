@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING
 
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
-from backend.db.neo4j.repositories.models.design import DesignNode
+from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
+from backend.db.neo4j.models.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
 from backend.design_data.repository import DesignDataRepository
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.db.neo4j.repositories.verification import VerificationRepository
@@ -27,6 +28,87 @@ if TYPE_CHECKING:
     from neo4j import Session as Neo4jSession
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Helper: OntologyNodeSchema → typed node model
+# ---------------------------------------------------------------------------
+
+
+def _map_source_type_to_layer(source_type: str, refid: str = "") -> str:
+    """Map legacy source_type to the new layer property.
+
+    Matches the migration script logic:
+    - source_type='dependency' → layer='dependency'
+    - source_type='compound' with non-empty refid → layer='as-built'
+    - source_type='compound' with empty refid → layer='design'
+    - source_type='namespace' or 'member' or empty → layer='design'
+    """
+    if source_type == "dependency":
+        return "dependency"
+    elif source_type == "compound":
+        if refid:
+            return "as-built"
+        return "design"
+    else:
+        return "design"
+
+
+def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceNode:
+    """Convert an OntologyNodeSchema to the correct typed node model.
+
+    Dispatches to CompoundNode, MemberNode, or NamespaceNode based on kind.
+    Maps source_type to layer.
+    """
+    kind = node_data.kind
+    layer = _map_source_type_to_layer(
+        getattr(node_data, 'source_type', '') or '',
+        getattr(node_data, 'refid', '') or '',
+    )
+
+    common = dict(
+        qualified_name=node_data.qualified_name,
+        name=node_data.name,
+        kind=kind,
+        layer=layer,
+        specialization=node_data.specialization or "",
+        visibility=node_data.visibility or "",
+        description=node_data.description or "",
+        type_signature=node_data.type_signature or "",
+        argsstring=node_data.argsstring or "",
+        definition=node_data.definition or "",
+        refid=getattr(node_data, 'refid', '') or "",
+        file_path=node_data.file_path or "",
+        line_number=node_data.line_number,
+        is_static=node_data.is_static or False,
+        is_const=node_data.is_const or False,
+        is_virtual=node_data.is_virtual or False,
+        is_abstract=node_data.is_abstract or False,
+        is_final=node_data.is_final or False,
+        component_id=node_data.component_id,
+    )
+
+    if kind in COMPOUND_KINDS:
+        return CompoundNode(
+            **common,
+            is_intercomponent=node_data.is_intercomponent or False,
+            implementation_status=getattr(node_data, 'implementation_status', 'designed') or 'designed',
+            source_file=getattr(node_data, 'source_file', '') or '',
+            test_file=getattr(node_data, 'test_file', '') or '',
+        )
+    elif kind in MEMBER_KINDS:
+        return MemberNode(**common)
+    elif kind in NAMESPACE_KINDS:
+        return NamespaceNode(**common)
+    else:
+        # Default to Compound for unknown kinds
+        return CompoundNode(
+            **common,
+            is_intercomponent=node_data.is_intercomponent or False,
+            implementation_status="designed",
+            source_file="",
+            test_file="",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +134,7 @@ class DesignResult:
     links_skipped: int = 0
     node_links_applied: int = 0
     node_links_skipped: int = 0
-    qname_to_node: dict[str, "DesignNode"] = field(default_factory=dict)
+    qname_to_node: dict[str, "CompoundNode | MemberNode | NamespaceNode"] = field(default_factory=dict)
 
 
 @dataclass
@@ -163,18 +245,18 @@ def persist_decomposition(
 def persist_design(
     design: DesignSchema,
     neo4j_session: "Neo4jSession",
-    qname_to_node: dict[str, DesignNode] | None = None,
+    qname_to_node: dict[str, "CompoundNode | MemberNode | NamespaceNode"] | None = None,
 ) -> DesignResult:
     """Create ontology nodes, triples, and requirement-to-node links in Neo4j.
 
     Design nodes and triples are written directly to Neo4j via
     DesignRepository. Requirement links use TRACES_TO edges from
-    :HLR/:LLR nodes to :Design nodes.
+    :HLR/:LLR nodes to :Compound/:Member/:Namespace nodes.
 
     Args:
         design: DesignSchema from the agent.
         neo4j_session: Active Neo4j session for graph writes.
-        qname_to_node: Optional cache of qualified_name → DesignNode.
+        qname_to_node: Optional cache of qualified_name → node model.
     """
     if qname_to_node is None:
         qname_to_node = {}
@@ -188,28 +270,7 @@ def persist_design(
             result.nodes_existing += 1
             continue
 
-        dn = DesignNode(
-            qualified_name=node_data.qualified_name,
-            name=node_data.name,
-            kind=node_data.kind,
-            specialization=node_data.specialization or "",
-            visibility=node_data.visibility or "",
-            description=node_data.description or "",
-            refid=node_data.qualified_name,
-            source_type=node_data.source_type or "",
-            type_signature=node_data.type_signature or "",
-            argsstring=node_data.argsstring or "",
-            definition=node_data.definition or "",
-            file_path=node_data.file_path or "",
-            line_number=node_data.line_number,
-            is_static=node_data.is_static or False,
-            is_const=node_data.is_const or False,
-            is_virtual=node_data.is_virtual or False,
-            is_abstract=node_data.is_abstract or False,
-            is_final=node_data.is_final or False,
-            component_id=node_data.component_id,
-            is_intercomponent=node_data.is_intercomponent or False,
-        )
+        dn = _ontology_node_to_model(node_data)
         repo.merge_node(dn)
         qname_to_node[node_data.qualified_name] = dn
         result.nodes_created += 1
@@ -225,7 +286,7 @@ def persist_design(
             continue
         if triple_data.object_qualified_name not in qname_to_node:
             dep_stub_qnames = {
-                nd.qualified_name for nd in design.nodes if nd.source_type == "dependency"
+                nd.qualified_name for nd in design.nodes if nd.source_type == "dependency" or _map_source_type_to_layer(nd.source_type) == "dependency"
             }
             if triple_data.object_qualified_name not in dep_stub_qnames:
                 log.warning(

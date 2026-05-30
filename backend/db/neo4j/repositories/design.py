@@ -2,30 +2,82 @@
 
 All design graph CRUD goes through this class. No SQLAlchemy models
 are used for design data.
+
+Graph primitives (CompoundNode, MemberNode, NamespaceNode, CodebaseEdge)
+are the typed Pydantic models for Neo4j nodes and edges. The repository
+dispatches to the correct Neo4j label (:Compound, :Member, :Namespace)
+based on the node model type.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Sequence
+from typing import Union
 
 from neo4j import Session as Neo4jSession
 
+from backend.db.neo4j.models.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
+from backend.db.neo4j.models.edges import CodebaseEdge
+from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
 from backend.db.neo4j.repositories.constants import PREDICATE_TO_REL_TYPE
-from backend.db.neo4j.repositories.models.design import (
-    DesignNode,
-    DesignTripleUpdate,
-)
+
+# Type alias for any codebase graph node
+NodeModel = Union[CompoundNode, MemberNode, NamespaceNode]
 
 log = logging.getLogger(__name__)
 
 
+def _determine_node_type(kind: str) -> type[CompoundNode | MemberNode | NamespaceNode]:
+    """Return the correct model class for a given kind value."""
+    if kind in COMPOUND_KINDS:
+        return CompoundNode
+    elif kind in MEMBER_KINDS:
+        return MemberNode
+    elif kind in NAMESPACE_KINDS:
+        return NamespaceNode
+    else:
+        # Default to Compound for unknown kinds
+        log.debug("Unknown kind %r — defaulting to CompoundNode", kind)
+        return CompoundNode
+
+
+def _determine_label(kind: str) -> str:
+    """Return the Neo4j label for a given kind value."""
+    if kind in COMPOUND_KINDS:
+        return "Compound"
+    elif kind in MEMBER_KINDS:
+        return "Member"
+    elif kind in NAMESPACE_KINDS:
+        return "Namespace"
+    else:
+        return "Compound"
+
+
+def _props_to_node(props: dict) -> NodeModel | None:
+    """Hydrate a node model from a Neo4j property dict.
+
+    Determines the correct model type from the `kind` property.
+    Returns None if the props dict cannot be hydrated.
+    """
+    kind = props.get("kind", "")
+    model_cls = _determine_node_type(kind)
+    # Filter props to only those the model accepts
+    try:
+        return model_cls(**props)
+    except Exception:
+        log.warning("Skipping node %r with invalid props for %s", props.get("qualified_name", "?"), model_cls.__name__)
+        return None
+
+
 class DesignRepository:
-    """CRUD operations for :Design nodes and their relationships.
+    """CRUD operations for codebase graph nodes and their relationships.
+
+    Supports both the new label scheme (:Compound, :Member, :Namespace
+    with `layer` property) and the legacy :Design label for backward
+    compatibility during migration.
 
     Each method accepts a Neo4j session and performs Cypher queries
-    directly. The caller is responsible for transaction management
-    (the session context manager handles commit/rollback).
+    directly. The caller is responsible for transaction management.
     """
 
     def __init__(self, session: Neo4jSession) -> None:
@@ -35,101 +87,134 @@ class DesignRepository:
     # Node operations
     # -----------------------------------------------------------------------
 
-    def merge_node(self, node: DesignNode) -> DesignNode:
-        """Create or update a :Design node by qualified_name.
+    def merge_node(self, node: NodeModel) -> NodeModel:
+        """Create or update a node by qualified_name.
 
-        Dependency-reference stubs (source_type='dependency') are skipped
-        because their real nodes exist as :Compound in Neo4j. Edges to
-        them are created via merge_triple, which routes to Compounds.
+        Dispatches to the appropriate Neo4j label (:Compound, :Member,
+        :Namespace) based on the node model type.
+
+        Dependency-layer compounds are written normally with
+        layer='dependency'.
         """
-        if node.source_type == "dependency":
-            log.debug("Skipping dependency stub %s in Neo4j merge", node.qualified_name)
-            return node
+        if isinstance(node, CompoundNode):
+            label = "Compound"
+        elif isinstance(node, MemberNode):
+            label = "Member"
+        elif isinstance(node, NamespaceNode):
+            label = "Namespace"
+        else:
+            raise ValueError(f"Unknown node type: {type(node)}")
 
-        kind_label = node.kind.capitalize() if node.kind else "Unknown"
+        props = node.model_dump(exclude_none=True)
+        # Ensure layer is set explicitly (not buried in $props dict)
+        layer = props.pop("layer", "design")
 
         cypher = f"""
-        MERGE (d:Design {{qualified_name: $qualified_name}})
-        SET d:{kind_label},
-            d.name = $name,
-            d.kind = $kind,
-            d.specialization = $specialization,
-            d.visibility = $visibility,
-            d.description = $description,
-            d.refid = $refid,
-            d.source_type = $source_type,
-            d.component_id = $component_id,
-            d.is_intercomponent = $is_intercomponent,
-            d.file_path = $file_path,
-            d.line_number = $line_number,
-            d.type_signature = $type_signature,
-            d.argsstring = $argsstring,
-            d.definition = $definition,
-            d.is_static = $is_static,
-            d.is_const = $is_const,
-            d.is_virtual = $is_virtual,
-            d.is_abstract = $is_abstract,
-            d.is_final = $is_final,
-            d.implementation_status = $implementation_status,
-            d.source_file = $source_file,
-            d.test_file = $test_file
+        MERGE (n:{label} {{qualified_name: $qualified_name}})
+        SET n += $props, n.layer = $layer
         """
-        self._session.run(cypher, node.model_dump())
+        self._session.run(cypher, {
+            "qualified_name": node.qualified_name,
+            "props": props,
+            "layer": layer,
+        })
         return node
 
-    def get_by_qualified_name(self, qualified_name: str) -> DesignNode | None:
-        """Fetch a :Design node by qualified_name. Returns None if not found."""
+    def get_by_qualified_name(self, qualified_name: str) -> NodeModel | None:
+        """Fetch a node by qualified_name. Returns None if not found.
+
+        Searches across :Compound, :Member, :Namespace, and :Design
+        (legacy) labels.
+        """
         result = self._session.run(
-            "MATCH (d:Design {qualified_name: $qn}) RETURN d",
+            """
+            MATCH (n)
+            WHERE n.qualified_name = $qn
+              AND (n:Compound OR n:Member OR n:Namespace OR n:Design)
+            RETURN n
+            """,
             {"qn": qualified_name},
         )
         record = result.single()
         if record is None:
             return None
-        props = dict(record["d"])
-        return DesignNode(**props)
+        props = dict(record["n"])
+        return _props_to_node(props)
 
     def find_nodes(
         self,
         kind: str | None = None,
         search: str | None = None,
         component_id: int | None = None,
+        layer: str | None = None,
+        exclude_layers: list[str] | None = None,
         exclude_source_types: list[str] | None = None,
-    ) -> list[DesignNode]:
-        """Find :Design nodes matching optional filters."""
-        conditions = ["d:Design"]
+    ) -> list[NodeModel]:
+        """Find nodes matching optional filters.
+
+        Searches across :Compound, :Member, :Namespace, and :Design
+        (legacy) labels.
+
+        Args:
+            kind: Filter by node kind (e.g. "class", "method").
+            search: Text search on name and qualified_name.
+            component_id: Filter by component FK.
+            layer: Filter by layer (design, as-built, dependency).
+            exclude_layers: Exclude nodes with these layer values.
+            exclude_source_types: Legacy — maps to exclude_layers
+                for backward compatibility.
+        """
+        conditions = ["(n:Compound OR n:Member OR n:Namespace OR n:Design)"]
         params: dict = {}
 
         if kind:
-            conditions.append("d.kind = $kind")
+            conditions.append("n.kind = $kind")
             params["kind"] = kind
         if component_id is not None:
-            conditions.append("d.component_id = $comp_id")
+            conditions.append("n.component_id = $comp_id")
             params["comp_id"] = component_id
         if search:
-            conditions.append("(d.name CONTAINS $search OR d.qualified_name CONTAINS $search)")
+            conditions.append("(n.name CONTAINS $search OR n.qualified_name CONTAINS $search)")
             params["search"] = search
-        if exclude_source_types:
-            conditions.append("NOT d.source_type IN $exclude_types")
-            params["exclude_types"] = exclude_source_types
+        if layer is not None:
+            conditions.append("n.layer = $layer")
+            params["layer"] = layer
+        if exclude_layers:
+            conditions.append("NOT n.layer IN $exclude_layers")
+            params["exclude_layers"] = exclude_layers
+        # Legacy: exclude_source_types maps to layer filtering
+        if exclude_source_types and not exclude_layers:
+            # "dependency" source_type → layer="dependency"
+            mapped = [s for s in exclude_source_types if s != "verification"]
+            if mapped:
+                conditions.append("NOT n.layer IN $exclude_layers_legacy")
+                params["exclude_layers_legacy"] = mapped
 
         where = " AND ".join(conditions)
-        cypher = f"MATCH (d) WHERE {where} RETURN d"
+        cypher = f"MATCH (n) WHERE {where} RETURN n"
 
         result = self._session.run(cypher, params)
         nodes = []
         for record in result:
-            props = dict(record["d"])
-            try:
-                nodes.append(DesignNode(**props))
-            except Exception:
-                log.warning("Skipping Design node with invalid props: %s", props)
+            props = dict(record["n"])
+            node = _props_to_node(props)
+            if node is not None:
+                nodes.append(node)
         return nodes
 
     def delete_node(self, qualified_name: str) -> bool:
-        """Delete a :Design node and all its relationships. Returns True if deleted."""
+        """Delete a node and all its relationships. Returns True if deleted.
+
+        Matches across :Compound, :Member, :Namespace, and :Design labels.
+        """
         result = self._session.run(
-            "MATCH (d:Design {qualified_name: $qn}) DETACH DELETE d RETURN count(d) AS cnt",
+            """
+            MATCH (n)
+            WHERE n.qualified_name = $qn
+              AND (n:Compound OR n:Member OR n:Namespace OR n:Design)
+            DETACH DELETE n
+            RETURN count(n) AS cnt
+            """,
             {"qn": qualified_name},
         )
         record = result.single()
@@ -149,10 +234,10 @@ class DesignRepository:
         name: str = "",
         display_name: str = "",
     ) -> None:
-        """MERGE a typed relationship between two Design nodes.
+        """MERGE a typed relationship between two codebase nodes.
 
-        For dependency targets (object is a dependency stub), falls back
-        to matching :Compound nodes.
+        Matches subject and object across :Compound, :Member, :Namespace,
+        and :Design (legacy) labels.
 
         Args:
             subject_qualified_name: Qualified name of the source node.
@@ -183,10 +268,12 @@ class DesignRepository:
         set_clause = "\n            " + "\n            ".join(set_props) if set_props else ""
 
         cypher = """
-        MATCH (s:Design {qualified_name: $subj})
-        OPTIONAL MATCH (o_design:Design {qualified_name: $obj})
-        OPTIONAL MATCH (o_compound:Compound {qualified_name: $obj})
-        WITH s, coalesce(o_design, o_compound) AS target
+        MATCH (s)
+        WHERE s.qualified_name = $subj AND (s:Compound OR s:Member OR s:Namespace OR s:Design)
+        OPTIONAL MATCH (o_new)
+        WHERE o_new.qualified_name = $obj AND (o_new:Compound OR o_new:Member OR o_new:Namespace)
+        OPTIONAL MATCH (o_legacy:Design {qualified_name: $obj})
+        WITH s, coalesce(o_new, o_legacy) AS target
         WHERE target IS NOT NULL
         MERGE (s)-[r:REL_TYPE]->(target)
         """
@@ -211,9 +298,12 @@ class DesignRepository:
     # -----------------------------------------------------------------------
 
     def clear_design_graph(self) -> bool:
-        """Delete all :Design nodes and their relationships."""
+        """Delete all codebase graph nodes and their relationships.
+
+        Removes :Compound, :Member, :Namespace, and legacy :Design nodes.
+        """
         try:
-            self._session.run("MATCH (n:Design) DETACH DELETE n")
+            self._session.run("MATCH (n) WHERE n:Compound OR n:Member OR n:Namespace OR n:Design DETACH DELETE n")
             log.info("Cleared design graph from Neo4j")
             return True
         except Exception:
@@ -221,13 +311,18 @@ class DesignRepository:
             return False
 
     def sync_implementation_status(self, qualified_name: str, status: str, source_file: str = "", test_file: str = "") -> None:
-        """Update implementation_status on a :Design node."""
+        """Update implementation_status on a node.
+
+        Matches across :Compound, :Member, :Namespace, and :Design labels.
+        """
         self._session.run(
             """
-            MATCH (d:Design {qualified_name: $qn})
-            SET d.implementation_status = $status,
-                d.source_file = $source_file,
-                d.test_file = $test_file
+            MATCH (n)
+            WHERE n.qualified_name = $qn
+              AND (n:Compound OR n:Member OR n:Namespace OR n:Design)
+            SET n.implementation_status = $status,
+                n.source_file = $source_file,
+                n.test_file = $test_file
             """,
             {
                 "qn": qualified_name,

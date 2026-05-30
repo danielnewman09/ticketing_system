@@ -123,7 +123,7 @@ def run_pipeline(
         PipelineResult with counts and sync status.
     """
     from backend.db import get_session
-    from backend.db.models import Component, OntologyNode
+    from backend.db.models import Component
     from backend.db.models.tasks import Task
     from backend.db.neo4j.repositories.requirement import RequirementRepository
     from backend.db.neo4j.repositories.verification import VerificationRepository
@@ -206,11 +206,10 @@ def run_pipeline(
     log.info("Phase 4: Generating OO design...")
     from backend.ticketing_agent.design.design_hlr import design_hlr
     from backend.requirements.services.persistence import persist_design
-    from backend.db.neo4j.repositories.models import DesignNode
     from backend.design_data import class_diagram_from_oo_design, oo_design_from_class_diagram
     from backend.design_data.models import ClassDiagram
 
-    qname_to_node: dict[str, DesignNode] = {}
+    qname_to_node = {}
     accumulated_diagram = ClassDiagram()
 
     for hlr in hlrs_neo4j:
@@ -445,12 +444,13 @@ def run_pipeline(
                     except Exception:
                         log.warning("Neo4j task sync failed for task %d", task.id)
 
-                for node in (
-                    session.query(OntologyNode)
-                    .filter_by(implementation_status="implemented")
-                    .all()
-                ):
-                    sync_implementation_status(neo4j_sess, node)
+                # Sync implementation status for all implemented nodes
+                from backend.db.neo4j.repositories.design import DesignRepository as _DR
+                _dr = _DR(neo4j_sess)
+                _impl_nodes = _dr.find_nodes(layer="design")
+                for node in _impl_nodes:
+                    if node.implementation_status == "implemented":
+                        sync_implementation_status(neo4j_sess, node)
 
         result.neo4j_synced = True
         log.info(

@@ -25,8 +25,8 @@ class TestConstants:
         assert "package" in NAMESPACE_KINDS
 
     def test_node_kinds_is_union(self):
-        from backend.db.neo4j.models.constants import NODE_KINDS, COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
-        assert set(NODE_KINDS) == set(COMPOUND_KINDS + MEMBER_KINDS + NAMESPACE_KINDS)
+        from backend.db.neo4j.models.constants import NODE_KINDS, COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS, UNCLASSIFIED_KINDS
+        assert set(NODE_KINDS) == set(COMPOUND_KINDS + MEMBER_KINDS + NAMESPACE_KINDS + UNCLASSIFIED_KINDS)
 
     def test_type_kinds(self):
         from backend.db.neo4j.models.constants import TYPE_KINDS
