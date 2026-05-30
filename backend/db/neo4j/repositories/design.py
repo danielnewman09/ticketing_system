@@ -19,6 +19,12 @@ from neo4j import Session as Neo4jSession
 from backend.db.neo4j.models.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
 from backend.db.neo4j.models.edges import CodebaseEdge
 from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
+from backend.db.neo4j.models.graph import (
+    CompoundGraph,
+    GraphEdge,
+    NamespaceGraph,
+    OntologyGraph,
+)
 from backend.db.neo4j.repositories.constants import PREDICATE_TO_REL_TYPE
 
 # Type alias for any codebase graph node
@@ -67,6 +73,21 @@ def _props_to_node(props: dict) -> NodeModel | None:
     except Exception:
         log.warning("Skipping node %r with invalid props for %s", props.get("qualified_name", "?"), model_cls.__name__)
         return None
+
+
+def _hydrate_graph_edge(rel_type: str, source_qn: str, target_qn: str,
+                        mechanism: str = "", position: int | None = None,
+                        name: str = "", display_name: str = "") -> GraphEdge:
+    """Create a GraphEdge from raw Neo4j relationship fields."""
+    return GraphEdge(
+        source_qualified_name=source_qn,
+        target_qualified_name=target_qn,
+        predicate=rel_type,
+        mechanism=mechanism or "",
+        position=position,
+        name=name or "",
+        display_name=display_name or "",
+    )
 
 
 _DESIGN_NODE_LABELS: list[str] = ["Compound", "Member", "Namespace"]
@@ -216,6 +237,138 @@ class DesignRepository:
             if node is not None:
                 nodes.append(node)
         return nodes
+
+    def get_compound_graph(
+        self, qualified_name: str, *, layer: str | None = None
+    ) -> CompoundGraph | None:
+        """Fetch a single compound with members, edges, and nested classes.
+
+        One Cypher query fills the entire CompoundGraph. Returns None
+        if the compound is not found.
+        """
+        layer_condition = "AND c.layer = $layer" if layer is not None else ""
+        params: dict = {"qn": qualified_name}
+        if layer is not None:
+            params["layer"] = layer
+
+        result = self._session.run(
+            f"""
+            MATCH (c:Compound {{qualified_name: $qn}})
+            {layer_condition}
+            OPTIONAL MATCH (c)-[:COMPOSES]->(m:Member)
+            OPTIONAL MATCH (c)-[r_out]->(tgt)
+              WHERE type(r_out) <> 'COMPOSES'
+                AND (tgt:Compound OR tgt:Namespace)
+            OPTIONAL MATCH (src)-[r_in]->(c)
+              WHERE NOT src:Member
+            OPTIONAL MATCH (c)-[:COMPOSES]->(nested:Compound)
+            RETURN c,
+                   collect(DISTINCT m) AS members,
+                   collect(DISTINCT {{rel: type(r_out),
+                       source_qn: c.qualified_name,
+                       target_qn: tgt.qualified_name}}) AS outs,
+                   collect(DISTINCT {{rel: type(r_in),
+                       source_qn: src.qualified_name,
+                       target_qn: c.qualified_name}}) AS ins,
+                   collect(DISTINCT nested) AS nested_compounds
+            """,
+            params,
+        )
+        record = result.single()
+        if record is None or record["c"] is None:
+            return None
+
+        c_props = dict(record["c"])
+        compound = CompoundNode(**c_props)
+
+        members: list[MemberNode] = []
+        for m in (record["members"] or []):
+            if m is None:
+                continue
+            try:
+                members.append(MemberNode(**dict(m)))
+            except Exception:
+                log.debug("Skipping invalid member: %s",
+                          m.get("qualified_name", "?"))
+
+        edges_out: list[GraphEdge] = []
+        for e in (record["outs"] or []):
+            if e is None or e.get("rel") is None:
+                continue
+            edges_out.append(_hydrate_graph_edge(
+                e["rel"], e.get("source_qn", ""), e.get("target_qn", ""),
+            ))
+
+        edges_in: list[GraphEdge] = []
+        for e in (record["ins"] or []):
+            if e is None or e.get("rel") is None:
+                continue
+            edges_in.append(_hydrate_graph_edge(
+                e["rel"], e.get("source_qn", ""), e.get("target_qn", ""),
+            ))
+
+        nested: list[CompoundGraph] = []
+        for nc in (record["nested_compounds"] or []):
+            if nc is None:
+                continue
+            nc_qn = nc.get("qualified_name", "")
+            if nc_qn:
+                nested_cg = self.get_compound_graph(nc_qn, layer=layer)
+                if nested_cg:
+                    nested.append(nested_cg)
+
+        return CompoundGraph(
+            node=compound,
+            members=members,
+            nested=nested,
+            edges_out=edges_out,
+            edges_in=edges_in,
+        )
+
+    def get_namespace_graph(
+        self, qualified_name: str, *, layer: str | None = None
+    ) -> NamespaceGraph | None:
+        """Fetch a namespace with all contained compounds and child namespaces.
+
+        One Cypher query fills the NamespaceGraph. Returns None if
+        the namespace is not found.
+        """
+        layer_condition = "AND n.layer = $layer" if layer is not None else ""
+        params: dict = {"qn": qualified_name}
+        if layer is not None:
+            params["layer"] = layer
+
+        result = self._session.run(
+            f"""
+            MATCH (n:Namespace {{qualified_name: $qn}})
+            {layer_condition}
+            OPTIONAL MATCH (n)-[:COMPOSES]->(c:Compound)
+            RETURN n, collect(DISTINCT c) AS compounds
+            """,
+            params,
+        )
+        record = result.single()
+        if record is None or record["n"] is None:
+            return None
+
+        ns_props = dict(record["n"])
+        ns_node = NamespaceNode(**ns_props)
+
+        compounds: list[CompoundGraph] = []
+        for c in (record["compounds"] or []):
+            if c is None:
+                continue
+            c_qn = c.get("qualified_name", "")
+            if c_qn:
+                cg = self.get_compound_graph(c_qn, layer=layer)
+                if cg:
+                    compounds.append(cg)
+
+        return NamespaceGraph(
+            node=ns_node,
+            compounds=compounds,
+            namespaces=[],
+        )
 
     def delete_node(self, qualified_name: str) -> bool:
         """Delete a node and all its relationships. Returns True if deleted.
