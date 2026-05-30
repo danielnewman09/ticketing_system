@@ -178,19 +178,19 @@ class TestNamespaceNode:
     """Tests for NamespaceNode Pydantic model."""
 
     def test_create_minimal(self):
-        from backend.db.neo4j.models.nodes.namespace import NamespaceNode
+        from codegraph.nodes import NamespaceNode
         node = NamespaceNode(qualified_name="std", name="std", kind="namespace")
         assert node.qualified_name == "std"
         assert node.kind == "namespace"
 
     def test_create_package(self):
-        from backend.db.neo4j.models.nodes.namespace import NamespaceNode
+        from codegraph.nodes import NamespaceNode
         node = NamespaceNode(qualified_name="my_pkg", name="my_pkg", kind="package")
         assert node.kind == "package"
 
     def test_no_irrelevant_fields(self):
         """NamespaceNode should not have implementation_status or is_intercomponent."""
-        from backend.db.neo4j.models.nodes.namespace import NamespaceNode
+        from codegraph.nodes import NamespaceNode
         node = NamespaceNode(qualified_name="ns", name="ns")
         assert not hasattr(node, "implementation_status")
         assert not hasattr(node, "is_intercomponent")
