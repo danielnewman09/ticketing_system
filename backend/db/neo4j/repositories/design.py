@@ -854,7 +854,7 @@ class DesignRepository:
             log.warning("Neo4j clear failed", exc_info=True)
             return False
 
-    def sync_implementation_status(self, qualified_name: str, status: str, source_file: str = "", test_file: str = "") -> None:
+    def sync_implementation_status(self, qualified_name: str, status: str, file_path: str = "", test_file: str = "") -> None:
         """Update implementation_status on a node.
 
         Matches across :Compound, :Member, :Namespace labels.
@@ -866,13 +866,13 @@ class DesignRepository:
             WHERE n.qualified_name = $qn
               AND {label_clause}
             SET n.implementation_status = $status,
-                n.source_file = $source_file,
+                n.file_path = $file_path,
                 n.test_file = $test_file
             """,
             {
                 "qn": qualified_name,
                 "status": status,
-                "source_file": source_file,
+                "file_path": file_path,
                 "test_file": test_file,
             },
         )
