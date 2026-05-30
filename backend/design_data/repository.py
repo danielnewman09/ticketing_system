@@ -422,7 +422,6 @@ class DesignDataRepository:
             is_abstract=d.get("is_abstract", False),
             is_final=d.get("is_final", False),
             implementation_status=d.get("implementation_status", "designed"),
-            source_file=d.get("source_file", ""),
             test_file=d.get("test_file", ""),
             module=_extract_module(d.get("qualified_name", "")),
             inherits_from=[],  # Populated from relationships below

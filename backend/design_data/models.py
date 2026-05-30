@@ -46,7 +46,6 @@ class DiagramNode(BaseModel):
 
     # Implementation tracking (design layer)
     implementation_status: str = "designed"  # designed, scaffolded, tested, implemented, verified
-    source_file: str = ""
     test_file: str = ""
 
 
