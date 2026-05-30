@@ -106,6 +106,9 @@ class DesignRepository:
             raise ValueError(f"Unknown node type: {type(node)}")
 
         props = node.model_dump(exclude_none=True)
+        # Strip empty-string values that may conflict with Neo4j constraints
+        # (e.g. cppreference data creates unique constraints on refid)
+        props = {k: v for k, v in props.items() if v != ""}
         # Ensure layer is set explicitly (not buried in $props dict)
         layer = props.pop("layer", "design")
 
