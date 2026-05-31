@@ -394,7 +394,7 @@ class TestVisibilityLiteral:
         from codegraph.constants import VISIBILITY_CHOICES
 
         for vis_key, _ in VISIBILITY_CHOICES:
-            assert vis_name in Visibility.__args__, f"{vis_name} not in Visibility Literal"
+            assert vis_key in Visibility.__args__, f"{vis_key} not in Visibility Literal"
 
 
 class TestSourceTypeLiteral:

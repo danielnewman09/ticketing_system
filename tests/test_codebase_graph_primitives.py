@@ -8,7 +8,9 @@ Validates that:
 
 import pytest
 
-from codegraph.nodes import CompoundNode, MemberNode
+from codegraph.nodes import NamespaceNode
+from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
+from backend.db.neo4j.models.nodes.member import MemberNode as DbMemberNode
 
 
 class TestNodeKindImport:
@@ -87,57 +89,118 @@ class TestNodeKindImport:
         assert "javascript" in SUPPORTED_LANGUAGES
 
 
-class TestGraphPrimitiveModels:
-    """Lightweight validation of graph primitive model instantiation.
+class TestCompoundNodeModel:
+    """Tests for CompoundNode Pydantic model."""
 
-    Full round-trip tests live in tests/test_codebase_schemas.py.
-    """
-
-    def test_compound_node_minimal(self):
+    def test_create_minimal(self):
         node = CompoundNode(
+            qualified_name="ns::Foo",
+            name="Foo",
             kind="class",
-            name="MyClass",
-            qualified_name="ns::MyClass",
             layer="design",
         )
+        assert node.qualified_name == "ns::Foo"
         assert node.kind == "class"
-        assert node.name == "MyClass"
-        assert node.qualified_name == "ns::MyClass"
-        assert node.layer == "design"
 
-    def test_compound_node_defaults(self):
+    def test_create_with_optional_fields(self):
         node = CompoundNode(
-            kind="class",
-            name="MyClass",
-            qualified_name="ns::MyClass",
-            layer="design",
+            qualified_name="ns::Bar",
+            name="Bar",
+            kind="struct",
+            layer="as-built",
+            base_classes=["ns::Foo"],
+            is_abstract=True,
+            file_path="/path/to/file.h",
+            line_number=42,
         )
-        assert node.visibility == "public"
-        assert node.specialization is None
-        assert node.source is None
-        assert node.members == []
+        assert node.base_classes == ["ns::Foo"]
+        assert node.is_abstract is True
 
-    def test_member_node_minimal(self):
-        node = MemberNode(
+
+class TestMemberNodeModel:
+    """Tests for MemberNode Pydantic model."""
+
+    def test_create_method(self):
+        node = DbMemberNode(
+            qualified_name="ns::Foo::run",
+            name="run",
             kind="method",
-            name="my_method",
-            qualified_name="ns::MyClass::my_method",
-            layer="design",
         )
+        assert node.qualified_name == "ns::Foo::run"
         assert node.kind == "method"
-        assert node.params == []
 
-    def test_member_node_with_params(self):
-        node = MemberNode(
-            kind="function",
-            name="my_func",
-            qualified_name="ns::my_func",
-            layer="design",
-            params=[
-                {"name": "x", "type": "int", "is_reference": False, "default_value": None},
-                {"name": "y", "type": "float", "is_reference": True, "default_value": "0.0"},
-            ],
+    def test_create_attribute(self):
+        node = DbMemberNode(
+            qualified_name="ns::Foo::count",
+            name="count",
+            kind="variable",
+            protection="private",
+            type_signature="int",
         )
-        assert len(node.params) == 2
-        assert node.params[0]["name"] == "x"
-        assert node.params[1]["is_reference"] is True
+        assert node.kind == "variable"
+        assert node.type_signature == "int"
+
+    def test_invalid_kind_rejected(self):
+        with pytest.raises(Exception):
+            DbMemberNode(qualified_name="X", name="X", kind="class")
+
+
+class TestNamespaceNode:
+    """Tests for NamespaceNode Pydantic model."""
+
+    def test_create_minimal(self):
+        node = NamespaceNode(qualified_name="std", name="std", kind="namespace")
+        assert node.qualified_name == "std"
+        assert node.kind == "namespace"
+
+    def test_create_package(self):
+        node = NamespaceNode(qualified_name="my_pkg", name="my_pkg", kind="package")
+        assert node.kind == "package"
+
+    def test_no_irrelevant_fields(self):
+        """NamespaceNode should not have implementation_status or is_intercomponent."""
+        node = NamespaceNode(qualified_name="ns", name="ns")
+        assert not hasattr(node, "implementation_status")
+        assert not hasattr(node, "is_intercomponent")
+
+
+class TestCodebaseEdge:
+    """Tests for CodebaseEdge model and PREDICATES."""
+
+    def test_create_basic_edge(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge
+        edge = CodebaseEdge(
+            subject_qualified_name="ns::Foo",
+            predicate="composes",
+            object_qualified_name="ns::Foo::calculate",
+        )
+        assert edge.predicate == "composes"
+        assert edge.mechanism == ""
+        assert edge.position is None
+
+    def test_create_edge_with_mechanism(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge
+        edge = CodebaseEdge(
+            subject_qualified_name="ns::Car",
+            predicate="aggregates",
+            object_qualified_name="ns::Wheel",
+            mechanism="std::vector",
+        )
+        assert edge.mechanism == "std::vector"
+
+    def test_create_edge_with_type_argument(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge
+        edge = CodebaseEdge(
+            subject_qualified_name="std::vector",
+            predicate="type_argument",
+            object_qualified_name="std::string",
+            position=0,
+            display_name="std::string",
+        )
+        assert edge.position == 0
+        assert edge.display_name == "std::string"
+
+    def test_predicates_matches_constant(self):
+        from backend.db.neo4j.models.edges import CodebaseEdge, PREDICATES
+        assert len(PREDICATES) > 0
+        assert "composes" in PREDICATES
