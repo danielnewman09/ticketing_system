@@ -18,7 +18,7 @@ from neo4j import Session as Neo4jSession
 
 from backend.db.neo4j.models.edges import CodebaseEdge
 from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
-from backend.db.neo4j.models.graph import (
+from codegraph.graph import (
     CompoundGraph,
     GraphEdge,
     NamespaceGraph,

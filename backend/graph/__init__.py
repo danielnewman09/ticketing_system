@@ -13,7 +13,7 @@ from backend.graph.transforms import (
 )
 
 if TYPE_CHECKING:
-    from backend.db.neo4j.models.graph import (
+    from codegraph.graph import (
         CompoundGraph,
         GraphEdge,
         NamespaceGraph,

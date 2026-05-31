@@ -1,6 +1,6 @@
 """Unit tests for graph container models."""
 
-from backend.db.neo4j.models.graph import (
+from codegraph.graph import (
     CompoundGraph,
     GraphEdge,
     NamespaceGraph,

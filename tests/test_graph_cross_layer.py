@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.db.neo4j.models.graph import (
+from codegraph.graph import (
     CompoundGraph,
     GraphEdge,
     OntologyGraph,
