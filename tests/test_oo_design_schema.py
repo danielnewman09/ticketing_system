@@ -1,5 +1,5 @@
 """
-Test that OODesignSchema correctly represents the hlr2 calculator design.
+Test that ClassDiagram correctly represents the hlr2 calculator design.
 
 The expected data is derived from the reasoner output in:
     logs/prompts/step3b_design_oo_hlr2_reasoner_response.md
@@ -11,13 +11,14 @@ schema supports it.
 
 import pytest
 
-from backend.codebase.schemas import (
-    AssociationSchema,
-    AttributeSchema,
-    ClassSchema,
-    EnumSchema,
-    MethodSchema,
-    OODesignSchema,
+from codegraph.designs import (
+    Association,
+    AttributeNode,
+    ClassDiagram,
+    ClassNode,
+    EnumNode,
+    EnumValueNode,
+    MethodNode,
 )
 
 # ---------------------------------------------------------------------------
@@ -27,11 +28,11 @@ from backend.codebase.schemas import (
 
 @pytest.fixture()
 def hlr2_design():
-    """Build the OODesignSchema that matches the hlr2 reasoner output."""
-    return OODesignSchema(
-        modules=["calc::engine"],
+    """Build the ClassDiagram that matches the hlr2 reasoner output."""
+    return ClassDiagram(
+        module_names=["calc::engine"],
         classes=[
-            ClassSchema(
+            ClassNode(
                 name="Calculator",
                 module="calc::engine",
                 specialization="class",
@@ -40,58 +41,58 @@ def hlr2_design():
                     "with error handling and state maintenance for recovery."
                 ),
                 attributes=[
-                    AttributeSchema(
+                    AttributeNode(
                         name="current_result",
-                        type_name="double",
+                        type_signature="double",
                         visibility="private",
                         description="Stores the last computed result or zero if no valid operation completed.",
                     ),
-                    AttributeSchema(
+                    AttributeNode(
                         name="status",
-                        type_name="Status",
+                        type_signature="Status",
                         visibility="private",
                         description="Tracks the current error state or success status of the engine.",
                     ),
                 ],
                 methods=[
-                    MethodSchema(
+                    MethodNode(
                         name="add",
                         visibility="public",
-                        parameters=["operand1", "operand2"],
-                        return_type="CalculationResult",
+                        argsstring="(operand1, operand2)",
+                        type_signature="CalculationResult",
                         description="Computes sum of operands; returns error indicator if inputs are invalid.",
                     ),
-                    MethodSchema(
+                    MethodNode(
                         name="subtract",
                         visibility="public",
-                        parameters=["operand1", "operand2"],
-                        return_type="CalculationResult",
+                        argsstring="(operand1, operand2)",
+                        type_signature="CalculationResult",
                         description="Computes difference of operands; returns error indicator if inputs are invalid.",
                     ),
-                    MethodSchema(
+                    MethodNode(
                         name="multiply",
                         visibility="public",
-                        parameters=["operand1", "operand2"],
-                        return_type="CalculationResult",
+                        argsstring="(operand1, operand2)",
+                        type_signature="CalculationResult",
                         description="Computes product of operands; returns error indicator if inputs are invalid.",
                     ),
-                    MethodSchema(
+                    MethodNode(
                         name="divide",
                         visibility="public",
-                        parameters=["operand1", "operand2"],
-                        return_type="CalculationResult",
+                        argsstring="(operand1, operand2)",
+                        type_signature="CalculationResult",
                         description="Computes quotient; returns error indicator for division by zero or invalid inputs.",
                     ),
-                    MethodSchema(
+                    MethodNode(
                         name="getStatus",
                         visibility="public",
-                        parameters=[],
-                        return_type="Status",
+                        argsstring="()",
+                        type_signature="Status",
                         description="Retrieves the current internal status for error recovery verification.",
                     ),
                 ],
                 inherits_from=[],
-                realizes_interfaces=[],
+                realizes=[],
                 requirement_ids=[
                     "hlr:2",
                     "llr:9",
@@ -103,7 +104,7 @@ def hlr2_design():
                     "llr:15",
                 ],
             ),
-            ClassSchema(
+            ClassNode(
                 name="CalculationResult",
                 module="calc::engine",
                 specialization="class",
@@ -112,74 +113,83 @@ def hlr2_design():
                     "numeric value and associated status indicator."
                 ),
                 attributes=[
-                    AttributeSchema(
+                    AttributeNode(
                         name="value",
-                        type_name="double",
+                        type_signature="double",
                         visibility="private",
                         description="The numeric result of the operation if successful.",
                     ),
-                    AttributeSchema(
+                    AttributeNode(
                         name="status",
-                        type_name="Status",
+                        type_signature="Status",
                         visibility="private",
                         description="The error indicator or success code returned by the operation.",
                     ),
                 ],
                 methods=[
-                    MethodSchema(
+                    MethodNode(
                         name="getValue",
                         visibility="public",
-                        parameters=[],
-                        return_type="double",
+                        argsstring="()",
+                        type_signature="double",
                         description="Returns the numeric value if status is valid, otherwise returns default.",
                     ),
-                    MethodSchema(
+                    MethodNode(
                         name="getStatus",
                         visibility="public",
-                        parameters=[],
-                        return_type="Status",
+                        argsstring="()",
+                        type_signature="Status",
                         description="Returns the status indicator.",
                     ),
                 ],
                 inherits_from=[],
-                realizes_interfaces=[],
+                realizes=[],
                 requirement_ids=["hlr:2", "llr:13", "llr:14"],
             ),
         ],
         interfaces=[],
         enums=[
-            EnumSchema(
+            EnumNode(
                 name="Status",
                 module="calc::engine",
                 description="Defines valid calculation outcomes and error indicators.",
-                values=["OK", "INVALID_INPUT", "DIVISION_BY_ZERO"],
+                values=[
+                    EnumValueNode(name="OK", qualified_name="calc::engine::Status::OK"),
+                    EnumValueNode(name="INVALID_INPUT", qualified_name="calc::engine::Status::INVALID_INPUT"),
+                    EnumValueNode(name="DIVISION_BY_ZERO", qualified_name="calc::engine::Status::DIVISION_BY_ZERO"),
+                ],
             ),
-            EnumSchema(
+            EnumNode(
                 name="Operation",
                 module="calc::engine",
                 description="Defines supported arithmetic operations for the engine.",
-                values=["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"],
+                values=[
+                    EnumValueNode(name="ADD", qualified_name="calc::engine::Operation::ADD"),
+                    EnumValueNode(name="SUBTRACT", qualified_name="calc::engine::Operation::SUBTRACT"),
+                    EnumValueNode(name="MULTIPLY", qualified_name="calc::engine::Operation::MULTIPLY"),
+                    EnumValueNode(name="DIVIDE", qualified_name="calc::engine::Operation::DIVIDE"),
+                ],
             ),
         ],
         associations=[
-            AssociationSchema(
-                from_class="Calculator",
-                to_class="Status",
-                kind="depends_on",
+            Association(
+                subject="Calculator",
+                object="Status",
+                predicate="depends_on",
                 description="Used to maintain internal state and return error indicators",
                 requirement_ids=["hlr:2", "llr:13", "llr:14", "llr:15"],
             ),
-            AssociationSchema(
-                from_class="Calculator",
-                to_class="Operation",
-                kind="depends_on",
+            Association(
+                subject="Calculator",
+                object="Operation",
+                predicate="depends_on",
                 description="Used internally to select arithmetic logic",
                 requirement_ids=["hlr:2", "llr:9", "llr:10", "llr:11", "llr:12"],
             ),
-            AssociationSchema(
-                from_class="Calculator",
-                to_class="CalculationResult",
-                kind="associates",
+            Association(
+                subject="Calculator",
+                object="CalculationResult",
+                predicate="associates",
                 description="Produces and returns calculation results",
                 requirement_ids=["hlr:2", "llr:13", "llr:14", "llr:15"],
             ),
@@ -192,11 +202,11 @@ def hlr2_design():
 # ---------------------------------------------------------------------------
 
 
-class TestOODesignSchemaHLR2:
-    """Verify OODesignSchema faithfully holds the hlr2 calculator design."""
+class TestClassDiagramHLR2:
+    """Verify ClassDiagram faithfully holds the hlr2 calculator design."""
 
     def test_modules(self, hlr2_design):
-        assert hlr2_design.modules == ["calc::engine"]
+        assert hlr2_design.module_names == ["calc::engine"]
 
     def test_class_count(self, hlr2_design):
         assert len(hlr2_design.classes) == 2
@@ -227,8 +237,8 @@ class TestOODesignSchemaHLR2:
     def test_calculator_method_parameters(self, hlr2_design):
         calc = hlr2_design.classes[0]
         add = next(m for m in calc.methods if m.name == "add")
-        assert add.parameters == ["operand1", "operand2"]
-        assert add.return_type == "CalculationResult"
+        assert add.argsstring == "(operand1, operand2)"
+        assert add.type_signature == "CalculationResult"
 
     def test_calculation_result_attributes(self, hlr2_design):
         result_cls = hlr2_design.classes[1]
@@ -262,7 +272,7 @@ class TestOODesignSchemaHLR2:
     def test_round_trip_preserves_attributes_and_methods(self, hlr2_design):
         """Serialize to dict and back — attributes/methods must survive."""
         data = hlr2_design.model_dump()
-        restored = OODesignSchema.model_validate(data)
+        restored = ClassDiagram.model_validate(data)
 
         for orig, rest in zip(hlr2_design.classes, restored.classes):
             assert len(rest.attributes) == len(
@@ -275,7 +285,7 @@ class TestOODesignSchemaHLR2:
     def test_json_round_trip(self, hlr2_design):
         """Serialize to JSON string and back — nested arrays must survive."""
         json_str = hlr2_design.model_dump_json()
-        restored = OODesignSchema.model_validate_json(json_str)
+        restored = ClassDiagram.model_validate_json(json_str)
 
         calc = restored.classes[0]
         assert len(calc.attributes) == 2, "Attributes lost in JSON round-trip"
@@ -287,11 +297,11 @@ class TestOODesignSchemaHLR2:
         """Reproduce the actual formatter output from hlr2 — shows the bug.
 
         The formatter returned classes with no attributes or methods arrays.
-        OODesignSchema accepts this (they default to []) but it represents
+        ClassDiagram accepts this (they default to []) but it represents
         a data loss compared to the reasoner output.
         """
         formatter_output = {
-            "modules": ["calc::engine"],
+            "module_names": ["calc::engine"],
             "classes": [
                 {
                     "name": "Calculator",
@@ -299,7 +309,7 @@ class TestOODesignSchemaHLR2:
                     "specialization": "class",
                     "description": "Core calculation engine performing arithmetic operations with error handling and state maintenance for recovery.",
                     "inherits_from": [],
-                    "realizes_interfaces": [],
+                    "realizes": [],
                     "requirement_ids": [
                         "hlr:2",
                         "llr:9",
@@ -317,7 +327,7 @@ class TestOODesignSchemaHLR2:
                     "specialization": "class",
                     "description": "Encapsulates the outcome of a calculation including the numeric value and associated status indicator.",
                     "inherits_from": [],
-                    "realizes_interfaces": [],
+                    "realizes": [],
                     "requirement_ids": ["hlr:2", "llr:13", "llr:14"],
                 },
             ],
@@ -327,13 +337,22 @@ class TestOODesignSchemaHLR2:
                     "name": "Status",
                     "module": "calc::engine",
                     "description": "Defines valid calculation outcomes and error indicators.",
-                    "values": ["OK", "INVALID_INPUT", "DIVISION_BY_ZERO"],
+                    "values": [
+                        {"name": "OK", "qualified_name": "calc::engine::Status::OK"},
+                        {"name": "INVALID_INPUT", "qualified_name": "calc::engine::Status::INVALID_INPUT"},
+                        {"name": "DIVISION_BY_ZERO", "qualified_name": "calc::engine::Status::DIVISION_BY_ZERO"},
+                    ],
                 },
                 {
                     "name": "Operation",
                     "module": "calc::engine",
                     "description": "Defines supported arithmetic operations for the engine.",
-                    "values": ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"],
+                    "values": [
+                        {"name": "ADD", "qualified_name": "calc::engine::Operation::ADD"},
+                        {"name": "SUBTRACT", "qualified_name": "calc::engine::Operation::SUBTRACT"},
+                        {"name": "MULTIPLY", "qualified_name": "calc::engine::Operation::MULTIPLY"},
+                        {"name": "DIVIDE", "qualified_name": "calc::engine::Operation::DIVIDE"},
+                    ],
                 },
             ],
             "associations": [
@@ -361,7 +380,7 @@ class TestOODesignSchemaHLR2:
             ],
         }
 
-        schema = OODesignSchema.model_validate(formatter_output)
+        schema = ClassDiagram.model_validate(formatter_output)
 
         # The formatter bug: classes have no attributes or methods
         calc = schema.classes[0]

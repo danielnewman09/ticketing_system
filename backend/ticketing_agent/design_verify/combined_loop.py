@@ -9,7 +9,7 @@ import logging
 import os
 
 from llm_caller import call_tool_loop
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 from backend.requirements.schemas import VerificationSchema
 from backend.requirements.schemas import VerificationSchema
 from backend.requirements.formatting import format_hlr_dict, format_llrs_with_verifications_for_prompt
@@ -67,7 +67,7 @@ class DesignVerifyResult:
 
     def __init__(
         self,
-        oo_design: OODesignSchema,
+        oo_design: ClassDiagram,
         verifications: dict[int, list[VerificationSchema]],
         design_warnings: list[str] | None = None,
         verification_warnings: list[str] | None = None,
@@ -255,7 +255,7 @@ def design_and_verify(
             pass
 
     # Parse the final result
-    oo_design = OODesignSchema.model_validate(result["oo_design"])
+    oo_design = ClassDiagram.model_validate(result["oo_design"])
 
     # Safety check: detect truncated responses where classes/enums/interfaces are missing
     # This happens when the LLM's output is cut off mid-JSON, leaving only associations.
@@ -265,7 +265,7 @@ def design_and_verify(
             f"design_and_verify: LLM response appears truncated — "
             f"oo_design has {len(oo_design.associations)} associations but 0 "
             f"classes/interfaces/enums. Associations reference undefined class names: "
-            f"{sorted({a.from_class for a in oo_design.associations} | {a.to_class for a in oo_design.associations})[:5]}. "
+            f"{sorted({a.subject for a in oo_design.associations} | {a.object for a in oo_design.associations})[:5]}. "
             f"This typically means the commit_design_and_verifications output exceeded the "
             f"token budget. Consider increasing max_tokens or simplifying the design."
         )

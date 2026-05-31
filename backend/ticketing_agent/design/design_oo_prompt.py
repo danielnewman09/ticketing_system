@@ -2,7 +2,7 @@
 Prompt templates and section builders for the design_oo agent.
 """
 
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 from codegraph.constants import LANGUAGE_SPECIALIZATIONS
 
 # ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ can only come from child components, which are defined separately.
 
 ### Classes
 Each class needs: name, module, description, attributes, methods,
-inherits_from, realizes_interfaces, and requirement_ids.
+inherits_from, realizes, and requirement_ids.
 
 ### Requirement IDs format
 Tag requirement_ids using the format `"hlr:<ID>"` or `"llr:<ID>"`
@@ -140,7 +140,7 @@ Do NOT list primitive-type attributes (int, string, bool, etc.) in
 associations — only relationships between design entities.
 
 Do NOT put inheritance or interface realization in associations — use
-inherits_from and realizes_interfaces on the class instead.
+inherits_from and realizes on the class instead.
 
 {specializations_section}
 
@@ -181,7 +181,7 @@ interfaces, or event contracts. Internal implementation classes should have
 TOOL_DEFINITION = {
     "name": "produce_oo_design",
     "description": "Return the object-oriented class design derived from the requirements",
-    "input_schema": OODesignSchema.model_json_schema(),
+    "input_schema": ClassDiagram.model_json_schema(),
 }
 
 

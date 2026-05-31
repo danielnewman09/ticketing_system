@@ -1,22 +1,23 @@
 """Tests for design_data transforms."""
 
-from backend.codebase.schemas import (
-    AssociationSchema,
-    AttributeSchema,
-    ClassSchema,
-    EnumSchema,
-    InterfaceSchema,
-    MethodSchema,
-    OODesignSchema,
+from codegraph.designs import (
+    Association,
+    AttributeNode,
+    ClassDiagram,
+    ClassNode,
+    EnumNode,
+    EnumValueNode,
+    InterfaceNode,
+    MethodNode,
 )
 from backend.design_data.transforms import class_diagram_from_oo_design, oo_design_from_class_diagram
 
 
 def _sample_oo_design():
-    return OODesignSchema(
-        modules=["calc"],
+    return ClassDiagram(
+        module_names=["calc"],
         classes=[
-            ClassSchema(
+            ClassNode(
                 name="Calculator",
                 module="calc",
                 description="Main calculator class",
@@ -24,56 +25,59 @@ def _sample_oo_design():
                 is_intercomponent=False,
                 requirement_ids=["hlr:1"],
                 attributes=[
-                    AttributeSchema(
+                    AttributeNode(
                         name="result_",
-                        type_name="double",
+                        type_signature="double",
                         visibility="private",
                         description="Last result",
                     ),
                 ],
                 methods=[
-                    MethodSchema(
+                    MethodNode(
                         name="add",
                         visibility="public",
                         description="Add two numbers",
-                        parameters=["double x", "double y"],
-                        return_type="double",
+                        argsstring="(double x, double y)",
+                        type_signature="double",
                     ),
                 ],
                 inherits_from=["ICalculator"],
-                realizes_interfaces=[],
+                realizes=[],
             ),
         ],
         interfaces=[
-            InterfaceSchema(
+            InterfaceNode(
                 name="ICalculator",
                 module="calc",
                 description="Calculator interface",
                 is_intercomponent=False,
                 methods=[
-                    MethodSchema(
+                    MethodNode(
                         name="add",
                         visibility="public",
                         description="Add two numbers",
-                        parameters=[],
-                        return_type="double",
+                        argsstring="",
+                        type_signature="double",
                     ),
                 ],
             ),
         ],
         enums=[
-            EnumSchema(
+            EnumNode(
                 name="Operation",
                 module="calc",
                 description="Supported operations",
-                values=["ADD", "SUBTRACT"],
+                values=[
+                    EnumValueNode(name="ADD", qualified_name="calc::Operation::ADD"),
+                    EnumValueNode(name="SUBTRACT", qualified_name="calc::Operation::SUBTRACT"),
+                ],
             ),
         ],
         associations=[
-            AssociationSchema(
-                from_class="Calculator",
-                to_class="Result",
-                kind="aggregates",
+            Association(
+                subject="Calculator",
+                object="Result",
+                predicate="aggregates",
                 description="Calculator aggregates results",
                 mechanism="std::vector",
             ),

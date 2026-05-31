@@ -1,10 +1,10 @@
 """Tests for mechanism field and references association kind."""
 
 import pytest
-from backend.codebase.schemas import (
-    AssociationSchema,
-    ClassSchema,
-    OODesignSchema,
+from codegraph.designs import (
+    Association,
+    ClassDiagram,
+    ClassNode,
 )
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
@@ -15,10 +15,10 @@ class TestMechanismInference:
 
     def test_aggregates_mechanism_infers_container_dep(self):
         """aggregates with mechanism=std::vector should infer depends_on std::vector."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -26,10 +26,10 @@ class TestMechanismInference:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Button",
+                    predicate="aggregates",
                     description="Button widgets",
                     mechanism="std::vector",
                 ),
@@ -56,10 +56,10 @@ class TestMechanismInference:
 
     def test_references_mechanism_unique_ptr_dep(self):
         """references with mechanism=std::unique_ptr should infer depends_on std::unique_ptr."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -67,10 +67,10 @@ class TestMechanismInference:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="CalculatorEngine",
-                    kind="references",
+                Association(
+                    subject="CalculatorWindow",
+                    object="CalculatorEngine",
+                    predicate="references",
                     description="Engine pointer",
                     mechanism="std::unique_ptr",
                 ),
@@ -108,10 +108,10 @@ class TestMechanismInference:
 
     def test_references_raw_pointer_no_container_dep(self):
         """references with mechanism=raw_pointer should NOT add container dependency."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -119,10 +119,10 @@ class TestMechanismInference:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Widget",
-                    kind="references",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Widget",
+                    predicate="references",
                     description="Raw pointer to widget",
                     mechanism="raw_pointer",
                 ),
@@ -151,10 +151,10 @@ class TestMechanismInference:
 
     def test_aggregates_mechanism_on_triple(self):
         """The mechanism field should be stored on the triple."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -162,10 +162,10 @@ class TestMechanismInference:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Button",
+                    predicate="aggregates",
                     description="Buttons",
                     mechanism="std::vector",
                 ),
@@ -185,10 +185,10 @@ class TestMechanismInference:
 
     def test_mechanism_shared_ptr(self):
         """references with mechanism=std::shared_ptr should infer depends_on std::shared_ptr."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -196,10 +196,10 @@ class TestMechanismInference:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="SharedWidget",
-                    kind="references",
+                Association(
+                    subject="CalculatorWindow",
+                    object="SharedWidget",
+                    predicate="references",
                     description="Shared widget reference",
                     mechanism="std::shared_ptr",
                 ),
@@ -219,10 +219,10 @@ class TestMechanismInference:
 
     def test_mechanism_duplicate_container_dep(self):
         """Two associations with the same container type should not duplicate."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -230,17 +230,17 @@ class TestMechanismInference:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Button",
+                    predicate="aggregates",
                     description="Buttons",
                     mechanism="std::vector",
                 ),
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Box",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Box",
+                    predicate="aggregates",
                     description="Boxes",
                     mechanism="std::vector",
                 ),
@@ -260,10 +260,10 @@ class TestMechanismInference:
 
     def test_kinds_other_than_aggregates_references_ignore_mechanism(self):
         """Associates/depends_on/invokes should not use mechanism field."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -271,10 +271,10 @@ class TestMechanismInference:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Logger",
-                    kind="invokes",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Logger",
+                    predicate="invokes",
                     description="Logs messages",
                     mechanism="std::shared_ptr",
                 ),

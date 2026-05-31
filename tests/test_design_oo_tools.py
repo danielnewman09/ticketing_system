@@ -9,7 +9,7 @@ from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,
     make_design_dispatcher,
 )
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 
 
 def _sample_design_dict():
@@ -221,7 +221,7 @@ class TestDisconnectedEntityValidation:
         """A single-class design should not be flagged as disconnected."""
         from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
-        oo = OODesignSchema.model_validate(_sample_design_dict())
+        oo = ClassDiagram.model_validate(_sample_design_dict())
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
         assert not any("Disconnected" in e for e in errors)
 
@@ -233,7 +233,7 @@ class TestDisconnectedEntityValidation:
         design["enums"] = [
             {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
         ]
-        oo = OODesignSchema.model_validate(design)
+        oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
         assert any("Disconnected" in e and "Operation" in e for e in errors)
 
@@ -248,7 +248,7 @@ class TestDisconnectedEntityValidation:
         design["classes"][0]["attributes"].append(
             {"name": "op", "type_name": "Operation", "visibility": "private", "description": "Current operation"}
         )
-        oo = OODesignSchema.model_validate(design)
+        oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
         assert not any("Disconnected" in e for e in errors)
 
@@ -263,7 +263,7 @@ class TestDisconnectedEntityValidation:
         design["classes"][0]["methods"].append(
             {"name": "getOperation", "description": "Get operation", "visibility": "public", "parameters": [], "return_type": "Operation"}
         )
-        oo = OODesignSchema.model_validate(design)
+        oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
         assert not any("Disconnected" in e for e in errors)
 
@@ -278,7 +278,7 @@ class TestDisconnectedEntityValidation:
         design["associations"] = [
             {"from_class": "Calculator", "to_class": "Operation", "kind": "depends_on", "description": "Uses operation enum"}
         ]
-        oo = OODesignSchema.model_validate(design)
+        oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
         assert not any("Disconnected" in e for e in errors)
 
@@ -292,7 +292,7 @@ class TestDisconnectedEntityValidation:
              "visibility": "public", "is_intercomponent": False, "requirement_ids": [],
              "attributes": [], "methods": [], "inherits_from": [], "realizes_interfaces": []}
         )
-        oo = OODesignSchema.model_validate(design)
+        oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
         assert any("Disconnected" in e and "Orphan" in e for e in errors)
 
@@ -307,6 +307,6 @@ class TestDisconnectedEntityValidation:
         design["classes"][0]["methods"].append(
             {"name": "setOperator", "description": "Set the operator", "visibility": "public", "parameters": ["Operation op"], "return_type": "void"}
         )
-        oo = OODesignSchema.model_validate(design)
+        oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
         assert not any("Disconnected" in e for e in errors)

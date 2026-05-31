@@ -288,9 +288,8 @@ def persist_design(
             result.nodes_existing += 1
             continue
 
-        dn = _ontology_node_to_model(node_data)
-        repo.merge_node(dn)
-        qname_to_node[node_data.qualified_name] = dn
+        repo.merge_node(node_data)
+        qname_to_node[node_data.qualified_name] = node_data
         result.nodes_created += 1
 
     # --- Triples ---
@@ -304,7 +303,7 @@ def persist_design(
             continue
         if triple_data.object_qualified_name not in qname_to_node:
             dep_stub_qnames = {
-                nd.qualified_name for nd in design.nodes if nd.source_type == "dependency" or _map_source_type_to_layer(nd.source_type) == "dependency"
+                nd.qualified_name for nd in design.nodes if getattr(nd, 'layer', None) == "dependency"
             }
             if triple_data.object_qualified_name not in dep_stub_qnames:
                 log.warning(

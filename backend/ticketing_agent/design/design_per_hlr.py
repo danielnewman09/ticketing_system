@@ -11,7 +11,8 @@ from __future__ import annotations
 import logging
 import os
 
-from backend.codebase.schemas import DesignSchema, OODesignSchema
+from backend.codebase.schemas import DesignSchema
+from codegraph.designs import ClassDiagram
 from backend.design_data import class_diagram_from_oo_design
 from backend.ticketing_agent.design.design_hlr import design_hlr
 from backend.ticketing_agent.design.order_hlrs import order_hlrs
@@ -33,7 +34,7 @@ def _get_comp_ns(component_id: int | None) -> str:
         return ""
 
 
-def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
+def _extract_existing_classes(oo: ClassDiagram) -> list[dict]:
     """Extract class summaries from an OO design for the existing_classes prompt.
 
     # TODO: Replace with design_data module once prompt builders accept ClassNode directly
@@ -46,9 +47,9 @@ def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
     # Build association lookup: from_class -> list of associations
     assoc_lookup: dict[str, list[dict]] = {}
     for assoc in oo.associations:
-        assoc_lookup.setdefault(assoc.from_class, []).append(
+        assoc_lookup.setdefault(assoc.subject, []).append(
             {
-                "target": assoc.to_class,
+                "target": assoc.object,
                 "kind": assoc.kind,
                 "description": assoc.description,
             }
@@ -67,7 +68,7 @@ def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
                     {"name": a.name, "visibility": a.visibility} for a in cls.attributes
                 ],
                 "inherits_from": cls.inherits_from,
-                "realizes": cls.realizes_interfaces,
+                "realizes": cls.realizes,
                 "associations": assoc_lookup.get(cls.name, []),
             }
         )
@@ -92,7 +93,7 @@ def _extract_existing_classes(oo: OODesignSchema) -> list[dict]:
 
 
 def _extract_intercomponent_context(
-    oo: OODesignSchema,
+    oo: ClassDiagram,
     component_name: str,
     exclude_component_id: int | None,
     source_component_id: int | None,
@@ -148,7 +149,7 @@ def design_all_hlrs(
     model: str = "",
     log_dir: str = "",
     use_dependency_graph: bool = False,
-) -> list[tuple[dict, OODesignSchema, DesignSchema]]:
+) -> list[tuple[dict, ClassDiagram, DesignSchema]]:
     """Design each HLR individually in dependency order.
 
     Args:
@@ -178,9 +179,9 @@ def design_all_hlrs(
             llrs_by_hlr.setdefault(hlr_id, []).append(llr)
 
     # Accumulate results per HLR
-    designed: dict[int, tuple[OODesignSchema, int | None, str]] = {}
+    designed: dict[int, tuple[ClassDiagram, int | None, str]] = {}
     accumulated_class_lookup: dict[str, str] = {}
-    results: list[tuple[dict, OODesignSchema, DesignSchema]] = []
+    results: list[tuple[dict, ClassDiagram, DesignSchema]] = []
 
     # Optionally connect to the dependency graph
     dep_toolset = None

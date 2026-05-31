@@ -2,7 +2,7 @@
 
 import json
 
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 from backend.design_data import class_diagram_from_oo_design
 from backend.ticketing_agent.tools.helpers.design_validation import check_enum_collisions
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
@@ -18,7 +18,7 @@ SCHEMA = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "design": OODesignSchema.model_json_schema(),
+            "design": ClassDiagram.model_json_schema(),
         },
         "required": ["design"],
     },
@@ -28,7 +28,7 @@ SCHEMA = {
 def handle(ctx, tool_input: dict) -> str:
     """Parse, validate, and store the draft design."""
     try:
-        design = OODesignSchema.model_validate(tool_input.get("design", tool_input))
+        design = ClassDiagram.model_validate(tool_input.get("design", tool_input))
     except Exception as e:
         return json.dumps({
             "valid": False,

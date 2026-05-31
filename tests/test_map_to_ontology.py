@@ -1,13 +1,13 @@
 """Tests for map_oo_to_ontology dependency resolution."""
 
 import pytest
-from backend.codebase.schemas import (
-    AssociationSchema,
-    AttributeSchema,
-    ClassSchema,
-    DesignSchema,
-    MethodSchema,
-    OODesignSchema,
+from backend.codebase.schemas import DesignSchema
+from codegraph.designs import (
+    Association,
+    AttributeNode,
+    ClassDiagram,
+    ClassNode,
+    MethodNode,
 )
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
@@ -17,10 +17,10 @@ class TestDependencyLookupInAssociations:
     use the dependency's qualified name from the lookup."""
 
     def test_association_to_dependency_resolved(self):
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="calc",
                     attributes=[],
@@ -28,10 +28,10 @@ class TestDependencyLookupInAssociations:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="Calculator",
-                    to_class="Fl_Window",
-                    kind="aggregates",
+                Association(
+                    subject="Calculator",
+                    object="Fl_Window",
+                    predicate="aggregates",
                     description="Calculator window",
                 ),
             ],
@@ -53,10 +53,10 @@ class TestDependencyLookupInAssociations:
         assert dep_node[0].is_intercomponent is True
 
     def test_association_to_dependency_with_namespaced_qname(self):
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="calc",
                     attributes=[],
@@ -64,10 +64,10 @@ class TestDependencyLookupInAssociations:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="Calculator",
-                    to_class="string",
-                    kind="depends_on",
+                Association(
+                    subject="Calculator",
+                    object="string",
+                    predicate="depends_on",
                     description="Uses strings",
                 ),
             ],
@@ -91,10 +91,10 @@ class TestDependencyLookupInInheritance:
     triple should use the dependency's qualified name."""
 
     def test_inherits_from_dependency(self):
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="MyWindow",
                     module="ui",
                     inherits_from=["Fl_Window"],
@@ -122,16 +122,16 @@ class TestDependsOnFromTypeSignatures:
     a depends_on triple should be synthesized from the design class."""
 
     def test_attribute_type_references_dependency(self):
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="ui",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="display",
-                            type_name="Fl_Output",
+                            type_signature="Fl_Output",
                             visibility="private",
                             description="The display",
                         ),
@@ -157,16 +157,16 @@ class TestDependsOnFromTypeSignatures:
 
     def test_pointer_type_still_resolves(self):
         """Fl_Output* should still resolve Fl_Output."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="ui",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="display",
-                            type_name="Fl_Output*",
+                            type_signature="Fl_Output*",
                             visibility="private",
                             description="Pointer to display",
                         ),
@@ -188,23 +188,23 @@ class TestDependsOnFromTypeSignatures:
 
     def test_no_depends_on_for_design_internal_classes(self):
         """If the type name matches a design class, no depends_on should be created."""
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="calc",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="result",
-                            type_name="CalculationResult",
+                            type_signature="CalculationResult",
                             visibility="private",
                             description="The result",
                         ),
                     ],
                     methods=[],
                 ),
-                ClassSchema(
+                ClassNode(
                     name="CalculationResult",
                     module="calc",
                     attributes=[],
@@ -229,10 +229,10 @@ class TestAggregatesInfersDependsOn:
 
     def test_aggregates_dependency_infers_depends_on(self):
         """aggregates to a dependency class should auto-add depends_on."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -240,10 +240,10 @@ class TestAggregatesInfersDependsOn:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Button",
+                    predicate="aggregates",
                     description="Button widget",
                 ),
             ],
@@ -274,10 +274,10 @@ class TestAggregatesInfersDependsOn:
 
     def test_aggregates_dependency_no_duplicate_depends_on(self):
         """If the agent already provided depends_on, don't duplicate it."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -285,16 +285,16 @@ class TestAggregatesInfersDependsOn:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Button",
+                    predicate="aggregates",
                     description="Button widget",
                 ),
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="depends_on",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Button",
+                    predicate="depends_on",
                     description="Uses Fl_Button",
                 ),
             ],
@@ -316,16 +316,16 @@ class TestAggregatesInfersDependsOn:
 
     def test_aggregates_design_class_no_depends_on_inferred(self):
         """Aggregating a design-internal class should NOT infer depends_on."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
                     methods=[],
                 ),
-                ClassSchema(
+                ClassNode(
                     name="CalculatorDisplay",
                     module="ui",
                     attributes=[],
@@ -333,10 +333,10 @@ class TestAggregatesInfersDependsOn:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="CalculatorDisplay",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="CalculatorDisplay",
+                    predicate="aggregates",
                     description="Display component",
                 ),
             ],
@@ -357,10 +357,10 @@ class TestAggregatesInfersDependsOn:
 
     def test_aggregates_multiple_dependencies(self):
         """Multiple aggregates to different dependencies should each infer depends_on."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculatorWindow",
                     module="ui",
                     attributes=[],
@@ -368,16 +368,16 @@ class TestAggregatesInfersDependsOn:
                 ),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Button",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Button",
+                    predicate="aggregates",
                     description="Button",
                 ),
-                AssociationSchema(
-                    from_class="CalculatorWindow",
-                    to_class="Fl_Box",
-                    kind="aggregates",
+                Association(
+                    subject="CalculatorWindow",
+                    object="Fl_Box",
+                    predicate="aggregates",
                     description="Box",
                 ),
             ],
@@ -401,16 +401,16 @@ class TestNoDependencyLookup:
     """Without a dependency_lookup, behavior should be unchanged."""
 
     def test_association_to_unknown_name_uses_bare_name(self):
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(name="Calculator", module="calc", attributes=[], methods=[]),
+                ClassNode(name="Calculator", module="calc", attributes=[], methods=[]),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="Calculator",
-                    to_class="RandomThing",
-                    kind="associates",
+                Association(
+                    subject="Calculator",
+                    object="RandomThing",
+                    predicate="associates",
                     description="Something",
                 ),
             ],
@@ -426,23 +426,23 @@ class TestNoDependencyLookup:
         random_nodes = [n for n in result.nodes if n.qualified_name == "RandomThing"]
         assert len(random_nodes) == 0
 
-class TestAssociationSchemaKinds:
-    """AssociationSchema.kind should accept composes and returns."""
+class TestAssociationKinds:
+    """Association.kind should accept composes and returns."""
 
     def test_composes_association(self):
-        assoc = AssociationSchema(
-            from_class="CalculatorResult",
-            to_class="ErrorType",
-            kind="composes",
+        assoc = Association(
+            subject="CalculatorResult",
+            object="ErrorType",
+            predicate="composes",
             description="ErrorType member variable",
         )
         assert assoc.kind == "composes"
 
     def test_returns_association(self):
-        assoc = AssociationSchema(
-            from_class="CalculatorEngine",
-            to_class="CalculationResult",
-            kind="returns",
+        assoc = Association(
+            subject="CalculatorEngine",
+            object="CalculationResult",
+            predicate="returns",
             description="Returns calculation result",
         )
         assert assoc.kind == "returns"
@@ -455,12 +455,12 @@ class TestEnumInClassLookup:
     def test_class_references_enum_from_attribute_type(self):
         """When a class has an attribute typed by an enum, a class-level
         references edge should be emitted (class → enum)."""
-        from backend.codebase.schemas import EnumSchema, InterfaceSchema
+        from backend.codebase.schemas import EnumNode, InterfaceNode
 
-        oo = OODesignSchema(
-            modules=["calc_engine"],
+        oo = ClassDiagram(
+            module_names=["calc_engine"],
             enums=[
-                EnumSchema(
+                EnumNode(
                     name="ErrorType",
                     module="calc_engine",
                     description="Error types",
@@ -468,13 +468,13 @@ class TestEnumInClassLookup:
                 ),
             ],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="CalculationResult",
                     module="calc_engine",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="error_signal",
-                            type_name="ErrorType",
+                            type_signature="ErrorType",
                             visibility="private",
                             description="Error indicator",
                         ),
@@ -501,22 +501,22 @@ class TestEnumInClassLookup:
     def test_class_references_class_from_attribute_type(self):
         """When a class has an attribute typed by another design class,
         a class-level references edge should be emitted."""
-        oo = OODesignSchema(
-            modules=["core"],
+        oo = ClassDiagram(
+            module_names=["core"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Engine",
                     module="core",
                     attributes=[],
                     methods=[],
                 ),
-                ClassSchema(
+                ClassNode(
                     name="Controller",
                     module="core",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="engine",
-                            type_name="Engine",
+                            type_signature="Engine",
                             visibility="private",
                             description="The engine",
                         ),
@@ -538,12 +538,12 @@ class TestEnumInClassLookup:
     def test_class_references_interface_from_attribute_type(self):
         """When a class has an attribute typed by a design interface,
         a class-level references edge should be emitted."""
-        from backend.codebase.schemas import InterfaceSchema
+        from backend.codebase.schemas import InterfaceNode
 
-        oo = OODesignSchema(
-            modules=["app"],
+        oo = ClassDiagram(
+            module_names=["app"],
             interfaces=[
-                InterfaceSchema(
+                InterfaceNode(
                     name="IHandler",
                     module="app",
                     description="Handler interface",
@@ -551,13 +551,13 @@ class TestEnumInClassLookup:
                 ),
             ],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Processor",
                     module="app",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="handler",
-                            type_name="IHandler",
+                            type_signature="IHandler",
                             visibility="private",
                             description="The handler",
                         ),
@@ -578,16 +578,16 @@ class TestEnumInClassLookup:
 
     def test_no_composes_for_primitive_attribute_type(self):
         """Primitive types (bool, int, string) should not produce composes edges."""
-        oo = OODesignSchema(
-            modules=["core"],
+        oo = ClassDiagram(
+            module_names=["core"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Config",
                     module="core",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="enabled",
-                            type_name="bool",
+                            type_signature="bool",
                             visibility="public",
                             description="Enabled flag",
                         ),
@@ -616,25 +616,25 @@ class TestReturnsEdge:
     """Methods returning design-internal types should get a returns edge."""
 
     def test_method_returns_design_class(self):
-        from backend.codebase.schemas import MethodSchema
+        from backend.codebase.schemas import MethodNode
 
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="calc",
                     attributes=[],
                     methods=[
-                        MethodSchema(
+                        MethodNode(
                             name="compute",
                             visibility="public",
                             description="Compute result",
-                            return_type="CalcResult",
+                            type_signature="CalcResult",
                         ),
                     ],
                 ),
-                ClassSchema(
+                ClassNode(
                     name="CalcResult",
                     module="calc",
                     attributes=[],
@@ -653,12 +653,12 @@ class TestReturnsEdge:
         assert len(returns_triples) == 1
 
     def test_method_returns_design_enum(self):
-        from backend.codebase.schemas import EnumSchema, MethodSchema
+        from backend.codebase.schemas import EnumNode, MethodNode
 
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             enums=[
-                EnumSchema(
+                EnumNode(
                     name="Status",
                     module="calc",
                     description="Status codes",
@@ -666,16 +666,16 @@ class TestReturnsEdge:
                 ),
             ],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Processor",
                     module="calc",
                     attributes=[],
                     methods=[
-                        MethodSchema(
+                        MethodNode(
                             name="check",
                             visibility="public",
                             description="Check status",
-                            return_type="Status",
+                            type_signature="Status",
                         ),
                     ],
                 ),
@@ -692,21 +692,21 @@ class TestReturnsEdge:
         assert len(returns_triples) == 1
 
     def test_no_returns_for_primitive_type(self):
-        from backend.codebase.schemas import MethodSchema
+        from backend.codebase.schemas import MethodNode
 
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="calc",
                     attributes=[],
                     methods=[
-                        MethodSchema(
+                        MethodNode(
                             name="count",
                             visibility="public",
                             description="Count items",
-                            return_type="int",
+                            type_signature="int",
                         ),
                     ],
                 ),
@@ -728,12 +728,12 @@ class TestReferencesFromAttributeTypes:
     from _add_depends_from_type."""
 
     def test_attribute_type_produces_references_not_composes(self):
-        from backend.codebase.schemas import EnumSchema
+        from backend.codebase.schemas import EnumNode
 
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             enums=[
-                EnumSchema(
+                EnumNode(
                     name="ErrorType",
                     module="calc",
                     description="Errors",
@@ -741,13 +741,13 @@ class TestReferencesFromAttributeTypes:
                 ),
             ],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Result",
                     module="calc",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="error",
-                            type_name="ErrorType",
+                            type_signature="ErrorType",
                             visibility="private",
                             description="Error",
                         ),
@@ -779,25 +779,25 @@ class TestReferencesFromAttributeTypes:
         )
 
     def test_method_return_type_produces_returns_not_references(self):
-        from backend.codebase.schemas import MethodSchema
+        from backend.codebase.schemas import MethodNode
 
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Engine",
                     module="calc",
                     attributes=[],
                     methods=[
-                        MethodSchema(
+                        MethodNode(
                             name="run",
                             visibility="public",
                             description="Run",
-                            return_type="Result",
+                            type_signature="Result",
                         ),
                     ],
                 ),
-                ClassSchema(
+                ClassNode(
                     name="Result",
                     module="calc",
                     attributes=[],
@@ -828,16 +828,16 @@ class TestReferencesFromAttributeTypes:
     def test_external_dependency_still_produces_depends_on(self):
         """External dependencies in attribute types should still produce
         depends_on edges from _add_depends_from_type."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Window",
                     module="ui",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="button",
-                            type_name="Fl_Button*",
+                            type_signature="Fl_Button*",
                             visibility="private",
                             description="Button",
                         ),
@@ -864,19 +864,19 @@ class TestStdlibTypeLinking:
 
     def test_method_with_std_string_creates_has_argument_edge(self):
         """std::string in method args → has_argument edge to std::basic_string."""
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="calc",
                     attributes=[],
                     methods=[
-                        MethodSchema(
+                        MethodNode(
                             name="add",
                             visibility="public",
                             parameters=["const std::string& operand1", "const std::string& operand2"],
-                            return_type="CalculationResult",
+                            type_signature="CalculationResult",
                         ),
                     ],
                 ),
@@ -914,19 +914,19 @@ class TestStdlibTypeLinking:
     def test_method_returning_std_vector_creates_type_argument_edge(self):
         """std::vector<std::string> in return type → returns edge to std::vector
         + TYPE_ARGUMENT edge from std::vector to std::basic_string."""
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Parser",
                     module="calc",
                     attributes=[],
                     methods=[
-                        MethodSchema(
+                        MethodNode(
                             name="parse",
                             visibility="public",
                             parameters=["const std::string& expr"],
-                            return_type="std::vector<std::string>",
+                            type_signature="std::vector<std::string>",
                         ),
                     ],
                 ),
@@ -977,23 +977,23 @@ class TestExistingBehaviorPreserved:
 
     def test_design_internal_has_argument_still_works(self):
         """A has_argument edge to a design-internal type should still be created."""
-        oo = OODesignSchema(
-            modules=["calc"],
+        oo = ClassDiagram(
+            module_names=["calc"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="calc",
                     attributes=[],
                     methods=[
-                        MethodSchema(
+                        MethodNode(
                             name="add",
                             visibility="public",
                             parameters=["const CalculationResult& result"],
-                            return_type="CalculationResult",
+                            type_signature="CalculationResult",
                         ),
                     ],
                 ),
-                ClassSchema(
+                ClassNode(
                     name="CalculationResult",
                     module="calc",
                     attributes=[],
@@ -1011,16 +1011,16 @@ class TestExistingBehaviorPreserved:
 
     def test_depends_on_from_attribute_type_still_works(self):
         """An attribute with a dependency type should still create depends_on."""
-        oo = OODesignSchema(
-            modules=["ui"],
+        oo = ClassDiagram(
+            module_names=["ui"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="Calculator",
                     module="ui",
                     attributes=[
-                        AttributeSchema(
+                        AttributeNode(
                             name="display",
-                            type_name="Fl_Output",
+                            type_signature="Fl_Output",
                             visibility="private",
                             description="The display",
                         ),

@@ -10,7 +10,8 @@ Orchestrates the full per-HLR pipeline:
 import logging
 import os
 
-from backend.codebase.schemas import DesignSchema, OODesignSchema
+from backend.codebase.schemas import DesignSchema
+from codegraph.designs import ClassDiagram
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, build_alias_lookup
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
@@ -30,7 +31,7 @@ def design_hlr(
     neo4j_session=None,
     model: str = "",
     log_dir: str = "",
-) -> tuple[OODesignSchema, DesignSchema]:
+) -> tuple[ClassDiagram, DesignSchema]:
     """Design a single HLR through the full pipeline.
 
     Args:

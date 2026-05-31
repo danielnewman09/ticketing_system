@@ -1,14 +1,14 @@
 """Tests for design_oo validation helpers and tool-loop integration."""
 
 from unittest.mock import patch
-from backend.codebase.schemas import OODesignSchema, ClassSchema, AssociationSchema
+from codegraph.designs import ClassDiagram, ClassNode, Association
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 
 def _make_design(associations=None, classes=None, class_attrs=None, class_methods=None):
     """Helper to create a minimal OODesignSchema for testing."""
     if classes is None:
-        classes = [ClassSchema(
+        classes = [ClassNode(
             name="TestClass",
             module="test",
             description="A test class",
@@ -21,7 +21,7 @@ def _make_design(associations=None, classes=None, class_attrs=None, class_method
             realizes_interfaces=[],
         )]
     return OODesignSchema(
-        modules=["test"],
+        module_names=["test"],
         classes=classes,
         interfaces=[],
         enums=[],
@@ -32,14 +32,14 @@ def _make_design(associations=None, classes=None, class_attrs=None, class_method
 class TestValidateOODesign:
     def test_unknown_association_target_flagged(self):
         oo = _make_design(associations=[
-            AssociationSchema(from_class="TestClass", to_class="PhantomClass", kind="depends_on", description="bad")
+            Association(subject="TestClass", object="PhantomClass", predicate="depends_on", description="bad")
         ])
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
         assert any("PhantomClass" in e for e in errors)
 
     def test_known_intercomponent_class_not_flagged(self):
         oo = _make_design(associations=[
-            AssociationSchema(from_class="TestClass", to_class="ui::Display", kind="depends_on", description="ok")
+            Association(subject="TestClass", object="ui::Display", predicate="depends_on", description="ok")
         ])
         intercomp = [{"qualified_name": "ui::Display", "kind": "class", "description": "Display", "name": "Display", "methods": [], "attributes": []}]
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
@@ -47,7 +47,7 @@ class TestValidateOODesign:
 
     def test_missing_intercomponent_association_flagged(self):
         oo = _make_design(
-            classes=[ClassSchema(
+            classes=[ClassNode(
                 name="TestClass", module="test", description="test",
                 visibility="public", is_intercomponent=False,
                 requirement_ids=[],
@@ -68,14 +68,14 @@ class TestValidateOODesign:
 
     def test_dependency_lookup_target_not_flagged(self):
         oo = _make_design(associations=[
-            AssociationSchema(from_class="TestClass", to_class="Fl_Window", kind="depends_on", description="dep")
+            Association(subject="TestClass", object="Fl_Window", predicate="depends_on", description="dep")
         ])
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={"Fl_Window": "fltk::Fl_Window"}, intercomponent_classes=None)
         assert errors == []
 
     def test_prior_class_lookup_target_not_flagged(self):
         oo = _make_design(associations=[
-            AssociationSchema(from_class="TestClass", to_class="PriorClass", kind="depends_on", description="prior")
+            Association(subject="TestClass", object="PriorClass", predicate="depends_on", description="prior")
         ])
         errors = validate_oo_design(oo, prior_class_lookup={"PriorClass": "ns::PriorClass"}, dependency_lookup=None, intercomponent_classes=None)
         assert errors == []

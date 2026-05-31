@@ -34,8 +34,8 @@ def generate_class_skeleton(cls: dict) -> str:
     """Generate a Python class definition with method stubs."""
     name = cls["name"]
     bases = ", ".join(cls.get("inherits_from", []))
-    if cls.get("realizes_interfaces"):
-        extra = ", ".join(cls["realizes_interfaces"])
+    if cls.get("realizes"):
+        extra = ", ".join(cls["realizes"])
         bases = f"{bases}, {extra}" if bases else extra
 
     header = f"class {name}({bases}):" if bases else f"class {name}:"

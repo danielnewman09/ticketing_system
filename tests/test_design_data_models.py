@@ -46,7 +46,6 @@ class TestDiagramNode:
             type_signature="double(double, double)",
             argsstring="(double x, double y)",
             definition="double Calculator::calculate(double x, double y)",
-            source_type="member",
             source="",
             file_path="src/calculator.hpp",
             line_number=42,

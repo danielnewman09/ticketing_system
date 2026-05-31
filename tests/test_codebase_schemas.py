@@ -1,9 +1,9 @@
 """
 Tests for Pydantic schemas in backend.codebase.schemas.
 
-Covers: AttributeSchema, MethodSchema, ClassSchema, EnumSchema,
-InterfaceSchema, AssociationSchema, OODesignSchema, OntologyNodeSchema,
-OntologyTripleSchema, RequirementTripleLinkSchema, DesignSchema,
+Covers: AttributeNode, MethodNode, ClassNode, EnumNode,
+InterfaceNode, Association, ClassDiagram, CompoundNode,
+CodebaseEdge, RequirementTripleLinkSchema, DesignSchema,
 and the NodeKind / Visibility / SourceType literals.
 """
 
@@ -11,188 +11,190 @@ import pytest
 from pydantic import ValidationError
 
 from backend.codebase.schemas import (
-    AssociationSchema,
-    AttributeSchema,
-    ClassSchema,
     DesignSchema,
-    EnumSchema,
-    InterfaceSchema,
-    MethodSchema,
     NodeKind,
-    OODesignSchema,
-    OntologyNodeSchema,
-    OntologyTripleSchema,
     RequirementTripleLinkSchema,
     SourceType,
     Visibility,
 )
+from codegraph.designs import (
+    Association,
+    AttributeNode,
+    ClassDiagram,
+    ClassNode,
+    EnumNode,
+    InterfaceNode,
+    MethodNode,
+)
+from codegraph.nodes import CompoundNode
+from codegraph.edges import CodebaseEdge
 
 # ---------------------------------------------------------------------------
-# AttributeSchema
+# AttributeNode
 # ---------------------------------------------------------------------------
 
 
-class TestAttributeSchema:
+class TestAttributeNode:
     def test_minimal(self):
-        a = AttributeSchema(name="x", visibility="private")
+        a = AttributeNode(name="x", visibility="private")
         assert a.name == "x"
         assert a.type_name == ""
         assert a.visibility == "private"
         assert a.description == ""
 
     def test_all_fields(self):
-        a = AttributeSchema(
-            name="count", type_name="int", visibility="public", description="item count"
+        a = AttributeNode(
+            name="count", type_signature="int", visibility="public", description="item count"
         )
         assert a.type_name == "int"
         assert a.description == "item count"
 
     def test_invalid_visibility(self):
         with pytest.raises(ValidationError):
-            AttributeSchema(name="x", visibility="banana")
+            AttributeNode(name="x", visibility="banana")
 
     def test_missing_required_field(self):
         with pytest.raises(ValidationError):
-            AttributeSchema(visibility="private")  # missing name
+            AttributeNode(visibility="private")  # missing name
 
     def test_valid_visibilities(self):
         for v in ("public", "private", "protected"):
-            a = AttributeSchema(name="x", visibility=v)
+            a = AttributeNode(name="x", visibility=v)
             assert a.visibility == v
 
 
 # ---------------------------------------------------------------------------
-# MethodSchema
+# MethodNode
 # ---------------------------------------------------------------------------
 
 
-class TestMethodSchema:
+class TestMethodNode:
     def test_minimal(self):
-        m = MethodSchema(name="run", visibility="public")
+        m = MethodNode(name="run", visibility="public")
         assert m.name == "run"
-        assert m.parameters == []
-        assert m.return_type == ""
+        assert m.argsstring == ""
+        assert m.type_signature == ""
 
     def test_all_fields(self):
-        m = MethodSchema(
+        m = MethodNode(
             name="calc",
             visibility="private",
             description="do math",
-            parameters=["a", "b"],
-            return_type="int",
+            argsstring="(a, b)",
+            type_signature="int",
         )
-        assert m.parameters == ["a", "b"]
-        assert m.return_type == "int"
+        assert m.argsstring == "(a, b)"
+        assert m.type_signature == "int"
 
     def test_invalid_visibility(self):
         with pytest.raises(ValidationError):
-            MethodSchema(name="x", visibility="invisible")
+            MethodNode(name="x", visibility="invisible")
 
 
 # ---------------------------------------------------------------------------
-# ClassSchema
+# ClassNode
 # ---------------------------------------------------------------------------
 
 
-class TestClassSchema:
+class TestClassNode:
     def test_minimal(self):
-        c = ClassSchema(name="Widget")
+        c = ClassNode(name="Widget")
         assert c.module == ""
         assert c.specialization == ""
         assert c.is_intercomponent is False
         assert c.attributes == []
         assert c.methods == []
         assert c.inherits_from == []
-        assert c.realizes_interfaces == []
+        assert c.realizes == []
         assert c.requirement_ids == []
 
     def test_with_nested_schemas(self):
-        c = ClassSchema(
+        c = ClassNode(
             name="Engine",
             module="eng",
             specialization="class",
-            attributes=[AttributeSchema(name="rpm", type_name="int", visibility="private")],
-            methods=[MethodSchema(name="start", visibility="public")],
+            attributes=[AttributeNode(name="rpm", type_signature="int", visibility="private")],
+            methods=[MethodNode(name="start", visibility="public")],
             inherits_from=["Motor"],
-            realizes_interfaces=["Runnable"],
+            realizes=["Runnable"],
             requirement_ids=["hlr:1"],
         )
         assert len(c.attributes) == 1
         assert c.attributes[0].name == "rpm"
         assert len(c.methods) == 1
         assert "Motor" in c.inherits_from
-        assert "Runnable" in c.realizes_interfaces
+        assert "Runnable" in c.realizes
 
     def test_invalid_specialization(self):
         # specialization is str, not Literal — Pydantic will accept any string
-        c = ClassSchema(name="X", specialization="trait")
+        c = ClassNode(name="X", specialization="trait")
         assert c.specialization == "trait"
 
 
 # ---------------------------------------------------------------------------
-# EnumSchema
+# EnumNode
 # ---------------------------------------------------------------------------
 
 
-class TestEnumSchema:
+class TestEnumNode:
     def test_minimal(self):
-        e = EnumSchema(name="Color")
+        e = EnumNode(name="Color")
         assert e.values == []
         assert e.module == ""
 
     def test_with_values(self):
-        e = EnumSchema(name="Status", module="core", values=["OK", "FAIL"])
+        e = EnumNode(name="Status", module="core", values=["OK", "FAIL"])
         assert e.values == ["OK", "FAIL"]
 
 
 # ---------------------------------------------------------------------------
-# InterfaceSchema
+# InterfaceNode
 # ---------------------------------------------------------------------------
 
 
-class TestInterfaceSchema:
+class TestInterfaceNode:
     def test_minimal(self):
-        i = InterfaceSchema(name="Serializable")
+        i = InterfaceNode(name="Serializable")
         assert i.methods == []
         assert i.is_intercomponent is False
 
     def test_with_methods(self):
-        i = InterfaceSchema(
+        i = InterfaceNode(
             name="Runnable",
-            methods=[MethodSchema(name="run", visibility="public")],
+            methods=[MethodNode(name="run", visibility="public")],
         )
         assert len(i.methods) == 1
 
 
 # ---------------------------------------------------------------------------
-# AssociationSchema
+# Association
 # ---------------------------------------------------------------------------
 
 
-class TestAssociationSchema:
+class TestAssociation:
     def test_minimal(self):
-        a = AssociationSchema(from_class="A", to_class="B", kind="associates")
+        a = Association(subject="A", object="B", predicate="associates")
         assert a.description == ""
         assert a.requirement_ids == []
 
     def test_all_kinds(self):
         for kind in ("associates", "aggregates", "depends_on", "invokes"):
-            a = AssociationSchema(from_class="A", to_class="B", kind=kind)
+            a = Association(subject="A", object="B", predicate=kind)
             assert a.kind == kind
 
     def test_invalid_kind(self):
         with pytest.raises(ValidationError):
-            AssociationSchema(from_class="A", to_class="B", kind="invalid")
+            Association(subject="A", object="B", predicate="invalid")
 
 
 # ---------------------------------------------------------------------------
-# OODesignSchema
+# ClassDiagram
 # ---------------------------------------------------------------------------
 
 
-class TestOODesignSchema:
+class TestClassDiagram:
     def test_minimal(self):
-        d = OODesignSchema()
+        d = ClassDiagram()
         assert d.modules == []
         assert d.classes == []
         assert d.interfaces == []
@@ -200,55 +202,55 @@ class TestOODesignSchema:
         assert d.associations == []
 
     def test_with_classes(self):
-        d = OODesignSchema(
-            modules=["app"],
-            classes=[ClassSchema(name="Foo")],
-            enums=[EnumSchema(name="Bar")],
+        d = ClassDiagram(
+            module_names=["app"],
+            classes=[ClassNode(name="Foo")],
+            enums=[EnumNode(name="Bar")],
         )
         assert len(d.classes) == 1
-        assert d.modules == ["app"]
+        assert d.module_names == ["app"]
 
     def test_round_trip(self):
-        d = OODesignSchema(
-            modules=["m1"],
+        d = ClassDiagram(
+            module_names=["m1"],
             classes=[
-                ClassSchema(
+                ClassNode(
                     name="C",
-                    attributes=[AttributeSchema(name="x", visibility="public")],
-                    methods=[MethodSchema(name="get", visibility="public")],
+                    attributes=[AttributeNode(name="x", visibility="public")],
+                    methods=[MethodNode(name="get", visibility="public")],
                 )
             ],
         )
-        restored = OODesignSchema.model_validate(d.model_dump())
+        restored = ClassDiagram.model_validate(d.model_dump())
         assert restored.classes[0].name == "C"
         assert len(restored.classes[0].attributes) == 1
 
     def test_json_round_trip(self):
-        d = OODesignSchema(
-            classes=[ClassSchema(name="C")],
-            associations=[AssociationSchema(from_class="C", to_class="D", kind="depends_on")],
+        d = ClassDiagram(
+            classes=[ClassNode(name="C")],
+            associations=[Association(subject="C", object="D", predicate="depends_on")],
         )
         json_str = d.model_dump_json()
-        restored = OODesignSchema.model_validate_json(json_str)
+        restored = ClassDiagram.model_validate_json(json_str)
         assert restored.classes[0].name == "C"
         assert restored.associations[0].kind == "depends_on"
 
 
 # ---------------------------------------------------------------------------
-# OntologyNodeSchema
+# CompoundNode
 # ---------------------------------------------------------------------------
 
 
-class TestOntologyNodeSchema:
+class TestCompoundNode:
     def test_minimal(self):
-        n = OntologyNodeSchema(kind="class", name="Widget", qualified_name="ns::Widget")
+        n = CompoundNode(kind="class", name="Widget", qualified_name="ns::Widget")
         assert n.specialization == ""
         assert n.visibility == ""
         assert n.is_intercomponent is False
 
     def test_all_fields(self):
-        n = OntologyNodeSchema(
-            kind="method",
+        n = CompoundNode(
+            predicate="method",
             specialization="instance_method",
             visibility="public",
             name="doStuff",
@@ -256,7 +258,7 @@ class TestOntologyNodeSchema:
             description="does stuff",
             component_id=5,
             is_intercomponent=True,
-            source_type="defined_here",
+            layer="design",
             type_signature="void()",
             argsstring="(int x)",
             definition="void doStuff(int x)",
@@ -272,23 +274,23 @@ class TestOntologyNodeSchema:
 
     def test_invalid_kind(self):
         with pytest.raises(ValidationError):
-            OntologyNodeSchema(kind="foobar", name="X", qualified_name="X")
+            CompoundNode(kind="foobar", name="X", qualified_name="X")
 
     def test_valid_kinds(self):
         # NodeKind is derived from NODE_KINDS — test a representative sample
         for kind_name in ("class", "method", "variable", "enum", "interface"):
-            n = OntologyNodeSchema(kind=kind_name, name="X", qualified_name="X")
+            n = CompoundNode(kind=kind_name, name="X", qualified_name="X")
             assert n.kind == kind_name
 
 
 # ---------------------------------------------------------------------------
-# OntologyTripleSchema
+# CodebaseEdge
 # ---------------------------------------------------------------------------
 
 
-class TestOntologyTripleSchema:
+class TestCodebaseEdge:
     def test_minimal(self):
-        t = OntologyTripleSchema(
+        t = CodebaseEdge(
             subject_qualified_name="A::B",
             predicate="associates",
             object_qualified_name="C::D",
@@ -298,7 +300,7 @@ class TestOntologyTripleSchema:
 
     def test_missing_required_field(self):
         with pytest.raises(ValidationError):
-            OntologyTripleSchema(subject_qualified_name="A::B", predicate="associates")
+            CodebaseEdge(subject_qualified_name="A::B", predicate="associates")
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +339,7 @@ class TestRequirementTripleLinkSchema:
 class TestDesignSchema:
     def test_minimal(self):
         d = DesignSchema(
-            nodes=[OntologyNodeSchema(kind="class", name="A", qualified_name="A")],
+            nodes=[CompoundNode(kind="class", name="A", qualified_name="A")],
             triples=[],
         )
         assert len(d.nodes) == 1
@@ -346,11 +348,11 @@ class TestDesignSchema:
     def test_full_round_trip(self):
         d = DesignSchema(
             nodes=[
-                OntologyNodeSchema(kind="class", name="Widget", qualified_name="app::Widget"),
-                OntologyNodeSchema(kind="method", name="run", qualified_name="app::Widget::run"),
+                CompoundNode(kind="class", name="Widget", qualified_name="app::Widget"),
+                CompoundNode(kind="method", name="run", qualified_name="app::Widget::run"),
             ],
             triples=[
-                OntologyTripleSchema(
+                CodebaseEdge(
                     subject_qualified_name="app::Widget",
                     predicate="has_method",
                     object_qualified_name="app::Widget::run",
@@ -368,7 +370,7 @@ class TestDesignSchema:
 
     def test_json_round_trip(self):
         d = DesignSchema(
-            nodes=[OntologyNodeSchema(kind="class", name="A", qualified_name="A")],
+            nodes=[CompoundNode(kind="class", name="A", qualified_name="A")],
             triples=[],
         )
         json_str = d.model_dump_json()

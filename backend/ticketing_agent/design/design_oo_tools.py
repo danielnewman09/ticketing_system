@@ -9,7 +9,7 @@ Provides three tools:
 import json
 import logging
 
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design, extract_type_refs
 
 log = logging.getLogger("agents.design")
@@ -25,7 +25,7 @@ PRODUCE_OO_DESIGN_TOOL = {
         "Call this ONLY after you are confident the design is correct — use "
         "validate_design first to check for issues."
     ),
-    "input_schema": OODesignSchema.model_json_schema(),
+    "input_schema": ClassDiagram.model_json_schema(),
 }
 
 VALIDATE_DESIGN_TOOL = {
@@ -36,7 +36,7 @@ VALIDATE_DESIGN_TOOL = {
         "structural issues. Returns a list of errors and warnings. Use this "
         "to check your work before calling produce_oo_design."
     ),
-    "input_schema": OODesignSchema.model_json_schema(),
+    "input_schema": ClassDiagram.model_json_schema(),
 }
 
 CHECK_CLASS_NAME_TOOL = {
@@ -129,7 +129,7 @@ def make_design_dispatcher(
 
     def _dispatch_validate_design(tool_input: dict) -> str:
         try:
-            schema = OODesignSchema.model_validate(tool_input)
+            schema = ClassDiagram.model_validate(tool_input)
         except Exception as e:
             return json.dumps({
                 "valid": False,

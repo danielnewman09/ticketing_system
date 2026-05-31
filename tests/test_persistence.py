@@ -35,33 +35,31 @@ class TestPersistDesignNeo4j:
 
     def test_persist_design_creates_nodes(self, neo4j_session):
         from backend.codebase.schemas import (
-            AssociationSchema,
-            ClassSchema,
             DesignSchema,
-            OntologyNodeSchema,
-            OntologyTripleSchema,
+            CompoundNode,
+            CodebaseEdge,
         )
         from backend.requirements.services.persistence import persist_design
 
         design = DesignSchema(
             nodes=[
-                OntologyNodeSchema(
+                CompoundNode(
                     kind="class",
                     name="Calculator",
                     qualified_name="calc::Calculator",
-                    source_type="compound",
+                    layer="design",
                 ),
-                OntologyNodeSchema(
+                CompoundNode(
                     kind="class",
                     name="Fl_Button",
                     qualified_name="Fl_Button",
-                    source_type="dependency",
-                    is_intercomponent=True,
+                    layer="dependency",
+                    
                     description="External dependency: Fl_Button",
                 ),
             ],
             triples=[
-                OntologyTripleSchema(
+                CodebaseEdge(
                     subject_qualified_name="calc::Calculator",
                     predicate="depends_on",
                     object_qualified_name="Fl_Button",
@@ -92,35 +90,35 @@ class TestPersistDesignNeo4j:
     def test_persist_design_deduplication(self, neo4j_session):
         from backend.codebase.schemas import (
             DesignSchema,
-            OntologyNodeSchema,
-            OntologyTripleSchema,
+            CompoundNode,
+            CodebaseEdge,
         )
         from backend.requirements.services.persistence import persist_design
 
         design = DesignSchema(
             nodes=[
-                OntologyNodeSchema(
+                CompoundNode(
                     kind="class",
                     name="Calculator",
                     qualified_name="calc::Calculator",
-                    source_type="compound",
+                    layer="design",
                 ),
-                OntologyNodeSchema(
+                CompoundNode(
                     kind="class",
                     name="Fl_Button",
                     qualified_name="Fl_Button",
-                    source_type="dependency",
-                    is_intercomponent=True,
+                    layer="dependency",
+                    
                     description="External dependency: Fl_Button",
                 ),
             ],
             triples=[
-                OntologyTripleSchema(
+                CodebaseEdge(
                     subject_qualified_name="calc::Calculator",
                     predicate="depends_on",
                     object_qualified_name="Fl_Button",
                 ),
-                OntologyTripleSchema(
+                CodebaseEdge(
                     subject_qualified_name="calc::Calculator",
                     predicate="aggregates",
                     object_qualified_name="Fl_Button",
@@ -143,8 +141,8 @@ class TestPersistDesignNeo4j:
         """Verify that HLR links create TRACES_TO edges in Neo4j."""
         from backend.codebase.schemas import (
             DesignSchema,
-            OntologyNodeSchema,
-            RequirementLinkSchema,
+            CompoundNode,
+            RequirementTripleLinkSchema,
         )
         from backend.requirements.services.persistence import persist_design
         from backend.db.neo4j.repositories.requirement import RequirementRepository
@@ -155,7 +153,7 @@ class TestPersistDesignNeo4j:
 
         design = DesignSchema(
             nodes=[
-                OntologyNodeSchema(
+                CompoundNode(
                     kind="class",
                     name="Calculator",
                     qualified_name="calc::Calculator",
@@ -163,7 +161,7 @@ class TestPersistDesignNeo4j:
             ],
             triples=[],
             requirement_links=[
-                RequirementLinkSchema(
+                RequirementTripleLinkSchema(
                     requirement_type="hlr",
                     requirement_id=hlr.id,
                     triple_index=-1,  # No triple to link, just node link

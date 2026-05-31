@@ -12,7 +12,7 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-from backend.codebase.schemas import OODesignSchema, AssociationSchema, ClassSchema
+from codegraph.designs import ClassDiagram, Association, ClassNode
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
 from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,
@@ -128,11 +128,11 @@ class TestMechanismResolution:
     """Test that mechanism resolution prefers dep_lookup over stubs."""
 
     def _make_simple_design(self, associations):
-        """Helper to create a minimal OODesignSchema."""
-        return OODesignSchema(
-            modules=["test"],
+        """Helper to create a minimal ClassDiagram."""
+        return ClassDiagram(
+            module_names=["test"],
             classes=[
-                ClassSchema(name="MyClass", module="test", visibility="public"),
+                ClassNode(name="MyClass", module="test", visibility="public"),
             ],
             associations=associations,
         )
@@ -142,9 +142,9 @@ class TestMechanismResolution:
         from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
         oo = self._make_simple_design([
-            AssociationSchema(
-                from_class="MyClass",
-                to_class="Widget",
+            Association(
+                subject="MyClass",
+                object="Widget",
                 kind="aggregates",
                 mechanism="std::vector",
             ),
@@ -161,7 +161,7 @@ class TestMechanismResolution:
 
         # Should NOT have a stub node for std::vector (it should resolve to real one)
         stub_nodes = [n for n in result.nodes if n.qualified_name == "std::vector" and n.source_type == "dependency" and "Standard library" in n.description]
-        # When resolved via dep_lookup, the _add_node in _resolve_ref creates the node with source_type="dependency"
+        # When resolved via dep_lookup, the _add_node in _resolve_ref creates the node with layer="dependency"
         # but it's a real node from the lookup, not a stub
         assert len([n for n in result.nodes if n.qualified_name == "std::vector"]) >= 1
 
@@ -170,9 +170,9 @@ class TestMechanismResolution:
         from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
         oo = self._make_simple_design([
-            AssociationSchema(
-                from_class="MyClass",
-                to_class="Widget",
+            Association(
+                subject="MyClass",
+                object="Widget",
                 kind="aggregates",
                 mechanism="std::vector",
             ),
@@ -192,9 +192,9 @@ class TestMechanismResolution:
         from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
         oo = self._make_simple_design([
-            AssociationSchema(
-                from_class="MyClass",
-                to_class="Widget",
+            Association(
+                subject="MyClass",
+                object="Widget",
                 kind="references",
                 mechanism="raw_pointer",
             ),
@@ -284,16 +284,16 @@ class TestAggregatesValidation:
 
     def test_aggregates_without_mechanism_is_error(self):
         """Aggregates without mechanism should produce an error."""
-        oo = OODesignSchema(
-            modules=["test"],
+        oo = ClassDiagram(
+            module_names=["test"],
             classes=[
-                ClassSchema(name="MyClass", module="test", visibility="public"),
-                ClassSchema(name="Widget", module="test", visibility="public"),
+                ClassNode(name="MyClass", module="test", visibility="public"),
+                ClassNode(name="Widget", module="test", visibility="public"),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="MyClass",
-                    to_class="Widget",
+                Association(
+                    subject="MyClass",
+                    object="Widget",
                     kind="aggregates",
                     mechanism="",
                 ),
@@ -313,16 +313,16 @@ class TestAggregatesValidation:
 
     def test_aggregates_with_known_mechanism_passes(self):
         """Aggregates with a known mechanism should pass validation."""
-        oo = OODesignSchema(
-            modules=["test"],
+        oo = ClassDiagram(
+            module_names=["test"],
             classes=[
-                ClassSchema(name="MyClass", module="test", visibility="public"),
-                ClassSchema(name="Widget", module="test", visibility="public"),
+                ClassNode(name="MyClass", module="test", visibility="public"),
+                ClassNode(name="Widget", module="test", visibility="public"),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="MyClass",
-                    to_class="Widget",
+                Association(
+                    subject="MyClass",
+                    object="Widget",
                     kind="aggregates",
                     mechanism="std::vector",
                 ),
@@ -342,16 +342,16 @@ class TestAggregatesValidation:
 
     def test_aggregates_with_unknown_mechanism_is_error(self):
         """Aggregates with an unknown mechanism should produce an error."""
-        oo = OODesignSchema(
-            modules=["test"],
+        oo = ClassDiagram(
+            module_names=["test"],
             classes=[
-                ClassSchema(name="MyClass", module="test", visibility="public"),
-                ClassSchema(name="Widget", module="test", visibility="public"),
+                ClassNode(name="MyClass", module="test", visibility="public"),
+                ClassNode(name="Widget", module="test", visibility="public"),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="MyClass",
-                    to_class="Widget",
+                Association(
+                    subject="MyClass",
+                    object="Widget",
                     kind="aggregates",
                     mechanism="std::hypothetical_container",
                 ),
@@ -371,16 +371,16 @@ class TestAggregatesValidation:
 
     def test_references_without_mechanism_is_not_error(self):
         """References without mechanism should NOT produce an error (out of scope)."""
-        oo = OODesignSchema(
-            modules=["test"],
+        oo = ClassDiagram(
+            module_names=["test"],
             classes=[
-                ClassSchema(name="MyClass", module="test", visibility="public"),
-                ClassSchema(name="Engine", module="test", visibility="public"),
+                ClassNode(name="MyClass", module="test", visibility="public"),
+                ClassNode(name="Engine", module="test", visibility="public"),
             ],
             associations=[
-                AssociationSchema(
-                    from_class="MyClass",
-                    to_class="Engine",
+                Association(
+                    subject="MyClass",
+                    object="Engine",
                     kind="references",
                     mechanism="",
                 ),

@@ -2,7 +2,7 @@
 
 import re
 
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 
 
 def extract_type_refs(type_string: str, known_names: set[str], out: set[str]) -> None:
@@ -18,7 +18,7 @@ def extract_type_refs(type_string: str, known_names: set[str], out: set[str]) ->
 
 
 def validate_oo_design(
-    oo: OODesignSchema,
+    oo: ClassDiagram,
     prior_class_lookup: dict[str, str],
     dependency_lookup: dict[str, str] | None,
     intercomponent_classes: list[dict] | None,
@@ -47,7 +47,7 @@ def validate_oo_design(
 
     # Check 1: Unknown association targets
     for assoc in oo.associations:
-        for ref in [assoc.from_class, assoc.to_class]:
+        for ref in [assoc.subject, assoc.object]:
             if ref in all_design_names:
                 continue
             if ref in prior_class_lookup.values():
@@ -60,23 +60,23 @@ def validate_oo_design(
                 continue
             errors.append(
                 f'Unknown class reference: "{ref}" in association '
-                f'({assoc.from_class} -[{assoc.kind}]-> {assoc.to_class}). '
+                f'({assoc.subject} -[{assoc.predicate}]-> {assoc.object}). '
                 f'"{ref}" is not defined in this design or the provided context.'
             )
 
     # Check 2: aggregates must have a mechanism; references recommended
     for assoc in oo.associations:
-        if assoc.kind == "aggregates" and not assoc.mechanism:
+        if assoc.predicate == "aggregates" and not assoc.mechanism:
             errors.append(
-                f"Association {assoc.from_class} -[aggregates]-> {assoc.to_class} "
+                f"Association {assoc.subject} -[aggregates]-> {assoc.object} "
                 f"has no mechanism. Use find_mechanism to discover the container "
                 f"type (e.g., std::vector, std::map) and specify it in the mechanism field."
             )
-        if assoc.kind == "aggregates" and assoc.mechanism:
+        if assoc.predicate == "aggregates" and assoc.mechanism:
             mechanism = assoc.mechanism
             if mechanism not in all_design_names and mechanism not in prior_class_lookup and mechanism not in dep_lookup:
                 errors.append(
-                    f"Association {assoc.from_class} -[aggregates]-> {assoc.to_class} "
+                    f"Association {assoc.subject} -[aggregates]-> {assoc.object} "
                     f"has mechanism '{mechanism}' which is not a known class or dependency. "
                     f"Use find_mechanism to search for the correct container name."
                 )
@@ -88,17 +88,17 @@ def validate_oo_design(
             for attr in cls.attributes:
                 for ic in intercomponent_classes:
                     ic_bare = ic["qualified_name"].rsplit("::", 1)[-1]
-                    if attr.type_name and (ic_bare in attr.type_name or ic["qualified_name"] in attr.type_name):
+                    if attr.type_signature and (ic_bare in attr.type_signature or ic["qualified_name"] in attr.type_signature):
                         referenced_intercomp.add(ic["qualified_name"])
             for method in cls.methods:
-                if method.return_type:
+                if method.type_signature:
                     for ic in intercomponent_classes:
                         ic_bare = ic["qualified_name"].rsplit("::", 1)[-1]
-                        if ic_bare in method.return_type or ic["qualified_name"] in method.return_type:
+                        if ic_bare in method.type_signature or ic["qualified_name"] in method.type_signature:
                             referenced_intercomp.add(ic["qualified_name"])
 
             if referenced_intercomp:
-                assoc_targets = {assoc.to_class for assoc in oo.associations} | {assoc.from_class for assoc in oo.associations}
+                assoc_targets = {assoc.object for assoc in oo.associations} | {assoc.subject for assoc in oo.associations}
                 for ic_qname in referenced_intercomp:
                     if ic_qname not in assoc_targets:
                         ic_bare = ic_qname.rsplit("::", 1)[-1]
@@ -113,39 +113,45 @@ def validate_oo_design(
     outbound: dict[str, set[str]] = {name: set() for name in all_design_names}
 
     for assoc in oo.associations:
-        if assoc.from_class in all_design_names:
-            if assoc.to_class in all_design_names:
-                inbound[assoc.to_class].add(assoc.from_class)
-            outbound[assoc.from_class].add(assoc.to_class)
-        elif assoc.to_class in all_design_names:
-            inbound[assoc.to_class].add(assoc.from_class)
+        if assoc.subject in all_design_names:
+            if assoc.object in all_design_names:
+                inbound[assoc.object].add(assoc.subject)
+            outbound[assoc.subject].add(assoc.object)
+        elif assoc.object in all_design_names:
+            inbound[assoc.object].add(assoc.subject)
 
     for cls in oo.classes:
         for attr in cls.attributes:
-            if attr.type_name:
-                extract_type_refs(attr.type_name, all_design_names, outbound[cls.name])
+            if attr.type_signature:
+                extract_type_refs(attr.type_signature, all_design_names, outbound[cls.name])
         for method in cls.methods:
-            if method.return_type:
-                extract_type_refs(method.return_type, all_design_names, outbound[cls.name])
-            for param in (method.parameters or []):
-                if isinstance(param, str):
-                    extract_type_refs(param, all_design_names, outbound[cls.name])
+            if method.type_signature:
+                extract_type_refs(method.type_signature, all_design_names, outbound[cls.name])
+            if method.argsstring:
+                inner = method.argsstring.strip("()")
+                for param_text in inner.split(","):
+                    param_text = param_text.strip()
+                    if param_text:
+                        extract_type_refs(param_text, all_design_names, outbound[cls.name])
         for parent in (cls.inherits_from or []):
             if parent in all_design_names:
                 outbound[cls.name].add(parent)
                 inbound[parent].add(cls.name)
-        for iface in (cls.realizes_interfaces or []):
+        for iface in (cls.realizes or []):
             if iface in all_design_names:
                 outbound[cls.name].add(iface)
                 inbound[iface].add(cls.name)
 
     for iface in oo.interfaces:
         for method in iface.methods:
-            if method.return_type:
-                extract_type_refs(method.return_type, all_design_names, outbound[iface.name])
-            for param in (method.parameters or []):
-                if isinstance(param, str):
-                    extract_type_refs(param, all_design_names, outbound[iface.name])
+            if method.type_signature:
+                extract_type_refs(method.type_signature, all_design_names, outbound[iface.name])
+            if method.argsstring:
+                inner = method.argsstring.strip("()")
+                for param_text in inner.split(","):
+                    param_text = param_text.strip()
+                    if param_text:
+                        extract_type_refs(param_text, all_design_names, outbound[iface.name])
 
     for entity_name, refs in outbound.items():
         for ref_name in refs:
@@ -174,7 +180,7 @@ def validate_oo_design(
 
     return errors
 
-def check_enum_collisions(design: OODesignSchema, prior_class_lookup: dict[str, str]) -> list[str]:
+def check_enum_collisions(design: ClassDiagram, prior_class_lookup: dict[str, str]) -> list[str]:
     """Warn if enum names collide with prior designs.
 
     Returns a list of warning strings. Empty list means no collisions.

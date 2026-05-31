@@ -4,7 +4,7 @@ Creates a ToolDispatcher with all design, verification, and discovery
 tools registered. Maintains in-memory draft state between tool calls.
 """
 
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 from backend.requirements.schemas import VerificationSchema
 from backend.ticketing_agent.tools import ToolDispatcher
 
@@ -82,7 +82,7 @@ class CombinedDispatcher(ToolDispatcher):
         self.toolset = toolset
 
         # --- Mutable draft state ---
-        self.draft_design: OODesignSchema | None = None
+        self.draft_design: ClassDiagram | None = None
         self.draft_lookup: dict[str, dict] = {}
         self.draft_verifications: dict[int, list[VerificationSchema]] = {}
 

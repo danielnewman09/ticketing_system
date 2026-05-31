@@ -17,7 +17,7 @@ import logging
 import os
 
 from llm_caller import call_tool_loop
-from backend.codebase.schemas import OODesignSchema
+from codegraph.designs import ClassDiagram
 from backend.requirements.formatting import format_hlrs_for_prompt
 
 from backend.ticketing_agent.design.design_oo_prompt import (
@@ -62,7 +62,7 @@ def design_oo(
     prompt_log_file: str = "",
     discovery_failed: bool = False,
     neo4j_session=None,
-) -> OODesignSchema:
+) -> ClassDiagram:
     """
     Stage 1: derive an OO class design from a single HLR and its LLRs.
 
@@ -178,7 +178,7 @@ def design_oo(
     )
 
     # Parse the final result
-    schema = OODesignSchema.model_validate(result)
+    schema = ClassDiagram.model_validate(result)
 
     # Post-loop sanity check: validate and log any remaining issues
     errors = validate_oo_design(

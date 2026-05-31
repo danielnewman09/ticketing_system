@@ -312,7 +312,7 @@ def generate_class_skeleton(cls: dict, namespace: str = "") -> tuple[str, str]:
     """
     name = cls["name"]
     bases = cls.get("inherits_from", [])
-    interfaces = cls.get("realizes_interfaces", [])
+    interfaces = cls.get("realizes", [])
     attrs = cls.get("attributes", [])
     methods = cls.get("methods", [])
     desc = cls.get("description", "")
@@ -461,7 +461,7 @@ def generate_module_skeleton(
     # Check for std::string, std::vector etc. in class bases too
     all_builtins = set()
     for cls in classes:
-        for base in cls.get("inherits_from", []) + cls.get("realizes_interfaces", []):
+        for base in cls.get("inherits_from", []) + cls.get("realizes", []):
             inc = _includes_for_type(base)
             if inc:
                 includes.add(inc)
@@ -469,7 +469,7 @@ def generate_module_skeleton(
     # Forward declarations for cross-references within the same design
     forward_decls = set()
     for cls in classes:
-        for base in cls.get("inherits_from", []) + cls.get("realizes_interfaces", []):
+        for base in cls.get("inherits_from", []) + cls.get("realizes", []):
             # Only forward-declare if it's not a standard type
             cpp_base = _cpp_type(base)
             if cpp_base not in _CPP_TYPE_MAP.values() and "::" not in cpp_base:
@@ -658,7 +658,7 @@ def gather_includes_from_design(oo_design: dict) -> set[str]:
                     inc = _includes_for_type(param.get("type_name", ""))
                     if inc:
                         includes.add(inc)
-        for base in cls.get("inherits_from", []) + cls.get("realizes_interfaces", []):
+        for base in cls.get("inherits_from", []) + cls.get("realizes", []):
             inc = _includes_for_type(base)
             if inc:
                 includes.add(inc)
