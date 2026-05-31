@@ -1,6 +1,6 @@
 """Neo4j data access — connection, repositories, and raw queries."""
 
-from backend.db.neo4j.connection import (
+from codegraph.neo4j import (
     NEO4J_PASSWORD,
     NEO4J_URI,
     NEO4J_USER,
@@ -22,6 +22,7 @@ from backend.db.neo4j.repositories import DesignRepository, RequirementRepositor
 from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
 from backend.db.neo4j.models.edges import CodebaseEdge
 from backend.db.neo4j.repositories.models import HLRNode, LLRNode, VerificationMethodNode, ConditionNode, ActionNode
+from backend.db.neo4j.constraints import ensure_ticketing_constraints
 
 __all__ = [
     "Neo4jConnection",
@@ -52,4 +53,6 @@ __all__ = [
     "fetch_hlr_subgraph",
     "fetch_neighbourhood_graph",
     "fetch_node_detail",
+    # Constraints
+    "ensure_ticketing_constraints",
 ]
