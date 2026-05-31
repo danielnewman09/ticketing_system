@@ -1,5 +1,4 @@
 import pytest
-pytest.skip("Source code needs atomized type updates — uses old field names", allow_module_level=True)
 """Integration test for the combined design+verify loop."""
 
 import json

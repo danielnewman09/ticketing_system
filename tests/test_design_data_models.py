@@ -16,7 +16,6 @@ from backend.design_data.models import (
 )
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestDiagramNode:
     def test_minimal_creation(self):
         node = DiagramNode(
@@ -75,7 +74,6 @@ class TestDiagramNode:
         assert node.source == "fltk"
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestAttributeNode:
     def test_creation(self):
         attr = AttributeNode(
@@ -91,7 +89,6 @@ class TestAttributeNode:
         assert attr.type_signature == "double"
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestMethodNode:
     def test_creation(self):
         method = MethodNode(
@@ -108,7 +105,6 @@ class TestMethodNode:
         assert method.argsstring == "(double x, double y)"
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestEnumValueNode:
     def test_creation(self):
         val = EnumValueNode(
@@ -121,7 +117,6 @@ class TestEnumValueNode:
         assert val.owner == "calc::Operation"
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestClassNode:
     def test_minimal(self):
         cls = ClassNode(
@@ -187,7 +182,6 @@ class TestClassNode:
         assert cls.line_number == 10
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestInterfaceNode:
     def test_creation(self):
         iface = InterfaceNode(
@@ -212,7 +206,6 @@ class TestInterfaceNode:
         assert len(iface.methods) == 1
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestEnumNode:
     def test_creation(self):
         enum = EnumNode(
@@ -234,7 +227,6 @@ class TestEnumNode:
         assert len(enum.values) == 1
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestModuleNode:
     def test_creation(self):
         mod = ModuleNode(
@@ -245,7 +237,6 @@ class TestModuleNode:
         )
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestAssociation:
     def test_minimal(self):
         assoc = Association(
@@ -268,7 +259,6 @@ class TestAssociation:
         assert assoc.mechanism == "std::unique_ptr"
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestClassDiagram:
     def test_minimal(self):
         diagram = ClassDiagram()
@@ -384,7 +374,6 @@ class TestClassDiagram:
         assert all(c.module == "calc" for c in calc_classes)
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestClassDiagramToVerificationDicts:
     def test_class_context_dicts(self):
         diagram = ClassDiagram(
@@ -469,7 +458,6 @@ class TestClassDiagramToVerificationDicts:
         assert iface_dict["attributes"] == []
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestClassDiagramToDraftLookup:
     def test_lookup_with_classes_and_members(self):
         diagram = ClassDiagram(
@@ -531,7 +519,6 @@ class TestClassDiagramToDraftLookup:
         assert lookup["calc::Operation"]["kind"] == "enum"
 
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestClassDiagramToSummary:
     """Tests for ClassDiagram.to_summary()."""
 
@@ -632,7 +619,6 @@ class TestClassDiagramToSummary:
         assert summary["attributes"] == 0
         assert summary["methods"] == 0
 
-@pytest.mark.skip(reason="backend.design_data.models shim deleted — tests need updating for codegraph atomized types")
 class TestClassDiagramToClassLookup:
     """Tests for ClassDiagram.to_class_lookup()."""
 

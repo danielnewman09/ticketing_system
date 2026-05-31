@@ -14,7 +14,6 @@ from codegraph.models import (
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestDependencyLookupInAssociations:
     """When an association targets a dependency class, the triple should
     use the dependency's qualified name from the lookup."""
@@ -44,8 +43,8 @@ class TestDependencyLookupInAssociations:
         )
         # There should be a triple: calc::Calculator -[aggregates]-> Fl_Window
         dep_agg = [
-            t for t in result.triples
-            if t.predicate == "aggregates" and t.object_qualified_name == "Fl_Window"
+            t for t in result.associations
+            if t['predicate'] == "aggregates" and t['object'] == "Fl_Window"
         ]
         assert len(dep_agg) == 1
         # There should also be a dependency stub node for Fl_Window
@@ -77,8 +76,8 @@ class TestDependencyLookupInAssociations:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples
-            if t.object_qualified_name == "std::string"
+            t for t in result.associations
+            if t['object'] == "std::string"
         ]
         assert len(dep_triples) >= 1
         dep_node = [n for n in result.nodes if n.qualified_name == "std::string"]
@@ -86,7 +85,6 @@ class TestDependencyLookupInAssociations:
         assert dep_node[0].layer == "dependency"
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestDependencyLookupInInheritance:
     """When a class inherits from a dependency class, the generalizes
     triple should use the dependency's qualified name."""
@@ -109,8 +107,8 @@ class TestDependencyLookupInInheritance:
             oo, dependency_lookup=dep_lookup
         )
         gen_triples = [
-            t for t in result.triples
-            if t.predicate == "generalizes" and t.object_qualified_name == "Fl_Window"
+            t for t in result.associations
+            if t['predicate'] == "generalizes" and t['object'] == "Fl_Window"
         ]
         assert len(gen_triples) == 1
         dep_node = [n for n in result.nodes if n.qualified_name == "Fl_Window"]
@@ -118,7 +116,6 @@ class TestDependencyLookupInInheritance:
         assert dep_node[0].layer == "dependency"
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestDependsOnFromTypeSignatures:
     """When an attribute or method return type references a dependency class,
     a depends_on triple should be synthesized from the design class."""
@@ -146,10 +143,10 @@ class TestDependsOnFromTypeSignatures:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::Calculator"
-            and t.object_qualified_name == "Fl_Output"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::Calculator"
+            and t['object'] == "Fl_Output"
         ]
         assert len(dep_triples) == 1
         dep_node = [n for n in result.nodes if n.qualified_name == "Fl_Output"]
@@ -180,9 +177,9 @@ class TestDependsOnFromTypeSignatures:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "Fl_Output"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "Fl_Output"
         ]
         assert len(dep_triples) == 1
 
@@ -216,12 +213,11 @@ class TestDependsOnFromTypeSignatures:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples if t.predicate == "depends_on"
+            t for t in result.associations if t['predicate'] == "depends_on"
         ]
         assert len(dep_triples) == 0
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestAggregatesInfersDependsOn:
     """When a design class aggregates an external dependency class,
     a depends_on triple should be inferred even if the design agent
@@ -253,22 +249,22 @@ class TestAggregatesInfersDependsOn:
         )
 
         agg_triples = [
-            t for t in result.triples
-            if t.predicate == "aggregates"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "aggregates"
+            and t['subject'] == "ui::CalculatorWindow"
+            and t['object'] == "Fl_Button"
         ]
         assert len(agg_triples) == 1
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::CalculatorWindow"
+            and t['object'] == "Fl_Button"
         ]
         assert len(dep_triples) == 1, (
             f"Expected 1 inferred depends_on triple, got {dep_triples}. "
-            f"All triples: {[(t.predicate, t.subject_qualified_name, t.object_qualified_name) for t in result.triples]}"
+            f"All triples: {[(t['predicate'], t['subject'], t['object']) for t in result.associations]}"
         )
 
     def test_aggregates_dependency_no_duplicate_depends_on(self):
@@ -302,10 +298,10 @@ class TestAggregatesInfersDependsOn:
         )
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::CalculatorWindow"
+            and t['object'] == "Fl_Button"
         ]
         assert len(dep_triples) == 1, (
             f"Expected exactly 1 depends_on triple (no duplicates), got {len(dep_triples)}"
@@ -343,8 +339,8 @@ class TestAggregatesInfersDependsOn:
         )
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
         ]
         assert len(dep_triples) == 0, (
             f"No depends_on should be inferred for design-internal aggregates, "
@@ -382,16 +378,15 @@ class TestAggregatesInfersDependsOn:
         )
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::CalculatorWindow"
         ]
-        dep_targets = {t.object_qualified_name for t in dep_triples}
+        dep_targets = {t['object'] for t in dep_triples}
         assert "Fl_Button" in dep_targets
         assert "Fl_Box" in dep_targets
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestNoDependencyLookup:
     """Without a dependency_lookup, behavior should be unchanged."""
 
@@ -412,15 +407,14 @@ class TestNoDependencyLookup:
         result = map_oo_to_ontology(oo)
         # Triple uses bare name (no resolution)
         assoc_triples = [
-            t for t in result.triples
-            if t.predicate == "associates" and t.object_qualified_name == "RandomThing"
+            t for t in result.associations
+            if t['predicate'] == "associates" and t['object'] == "RandomThing"
         ]
         assert len(assoc_triples) == 1
         # No dependency stub node
         random_nodes = [n for n in result.nodes if n.qualified_name == "RandomThing"]
         assert len(random_nodes) == 0
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestAssociationKinds:
     """Association.predicate should accept composes and returns."""
 
@@ -441,7 +435,6 @@ class TestAssociationKinds:
         assert assoc.predicate == "returns"
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestEnumInClassLookup:
     """Enums should be added to class_lookup so attribute type
     references to enums can be resolved."""
@@ -479,15 +472,15 @@ class TestEnumInClassLookup:
 
         # Class-level references edge: CalculationResult → ErrorType
         references_triples = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "calc_engine::CalculationResult"
-            and t.object_qualified_name == "calc_engine::ErrorType"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "calc_engine::CalculationResult"
+            and t['object'] == "calc_engine::ErrorType"
         ]
         assert len(references_triples) == 1, (
             f"Expected 1 class-level references edge from CalculationResult to ErrorType, "
             f"got {references_triples}. "
-            f"All triples: {[(t.predicate, t.subject_qualified_name, t.object_qualified_name) for t in result.triples]}"
+            f"All triples: {[(t['predicate'], t['subject'], t['object']) for t in result.associations]}"
         )
 
     def test_class_references_class_from_attribute_type(self):
@@ -519,10 +512,10 @@ class TestEnumInClassLookup:
         result = map_oo_to_ontology(oo)
 
         references_triples = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "core::Controller"
-            and t.object_qualified_name == "core::Engine"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "core::Controller"
+            and t['object'] == "core::Engine"
         ]
         assert len(references_triples) == 1
 
@@ -558,10 +551,10 @@ class TestEnumInClassLookup:
         result = map_oo_to_ontology(oo)
 
         references_triples = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "app::Processor"
-            and t.object_qualified_name == "app::IHandler"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "app::Processor"
+            and t['object'] == "app::IHandler"
         ]
         assert len(references_triples) == 1
 
@@ -587,20 +580,19 @@ class TestEnumInClassLookup:
         result = map_oo_to_ontology(oo)
 
         composes_triples = [
-            t for t in result.triples
-            if t.predicate == "composes"
-            and t.subject_qualified_name == "core::Config"
+            t for t in result.associations
+            if t['predicate'] == "composes"
+            and t['subject'] == "core::Config"
         ]
         # Only the attribute containment composes (Config → Config::enabled)
         # No class-level composes to a primitive
         entity_composes = [
             t for t in composes_triples
-            if "::" not in t.object_qualified_name.replace("core::", "")
+            if "::" not in t['object'].replace("core::", "")
         ]
         assert len(entity_composes) == 0
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestReturnsEdge:
     """Methods returning design-internal types should get a returns edge."""
 
@@ -633,10 +625,10 @@ class TestReturnsEdge:
         result = map_oo_to_ontology(oo)
 
         returns_triples = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Calculator::compute"
-            and t.object_qualified_name == "calc::CalcResult"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Calculator::compute"
+            and t['object'] == "calc::CalcResult"
         ]
         assert len(returns_triples) == 1
 
@@ -670,10 +662,10 @@ class TestReturnsEdge:
         result = map_oo_to_ontology(oo)
 
         returns_triples = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Processor::check"
-            and t.object_qualified_name == "calc::Status"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Processor::check"
+            and t['object'] == "calc::Status"
         ]
         assert len(returns_triples) == 1
 
@@ -700,14 +692,13 @@ class TestReturnsEdge:
         result = map_oo_to_ontology(oo)
 
         returns_triples = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Calculator::count"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Calculator::count"
         ]
         assert len(returns_triples) == 0
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestReferencesFromAttributeTypes:
     """Design-internal type references in attribute types should produce
     references edges (from the attribute processing), NOT composes edges
@@ -744,19 +735,19 @@ class TestReferencesFromAttributeTypes:
 
         # Should have class-level references
         references = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "calc::Result"
-            and t.object_qualified_name == "calc::ErrorType"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "calc::Result"
+            and t['object'] == "calc::ErrorType"
         ]
         assert len(references) == 1
 
         # Should NOT have composes from class to enum
         composes = [
-            t for t in result.triples
-            if t.predicate == "composes"
-            and t.subject_qualified_name == "calc::Result"
-            and t.object_qualified_name == "calc::ErrorType"
+            t for t in result.associations
+            if t['predicate'] == "composes"
+            and t['subject'] == "calc::Result"
+            and t['object'] == "calc::ErrorType"
         ]
         assert len(composes) == 0, (
             f"Expected no composes edge, got {composes}"
@@ -792,19 +783,19 @@ class TestReferencesFromAttributeTypes:
 
         # Should have returns edge from method
         returns_edges = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Engine::run"
-            and t.object_qualified_name == "calc::Result"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Engine::run"
+            and t['object'] == "calc::Result"
         ]
         assert len(returns_edges) == 1
 
         # Should NOT have references from class to class
         references = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "calc::Engine"
-            and t.object_qualified_name == "calc::Result"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "calc::Engine"
+            and t['object'] == "calc::Result"
         ]
         assert len(references) == 0
 
@@ -832,15 +823,14 @@ class TestReferencesFromAttributeTypes:
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::Window"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::Window"
+            and t['object'] == "Fl_Button"
         ]
         assert len(dep_triples) == 1
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestStdlibTypeLinking:
     """Test that design methods link to stdlib dependency nodes via
     has_argument/returns/TYPE_ARGUMENT edges."""
@@ -875,19 +865,19 @@ class TestStdlibTypeLinking:
 
         # Should have has_argument edges from add to std::basic_string
         has_arg = [
-            t for t in result.triples
-            if t.predicate == "has_argument"
-            and t.object_qualified_name == "std::basic_string"
+            t for t in result.associations
+            if t['predicate'] == "has_argument"
+            and t['object'] == "std::basic_string"
         ]
         assert len(has_arg) >= 1, (
             f"Expected has_argument edge to std::basic_string, "
-            f"got: {[t.object_qualified_name for t in result.triples if t.predicate == 'has_argument']}"
+            f"got: {[t['object'] for t in result.associations if t['predicate'] == 'has_argument']}"
         )
 
         # The edge should carry display_name "std::string"
         string_edges = [
-            t for t in result.triples
-            if t.object_qualified_name == "std::basic_string"
+            t for t in result.associations
+            if t['object'] == "std::basic_string"
             and t.display_name == "std::string"
         ]
         assert len(string_edges) >= 1, (
@@ -928,25 +918,25 @@ class TestStdlibTypeLinking:
 
         # Should have a returns edge from parse to std::vector
         ret_edges = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Parser::parse"
-            and t.object_qualified_name == "std::vector"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Parser::parse"
+            and t['object'] == "std::vector"
         ]
         assert len(ret_edges) == 1, (
             f"Expected returns edge to std::vector. "
-            f"All returns: {[(t.subject_qualified_name, t.object_qualified_name) for t in result.triples if t.predicate == 'returns']}"
+            f"All returns: {[(t['subject'], t['object']) for t in result.associations if t['predicate'] == 'returns']}"
         )
 
         # Should have TYPE_ARGUMENT edge from std::vector to std::basic_string
         type_arg_edges = [
-            t for t in result.triples
-            if t.predicate == "type_argument"
-            and t.object_qualified_name == "std::basic_string"
+            t for t in result.associations
+            if t['predicate'] == "type_argument"
+            and t['object'] == "std::basic_string"
         ]
         assert len(type_arg_edges) >= 1, (
             f"Expected TYPE_ARGUMENT edge to std::basic_string. "
-            f"All type_argument: {[(t.subject_qualified_name, t.object_qualified_name) for t in result.triples if t.predicate == 'type_argument']}"
+            f"All type_argument: {[(t['subject'], t['object']) for t in result.associations if t['predicate'] == 'type_argument']}"
         )
 
         # The TYPE_ARGUMENT edge should have position=0
@@ -955,7 +945,6 @@ class TestStdlibTypeLinking:
                 assert edge.position == 0
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types — uses is_intercomponent, specialization, description etc on ClassNode")
 class TestExistingBehaviorPreserved:
     """Ensure that existing dependency resolution still works after the refactoring."""
 
@@ -987,9 +976,9 @@ class TestExistingBehaviorPreserved:
         )
         result = map_oo_to_ontology(oo)
         has_arg = [
-            t for t in result.triples
-            if t.predicate == "has_argument"
-            and t.object_qualified_name == "calc::CalculationResult"
+            t for t in result.associations
+            if t['predicate'] == "has_argument"
+            and t['object'] == "calc::CalculationResult"
         ]
         assert len(has_arg) == 1
 
@@ -1015,9 +1004,9 @@ class TestExistingBehaviorPreserved:
         dep_lookup = {"Fl_Output": "Fl_Output"}
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::Calculator"
-            and t.object_qualified_name == "Fl_Output"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::Calculator"
+            and t['object'] == "Fl_Output"
         ]
         assert len(dep_triples) == 1

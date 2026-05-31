@@ -31,7 +31,6 @@ def _make_design(associations=None, classes=None, class_attrs=None, class_method
     )
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestValidateOODesign:
     def test_unknown_association_target_flagged(self):
         oo = _make_design(associations=[
@@ -84,7 +83,6 @@ class TestValidateOODesign:
         assert errors == []
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestDesignOOToolLoop:
     def test_design_oo_returns_schema_on_valid_output(self):
         """Verify design_oo function returns ClassDiagram via call_tool_loop."""

@@ -6,7 +6,6 @@ from codegraph.models import ClassNode
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
 
-@pytest.mark.skip(reason="map_oo_to_ontology needs refactoring for atomized types")
 class TestMechanismInference:
     """When an aggregates/references association has a mechanism field,
     the appropriate container/smart-ptr dependency should be inferred."""
@@ -39,9 +38,9 @@ class TestMechanismInference:
 
         # Should create depends_on to std::vector
         container_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "std::vector"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "std::vector"
         ]
         assert len(container_deps) == 1
         assert container_deps[0].subject_qualified_name == "ui::CalculatorWindow"
@@ -79,26 +78,26 @@ class TestMechanismInference:
 
         # Should have a REFERENCES triple with mechanism
         ref_triples = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "ui::CalculatorWindow"
         ]
         assert len(ref_triples) == 1
         assert ref_triples[0].mechanism == "std::unique_ptr"
 
         # Should infer depends_on to std::unique_ptr
         ptr_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "std::unique_ptr"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "std::unique_ptr"
         ]
         assert len(ptr_deps) == 1
 
         # Should also infer depends_on to the target dependency
         target_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "calculation_engine::CalculatorEngine"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "calculation_engine::CalculatorEngine"
         ]
         assert len(target_deps) == 1
 
@@ -130,17 +129,17 @@ class TestMechanismInference:
 
         # Should infer depends_on to Fl_Widget (the target)
         widget_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "Fl_Widget"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "Fl_Widget"
         ]
         assert len(widget_deps) == 1
 
         # Should NOT add std:: dependency for raw_pointer
         stdlib_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name.startswith("std::")
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'].startswith("std::")
         ]
         assert len(stdlib_deps) == 0, "raw_pointer should not add container dependencies"
 
@@ -171,8 +170,8 @@ class TestMechanismInference:
         )
 
         agg_triples = [
-            t for t in result.triples
-            if t.predicate == "aggregates"
+            t for t in result.associations
+            if t['predicate'] == "aggregates"
         ]
         assert len(agg_triples) == 1
         assert agg_triples[0].mechanism == "std::vector"
@@ -204,9 +203,9 @@ class TestMechanismInference:
         )
 
         ptr_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "std::shared_ptr"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "std::shared_ptr"
         ]
         assert len(ptr_deps) == 1
 
@@ -243,9 +242,9 @@ class TestMechanismInference:
         )
 
         vector_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "std::vector"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "std::vector"
         ]
         assert len(vector_deps) == 1, "Should not duplicate std::vector depends_on"
 
@@ -277,16 +276,16 @@ class TestMechanismInference:
 
         # invokes should not infer std::shared_ptr dependency
         ptr_deps = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "std::shared_ptr"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "std::shared_ptr"
         ]
         assert len(ptr_deps) == 0
 
         # Mechanism should NOT be stored on invokes triple
         invokes_triples = [
-            t for t in result.triples
-            if t.predicate == "invokes"
+            t for t in result.associations
+            if t['predicate'] == "invokes"
         ]
         assert len(invokes_triples) == 1
         assert invokes_triples[0].mechanism == ""

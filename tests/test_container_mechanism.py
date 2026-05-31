@@ -28,7 +28,6 @@ from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestSeedContainerLookup:
     def test_basic_lookup(self):
         """Test that seed_container_lookup returns bare_name -> qname mappings."""
@@ -96,7 +95,6 @@ class TestSeedContainerLookup:
         assert lookup["vector"] == "std::vector"
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestGetContainerClassInfo:
     def test_basic_info(self):
         """Test that get_container_class_info returns proper dicts."""
@@ -127,7 +125,6 @@ class TestGetContainerClassInfo:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestMechanismResolution:
     """Test that mechanism resolution prefers dep_lookup over stubs."""
 
@@ -160,8 +157,8 @@ class TestMechanismResolution:
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
 
         # Should have a depends_on to std::vector (resolved via dep_lookup)
-        dep_triples = [t for t in result.triples if t.predicate == "depends_on" and t.object_qualified_name == "std::vector"]
-        assert len(dep_triples) >= 1, f"Expected depends_on std::vector, got: {[t.object_qualified_name for t in result.triples if t.predicate == 'depends_on']}"
+        dep_triples = [t for t in result.associations if t['predicate'] == "depends_on" and t['object'] == "std::vector"]
+        assert len(dep_triples) >= 1, f"Expected depends_on std::vector, got: {[t['object'] for t in result.associations if t['predicate'] == 'depends_on']}"
 
         # Should NOT have a stub node for std::vector (it should resolve to real one)
         stub_nodes = [n for n in result.nodes if n.qualified_name == "std::vector" and n.layer == "dependency" and "Standard library" in n.brief_description]
@@ -188,7 +185,7 @@ class TestMechanismResolution:
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
 
         # Should still have depends_on to std::vector (via fallback)
-        dep_triples = [t for t in result.triples if t.predicate == "depends_on" and t.object_qualified_name == "std::vector"]
+        dep_triples = [t for t in result.associations if t['predicate'] == "depends_on" and t['object'] == "std::vector"]
         assert len(dep_triples) >= 1
 
     def test_no_dep_mechanisms_skip_dependency(self):
@@ -207,7 +204,7 @@ class TestMechanismResolution:
         result = map_oo_to_ontology(oo, dependency_lookup={})
 
         # Should NOT have depends_on from raw_pointer mechanism
-        ptr_deps = [t for t in result.triples if t.predicate == "depends_on" and t.object_qualified_name == "raw_pointer"]
+        ptr_deps = [t for t in result.associations if t['predicate'] == "depends_on" and t['object'] == "raw_pointer"]
         assert len(ptr_deps) == 0
 
 
@@ -216,7 +213,6 @@ class TestMechanismResolution:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestFindMechanism:
     def test_find_mechanism_searches_dep_lookup(self):
         """Test that find_mechanism searches dep_lookup for container names."""
@@ -284,7 +280,6 @@ class TestFindMechanism:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestAggregatesValidation:
     """Test that aggregates without mechanism is now a hard error."""
 

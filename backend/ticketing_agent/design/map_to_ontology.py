@@ -69,7 +69,7 @@ def map_oo_to_ontology(
     # Track qualified_name -> index in nodes list for dedup
     node_index: dict[str, int] = {}
 
-    def _add_node(kind, name, qualified_name, is_intercomponent=False, **kwargs):
+    def _add_node(kind, name, qualified_name, **kwargs):
         if qualified_name in node_index:
             return qualified_name
         node_index[qualified_name] = len(nodes)
@@ -87,6 +87,11 @@ def map_oo_to_ontology(
         description = kwargs.pop("description", "")
         # Map visibility to protection for member nodes
         visibility = kwargs.pop("visibility", "")
+        # Remove ticketing-specific fields not on atomized types
+        kwargs.pop("is_intercomponent", None)
+        kwargs.pop("specialization", None)
+        kwargs.pop("implementation_status", None)
+        kwargs.pop("test_file", None)
 
         common = dict(
             qualified_name=qualified_name,
@@ -373,8 +378,10 @@ def map_oo_to_ontology(
             assoc.subject = _strip_wrong_ns(assoc.subject)
             assoc.object = _strip_wrong_ns(assoc.object)
         for cls in oo.classes:
-            cls.inherits_from = [_strip_wrong_ns(p) for p in cls.inherits_from]
-            cls.realizes = [_strip_wrong_ns(i) for i in cls.realizes]
+            if hasattr(cls, 'inherits_from'):
+                cls.inherits_from = [_strip_wrong_ns(p) for p in cls.inherits_from]
+            if hasattr(cls, 'realizes'):
+                cls.realizes = [_strip_wrong_ns(i) for i in cls.realizes]
 
     # --- Modules (source_type="namespace") ---
     for module in oo.module_names:
@@ -393,9 +400,9 @@ def map_oo_to_ontology(
             "interface",
             iface.name,
             iface_qname,
-            is_intercomponent=iface.is_intercomponent,
-            specialization=iface.specialization,
-            description=iface.description,
+            is_intercomponent=getattr(iface, 'is_intercomponent', False),
+            specialization=getattr(iface, 'specialization', ''),
+            description=getattr(iface, 'description', ''),
             source_type="compound",
             is_abstract=True,
         )
@@ -407,8 +414,8 @@ def map_oo_to_ontology(
                 "method",
                 method.name,
                 method_qname,
-                visibility=method.visibility,
-                description=method.description,
+                visibility=getattr(method, 'protection', '') or getattr(method, 'visibility', ''),
+                description=getattr(method, 'brief_description', '') or getattr(method, 'description', ''),
                 source_type="member",
                 type_signature=method.type_signature,
                 argsstring=method.argsstring,
@@ -423,7 +430,7 @@ def map_oo_to_ontology(
             "enum",
             enum.name,
             enum_qname,
-            description=enum.description,
+            description=getattr(enum, 'brief_description', '') or getattr(enum, 'description', ''),
             source_type="compound",
         )
         if enum.module:
@@ -453,9 +460,9 @@ def map_oo_to_ontology(
             "class",
             cls.name,
             cls_qname,
-            is_intercomponent=cls.is_intercomponent,
-            specialization=cls.specialization,
-            description=cls.description,
+            is_intercomponent=getattr(cls, 'is_intercomponent', False),
+            specialization=getattr(cls, 'specialization', ''),
+            description=getattr(cls, 'description', ''),
             source_type="compound",
         )
         # Module composes class
@@ -469,13 +476,13 @@ def map_oo_to_ontology(
                 "variable",
                 attr.name,
                 attr_qname,
-                visibility=attr.visibility,
-                description=attr.description,
+                visibility=getattr(attr, 'protection', '') or getattr(attr, 'visibility', ''),
+                description=getattr(attr, 'brief_description', '') or getattr(attr, 'description', ''),
                 source_type="member",
                 type_signature=attr.type_signature,
             )
             triple_idx = _add_association(cls_qname, "composes", attr_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
             # references edge: class → design-internal entity type (attribute type reference)
             # AND type resolution for external deps and TYPE_ARGUMENT edges
@@ -500,14 +507,14 @@ def map_oo_to_ontology(
                 "method",
                 method.name,
                 method_qname,
-                visibility=method.visibility,
-                description=method.description,
+                visibility=getattr(method, 'protection', '') or getattr(method, 'visibility', ''),
+                description=getattr(method, 'brief_description', '') or getattr(method, 'description', ''),
                 source_type="member",
                 type_signature=method.type_signature,
                 argsstring=method.argsstring,
             )
             triple_idx = _add_association(cls_qname, "composes", method_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
             # has_argument edges: method → types used as parameters
             # Parse argsstring to extract parameter types
@@ -541,16 +548,16 @@ def map_oo_to_ontology(
                             _add_class_depends_from_type(param_text, cls_qname, _existing_depends)
 
         # Inheritance -> generalizes triples (with dependency resolution)
-        for parent_name in cls.inherits_from:
+        for parent_name in getattr(cls, 'inherits_from', []):
             parent_qname = _resolve_ref(parent_name) or class_lookup.get(parent_name, parent_name)
             triple_idx = _add_association(cls_qname, "generalizes", parent_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
         # Interface realization -> realizes triples (with dependency resolution)
-        for iface_name in cls.realizes:
+        for iface_name in getattr(cls, 'realizes', []):
             iface_qname = _resolve_ref(iface_name) or class_lookup.get(iface_name, iface_name)
             triple_idx = _add_association(cls_qname, "realizes", iface_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
     # --- Associations (with dependency resolution) ---
     for assoc in oo.associations:
@@ -696,7 +703,7 @@ def validate_coverage(
                     tagged_llrs.add(req_id)
 
     for cls in oo.classes:
-        _collect(cls.requirement_ids)
+        _collect(getattr(cls, 'requirement_ids', []))
     for assoc in oo.associations:
         _collect(assoc.requirement_ids)
 

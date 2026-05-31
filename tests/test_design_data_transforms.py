@@ -84,7 +84,6 @@ def _sample_oo_design():
     )
 
 
-@pytest.mark.skip(reason="Source code needs atomized type updates — uses old field names")
 class TestClassDiagramFromOODesign:
     def test_classes_preserved(self):
         oo = _sample_oo_design()
