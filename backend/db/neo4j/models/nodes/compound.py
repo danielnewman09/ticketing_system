@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from codegraph.nodes import CompoundNode as BaseCompoundNode
+from codegraph.models import CompoundNode as BaseCompoundNode
 
 
 class CompoundNode(BaseCompoundNode):

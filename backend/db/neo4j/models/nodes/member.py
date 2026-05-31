@@ -7,7 +7,7 @@ the specific member type. The `layer` field indicates origin.
 
 from __future__ import annotations
 
-from codegraph.nodes import MemberNode as BaseMemberNode
+from codegraph.models import MemberNode as BaseMemberNode
 
 
 class MemberNode(BaseMemberNode):

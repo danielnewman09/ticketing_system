@@ -1,14 +1,6 @@
-"""Neo4j data access — connection, repositories, and raw queries."""
+"""Neo4j data access — repositories and raw queries."""
 
-from codegraph.neo4j import (
-    NEO4J_PASSWORD,
-    NEO4J_URI,
-    NEO4J_USER,
-    Neo4jConnection,
-    close_standalone_driver,
-    get_standalone_driver,
-    get_standalone_session,
-)
+from backend.db.neo4j.connection import NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER
 from backend.db.neo4j.queries import (
     fetch_codebase_compounds,
     fetch_dependency_compounds,
@@ -25,14 +17,9 @@ from backend.db.neo4j.repositories.models import HLRNode, LLRNode, VerificationM
 from backend.db.neo4j.constraints import ensure_ticketing_constraints
 
 __all__ = [
-    "Neo4jConnection",
     "NEO4J_URI",
     "NEO4J_USER",
     "NEO4J_PASSWORD",
-    "get_standalone_driver",
-    "get_standalone_session",
-    "close_standalone_driver",
-    # Repositories
     "DesignRepository",
     "RequirementRepository",
     "VerificationRepository",
@@ -45,7 +32,6 @@ __all__ = [
     "VerificationMethodNode",
     "ConditionNode",
     "ActionNode",
-    # Queries
     "fetch_codebase_compounds",
     "fetch_dependency_compounds",
     "fetch_design_dependency_links",
@@ -53,6 +39,5 @@ __all__ = [
     "fetch_hlr_subgraph",
     "fetch_neighbourhood_graph",
     "fetch_node_detail",
-    # Constraints
     "ensure_ticketing_constraints",
 ]
