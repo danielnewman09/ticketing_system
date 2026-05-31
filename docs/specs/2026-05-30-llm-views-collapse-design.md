@@ -1,4 +1,4 @@
-# Collapse Codebase Schemas into Codegraph LLM Views
+# Collapse Codebase Schemas into Codegraph OO Design Models
 
 2026-05-30
 
@@ -12,57 +12,85 @@ creating duplication and divergence:
 2. **`backend/db/neo4j/models/nodes/compound.py`** — Neo4j node model extending
    `codegraph.nodes.CompoundNode` with ticketing-specific fields.
 3. **`backend/design_data/models.py`** — Rich Pydantic read models
-   (`DiagramNode`, `ClassNode`, `ClassDiagram`, etc.) for the frontend and agent
-   prompts. *(Deferred — not in scope for this design.)*
+   (`ClassDiagram`, `ClassNode`, `InterfaceNode`, `EnumNode`, etc.) providing
+   the object-oriented view of design data with nested members, cross-entity
+   associations, and query/transformation methods.
 
 The goal: two layers maximum. `codegraph` as the universal base, and one thin
 ticketing-system extension for fields that are genuinely novel to this repo.
+
+## Key Insight
+
+The LLM "views" and the ClassDiagram read models are structurally nearly
+identical (both have classes, interfaces, enums, associations with nested
+members). Rather than create a third parallel representation, `ClassDiagram`
+becomes the single canonical OO design model in codegraph. It handles three
+concerns:
+
+1. **LLM serialization** — a thin subset (no file_path, layer, code flags)
+2. **Neo4j round-tripping** — `from_neo4j()` / `to_neo4j()`
+3. **Query and transformation methods** — `get_entity()`, `to_verification_dicts()`, etc.
+
+```
+LLM → thin ClassDiagram → enrichment → rich ClassDiagram ↔ Neo4j
+```
 
 ## Scope
 
 ### In scope
 
-- Add `FieldTags` annotation mechanism to codegraph node/edge models, marking
-  field relevance for LLM, Neo4j, and read use cases.
-- Create `codegraph/views/` module with LLM view shapes (`ClassView`,
-  `AttributeView`, `MethodView`, `InterfaceView`, `EnumView`, `AssociationView`,
-  `OODesignView`) — these are the round-trippable schemas the LLM reads and
-  writes.
-- Add `to_llm_view()`, `from_llm_view()`, and `apply_to()` methods on codegraph
-  nodes/edges for projection and merging.
-- Move `TypeRef` dataclass from `backend/codebase/schemas.py` into codegraph as
-  `codegraph/type_parser.py`.
+- Move `ClassDiagram`, `ClassNode`, `InterfaceNode`, `EnumNode`, `ModuleNode`,
+  `Association`, `AttributeNode`, `MethodNode`, `EnumValueNode` from
+  `backend/design_data/models.py` into `codegraph/designs/`.
+- File layout mirrors `codegraph/nodes/`: `designs/compound.py`,
+  `designs/member.py`, `designs/edges.py`, etc.
+- Absorb `OODesignSchema` (from `backend/codebase/schemas.py`) into
+  `ClassDiagram` — the LLM reads and writes ClassDiagram directly.
+- Add `ClassDiagram.to_neo4j()` and `ClassDiagram.from_neo4j()` for
+  round-tripping between ClassDiagram and codegraph nodes/edges.
+- Add `FieldTags` annotation mechanism on ClassDiagram member models to control
+  which fields appear in LLM serialization vs. Neo4j-only fields.
+- Move `TypeRef` from `backend/codebase/schemas.py` into codegraph.
 - Thin `backend/codebase/schemas.py` to only ticketing-specific schemas
   (`RequirementTripleLinkSchema`, `DesignSchema`).
 - Thin `backend/db/neo4j/models/nodes/compound.py` to only
   `specialization`, `is_intercomponent`, `implementation_status`, `test_file`.
-- Update all ~25 consumer files to import from new locations.
+- `backend/design_data/models.py` → temporary re-export shim (deprecated).
+- `backend/design_data/transforms.py` → `class_diagram_from_oo_design()` and
+  `oo_design_from_class_diagram()` become no-ops or are absorbed into
+  ClassDiagram enrichment.
 
 ### Deferred
 
-- `backend/design_data/models.py` (`DiagramNode`, `ClassDiagram`, read models) —
-  stays as-is until a follow-up design.
-- `backend/design_data/transforms.py` — updated import paths only; logic
-  unchanged.
+- Moving `DesignDataRepository` to codegraph — stays in ticketing system for
+  now. ClassDiagram gets `from_neo4j()` / `to_neo4j()` as methods; the
+  repository's Cypher queries remain in the ticketing layer.
+- Full enrichment logic (`ClassDiagram.enrich()`) — deferred until a follow-up
+  design. The enrichment step (resolving type signatures, file paths, code
+  flags) will eventually live in codegraph.
 
 ### Out of scope
 
 - Changing LLM prompt contracts — field names visible to the LLM stay the same
   (aliases preserve backward compatibility).
+- Removing `backend/design_data/repository.py` — stays as-is; import paths
+  updated.
 
 ## Architecture
 
+### codegraph
+
 ```
 codegraph/src/codegraph/
-├── views/
-│   ├── __init__.py              # OODesignView, FieldTags, re-exports
+├── designs/
+│   ├── __init__.py              # ClassDiagram, FieldTags, re-exports
 │   ├── tags.py                  # FieldTags class + LLM/NEO4J/READ tag constants
-│   ├── compound.py              # ClassView, InterfaceView, EnumView
-│   ├── member.py                # AttributeView, MethodView, EnumValueView
-│   ├── namespace.py             # ModuleView (if LLM prompts need it)
-│   └── edges.py                 # AssociationView
+│   ├── compound.py              # ClassNode, InterfaceNode, EnumNode
+│   ├── member.py                # AttributeNode, MethodNode, EnumValueNode
+│   ├── namespace.py             # ModuleNode
+│   └── edges.py                 # Association
 ├── type_parser.py               # MOVED: TypeRef + parsing utilities
-├── nodes/
+├── nodes/                       # unchanged
 │   ├── compound_node.py         # + Annotated[FieldTags(...)]
 │   ├── member_node.py           # + Annotated[FieldTags(...)]
 │   └── *
@@ -82,221 +110,245 @@ backend/
 │   ├── compound.py              # thinned: only ticketing-specific fields
 │   └── member.py                # unchanged (already thin)
 └── design_data/
-    ├── models.py                # deferred
-    ├── repository.py            # deferred
-    └── transforms.py            # updated imports only
+    ├── models.py                # TEMPORARY re-export shim (→ codegraph.designs)
+    ├── repository.py            # unchanged (import paths updated)
+    └── transforms.py            # deprecated — OODesignSchema removed
 ```
 
 ## Field Tagging
 
+`FieldTags` lives in `codegraph/designs/tags.py` and is applied via
+`typing.Annotated` on the design model fields (ClassNode, InterfaceNode, etc.).
+
 ```python
-# codegraph/views/tags.py
+# codegraph/designs/tags.py
 
 class FieldTags:
-    LLM: str = "llm"
-    NEO4J: str = "neo4j"
-    READ: str = "read"
-    TICKETING: str = "ticketing"
+    LLM: str = "llm"          # serialized to LLM
+    NEO4J: str = "neo4j"       # persisted to Neo4j
+    READ: str = "read"         # internal read-only
+    TICKETING: str = "ticketing"  # ticketing-system extension
 
     def __init__(self, *tags: str) -> None: ...
 ```
 
-Usage on node fields:
+Usage on design model fields:
 
 ```python
-from codegraph.views.tags import FieldTags
-
-class CompoundNode(BaseModel):
+class ClassNode(BaseModel):
+    name: Annotated[str, FieldTags(LLM, NEO4J, READ)]
     qualified_name: Annotated[str, FieldTags(LLM, NEO4J, READ)]
     kind: Annotated[str, FieldTags(LLM, NEO4J, READ)]
-    component_id: Annotated[int | None, FieldTags(NEO4J)]
-    brief_description: Annotated[str, FieldTags(LLM, NEO4J, READ)]
-    is_final: Annotated[bool, FieldTags(NEO4J, READ)]
+    description: Annotated[str, FieldTags(LLM, NEO4J, READ)]
+    file_path: Annotated[str, FieldTags(NEO4J, READ)]       # NOT in LLM
+    line_number: Annotated[int | None, FieldTags(NEO4J, READ)]
+    is_static: Annotated[bool, FieldTags(NEO4J, READ)]
+    implementation_status: Annotated[str, FieldTags(TICKETING)]
     # ...
 ```
 
-`FieldTags` is stored in `typing.Annotated` metadata and is inspectable at
-runtime via `typing.get_type_hints(include_extras=True)`. The `.to_llm_view()`
-method uses this metadata to decide which fields to project.
+### Serialization modes
 
-## LLM View Shapes
+ClassDiagram and its member models provide a `model_dump(tags=...)` override
+that filters fields based on their `FieldTags` annotation:
 
-### File: `views/compound.py`
+```python
+diagram.model_dump()                    # all fields (Neo4j, debug)
+diagram.model_dump(tags={"LLM"})        # LLM subset — no file_path, layer, flags
+diagram.model_dump(tags={"LLM", "TICKETING"})  # LLM + ticketing fields
+```
 
-#### `ClassView` (replaces `ClassSchema`)
+Implementation: a shared mixin or base-class override on DiagramNode walks
+`typing.get_type_hints(include_extras=True)` at call time, inspects the
+`FieldTags` metadata on each field, and excludes fields whose tags have no
+intersection with the requested set. Recurses into nested model lists
+(attributes, methods, values) so `ClassDiagram.model_dump(tags={"LLM"})`
+produces a fully tagged output with nested members filtered as well.
 
-| Field | Type | LLM name | Notes |
-|---|---|---|---|
-| `qualified_name` | `str` | `qualified_name` | **New** — identity anchor |
-| `name` | `str` | `name` | |
-| `kind` | `Literal["class","struct","template_class"]` | `kind` | **New** — was implicit |
-| `specialization` | `str` | `specialization` | |
-| `description` | `str` | `description` | Maps to `brief_description` |
-| `visibility` | `str` | `visibility` | |
-| `is_intercomponent` | `bool` | `is_intercomponent` | |
-| `attributes` | `list[AttributeView]` | `attributes` | |
-| `methods` | `list[MethodView]` | `methods` | |
-| `inherits_from` | `list[str]` | `inherits_from` | |
-| `realizes_interfaces` | `list[str]` | `realizes_interfaces` | |
-| `requirement_ids` | `list[str]` | `requirement_ids` | |
+## Design Models (moved to codegraph/designs/)
 
-#### `InterfaceView` (replaces `InterfaceSchema`)
+### `DiagramNode` (base) — `designs/compound.py`
 
-| Field | Type | LLM name |
+Common fields for every diagram node. Moves unchanged from
+`backend/design_data/models.py`, with `FieldTags` annotations added.
+
+| Field | Tags | Notes |
 |---|---|---|
-| `qualified_name` | `str` | `qualified_name` |
-| `name` | `str` | `name` |
-| `kind` | `Literal["interface","abstract_class"]` | `kind` |
-| `specialization` | `str` | `specialization` |
-| `description` | `str` | `description` |
-| `is_intercomponent` | `bool` | `is_intercomponent` |
-| `methods` | `list[MethodView]` | `methods` |
+| `name` | LLM, NEO4J, READ | |
+| `qualified_name` | LLM, NEO4J, READ | Identity anchor |
+| `kind` | LLM, NEO4J, READ | |
+| `layer` | NEO4J, READ | NOT in LLM |
+| `description` | LLM, NEO4J, READ | |
+| `visibility` | LLM, NEO4J, READ | |
+| `specialization` | TICKETING | Ticketing extension |
+| `component_id` | NEO4J, READ | NOT in LLM |
+| `is_intercomponent` | TICKETING | Ticketing extension |
+| `type_signature` | LLM, NEO4J, READ | LLM sees as `type_name` (alias) |
+| `argsstring` | LLM, NEO4J, READ | |
+| `definition` | NEO4J, READ | NOT in LLM |
+| `source_type` | NEO4J, READ | NOT in LLM |
+| `source` | NEO4J, READ | NOT in LLM |
+| `file_path` | NEO4J, READ | NOT in LLM |
+| `line_number` | NEO4J, READ | NOT in LLM |
+| `is_static` | NEO4J, READ | NOT in LLM |
+| `is_const` | NEO4J, READ | NOT in LLM |
+| `is_virtual` | NEO4J, READ | NOT in LLM |
+| `is_abstract` | NEO4J, READ | NOT in LLM |
+| `is_final` | NEO4J, READ | NOT in LLM |
+| `implementation_status` | TICKETING | Ticketing extension |
+| `test_file` | TICKETING | Ticketing extension |
 
-#### `EnumView` (replaces `EnumSchema`)
+### `ClassNode` — `designs/compound.py`
 
-| Field | Type | LLM name |
+| Field | Tags | Notes |
 |---|---|---|
-| `qualified_name` | `str` | `qualified_name` |
-| `name` | `str` | `name` |
-| `kind` | `Literal["enum","enum_class"]` | `kind` |
-| `description` | `str` | `description` |
-| `values` | `list[str]` | `values` |
+| *(all DiagramNode fields)* | | |
+| `module` | LLM, NEO4J, READ | |
+| `inherits_from` | LLM, NEO4J, READ | |
+| `realizes` | LLM, NEO4J, READ | |
+| `attributes` | LLM, NEO4J, READ | list[AttributeNode] |
+| `methods` | LLM, NEO4J, READ | list[MethodNode] |
 
-### File: `views/member.py`
+### `InterfaceNode` — `designs/compound.py`
 
-#### `AttributeView` (replaces `AttributeSchema`)
-
-| Field | Type | LLM name | Notes |
-|---|---|---|---|
-| `qualified_name` | `str` | `qualified_name` | **New** |
-| `name` | `str` | `name` | |
-| `type_name` | `str` | `type_name` | **Alias** for `type_signature` |
-| `visibility` | `str` | `visibility` | |
-| `description` | `str` | `description` | |
-
-`type_name` is a Pydantic field alias that serializes as `type_name` to the LLM
-but maps to `type_signature` internally.
-
-#### `MethodView` (replaces `MethodSchema`)
-
-| Field | Type | LLM name | Notes |
-|---|---|---|---|
-| `qualified_name` | `str` | `qualified_name` | **New** |
-| `name` | `str` | `name` | |
-| `visibility` | `str` | `visibility` | |
-| `description` | `str` | `description` | |
-| `parameters` | `list[str]` | `parameters` | |
-| `return_type` | `str` | `return_type` | |
-
-#### `EnumValueView`
-
-| Field | Type | LLM name | Notes |
-|---|---|---|---|
-| `qualified_name` | `str` | `qualified_name` | |
-| `name` | `str` | `name` | |
-| `description` | `str` | `description` | |
-
-### File: `views/edges.py`
-
-#### `AssociationView` (replaces `AssociationSchema`)
-
-| Field | Type | LLM name | Notes |
-|---|---|---|---|
-| `from_class` | `str` | `from_class` | **Alias** for `subject` |
-| `to_class` | `str` | `to_class` | **Alias** for `object` |
-| `kind` | `str` | `kind` | **Alias** for `predicate` |
-| `description` | `str` | `description` | |
-| `mechanism` | `str` | `mechanism` | |
-
-Aliases preserve the existing LLM-facing vocabulary while internally using
-codegraph's canonical field names.
-
-### File: `views/__init__.py`
-
-#### `OODesignView` (replaces `OODesignSchema`)
-
-| Field | Type |
+| Field | Tags |
 |---|---|
-| `modules` | `list[str]` |
-| `classes` | `list[ClassView]` |
-| `interfaces` | `list[InterfaceView]` |
-| `enums` | `list[EnumView]` |
-| `associations` | `list[AssociationView]` |
+| *(all DiagramNode fields)* | |
+| `module` | LLM, NEO4J, READ |
+| `methods` | LLM, NEO4J, READ | list[MethodNode] |
 
-## Projection API
+### `EnumNode` — `designs/compound.py`
 
-### On nodes (e.g., `CompoundNode`)
+| Field | Tags |
+|---|---|
+| *(all DiagramNode fields)* | |
+| `module` | LLM, NEO4J, READ |
+| `values` | LLM, NEO4J, READ | list[EnumValueNode] |
+
+### `AttributeNode` — `designs/member.py`
+
+| Field | Tags | Notes |
+|---|---|---|
+| `name` | LLM, NEO4J, READ | |
+| `qualified_name` | LLM, NEO4J, READ | |
+| `kind` | LLM, NEO4J, READ | Literal["attribute"] |
+| `description` | LLM, NEO4J, READ | |
+| `visibility` | LLM, NEO4J, READ | |
+| `type_signature` | LLM, NEO4J, READ | LLM serialized as `type_name` (alias) |
+| `owner` | NEO4J, READ | NOT in LLM |
+| `component_id` | NEO4J, READ | NOT in LLM |
+
+### `MethodNode` — `designs/member.py`
+
+| Field | Tags | Notes |
+|---|---|---|
+| `name` | LLM, NEO4J, READ | |
+| `qualified_name` | LLM, NEO4J, READ | |
+| `kind` | LLM, NEO4J, READ | Literal["method"] |
+| `description` | LLM, NEO4J, READ | |
+| `visibility` | LLM, NEO4J, READ | |
+| `type_signature` | LLM, NEO4J, READ | LLM sees as `return_type` (alias) |
+| `argsstring` | LLM, NEO4J, READ | |
+| `owner` | NEO4J, READ | NOT in LLM |
+| `component_id` | NEO4J, READ | NOT in LLM |
+
+### `Association` — `designs/edges.py`
+
+| Field | Tags | Notes |
+|---|---|---|
+| `subject` | LLM, NEO4J, READ | LLM sees as `from_class` (alias) |
+| `predicate` | LLM, NEO4J, READ | LLM sees as `kind` (alias) |
+| `object` | LLM, NEO4J, READ | LLM sees as `to_class` (alias) |
+| `mechanism` | LLM, NEO4J, READ | |
+| `description` | LLM, NEO4J, READ | |
+
+### `ClassDiagram` — `designs/__init__.py`
+
+Container with all existing methods preserved:
+- `get_entity()`, `associations_for()`, `associations_involving()`
+- `classes_in_module()`
+- `to_verification_dicts()`, `to_draft_lookup()`, `to_class_lookup()`, `to_summary()`
+- `_entity_index` (PrivateAttr)
+
+**New methods:**
 
 ```python
-class CompoundNode(BaseModel):
-    def to_llm_view(self) -> ClassView:
-        """Project fields tagged LLM into ClassView.
-        description ← brief_description.
-        Ticketing-tagged fields excluded from view but preserved on node.
-        """
+def to_neo4j(self) -> tuple[list[CompoundNode], list[MemberNode], list[CodebaseEdge]]:
+    """Decompose ClassDiagram into codegraph node/edge models for Neo4j persistence."""
 
-    @classmethod
-    def from_llm_view(
-        cls, view: ClassView, *, component_id: int | None = None
-    ) -> CompoundNode:
-        """Create a new CompoundNode from LLM output.
-        Unspecified fields get sensible defaults.
-        component_id injected by the caller (not from LLM).
-        """
+@classmethod
+def from_neo4j(
+    cls,
+    compounds: list[CompoundNode],
+    members: list[MemberNode],
+    edges: list[CodebaseEdge],
+) -> ClassDiagram:
+    """Reconstruct ClassDiagram from Neo4j query results."""
+
+def model_dump(self, *, tags: set[str] | None = None) -> dict:
+    """Serialize with optional field-tag filtering for LLM consumption."""
 ```
 
-### On views (e.g., `ClassView`)
+## OODesignSchema absorbed into ClassDiagram
 
-```python
-class ClassView(BaseModel):
-    def apply_to(self, node: CompoundNode) -> CompoundNode:
-        """Merge this view into an existing node.
-        Only overwrites fields that were explicitly set (non-default).
-        Preserves layer, component_id, detailed_description, flags, etc.
+`OODesignSchema` (currently in `backend/codebase/schemas.py`) is removed.
+The LLM now reads and writes `ClassDiagram` directly. The LLM receives a tagged
+subset (`tags={"LLM", "TICKETING"}`) that includes only the fields it needs:
 
-        qualified_name is NEVER overwritten — it is the identity anchor.
-        If the LLM intends to rename an entity it must create a new one.
-        """
-```
+- `name`, `qualified_name`, `kind`, `description`, `visibility`
+- `specialization`, `is_intercomponent` (ticketing)
+- `type_name` (alias), `parameters`, `return_type` (aliases)
+- `from_class`, `to_class`, `kind` (aliases on Association)
+- `requirement_ids` (ticketing, on ClassNode)
 
-**Limitation**: "non-default" detection cannot distinguish between "the LLM
-explicitly set this field to its default value" and "the LLM didn't touch this
-field at all." For string fields (description, etc.) this is acceptable since
-an empty description is semantically equivalent to untouched. For boolean fields
-(is_intercomponent), a sentinel approach may be needed if the LLM needs to
-clear a previously `true` value.
+Fields like `layer`, `file_path`, `line_number`, `is_static`, `is_final`,
+`component_id` are excluded from LLM serialization.
 
-**Member views**: `apply_to` on `AttributeView`/`MethodView` expects the
-`qualified_name` to include the parent prefix (e.g., `"calc::Calculator::add"`).
-The caller is responsible for constructing this before calling `apply_to`.
+### LLM-facing aliases
 
-### On edges (`CodebaseEdge`)
+To preserve backward compatibility with existing prompt contracts:
 
-Same pattern: `to_llm_view() -> AssociationView`, `from_llm_view()`, `apply_to()`.
+| Canonical field | LLM serialized name | On type |
+|---|---|---|
+| `type_signature` | `type_name` | AttributeNode |
+| `type_signature` | `return_type` | MethodNode |
+| `subject` | `from_class` | Association |
+| `predicate` | `kind` | Association |
+| `object` | `to_class` | Association |
+| `argsstring` | `parameters` | MethodNode |
 
-## Description Mapping
+Aliases are implemented via Pydantic `serialization_alias` on the canonical field.
 
-- `to_llm_view()`: `description` = `node.brief_description`
-- `apply_to()`: writes back to `brief_description` only
-- `detailed_description` is codegraph-only, never exposed to the LLM
+## ClassDiagram ↔ Neo4j Round-Trip
 
-## Round-Trip Semantics
+### `to_neo4j()`
 
-1. **Extract**: `node.to_llm_view()` → `ClassView(qn="calc::Calculator", name="Calculator", description="...")`
-2. **LLM modifies**: returns `ClassView(qn="calc::Calculator", name="Calculator", description="adds two numbers")`
-3. **Merge**: `view.apply_to(node)` — only `brief_description` changes; `kind`, `layer`, `component_id`, `is_final`, etc. all preserved
-4. **Create new**: `CompoundNode.from_llm_view(view, component_id=5)` — creates a fresh node with sensible defaults
+1. For each `ClassNode`, `InterfaceNode`, `EnumNode` in the diagram:
+   - Create a `CompoundNode` with fields from the design model (name,
+     qualified_name, kind, description, etc.)
+   - Compute `layer = "design"` (or pass through if already set)
+   - For each nested `AttributeNode`/`MethodNode`, create a `MemberNode`
+     with `compound_refid` or compound qualified_name linkage
+2. For each `Association`, create a `CodebaseEdge`
+3. Return `(compounds, members, edges)` triples
+
+### `from_neo4j()`
+
+1. Accept `list[CompoundNode]`, `list[MemberNode]`, `list[CodebaseEdge]`
+2. Group members by parent compound using `compound_refid` or qualified_name
+3. For each compound, hydrate the appropriate ClassNode/InterfaceNode/EnumNode
+   with nested members
+4. Build association list from edges
+5. Populate `_entity_index`
+
+The existing `DesignDataRepository._hydrate_class()` logic moves into this
+method.
 
 ## What Stays in Ticketing System
 
 ### `backend/codebase/schemas.py` (reduced)
 
 ```python
-"""Ticketing-system schemas — requirement linkage and design aggregation."""
-
-from pydantic import BaseModel
-from typing import Literal
-
 class RequirementTripleLinkSchema(BaseModel):
     requirement_type: Literal["hlr", "llr"]
     requirement_id: int
@@ -306,20 +358,23 @@ class RequirementTripleLinkSchema(BaseModel):
     object_qualified_name: str = ""
 
 class DesignSchema(BaseModel):
-    nodes: list[CompoundNode | MemberNode | NamespaceNode]
+    nodes: list[CompoundNode | MemberNode | NamespaceNode]  # discriminated by .kind or type
     triples: list[CodebaseEdge]
     requirement_links: list[RequirementTripleLinkSchema] = []
 ```
 
-`DesignSchema` field types switch from the removed schemas to codegraph's
-`CompoundNode`, `MemberNode`, `NamespaceNode`, and `CodebaseEdge`.
+`nodes` uses a discriminated union — Pydantic inspects the `kind` field (or
+falls back to the class name for untyped dict round-trips) to determine which
+node model to validate against.
+
+Removed: `AttributeSchema`, `MethodSchema`, `ClassSchema`, `EnumSchema`,
+`InterfaceSchema`, `AssociationSchema`, `OODesignSchema`, `OntologyNodeSchema`,
+`OntologyTripleSchema`, `TypeRef`.
 
 ### `backend/db/neo4j/models/nodes/compound.py` (thinned)
 
 ```python
 class CompoundNode(BaseCompoundNode):
-    """Ticketing extensions on top of codegraph's CompoundNode."""
-
     specialization: str = ""
     is_intercomponent: bool = False
     implementation_status: Literal[
@@ -328,19 +383,40 @@ class CompoundNode(BaseCompoundNode):
     test_file: str = ""
 ```
 
-All other fields inherited from `codegraph.nodes.CompoundNode`. These four
-fields are ticketing-specific and have no place in the shared codegraph library.
+### Temporary shims
+
+`backend/design_data/models.py`:
+```python
+# TODO(2026-06): remove this shim — import from codegraph.designs instead
+from codegraph.designs import (
+    ClassDiagram, ClassNode, InterfaceNode, EnumNode,
+    ModuleNode, Association, AttributeNode, MethodNode, EnumValueNode,
+    DiagramNode,
+)
+__all__ = [...]  # same names
+```
+
+`backend/design_data/transforms.py`:
+```python
+# TODO(2026-06): OODesignSchema removed — ClassDiagram is the canonical type.
+# class_diagram_from_oo_design() and oo_design_from_class_diagram() are no-ops
+# if both sides are already ClassDiagram. Remove once callers updated.
+```
 
 ## Consumer Impact
 
 ~25 files import from `backend.codebase.schemas` or construct schema instances.
-All are updated to import from `codegraph.views` instead. LLM-facing field names
-are unchanged due to aliases; only import paths change.
+All are updated to import from `codegraph.designs` or the temporary shim in
+`backend.design_data.models`.
 
-### Files affected (from grep)
+LLM-facing field names are unchanged due to serialization aliases. Consumer
+changes are primarily import-path updates.
 
-- `backend/design_data/transforms.py` — updated imports
-- `backend/pipeline/orchestrator.py`
+### Files affected
+
+- `backend/design_data/transforms.py` — deprecated, OODesignSchema removed
+- `backend/design_data/models.py` — temporary shim
+- `backend/pipeline/orchestrator.py` — updated imports
 - `backend/requirements/services/persistence.py`
 - `backend/ticketing_agent/design/design_hlr.py`
 - `backend/ticketing_agent/design/design_ontology.py`
