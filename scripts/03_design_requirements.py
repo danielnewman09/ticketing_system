@@ -128,7 +128,7 @@ def step_design():
         _extract_intercomponent_context,
     )
     from backend.ticketing_agent.design.order_hlrs import order_hlrs
-    from backend.codebase.schemas import OODesignSchema
+    from codegraph.designs import ClassDiagram
     from backend.requirements.services.persistence import persist_design
 
     with get_neo4j().session() as ns:
@@ -170,7 +170,7 @@ def step_design():
             llrs_by_hlr.setdefault(hlr_id, []).append(llr)
 
     # Accumulate
-    designed: dict[int, tuple[OODesignSchema, int | None, str]] = {}
+    designed: dict[int, tuple[ClassDiagram, int | None, str]] = {}
     accumulated_class_lookup: dict[str, str] = {}
     total_nodes = 0
     total_triples = 0
@@ -245,13 +245,13 @@ def step_design():
 
             # Check for cross-component associations
             for assoc in oo.associations:
-                to_cls = assoc.to_class
+                to_cls = assoc.object
                 if '::' in to_cls:
                     to_ns = to_cls.split('::')[0]
                     if to_ns != component_namespace:
                         step_log.info("HLR %d: cross-component association: %s -> %s (%s)",
-                                      hlr_id, assoc.from_class, to_cls, assoc.relationship)
-                        print(f"    CROSS-COMPONENT: {assoc.from_class} -> {to_cls} ({assoc.relationship})")
+                                      hlr_id, assoc.subject, to_cls, assoc.predicate)
+                        print(f"    CROSS-COMPONENT: {assoc.subject} -> {to_cls} ({assoc.predicate})")
 
             # Accumulate
             accumulated_class_lookup.update(class_diagram_from_oo_design(oo).to_class_lookup())
@@ -297,7 +297,7 @@ def step_design_and_verify():
         _extract_intercomponent_context,
     )
     from backend.ticketing_agent.design.order_hlrs import order_hlrs
-    from backend.codebase.schemas import OODesignSchema
+    from codegraph.designs import ClassDiagram
     from backend.requirements.services.persistence import persist_design, persist_verification
 
     # --- Design phase context ---
@@ -342,7 +342,7 @@ def step_design_and_verify():
             llrs_by_hlr.setdefault(hlr_id, []).append(llr)
 
     # Accumulate
-    designed: dict[int, tuple[OODesignSchema, int | None, str]] = {}
+    designed: dict[int, tuple[ClassDiagram, int | None, str]] = {}
     accumulated_class_lookup: dict[str, str] = {}
     total_nodes = 0
     total_triples = 0
@@ -476,13 +476,13 @@ def step_design_and_verify():
 
             # Check for cross-component associations
             for assoc in oo.associations:
-                to_cls = assoc.to_class
+                to_cls = assoc.object
                 if '::' in to_cls:
                     to_ns = to_cls.split('::')[0]
                     if to_ns != component_namespace:
                         step_log.info("HLR %d: cross-component association: %s -> %s (%s)",
-                                      hlr_id, assoc.from_class, to_cls, assoc.relationship)
-                        print(f"    CROSS-COMPONENT: {assoc.from_class} -> {to_cls} ({assoc.relationship})")
+                                      hlr_id, assoc.subject, to_cls, assoc.predicate)
+                        print(f"    CROSS-COMPONENT: {assoc.subject} -> {to_cls} ({assoc.predicate})")
     finally:
         try:
             neo4j_session.close()
