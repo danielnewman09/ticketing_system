@@ -6,7 +6,7 @@ class_diagram_from_oo_design() enriches a ClassDiagram with computed fields
 oo_design_from_class_diagram() is a pass-through for ClassDiagram→ClassDiagram.
 """
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 
 
 def class_diagram_from_oo_design(

@@ -2,7 +2,7 @@
 Prompt templates and section builders for the design_oo agent.
 """
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from codegraph.constants import LANGUAGE_SPECIALIZATIONS
 
 # ---------------------------------------------------------------------------

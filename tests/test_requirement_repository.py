@@ -165,11 +165,11 @@ class TestComponentLinks:
 class TestTracesToDesign:
     def test_trace_and_untrace_design(self, neo4j_session):
         from backend.db.neo4j.repositories.requirement import RequirementRepository
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         design_repo = DesignRepository(neo4j_session)
-        design_repo.merge_node(CompoundNode(qualified_name="calc::Foo", name="Foo", kind="class"))
+        design_repo.merge_node(ClassNode(qualified_name="calc::Foo", name="Foo", kind="class"))
 
         req_repo = RequirementRepository(neo4j_session)
         hlr = req_repo.create_hlr(description="The system shall calculate")
@@ -192,11 +192,11 @@ class TestTracesToDesign:
 
     def test_llr_trace_to_design(self, neo4j_session):
         from backend.db.neo4j.repositories.requirement import RequirementRepository
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         design_repo = DesignRepository(neo4j_session)
-        design_repo.merge_node(CompoundNode(qualified_name="calc::Bar", name="Bar", kind="class"))
+        design_repo.merge_node(ClassNode(qualified_name="calc::Bar", name="Bar", kind="class"))
 
         req_repo = RequirementRepository(neo4j_session)
         hlr = req_repo.create_hlr(description="HLR")

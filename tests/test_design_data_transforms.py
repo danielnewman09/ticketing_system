@@ -1,14 +1,13 @@
 """Tests for design_data transforms."""
 
-from codegraph.designs import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import (
     ClassNode,
     EnumNode,
     EnumValueNode,
     InterfaceNode,
     MethodNode,
+    AttributeNode,
 )
 from backend.design_data.transforms import class_diagram_from_oo_design, oo_design_from_class_diagram
 

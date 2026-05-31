@@ -12,7 +12,8 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-from codegraph.designs import ClassDiagram, Association, ClassNode
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import ClassNode
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
 from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,

@@ -9,8 +9,8 @@ Validates that:
 import pytest
 
 from codegraph.models import NamespaceNode
-from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
-from backend.db.neo4j.models.nodes.member import MemberNode as DbMemberNode
+from codegraph.models import ClassNode, MethodNode
+from codegraph.models import MethodNode
 
 
 class TestNodeKindImport:
@@ -89,11 +89,11 @@ class TestNodeKindImport:
         assert "javascript" in SUPPORTED_LANGUAGES
 
 
-class TestCompoundNodeModel:
+class TestClassNodeModel:
     """Tests for CompoundNode Pydantic model."""
 
     def test_create_minimal(self):
-        node = CompoundNode(
+        node = ClassNode(
             qualified_name="ns::Foo",
             name="Foo",
             kind="class",
@@ -103,7 +103,7 @@ class TestCompoundNodeModel:
         assert node.kind == "class"
 
     def test_create_with_optional_fields(self):
-        node = CompoundNode(
+        node = ClassNode(
             qualified_name="ns::Bar",
             name="Bar",
             kind="struct",
@@ -117,11 +117,11 @@ class TestCompoundNodeModel:
         assert node.is_abstract is True
 
 
-class TestMemberNodeModel:
+class TestMethodNodeModel:
     """Tests for MemberNode Pydantic model."""
 
     def test_create_method(self):
-        node = DbMemberNode(
+        node = MethodNode(
             qualified_name="ns::Foo::run",
             name="run",
             kind="method",
@@ -130,7 +130,7 @@ class TestMemberNodeModel:
         assert node.kind == "method"
 
     def test_create_attribute(self):
-        node = DbMemberNode(
+        node = MethodNode(
             qualified_name="ns::Foo::count",
             name="count",
             kind="variable",
@@ -143,7 +143,7 @@ class TestMemberNodeModel:
     def test_invalid_kind_rejected(self):
         # Neomodel StringProperty accepts any string — kind validation
         # is handled at the repository/application layer, not model level.
-        node = DbMemberNode(qualified_name="X", name="X", kind="class")
+        node = MethodNode(qualified_name="X", name="X", kind="class")
         assert node.kind == "class"
 
 
@@ -164,45 +164,3 @@ class TestNamespaceNode:
         node = NamespaceNode(qualified_name="ns", name="ns")
         assert not hasattr(node, "implementation_status")
         assert not hasattr(node, "is_intercomponent")
-
-
-class TestCodebaseEdge:
-    """Tests for CodebaseEdge model and PREDICATES."""
-
-    def test_create_basic_edge(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge
-        edge = CodebaseEdge(
-            subject_qualified_name="ns::Foo",
-            predicate="composes",
-            object_qualified_name="ns::Foo::calculate",
-        )
-        assert edge.predicate == "composes"
-        assert edge.mechanism == ""
-        assert edge.position is None
-
-    def test_create_edge_with_mechanism(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge
-        edge = CodebaseEdge(
-            subject_qualified_name="ns::Car",
-            predicate="aggregates",
-            object_qualified_name="ns::Wheel",
-            mechanism="std::vector",
-        )
-        assert edge.mechanism == "std::vector"
-
-    def test_create_edge_with_type_argument(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge
-        edge = CodebaseEdge(
-            subject_qualified_name="std::vector",
-            predicate="type_argument",
-            object_qualified_name="std::string",
-            position=0,
-            display_name="std::string",
-        )
-        assert edge.position == 0
-        assert edge.display_name == "std::string"
-
-    def test_predicates_matches_constant(self):
-        from backend.db.neo4j.models.edges import CodebaseEdge, PREDICATES
-        assert len(PREDICATES) > 0
-        assert "composes" in PREDICATES

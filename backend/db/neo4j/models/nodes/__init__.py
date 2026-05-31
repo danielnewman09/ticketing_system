@@ -1,7 +1,17 @@
-"""Codebase graph node models — one per Neo4j label."""
+"""Codebase graph node models — atomized types from codegraph.
 
-from backend.db.neo4j.models.nodes.compound import CompoundNode
-from backend.db.neo4j.models.nodes.member import MemberNode
-from codegraph.models import NamespaceNode
+All node types now come from codegraph.models directly. The old
+CompoundNode/MemberNode subclasses are removed.
+"""
 
-__all__ = ["CompoundNode", "MemberNode", "NamespaceNode"]
+from codegraph.models import (
+    ClassNode, InterfaceNode, EnumNode, UnionNode, ModuleNode,
+    MethodNode, AttributeNode, EnumValueNode, FunctionNode, DefineNode,
+    NamespaceNode,
+)
+
+__all__ = [
+    "ClassNode", "InterfaceNode", "EnumNode", "UnionNode", "ModuleNode",
+    "MethodNode", "AttributeNode", "EnumValueNode", "FunctionNode", "DefineNode",
+    "NamespaceNode",
+]

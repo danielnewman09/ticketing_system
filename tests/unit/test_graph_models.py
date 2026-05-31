@@ -6,7 +6,7 @@ from codegraph.graph import (
     NamespaceGraph,
     OntologyGraph,
 )
-from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
+from codegraph.models import ClassNode, MethodNode, NamespaceNode
 
 
 class TestOntologyGraphToRaw:
@@ -16,13 +16,13 @@ class TestOntologyGraphToRaw:
         assert raw == {"nodes": [], "edges": []}
 
     def test_single_compound_with_members(self):
-        node = CompoundNode(
+        node = ClassNode(
             qualified_name="ns::MyClass",
             name="MyClass",
             kind="class",
             layer="design",
         )
-        member = MemberNode(
+        member = MethodNode(
             qualified_name="ns::MyClass::run",
             name="run",
             kind="method",
@@ -51,7 +51,7 @@ class TestOntologyGraphToRaw:
         assert raw["edges"][0]["type"] == "DEPENDS_ON"
 
     def test_namespace_with_nested_compounds(self):
-        node = CompoundNode(
+        node = ClassNode(
             qualified_name="ns::MyClass",
             name="MyClass",
             kind="class",
@@ -74,13 +74,13 @@ class TestOntologyGraphToRaw:
         assert "ns" in qns
 
     def test_nested_classes(self):
-        outer = CompoundNode(
+        outer = ClassNode(
             qualified_name="ns::Outer",
             name="Outer",
             kind="class",
             layer="design",
         )
-        inner_node = CompoundNode(
+        inner_node = ClassNode(
             qualified_name="ns::Outer::Inner",
             name="Inner",
             kind="class",
@@ -97,7 +97,7 @@ class TestOntologyGraphToRaw:
         assert "ns::Outer::Inner" in qns
 
     def test_deduplicates_duplicate_nodes(self):
-        node = CompoundNode(
+        node = ClassNode(
             qualified_name="ns::Shared",
             name="Shared",
             kind="class",

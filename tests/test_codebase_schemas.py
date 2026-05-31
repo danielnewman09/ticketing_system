@@ -2,7 +2,7 @@
 Tests for Pydantic schemas in backend.codebase.schemas.
 
 Covers: AttributeNode, MethodNode, ClassNode, EnumNode,
-InterfaceNode, Association, ClassDiagram, CompoundNode,
+InterfaceNode, Association, ClassDiagram, ClassNode,
 CodebaseEdge, RequirementTripleLinkSchema, DesignSchema,
 and the NodeKind / Visibility / SourceType literals.
 """
@@ -17,18 +17,15 @@ from backend.codebase.schemas import (
     SourceType,
     Visibility,
 )
-from codegraph.designs import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import (
     ClassNode,
     EnumNode,
     EnumValueNode,
     InterfaceNode,
     MethodNode,
+    AttributeNode,
 )
-from codegraph.models import CompoundNode
-from codegraph.edges import CodebaseEdge
 
 # ---------------------------------------------------------------------------
 # AttributeNode
@@ -224,13 +221,13 @@ class TestClassDiagram:
 
 
 # ---------------------------------------------------------------------------
-# CompoundNode
+# ClassNode (neomodel-level tests)
 # ---------------------------------------------------------------------------
 
 
-class TestCompoundNode:
+class TestNeomodelClassNode:
     def test_minimal(self):
-        n = CompoundNode(kind="class", name="Widget", qualified_name="ns::Widget")
+        n = ClassNode(kind="class", name="Widget", qualified_name="ns::Widget")
         assert n.kind == "class"
         assert n.layer == "design"
         assert n.base_classes == []
@@ -239,7 +236,7 @@ class TestCompoundNode:
         assert n.is_final is False
 
     def test_all_fields(self):
-        n = CompoundNode(
+        n = ClassNode(
             kind="class",
             name="Widget",
             qualified_name="ns::Widget",
@@ -263,33 +260,13 @@ class TestCompoundNode:
     def test_invalid_kind(self):
         # Neomodel StringProperty accepts any string — kind validation
         # is handled at the repository/application layer, not model level.
-        n = CompoundNode(kind="foobar", name="X", qualified_name="X")
+        n = ClassNode(kind="foobar", name="X", qualified_name="X")
         assert n.kind == "foobar"
 
     def test_valid_kinds(self):
         for kind_name in ("class", "enum", "interface", "abstract_class", "struct", "template_class", "enum_class"):
-            n = CompoundNode(kind=kind_name, name="X", qualified_name="X")
+            n = ClassNode(kind=kind_name, name="X", qualified_name="X")
             assert n.kind == kind_name
-
-
-# ---------------------------------------------------------------------------
-# CodebaseEdge
-# ---------------------------------------------------------------------------
-
-
-class TestCodebaseEdge:
-    def test_minimal(self):
-        t = CodebaseEdge(
-            subject_qualified_name="A::B",
-            predicate="associates",
-            object_qualified_name="C::D",
-        )
-        assert t.subject_qualified_name == "A::B"
-        assert t.predicate == "associates"
-
-    def test_missing_required_field(self):
-        with pytest.raises(ValidationError):
-            CodebaseEdge(subject_qualified_name="A::B", predicate="associates")
 
 
 # ---------------------------------------------------------------------------
@@ -328,8 +305,8 @@ class TestRequirementTripleLinkSchema:
 class TestDesignSchema:
     def test_minimal(self):
         d = DesignSchema(
-            nodes=[CompoundNode(kind="class", name="A", qualified_name="A")],
-            triples=[],
+            nodes=[ClassNode(kind="class", name="A", qualified_name="A")],
+            associations=[],
         )
         assert len(d.nodes) == 1
         assert d.requirement_links == []
@@ -337,15 +314,11 @@ class TestDesignSchema:
     def test_full_round_trip(self):
         d = DesignSchema(
             nodes=[
-                CompoundNode(kind="class", name="Widget", qualified_name="app::Widget"),
-                CompoundNode(kind="enum", name="Status", qualified_name="app::Status"),
+                ClassNode(kind="class", name="Widget", qualified_name="app::Widget"),
+                ClassNode(kind="enum", name="Status", qualified_name="app::Status"),
             ],
-            triples=[
-                CodebaseEdge(
-                    subject_qualified_name="app::Widget",
-                    predicate="has_method",
-                    object_qualified_name="app::Widget::run",
-                )
+            associations=[
+                {"subject": "app::Widget", "predicate": "has_method", "object": "app::Widget::run"},
             ],
             requirement_links=[
                 RequirementTripleLinkSchema(requirement_type="hlr", requirement_id=1),
@@ -354,14 +327,14 @@ class TestDesignSchema:
         data = d.model_dump()
         restored = DesignSchema.model_validate(data)
         assert len(restored.nodes) == 2
-        assert len(restored.triples) == 1
+        assert len(restored.associations) == 1
         assert restored.requirement_links[0].requirement_type == "hlr"
 
     def test_json_round_trip(self):
         # Neomodel nodes are not JSON-serializable by Pydantic.
         # Round-trip tested via object-level model_dump instead.
         d = DesignSchema(
-            nodes=[CompoundNode(kind="class", name="A", qualified_name="A")],
+            nodes=[ClassNode(kind="class", name="A", qualified_name="A")],
             triples=[],
         )
         data = d.model_dump()

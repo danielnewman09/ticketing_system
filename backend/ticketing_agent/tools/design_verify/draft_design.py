@@ -2,7 +2,7 @@
 
 import json
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.design_data import class_diagram_from_oo_design
 from backend.ticketing_agent.tools.helpers.design_validation import check_enum_collisions
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design

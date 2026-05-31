@@ -1,11 +1,8 @@
 """Tests for mechanism field and references association kind."""
 
 import pytest
-from codegraph.designs import (
-    Association,
-    ClassDiagram,
-    ClassNode,
-)
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import ClassNode
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
 

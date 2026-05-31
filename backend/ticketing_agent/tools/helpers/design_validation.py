@@ -2,7 +2,7 @@
 
 import re
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 
 
 def extract_type_refs(type_string: str, known_names: set[str], out: set[str]) -> None:

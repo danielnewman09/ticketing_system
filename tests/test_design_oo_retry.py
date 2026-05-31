@@ -1,7 +1,8 @@
 """Tests for design_oo validation helpers and tool-loop integration."""
 
 from unittest.mock import patch
-from codegraph.designs import ClassDiagram, ClassNode, Association
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import ClassNode
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 

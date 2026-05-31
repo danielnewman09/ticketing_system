@@ -12,7 +12,7 @@ import logging
 import os
 
 from backend.codebase.schemas import DesignSchema
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.design_data import class_diagram_from_oo_design
 from backend.ticketing_agent.design.design_hlr import design_hlr
 from backend.ticketing_agent.design.order_hlrs import order_hlrs

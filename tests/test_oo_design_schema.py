@@ -11,14 +11,13 @@ schema supports it.
 
 import pytest
 
-from codegraph.designs import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import (
     ClassNode,
     EnumNode,
     EnumValueNode,
     MethodNode,
+    AttributeNode,
 )
 
 # ---------------------------------------------------------------------------

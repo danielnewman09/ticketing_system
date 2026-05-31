@@ -2,12 +2,14 @@
 
 import pytest
 from backend.codebase.schemas import DesignSchema
-from codegraph.designs import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import (
     ClassNode,
     MethodNode,
+    EnumNode,
+    EnumValueNode,
+    InterfaceNode,
+    AttributeNode,
 )
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
@@ -454,7 +456,7 @@ class TestEnumInClassLookup:
     def test_class_references_enum_from_attribute_type(self):
         """When a class has an attribute typed by an enum, a class-level
         references edge should be emitted (class → enum)."""
-        from codegraph.designs import EnumNode, EnumValueNode, InterfaceNode
+        from codegraph.models import EnumNode, EnumValueNode, InterfaceNode
 
         oo = ClassDiagram(
             module_names=["calc_engine"],
@@ -537,7 +539,7 @@ class TestEnumInClassLookup:
     def test_class_references_interface_from_attribute_type(self):
         """When a class has an attribute typed by a design interface,
         a class-level references edge should be emitted."""
-        from codegraph.designs import InterfaceNode
+        from codegraph.models import InterfaceNode
 
         oo = ClassDiagram(
             module_names=["app"],
@@ -615,7 +617,7 @@ class TestReturnsEdge:
     """Methods returning design-internal types should get a returns edge."""
 
     def test_method_returns_design_class(self):
-        from codegraph.designs import MethodNode
+        from codegraph.models import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -652,7 +654,7 @@ class TestReturnsEdge:
         assert len(returns_triples) == 1
 
     def test_method_returns_design_enum(self):
-        from codegraph.designs import EnumNode, EnumValueNode, MethodNode
+        from codegraph.models import EnumNode, EnumValueNode, MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -691,7 +693,7 @@ class TestReturnsEdge:
         assert len(returns_triples) == 1
 
     def test_no_returns_for_primitive_type(self):
-        from codegraph.designs import MethodNode
+        from codegraph.models import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -727,7 +729,7 @@ class TestReferencesFromAttributeTypes:
     from _add_depends_from_type."""
 
     def test_attribute_type_produces_references_not_composes(self):
-        from codegraph.designs import EnumNode, EnumValueNode
+        from codegraph.models import EnumNode, EnumValueNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -778,7 +780,7 @@ class TestReferencesFromAttributeTypes:
         )
 
     def test_method_return_type_produces_returns_not_references(self):
-        from codegraph.designs import MethodNode
+        from codegraph.models import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],

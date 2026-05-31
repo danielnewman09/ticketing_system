@@ -29,13 +29,13 @@ def neo4j_session():
 
 def _seed_design_nodes(neo4j_session):
     """Seed some codebase graph nodes for testing."""
-    from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
+    from codegraph.models import ClassNode, MethodNode
     from backend.db.neo4j.repositories.design import DesignRepository
 
     repo = DesignRepository(neo4j_session)
 
     # Create a class with members
-    repo.merge_node(CompoundNode(
+    repo.merge_node(ClassNode(
         name="Calculator", qualified_name="calc::Calculator", kind="class",
         description="Main calculator class", component_id=1,
     ))
@@ -52,7 +52,7 @@ def _seed_design_nodes(neo4j_session):
     repo.merge_triple("calc::Calculator", "composes", "calc::Calculator::add")
 
     # Create an interface
-    repo.merge_node(CompoundNode(
+    repo.merge_node(ClassNode(
         name="ICalculator", qualified_name="calc::ICalculator", kind="interface",
         description="Calculator interface", component_id=1,
     ))
@@ -63,7 +63,7 @@ def _seed_design_nodes(neo4j_session):
     repo.merge_triple("calc::ICalculator", "composes", "calc::ICalculator::add")
 
     # Create an enum
-    repo.merge_node(CompoundNode(
+    repo.merge_node(ClassNode(
         name="Operation", qualified_name="calc::Operation", kind="enum",
         description="Supported operations", component_id=1,
     ))

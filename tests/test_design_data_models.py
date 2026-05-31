@@ -3,7 +3,6 @@
 import pytest
 from pydantic import ValidationError
 from backend.design_data.models import (
-    DiagramNode,
     ClassNode,
     InterfaceNode,
     EnumNode,

@@ -128,7 +128,7 @@ def step_design():
         _extract_intercomponent_context,
     )
     from backend.ticketing_agent.design.order_hlrs import order_hlrs
-    from codegraph.designs import ClassDiagram
+    from codegraph.diagram import ClassDiagram
     from backend.requirements.services.persistence import persist_design
 
     with get_neo4j().session() as ns:
@@ -297,7 +297,7 @@ def step_design_and_verify():
         _extract_intercomponent_context,
     )
     from backend.ticketing_agent.design.order_hlrs import order_hlrs
-    from codegraph.designs import ClassDiagram
+    from codegraph.diagram import ClassDiagram
     from backend.requirements.services.persistence import persist_design, persist_verification
 
     # --- Design phase context ---

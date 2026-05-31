@@ -18,8 +18,6 @@ from backend.db import init_db, get_session, get_or_create
 from backend.db.models import (
     Component,
     Dependency,
-    OntologyNode,
-    OntologyTriple,
     Predicate,
 )
 from backend.codebase.schemas import DesignSchema
@@ -87,28 +85,29 @@ def list_requirements() -> str:
 
 @mcp.tool()
 def list_ontology() -> str:
-    """List all ontology nodes and triples."""
-    with get_session() as session:
-        nodes = [
-            {
-                "id": n.id,
-                "qualified_name": n.qualified_name,
-                "kind": n.kind,
-                "description": n.description,
-            }
-            for n in session.query(OntologyNode).all()
-        ]
-        triples = [
-            {
-                "id": t.id,
-                "subject": t.subject.qualified_name,
-                "predicate": t.predicate.name,
-                "object": t.object.qualified_name,
-            }
-            for t in session.query(OntologyTriple).all()
-        ]
-        predicates = [name for (name,) in session.query(Predicate.name).all()]
-        return json.dumps({"nodes": nodes, "triples": triples, "predicates": predicates}, indent=2)
+    """List all ontology nodes and relationships."""
+    from backend.db.neo4j.repositories.design import DesignRepository
+    from services.dependencies import get_neo4j
+
+    with get_neo4j().session() as ns:
+        repo = DesignRepository(ns)
+        stats = repo.get_graph_stats()
+
+    predicates = []
+    try:
+        with get_session() as session:
+            predicates = [name for (name,) in session.query(Predicate.name).all()]
+    except Exception:
+        pass
+
+    return json.dumps({
+        "nodes": stats.get("nodes", []),
+        "kind_counts": stats.get("kind_counts", {}),
+        "total_nodes": stats.get("total_nodes", 0),
+        "total_edges": stats.get("total_edges", 0),
+        "total_predicates": stats.get("total_predicates", 0),
+        "predicates": predicates,
+    }, indent=2)
 
 
 @mcp.tool()
@@ -209,15 +208,15 @@ def save_decomposed_requirement(
 @mcp.tool()
 def save_ontology_design(
     nodes: list[dict],
-    triples: list[dict],
+    associations: list[dict],
     requirement_links: list[dict] | None = None,
 ) -> str:
-    """Save ontology nodes, triples, and requirement links to Neo4j."""
+    """Save ontology nodes, associations, and requirement links to Neo4j."""
     with get_neo4j().session() as neo4j_session:
         design = DesignSchema.model_validate(
             {
                 "nodes": nodes,
-                "triples": triples,
+                "associations": associations,
                 "requirement_links": requirement_links or [],
             }
         )
@@ -226,8 +225,7 @@ def save_ontology_design(
         return json.dumps(
             {
                 "nodes_created": result.nodes_created,
-                "triples_created": result.triples_created,
-                "triples_skipped": result.triples_skipped,
+                "associations_created": result.triples_created,
                 "requirement_links_applied": result.links_applied,
             }
         )

@@ -17,7 +17,7 @@ import logging
 import os
 
 from llm_caller import call_tool_loop
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.requirements.formatting import format_hlrs_for_prompt
 
 from backend.ticketing_agent.design.design_oo_prompt import (

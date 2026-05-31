@@ -4,7 +4,7 @@ Creates a ToolDispatcher with all design, verification, and discovery
 tools registered. Maintains in-memory draft state between tool calls.
 """
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.requirements.schemas import VerificationSchema
 from backend.ticketing_agent.tools import ToolDispatcher
 

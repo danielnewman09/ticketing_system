@@ -9,7 +9,7 @@ from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,
     make_design_dispatcher,
 )
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 
 
 def _sample_design_dict():

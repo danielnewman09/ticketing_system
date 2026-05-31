@@ -5,12 +5,14 @@ from backend.design_data.models import (
     AttributeNode,
     ClassDiagram,
     ClassNode,
-    DiagramNode,
     EnumNode,
     EnumValueNode,
     InterfaceNode,
     MethodNode,
     ModuleNode,
+    UnionNode,
+    FunctionNode,
+    DefineNode,
 )
 from backend.design_data.repository import DesignDataRepository
 from backend.design_data.transforms import (
@@ -24,12 +26,14 @@ __all__ = [
     "ClassDiagram",
     "ClassNode",
     "DesignDataRepository",
-    "DiagramNode",
     "EnumNode",
     "EnumValueNode",
     "InterfaceNode",
     "MethodNode",
     "ModuleNode",
+    "UnionNode",
+    "FunctionNode",
+    "DefineNode",
     "class_diagram_from_oo_design",
     "oo_design_from_class_diagram",
 ]

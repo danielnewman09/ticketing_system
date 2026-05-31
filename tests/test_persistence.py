@@ -32,43 +32,34 @@ class TestPersistDesignNeo4j:
     """Integration tests for persist_design against live Neo4j."""
 
     def test_persist_design_creates_nodes(self, neo4j_session):
-        from backend.codebase.schemas import (
-            DesignSchema,
-            CompoundNode,
-            CodebaseEdge,
-        )
+        from backend.codebase.schemas import DesignSchema
+        from codegraph.models import ClassNode
         from backend.requirements.services.persistence import persist_design
 
         design = DesignSchema(
             nodes=[
-                CompoundNode(
+                ClassNode(
                     kind="class",
                     name="Calculator",
                     qualified_name="calc::Calculator",
                     layer="design",
                 ),
-                CompoundNode(
+                ClassNode(
                     kind="class",
                     name="Fl_Button",
                     qualified_name="Fl_Button",
                     layer="dependency",
-                    
-                    description="External dependency: Fl_Button",
+                    brief_description="External dependency: Fl_Button",
                 ),
             ],
-            triples=[
-                CodebaseEdge(
-                    subject_qualified_name="calc::Calculator",
-                    predicate="depends_on",
-                    object_qualified_name="Fl_Button",
-                ),
+            associations=[
+                {"subject": "calc::Calculator", "predicate": "depends_on", "object": "Fl_Button"},
             ],
         )
 
         result = persist_design(design, neo4j_session)
 
         assert result.triples_created == 1
-        assert result.triples_skipped == 0
 
         # Verify the design node exists in Neo4j
         record = neo4j_session.run(
@@ -86,48 +77,35 @@ class TestPersistDesignNeo4j:
         assert record is None, "Dependency stub should not be created as Design node"
 
     def test_persist_design_deduplication(self, neo4j_session):
-        from backend.codebase.schemas import (
-            DesignSchema,
-            CompoundNode,
-            CodebaseEdge,
-        )
+        from backend.codebase.schemas import DesignSchema
+        from codegraph.models import ClassNode
         from backend.requirements.services.persistence import persist_design
 
         design = DesignSchema(
             nodes=[
-                CompoundNode(
+                ClassNode(
                     kind="class",
                     name="Calculator",
                     qualified_name="calc::Calculator",
                     layer="design",
                 ),
-                CompoundNode(
+                ClassNode(
                     kind="class",
                     name="Fl_Button",
                     qualified_name="Fl_Button",
                     layer="dependency",
-                    
-                    description="External dependency: Fl_Button",
+                    brief_description="External dependency: Fl_Button",
                 ),
             ],
-            triples=[
-                CodebaseEdge(
-                    subject_qualified_name="calc::Calculator",
-                    predicate="depends_on",
-                    object_qualified_name="Fl_Button",
-                ),
-                CodebaseEdge(
-                    subject_qualified_name="calc::Calculator",
-                    predicate="aggregates",
-                    object_qualified_name="Fl_Button",
-                ),
+            associations=[
+                {"subject": "calc::Calculator", "predicate": "depends_on", "object": "Fl_Button"},
+                {"subject": "calc::Calculator", "predicate": "aggregates", "object": "Fl_Button"},
             ],
         )
 
         result = persist_design(design, neo4j_session)
 
         assert result.triples_created == 2
-        assert result.triples_skipped == 0
 
         # Only one Fl_Button node in Neo4j (should be none, since it's a dep stub)
         count_result = neo4j_session.run(
@@ -139,9 +117,9 @@ class TestPersistDesignNeo4j:
         """Verify that HLR links create TRACES_TO edges in Neo4j."""
         from backend.codebase.schemas import (
             DesignSchema,
-            CompoundNode,
             RequirementTripleLinkSchema,
         )
+        from codegraph.models import ClassNode
         from backend.requirements.services.persistence import persist_design
         from backend.db.neo4j.repositories.requirement import RequirementRepository
 
@@ -151,7 +129,7 @@ class TestPersistDesignNeo4j:
 
         design = DesignSchema(
             nodes=[
-                CompoundNode(
+                ClassNode(
                     kind="class",
                     name="Calculator",
                     qualified_name="calc::Calculator",

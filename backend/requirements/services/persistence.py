@@ -17,13 +17,6 @@ from typing import TYPE_CHECKING
 
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
-from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
-from codegraph.models import NamespaceNode
-from codegraph.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
-
-COMPOUND_KIND_KEYS = {k for k, _ in COMPOUND_KINDS}
-MEMBER_KIND_KEYS = {k for k, _ in MEMBER_KINDS}
-NAMESPACE_KIND_KEYS = {k for k, _ in NAMESPACE_KINDS}
 from backend.design_data.repository import DesignDataRepository
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.db.neo4j.repositories.verification import VerificationRepository
@@ -59,74 +52,77 @@ def _map_source_type_to_layer(source_type: str, refid: str = "") -> str:
         return "design"
 
 
-def _ontology_node_to_model(node_data) -> CompoundNode | MemberNode | NamespaceNode:
-    """Convert an OntologyNodeSchema to the correct typed node model.
+def _ontology_node_to_model(node_data):
+    """Convert node data to the correct atomized neomodel type based on kind."""
+    from codegraph.models import (
+        ClassNode, InterfaceNode, EnumNode, UnionNode,
+        MethodNode, AttributeNode, EnumValueNode, FunctionNode, DefineNode,
+        NamespaceNode,
+    )
 
-    Dispatches to CompoundNode, MemberNode, or NamespaceNode based on kind.
-    Maps source_type to layer.  Only passes fields that belong to each
-    node type — member-specific attributes (type_signature, argsstring,
-    is_static, etc.) are only set on :Member nodes.
-    """
     kind = node_data.kind
     layer = _map_source_type_to_layer(
         getattr(node_data, 'source_type', '') or '',
         getattr(node_data, 'refid', '') or '',
     )
 
-    # Fields shared by all three node types.
     shared = dict(
         qualified_name=node_data.qualified_name,
         name=node_data.name,
         kind=kind,
         layer=layer,
         refid=getattr(node_data, 'refid', '') or "",
-        description=node_data.description or "",
+        brief_description=node_data.description or "",
         source=getattr(node_data, 'source', '') or "",
     )
 
-    if kind in COMPOUND_KIND_KEYS:
-        return CompoundNode(
+    if kind in ("class", "struct", "template_class", "abstract_class"):
+        return ClassNode(
             **shared,
             specialization=node_data.specialization or "",
-            protection=node_data.visibility or "",
-            file_path=node_data.file_path or "",
-            line_number=node_data.line_number,
-            is_abstract=node_data.is_abstract or False,
-            is_final=node_data.is_final or False,
             component_id=node_data.component_id,
-            is_intercomponent=node_data.is_intercomponent or False,
-            implementation_status=getattr(node_data, 'implementation_status', 'designed') or 'designed',
-            test_file=getattr(node_data, 'test_file', '') or '',
+            is_abstract=kind == "abstract_class",
         )
-    elif kind in MEMBER_KIND_KEYS:
-        return MemberNode(
+    elif kind == "interface":
+        return InterfaceNode(**shared, is_abstract=True, component_id=node_data.component_id)
+    elif kind in ("enum", "enum_class"):
+        return EnumNode(**shared, component_id=node_data.component_id)
+    elif kind == "union":
+        return UnionNode(**shared, component_id=node_data.component_id)
+    elif kind == "method":
+        return MethodNode(
             **shared,
             protection=node_data.visibility or "",
             type_signature=node_data.type_signature or "",
             argsstring=node_data.argsstring or "",
-            definition=node_data.definition or "",
-            file_path=node_data.file_path or "",
-            line_number=node_data.line_number,
             is_static=node_data.is_static or False,
             is_const=node_data.is_const or False,
             is_virtual=node_data.is_virtual or False,
             component_id=node_data.component_id,
         )
-    elif kind in NAMESPACE_KIND_KEYS:
-        return NamespaceNode(
+    elif kind in ("variable", "attribute"):
+        return AttributeNode(
             **shared,
-            component_id=node_data.component_id,
+            protection=node_data.visibility or "",
+            type_signature=node_data.type_signature or "",
+            is_static=node_data.is_static or False,
+            is_const=node_data.is_const or False,
         )
+    elif kind == "enumvalue":
+        return EnumValueNode(**shared)
+    elif kind == "function":
+        return FunctionNode(
+            **shared,
+            type_signature=node_data.type_signature or "",
+            argsstring=node_data.argsstring or "",
+        )
+    elif kind == "define":
+        return DefineNode(**shared)
+    elif kind in ("module", "namespace", "package"):
+        return NamespaceNode(**shared, component_id=node_data.component_id)
     else:
-        # Default to Compound for unknown kinds
-        return CompoundNode(
-            **shared,
-            specialization=node_data.specialization or "",
-            component_id=node_data.component_id,
-            is_intercomponent=node_data.is_intercomponent or False,
-            implementation_status="designed",
-            test_file="",
-        )
+        return ClassNode(**shared, component_id=node_data.component_id,
+                        specialization=node_data.specialization or "")
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +148,7 @@ class DesignResult:
     links_skipped: int = 0
     node_links_applied: int = 0
     node_links_skipped: int = 0
-    qname_to_node: dict[str, "CompoundNode | MemberNode | NamespaceNode"] = field(default_factory=dict)
+    qname_to_node: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -263,7 +259,7 @@ def persist_decomposition(
 def persist_design(
     design: DesignSchema,
     neo4j_session: "Neo4jSession",
-    qname_to_node: dict[str, "CompoundNode | MemberNode | NamespaceNode"] | None = None,
+    qname_to_node: dict[str, object] | None = None,
 ) -> DesignResult:
     """Create ontology nodes, triples, and requirement-to-node links in Neo4j.
 
@@ -292,46 +288,21 @@ def persist_design(
         qname_to_node[node_data.qualified_name] = node_data
         result.nodes_created += 1
 
-    # --- Triples ---
-    for triple_data in design.triples:
-        if triple_data.subject_qualified_name not in qname_to_node:
-            log.warning(
-                "Triple skipped: subject %r not found",
-                triple_data.subject_qualified_name,
-            )
-            result.triples_skipped += 1
-            continue
-        if triple_data.object_qualified_name not in qname_to_node:
-            dep_stub_qnames = {
-                nd.qualified_name for nd in design.nodes if getattr(nd, 'layer', None) == "dependency"
-            }
-            if triple_data.object_qualified_name not in dep_stub_qnames:
-                log.warning(
-                    "Triple skipped: object %r not found",
-                    triple_data.object_qualified_name,
-                )
-                result.triples_skipped += 1
-                continue
-
-        repo.merge_triple(
-            triple_data.subject_qualified_name,
-            triple_data.predicate,
-            triple_data.object_qualified_name,
-            mechanism=getattr(triple_data, "mechanism", "") or "",
-            position=getattr(triple_data, "position", None),
-            name=getattr(triple_data, "name", "") or "",
-            display_name=getattr(triple_data, "display_name", "") or "",
-        )
-        result.triples_created += 1
+    # --- Associations (was Triples) ---
+    created = repo.save_associations(
+        design.associations,
+        qname_to_node=qname_to_node,
+    )
+    result.triples_created = created
 
     # --- Requirement links (explicit from LLM) ---
     if design.requirement_links:
         req_repo = RequirementRepository(neo4j_session)
         for link in design.requirement_links:
             if link.requirement_type == "hlr":
-                if 0 <= link.triple_index < len(design.triples):
-                    triple_data = design.triples[link.triple_index]
-                    for qn in [triple_data.subject_qualified_name, triple_data.object_qualified_name]:
+                if 0 <= link.triple_index < len(design.associations):
+                    triple_data = design.associations[link.triple_index]
+                    for qn in [triple_data["subject"], triple_data["object"]]:
                         if qn in qname_to_node:
                             try:
                                 req_repo.trace_to_design(
@@ -349,9 +320,9 @@ def persist_design(
                                 result.node_links_skipped += 1
                 result.links_applied += 1
             elif link.requirement_type == "llr":
-                if 0 <= link.triple_index < len(design.triples):
-                    triple_data = design.triples[link.triple_index]
-                    for qn in [triple_data.subject_qualified_name, triple_data.object_qualified_name]:
+                if 0 <= link.triple_index < len(design.associations):
+                    triple_data = design.associations[link.triple_index]
+                    for qn in [triple_data["subject"], triple_data["object"]]:
                         if qn in qname_to_node:
                             try:
                                 req_repo.trace_to_design(
