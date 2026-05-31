@@ -42,12 +42,12 @@ for _name in ("backend", "frontend", "agents", "__main__"):
 from nicegui import app, ui
 
 from backend.db import init_db
-from codegraph.neo4j import Neo4jConnection
+from backend.db.neo4j.connection import Neo4jSessionManager
 import frontend.pages  # noqa: F401 — registers all @ui.page routes
 
 log = logging.getLogger(__name__)
 
-app.neo4j = Neo4jConnection()
+app.neo4j = Neo4jSessionManager()
 
 
 @app.on_startup

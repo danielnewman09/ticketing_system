@@ -26,8 +26,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from codegraph.neo4j import Neo4jConnection
-from backend.db.neo4j.constraints import ensure_ticketing_constraints
+from backend.db.neo4j.connection import Neo4jSessionManager
+
 
 
 COMPOUND_KINDS = {"class", "struct", "template_class", "interface", "abstract_class", "enum", "enum_class"}
@@ -67,9 +67,8 @@ def determine_label(kind: str) -> str:
 
 
 def migrate(dry_run: bool = False):
-    conn = Neo4jConnection()
+    conn = Neo4jSessionManager()
     conn.ensure_constraints()
-    ensure_ticketing_constraints(conn)
 
     driver = conn.get_driver()
     with driver.session(database="neo4j") as session:

@@ -42,7 +42,6 @@ load_dotenv()
 
 from backend.db import init_db, get_session
 from backend.db.models import Component, Language, ProjectMeta
-from codegraph.neo4j import Neo4jConnection
 from backend.db.neo4j.sync import sync_full_design
 from services.dependencies import get_neo4j, init_neo4j, close_neo4j
 

@@ -5,6 +5,8 @@ torn down afterwards.  No sqlite-vec extension, no Neo4j, no disk
 artifacts.
 """
 
+import os
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,6 +15,18 @@ from backend.db.base import Base
 
 # Import all models so Base.metadata knows about every table.
 import backend.db.models  # noqa: F401
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_neomodel():
+    """Configure neomodel for tests — uses env vars or defaults to localhost."""
+    from neomodel import get_config
+    uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+    user = os.environ.get("NEO4J_USER", "neo4j")
+    password = os.environ.get("NEO4J_PASSWORD", "neo4j")
+    host = uri.replace("bolt://", "")
+    get_config().database_url = f"bolt://{user}:{password}@{host}"
+    get_config().ALLOW_RELOAD = True
 
 
 @pytest.fixture()

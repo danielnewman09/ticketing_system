@@ -15,10 +15,9 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def neo4j_session():
     """Provide a Neo4j session and clean up after each test."""
-    from codegraph.neo4j import get_standalone_driver
+    from neomodel import db
 
-    driver = get_standalone_driver()
-    session = driver.session(database="neo4j")
+    session = db.driver.session()
     # Clean up before
     from backend.db.neo4j.repositories.design import DesignRepository
     DesignRepository(session).clear_design_graph()
@@ -26,7 +25,6 @@ def neo4j_session():
     # Clean up after
     DesignRepository(session).clear_design_graph()
     session.close()
-    driver.close()
 
 
 def _seed_design_nodes(neo4j_session):

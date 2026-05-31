@@ -139,10 +139,10 @@ def export_sqlite():
 
 def export_neo4j():
     """Dump Design nodes, relationships, and verification data from Neo4j to JSON."""
-    from codegraph.neo4j import Neo4jConnection
+    from backend.db.neo4j.connection import Neo4jSessionManager
     from backend.db.neo4j.repositories.verification import VerificationRepository
 
-    neo4j = Neo4jConnection()
+    neo4j = Neo4jSessionManager()
     os.makedirs(FIXTURES_DIR, exist_ok=True)
 
     with neo4j.session() as session:

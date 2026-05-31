@@ -40,7 +40,6 @@ load_dotenv()
 
 from backend.db import init_db, get_session, get_or_create
 from backend.db.models import Component, Language, ProjectMeta
-from codegraph.neo4j import Neo4jConnection
 from backend.db.neo4j.repositories.design import DesignRepository
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.ticketing_agent.generate_skeleton import generate_skeleton

@@ -25,9 +25,8 @@ load_dotenv()
 from services.dependencies import get_neo4j, init_neo4j, close_neo4j
 from backend.db import init_db, get_session, get_or_create
 from backend.db.models import Component
-from codegraph.neo4j import Neo4jConnection
+from backend.db.neo4j.connection import Neo4jSessionManager
 from backend.db.neo4j.repositories.requirement import RequirementRepository
-from backend.db.neo4j.constraints import ensure_ticketing_constraints
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
@@ -90,9 +89,8 @@ def assign_components():
     os.makedirs(LOGS_DIR, exist_ok=True)
 
     # Ensure Neo4j constraints
-    neo4j_conn = Neo4jConnection()
+    neo4j_conn = Neo4jSessionManager()
     neo4j_conn.ensure_constraints()
-    ensure_ticketing_constraints(neo4j_conn)
 
     # Create HLRs in Neo4j
     with get_neo4j().session() as ns:

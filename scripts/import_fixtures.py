@@ -120,13 +120,13 @@ def import_sqlite():
 
 def import_neo4j():
     """Load Neo4j fixture data: design nodes, relationships, and verification data."""
-    from codegraph.neo4j import Neo4jConnection
+    from backend.db.neo4j.connection import Neo4jSessionManager
     from backend.db.neo4j.repositories.verification import VerificationRepository
 
     with open(NEO4J_FIXTURE) as f:
         data = json.load(f)
 
-    neo4j = Neo4jConnection()
+    neo4j = Neo4jSessionManager()
 
     with neo4j.session() as session:
         # Clear existing Design nodes

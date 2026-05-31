@@ -15,16 +15,14 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def neo4j_session():
     """Provide a Neo4j session and clean up HLR/LLR nodes after each test."""
-    from codegraph.neo4j import get_standalone_driver
+    from neomodel import db
 
-    driver = get_standalone_driver()
-    session = driver.session(database="neo4j")
+    session = db.driver.session()
     yield session
     # Cleanup: remove all test data
     session.run("MATCH (n:HLR) DETACH DELETE n")
     session.run("MATCH (n:LLR) DETACH DELETE n")
     session.close()
-    driver.close()
 
 
 class TestHLRCRUD:

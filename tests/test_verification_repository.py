@@ -15,10 +15,9 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def neo4j_session():
     """Provide a Neo4j session and clean up after each test."""
-    from codegraph.neo4j import get_standalone_driver
+    from neomodel import db
 
-    driver = get_standalone_driver()
-    session = driver.session(database="neo4j")
+    session = db.driver.session()
     # Clean up before
     session.run("MATCH (n:VerificationMethod) DETACH DELETE n")
     session.run("MATCH (n:Condition) DETACH DELETE n")

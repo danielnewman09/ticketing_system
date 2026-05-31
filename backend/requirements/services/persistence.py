@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from backend.codebase.schemas import DesignSchema
 from backend.db.neo4j.repositories.design import DesignRepository
 from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
-from codegraph.nodes import NamespaceNode
+from codegraph.models import NamespaceNode
 from codegraph.constants import COMPOUND_KINDS, MEMBER_KINDS, NAMESPACE_KINDS
 
 COMPOUND_KIND_KEYS = {k for k, _ in COMPOUND_KINDS}

@@ -3,26 +3,28 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from codegraph.neo4j import Neo4jConnection
+from neomodel import db
 
 log = logging.getLogger(__name__)
 
 
-def ensure_ticketing_constraints(conn: Neo4jConnection) -> bool:
+def ensure_ticketing_constraints(conn=None) -> bool:
     """Create ticketing-specific constraints and indexes.
 
     Covers HLR, LLR, VerificationMethod, Condition, Action labels plus
     ticketing-only Compound indexes (component_id, implementation_status).
     Also handles Phase 2 migration cleanup (dropping sqlite_id constraints).
+
+    Args:
+        conn: Deprecated — kept for backward compatibility. Ignored.
     """
-    if not conn.verify_connectivity():
+    try:
+        db.cypher_query("RETURN 1")
+    except Exception:
         log.warning("Neo4j not reachable — skipping ticketing constraint setup")
         return False
 
-    with conn.session() as session:
+    with db.driver.session() as session:
         # Unique constraints
         for stmt in [
             "CREATE CONSTRAINT hlr_id IF NOT EXISTS FOR (n:HLR) REQUIRE n.id IS UNIQUE",

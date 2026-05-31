@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 from backend.codebase.schemas import DesignSchema, RequirementTripleLinkSchema
 from backend.codebase.type_parser import parse_type_refs
 from codegraph.designs import ClassDiagram
-from codegraph.nodes import CompoundNode, MemberNode, NamespaceNode
+from codegraph.models import CompoundNode, MemberNode, NamespaceNode
 from codegraph.edges import CodebaseEdge
 
 
