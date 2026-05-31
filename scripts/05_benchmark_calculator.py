@@ -21,6 +21,7 @@ from backend.db import init_db, get_session, get_or_create
 from backend.db.models import Component, Language
 from codegraph.neo4j import Neo4jConnection
 from backend.db.neo4j.repositories.requirement import RequirementRepository
+from backend.db.neo4j.constraints import ensure_ticketing_constraints
 from services.dependencies import get_neo4j, init_neo4j, close_neo4j
 
 CALCULATOR_HLRS = [
@@ -39,7 +40,7 @@ def main():
 
     neo4j_conn = Neo4jConnection()
     neo4j_conn.ensure_constraints()
-    neo4j_conn.ensure_requirement_constraints()
+    ensure_ticketing_constraints(neo4j_conn)
 
     with get_session() as session:
         lang, _ = get_or_create(session, Language, name="Python", defaults={"version": "3.11"})

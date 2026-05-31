@@ -117,8 +117,9 @@ def fetch_hlr_detail(hlr_id):
 def create_hlr(description: str, component_id: int | None = None) -> int:
     """Create a new HLR in Neo4j. Returns the new HLR id."""
     from codegraph.neo4j import Neo4jConnection
+    from backend.db.neo4j.constraints import ensure_ticketing_constraints
     neo4j_conn = Neo4jConnection()
-    neo4j_conn.ensure_requirement_constraints()
+    ensure_ticketing_constraints(neo4j_conn)
 
     with get_neo4j().session() as ns:
         repo = RequirementRepository(ns)

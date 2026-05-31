@@ -27,6 +27,7 @@ from backend.db import init_db, get_session, get_or_create
 from backend.db.models import Component
 from codegraph.neo4j import Neo4jConnection
 from backend.db.neo4j.repositories.requirement import RequirementRepository
+from backend.db.neo4j.constraints import ensure_ticketing_constraints
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 LOGS_DIR = os.path.join(REPO_ROOT, "logs")
@@ -91,7 +92,7 @@ def assign_components():
     # Ensure Neo4j constraints
     neo4j_conn = Neo4jConnection()
     neo4j_conn.ensure_constraints()
-    neo4j_conn.ensure_requirement_constraints()
+    ensure_ticketing_constraints(neo4j_conn)
 
     # Create HLRs in Neo4j
     with get_neo4j().session() as ns:

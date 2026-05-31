@@ -189,8 +189,9 @@ def save_decomposed_requirement(
 ) -> str:
     """Save a decomposed high-level requirement with its LLRs and verifications."""
     from codegraph.neo4j import Neo4jConnection
+    from backend.db.neo4j.constraints import ensure_ticketing_constraints
     neo4j_conn = Neo4jConnection()
-    neo4j_conn.ensure_requirement_constraints()
+    ensure_ticketing_constraints(neo4j_conn)
 
     with get_neo4j().session() as ns:
         repo = RequirementRepository(ns)
