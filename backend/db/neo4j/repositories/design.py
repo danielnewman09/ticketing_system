@@ -14,7 +14,7 @@ from typing import Union
 
 from neo4j import Session as Neo4jSession
 
-from backend.db.neo4j.models.nodes import (
+from codegraph.models import (
     ClassNode, InterfaceNode, EnumNode, UnionNode, ModuleNode,
     MethodNode, AttributeNode, EnumValueNode, FunctionNode, DefineNode,
     NamespaceNode,
