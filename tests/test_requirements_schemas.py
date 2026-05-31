@@ -169,7 +169,7 @@ class TestLowLevelRequirementSchema:
             description="Robust addition",
             verifications=[
                 VerificationSchema(method="automated", test_name="test_add"),
-                VerificationSchema(method="review", description="Design review"),
+                VerificationSchema(method="review"),
             ],
         )
         assert len(llr.verifications) == 2

@@ -43,7 +43,7 @@ def _seed_hlr_llr(neo4j_session):
 
     repo = RequirementRepository(neo4j_session)
     hlr = repo.create_hlr(description="The system shall calculate")
-    llr = repo.create_llr(hlr_id=hlr.id, description="The calculator shall add two numbers")
+    llr = repo.create_llr(hlr_id=hlr.id)
     return hlr, llr
 
 
@@ -104,7 +104,7 @@ class TestVerificationMethodCRUD:
         hlr, llr = _seed_hlr_llr(neo4j_session)
         repo = VerificationRepository(neo4j_session)
         created = repo.create_verification(llr_id=llr.id, method="automated", test_name="original")
-        updated = repo.update_verification(created.id, test_name="updated", description="New desc")
+        updated = repo.update_verification(created.id, test_name="updated")
         assert updated is not None
         assert updated.test_name == "updated"
         assert updated.description == "New desc"
@@ -126,7 +126,7 @@ class TestVerificationMethodCRUD:
         repo = VerificationRepository(neo4j_session)
         vm = repo.create_verification(llr_id=llr.id, method="automated", test_name="test_cascade")
         repo.add_condition(vm.id, phase="pre", subject_qualified_name="Calc::result", operator="==", expected_value="0")
-        repo.add_action(vm.id, order=1, description="Push button", callee_qualified_name="Calc::result")
+        repo.add_action(vm.id, order=1, callee_qualified_name="Calc::result")
         # Verify condition and action exist
         assert len(repo.list_conditions(vm.id)) == 1
         assert len(repo.list_actions(vm.id)) == 1
@@ -284,7 +284,7 @@ class TestActionCRUD:
         hlr, llr = _seed_hlr_llr(neo4j_session)
         repo = VerificationRepository(neo4j_session)
         vm = repo.create_verification(llr_id=llr.id, method="automated")
-        action = repo.add_action(vm.id, order=1, description="Call add()", callee_qualified_name="Calc::add")
+        action = repo.add_action(vm.id, order=1, callee_qualified_name="Calc::add")
         assert action.id is not None
         assert action.verification_method_id == vm.id
         assert action.description == "Call add()"
@@ -297,7 +297,7 @@ class TestActionCRUD:
         hlr, llr = _seed_hlr_llr(neo4j_session)
         repo = VerificationRepository(neo4j_session)
         vm = repo.create_verification(llr_id=llr.id, method="automated")
-        repo.add_action(vm.id, order=1, description="Invoke", callee_qualified_name="Calc::add")
+        repo.add_action(vm.id, order=1, callee_qualified_name="Calc::add")
         result = neo4j_session.run(
             "MATCH (a:Action)-[:CALLEE]->(d:Design {qualified_name: $qn}) RETURN count(*) AS cnt",
             {"qn": "Calc::add"},
@@ -312,7 +312,7 @@ class TestActionCRUD:
         hlr, llr = _seed_hlr_llr(neo4j_session)
         repo = VerificationRepository(neo4j_session)
         vm = repo.create_verification(llr_id=llr.id, method="automated")
-        repo.add_action(vm.id, order=1, description="Calc calls add()", caller_qualified_name="Calc", callee_qualified_name="Calc::add")
+        repo.add_action(vm.id, order=1, caller_qualified_name="Calc", callee_qualified_name="Calc::add")
         result = neo4j_session.run(
             "MATCH (a:Action)-[:CALLER]->(d:Design {qualified_name: $qn}) RETURN count(*) AS cnt",
             {"qn": "Calc"},
@@ -325,8 +325,8 @@ class TestActionCRUD:
         hlr, llr = _seed_hlr_llr(neo4j_session)
         repo = VerificationRepository(neo4j_session)
         vm = repo.create_verification(llr_id=llr.id, method="automated")
-        repo.add_action(vm.id, order=1, description="Step 1")
-        repo.add_action(vm.id, order=2, description="Step 2")
+        repo.add_action(vm.id, order=1)
+        repo.add_action(vm.id, order=2)
         actions = repo.list_actions(vm.id)
         assert len(actions) == 2
         # Should be ordered
@@ -353,7 +353,7 @@ class TestGetVerificationsForLlr:
             expected_value="initialized", subject_qualified_name="calc::CalculatorEngine::state",
         )
         repo.add_action(
-            vm.id, order=0, description="Invoke CalculatorEngine.compute(5, 3, 'add')",
+            vm.id, order=0,
             callee_qualified_name="calc::CalculatorEngine::compute",
             caller_qualified_name="TestSuite",
         )

@@ -42,7 +42,7 @@ class TestAttributeNode:
 
     def test_all_fields(self):
         a = AttributeNode(
-            name="count", type_signature="int", visibility="public", description="item count"
+            name="count", type_signature="int", visibility="public"
         )
         assert a.type_signature == "int"
         assert a.description == "item count"
@@ -243,7 +243,6 @@ class TestNeomodelClassNode:
             layer="design",
             component_id=5,
             refid="ref123",
-            brief_description="does stuff",
             detailed_description="long description",
             base_classes=["ns::BaseWidget"],
             file_path="src/widget.cpp",

@@ -113,10 +113,10 @@ class TestDesignRepositoryIntegration:
 
         repo = DesignRepository(neo4j_session)
         node1 = ClassNode(qualified_name="test::update", name="old", kind="class",
-                            layer="design", description="old desc")
+                            layer="design")
         repo.merge_node(node1)
         node2 = ClassNode(qualified_name="test::update", name="old", kind="class",
-                            layer="design", description="new desc")
+                            layer="design")
         result = repo.merge_node(node2)
         fetched = repo.get_by_qualified_name("test::update")
         assert fetched is not None

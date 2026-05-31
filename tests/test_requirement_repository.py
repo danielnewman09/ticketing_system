@@ -49,7 +49,7 @@ class TestHLRCRUD:
 
         repo = RequirementRepository(neo4j_session)
         created = repo.create_hlr(description="Original description", component_id=1)
-        updated = repo.update_hlr(created.id, description="Updated description", component_id=2)
+        updated = repo.update_hlr(created.id, component_id=2)
         assert updated is not None
         assert updated.description == "Updated description"
         assert updated.component_id == 2
@@ -81,7 +81,7 @@ class TestLLRCRUD:
 
         repo = RequirementRepository(neo4j_session)
         hlr = repo.create_hlr(description="Parent HLR")
-        llr = repo.create_llr(hlr_id=hlr.id, description="The calculator shall add")
+        llr = repo.create_llr(hlr_id=hlr.id)
         assert llr.id is not None
         assert llr.description == "The calculator shall add"
         assert llr.high_level_requirement_id == hlr.id
@@ -91,7 +91,7 @@ class TestLLRCRUD:
 
         repo = RequirementRepository(neo4j_session)
         hlr = repo.create_hlr(description="HLR")
-        created = repo.create_llr(hlr_id=hlr.id, description="LLR desc")
+        created = repo.create_llr(hlr_id=hlr.id)
         fetched = repo.get_llr(created.id)
         assert fetched is not None
         assert fetched.description == "LLR desc"
@@ -101,8 +101,8 @@ class TestLLRCRUD:
 
         repo = RequirementRepository(neo4j_session)
         hlr = repo.create_hlr(description="HLR")
-        created = repo.create_llr(hlr_id=hlr.id, description="Original LLR")
-        updated = repo.update_llr(created.id, description="Updated LLR")
+        created = repo.create_llr(hlr_id=hlr.id)
+        updated = repo.update_llr(created.id)
         assert updated is not None
         assert updated.description == "Updated LLR"
 
@@ -111,7 +111,7 @@ class TestLLRCRUD:
 
         repo = RequirementRepository(neo4j_session)
         hlr = repo.create_hlr(description="HLR")
-        created = repo.create_llr(hlr_id=hlr.id, description="To delete")
+        created = repo.create_llr(hlr_id=hlr.id)
         assert repo.delete_llr(created.id) is True
         assert repo.get_llr(created.id) is None
 
@@ -121,9 +121,9 @@ class TestLLRCRUD:
         repo = RequirementRepository(neo4j_session)
         hlr1 = repo.create_hlr(description="HLR 1")
         hlr2 = repo.create_hlr(description="HLR 2")
-        repo.create_llr(hlr_id=hlr1.id, description="LLR 1A")
-        repo.create_llr(hlr_id=hlr1.id, description="LLR 1B")
-        repo.create_llr(hlr_id=hlr2.id, description="LLR 2A")
+        repo.create_llr(hlr_id=hlr1.id)
+        repo.create_llr(hlr_id=hlr1.id)
+        repo.create_llr(hlr_id=hlr2.id)
         all_llrs = repo.list_llrs()
         assert len(all_llrs) == 3
         filtered = repo.list_llrs(hlr_id=hlr1.id)
@@ -135,7 +135,7 @@ class TestLLRCRUD:
 
         repo = RequirementRepository(neo4j_session)
         hlr = repo.create_hlr(description="HLR")
-        llr = repo.create_llr(hlr_id=hlr.id, description="LLR")
+        llr = repo.create_llr(hlr_id=hlr.id)
         repo.delete_hlr(hlr.id)
         assert repo.get_llr(llr.id) is None
 
@@ -146,7 +146,7 @@ class TestComponentLinks:
 
         repo = RequirementRepository(neo4j_session)
         hlr = repo.create_hlr(description="HLR")
-        llr = repo.create_llr(hlr_id=hlr.id, description="LLR")
+        llr = repo.create_llr(hlr_id=hlr.id)
         repo.link_component(llr_id=llr.id, component_id=5)
         cids = repo.get_llr_components(llr.id)
         assert 5 in cids
@@ -200,7 +200,7 @@ class TestTracesToDesign:
 
         req_repo = RequirementRepository(neo4j_session)
         hlr = req_repo.create_hlr(description="HLR")
-        llr = req_repo.create_llr(hlr_id=hlr.id, description="LLR")
+        llr = req_repo.create_llr(hlr_id=hlr.id)
         req_repo.trace_to_design(llr_id=llr.id, design_qualified_name="calc::Bar")
 
         result = neo4j_session.run(

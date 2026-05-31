@@ -9,7 +9,7 @@ from backend.pipeline.schemas import TaskSchema, TaskBatchSchema
 class TestTaskSchema:
     def test_minimal_valid(self):
         """TaskSchema requires only title and description."""
-        t = TaskSchema(title="Create Foo class", description="Add the Foo class")
+        t = TaskSchema(title="Create Foo class")
         assert t.title == "Create Foo class"
         assert t.description == "Add the Foo class"
         assert t.estimated_complexity == "medium"
@@ -46,7 +46,7 @@ class TestTaskSchema:
             )
 
     def test_serialization(self):
-        t = TaskSchema(title="t", description="d", estimated_complexity="high")
+        t = TaskSchema(title="t", estimated_complexity="high")
         d = t.model_dump()
         assert d["title"] == "t"
         assert d["description"] == "d"
@@ -64,8 +64,8 @@ class TestTaskBatchSchema:
         batch = TaskBatchSchema(
             component_name="Calculator",
             tasks=[
-                TaskSchema(title="Task A", description="First"),
-                TaskSchema(title="Task B", description="Second", dependencies=["Task A"]),
+                TaskSchema(title="Task A"),
+                TaskSchema(title="Task B", dependencies=["Task A"]),
             ],
             dependency_graph=[("Task A", "Task B")],
         )
@@ -75,7 +75,7 @@ class TestTaskBatchSchema:
         assert batch.dependency_graph[0] == ("Task A", "Task B")
 
     def test_serialization(self):
-        batch = TaskBatchSchema(tasks=[TaskSchema(title="t", description="d")])
+        batch = TaskBatchSchema(tasks=[TaskSchema(title="t")])
         d = batch.model_dump()
         assert d["component_name"] == ""
         assert len(d["tasks"]) == 1

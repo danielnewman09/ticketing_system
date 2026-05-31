@@ -33,14 +33,14 @@ def _make_design(associations=None, classes=None, class_attrs=None, class_method
 class TestValidateOODesign:
     def test_unknown_association_target_flagged(self):
         oo = _make_design(associations=[
-            Association(subject="TestClass", object="PhantomClass", predicate="depends_on", description="bad")
+            Association(subject="TestClass", object="PhantomClass", predicate="depends_on")
         ])
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=None)
         assert any("PhantomClass" in e for e in errors)
 
     def test_known_intercomponent_class_not_flagged(self):
         oo = _make_design(associations=[
-            Association(subject="TestClass", object="ui::Display", predicate="depends_on", description="ok")
+            Association(subject="TestClass", object="ui::Display", predicate="depends_on")
         ])
         intercomp = [{"qualified_name": "ui::Display", "kind": "class", "description": "Display", "name": "Display", "methods": [], "attributes": []}]
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup=None, intercomponent_classes=intercomp)
@@ -49,7 +49,7 @@ class TestValidateOODesign:
     def test_missing_intercomponent_association_flagged(self):
         oo = _make_design(
             classes=[ClassNode(
-                name="TestClass", module="test", description="test",
+                name="TestClass", module="test",
                 visibility="public", is_intercomponent=False,
                 requirement_ids=[],
                 attributes=[{"name": "disp", "type_signature": "Display", "visibility": "private", "description": "display"}],
@@ -69,14 +69,14 @@ class TestValidateOODesign:
 
     def test_dependency_lookup_target_not_flagged(self):
         oo = _make_design(associations=[
-            Association(subject="TestClass", object="Fl_Window", predicate="depends_on", description="dep")
+            Association(subject="TestClass", object="Fl_Window", predicate="depends_on")
         ])
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={"Fl_Window": "fltk::Fl_Window"}, intercomponent_classes=None)
         assert errors == []
 
     def test_prior_class_lookup_target_not_flagged(self):
         oo = _make_design(associations=[
-            Association(subject="TestClass", object="PriorClass", predicate="depends_on", description="prior")
+            Association(subject="TestClass", object="PriorClass", predicate="depends_on")
         ])
         errors = validate_oo_design(oo, prior_class_lookup={"PriorClass": "ns::PriorClass"}, dependency_lookup=None, intercomponent_classes=None)
         assert errors == []

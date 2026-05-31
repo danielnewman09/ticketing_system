@@ -49,7 +49,6 @@ class TestPersistDesignNeo4j:
                     name="Fl_Button",
                     qualified_name="Fl_Button",
                     layer="dependency",
-                    brief_description="External dependency: Fl_Button",
                 ),
             ],
             associations=[
@@ -94,7 +93,6 @@ class TestPersistDesignNeo4j:
                     name="Fl_Button",
                     qualified_name="Fl_Button",
                     layer="dependency",
-                    brief_description="External dependency: Fl_Button",
                 ),
             ],
             associations=[

@@ -34,7 +34,6 @@ class TestDependencyLookupInAssociations:
                     subject="Calculator",
                     object="Fl_Window",
                     predicate="aggregates",
-                    description="Calculator window",
                 ),
             ],
         )
@@ -69,7 +68,6 @@ class TestDependencyLookupInAssociations:
                     subject="Calculator",
                     object="string",
                     predicate="depends_on",
-                    description="Uses strings",
                 ),
             ],
         )
@@ -134,7 +132,6 @@ class TestDependsOnFromTypeSignatures:
                             name="display",
                             type_signature="Fl_Output",
                             visibility="private",
-                            description="The display",
                         ),
                     ],
                     methods=[],
@@ -169,7 +166,6 @@ class TestDependsOnFromTypeSignatures:
                             name="display",
                             type_signature="Fl_Output*",
                             visibility="private",
-                            description="Pointer to display",
                         ),
                     ],
                     methods=[],
@@ -200,7 +196,6 @@ class TestDependsOnFromTypeSignatures:
                             name="result",
                             type_signature="CalculationResult",
                             visibility="private",
-                            description="The result",
                         ),
                     ],
                     methods=[],
@@ -245,7 +240,6 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="aggregates",
-                    description="Button widget",
                 ),
             ],
         )
@@ -290,13 +284,11 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="aggregates",
-                    description="Button widget",
                 ),
                 Association(
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="depends_on",
-                    description="Uses Fl_Button",
                 ),
             ],
         )
@@ -338,7 +330,6 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="CalculatorDisplay",
                     predicate="aggregates",
-                    description="Display component",
                 ),
             ],
         )
@@ -373,13 +364,11 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="aggregates",
-                    description="Button",
                 ),
                 Association(
                     subject="CalculatorWindow",
                     object="Fl_Box",
                     predicate="aggregates",
-                    description="Box",
                 ),
             ],
         )
@@ -412,7 +401,6 @@ class TestNoDependencyLookup:
                     subject="Calculator",
                     object="RandomThing",
                     predicate="associates",
-                    description="Something",
                 ),
             ],
         )
@@ -435,7 +423,6 @@ class TestAssociationKinds:
             subject="CalculatorResult",
             object="ErrorType",
             predicate="composes",
-            description="ErrorType member variable",
         )
         assert assoc.predicate == "composes"
 
@@ -444,7 +431,6 @@ class TestAssociationKinds:
             subject="CalculatorEngine",
             object="CalculationResult",
             predicate="returns",
-            description="Returns calculation result",
         )
         assert assoc.predicate == "returns"
 
@@ -464,7 +450,6 @@ class TestEnumInClassLookup:
                 EnumNode(
                     name="ErrorType",
                     module="calc_engine",
-                    description="Error types",
                     values=[EnumValueNode(name="MALFORMED_STRING"), EnumValueNode(name="NULL_INPUT")],
                 ),
             ],
@@ -477,7 +462,6 @@ class TestEnumInClassLookup:
                             name="error_signal",
                             type_signature="ErrorType",
                             visibility="private",
-                            description="Error indicator",
                         ),
                     ],
                     methods=[],
@@ -519,7 +503,6 @@ class TestEnumInClassLookup:
                             name="engine",
                             type_signature="Engine",
                             visibility="private",
-                            description="The engine",
                         ),
                     ],
                     methods=[],
@@ -547,7 +530,6 @@ class TestEnumInClassLookup:
                 InterfaceNode(
                     name="IHandler",
                     module="app",
-                    description="Handler interface",
                     methods=[],
                 ),
             ],
@@ -560,7 +542,6 @@ class TestEnumInClassLookup:
                             name="handler",
                             type_signature="IHandler",
                             visibility="private",
-                            description="The handler",
                         ),
                     ],
                     methods=[],
@@ -590,7 +571,6 @@ class TestEnumInClassLookup:
                             name="enabled",
                             type_signature="bool",
                             visibility="public",
-                            description="Enabled flag",
                         ),
                     ],
                     methods=[],
@@ -630,7 +610,6 @@ class TestReturnsEdge:
                         MethodNode(
                             name="compute",
                             visibility="public",
-                            description="Compute result",
                             type_signature="CalcResult",
                         ),
                     ],
@@ -662,7 +641,6 @@ class TestReturnsEdge:
                 EnumNode(
                     name="Status",
                     module="calc",
-                    description="Status codes",
                     values=[EnumValueNode(name="OK"), EnumValueNode(name="ERROR")],
                 ),
             ],
@@ -675,7 +653,6 @@ class TestReturnsEdge:
                         MethodNode(
                             name="check",
                             visibility="public",
-                            description="Check status",
                             type_signature="Status",
                         ),
                     ],
@@ -706,7 +683,6 @@ class TestReturnsEdge:
                         MethodNode(
                             name="count",
                             visibility="public",
-                            description="Count items",
                             type_signature="int",
                         ),
                     ],
@@ -737,7 +713,6 @@ class TestReferencesFromAttributeTypes:
                 EnumNode(
                     name="ErrorType",
                     module="calc",
-                    description="Errors",
                     values=[EnumValueNode(name="NONE")],
                 ),
             ],
@@ -750,7 +725,6 @@ class TestReferencesFromAttributeTypes:
                             name="error",
                             type_signature="ErrorType",
                             visibility="private",
-                            description="Error",
                         ),
                     ],
                     methods=[],
@@ -793,7 +767,6 @@ class TestReferencesFromAttributeTypes:
                         MethodNode(
                             name="run",
                             visibility="public",
-                            description="Run",
                             type_signature="Result",
                         ),
                     ],
@@ -840,7 +813,6 @@ class TestReferencesFromAttributeTypes:
                             name="button",
                             type_signature="Fl_Button*",
                             visibility="private",
-                            description="Button",
                         ),
                     ],
                     methods=[],
@@ -1023,7 +995,6 @@ class TestExistingBehaviorPreserved:
                             name="display",
                             type_signature="Fl_Output",
                             visibility="private",
-                            description="The display",
                         ),
                     ],
                     methods=[],
