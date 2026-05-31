@@ -120,7 +120,7 @@ def import_sqlite():
 
 def import_neo4j():
     """Load Neo4j fixture data: design nodes, relationships, and verification data."""
-    from backend.db.neo4j.connection import Neo4jConnection
+    from codegraph.neo4j import Neo4jConnection
     from backend.db.neo4j.repositories.verification import VerificationRepository
 
     with open(NEO4J_FIXTURE) as f:

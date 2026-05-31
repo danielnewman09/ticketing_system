@@ -188,7 +188,7 @@ def save_decomposed_requirement(
     low_level_requirements: list[dict],
 ) -> str:
     """Save a decomposed high-level requirement with its LLRs and verifications."""
-    from backend.db.neo4j.connection import Neo4jConnection
+    from codegraph.neo4j import Neo4jConnection
     neo4j_conn = Neo4jConnection()
     neo4j_conn.ensure_requirement_constraints()
 
@@ -277,7 +277,7 @@ def _get_codebase_tools():
     global _codebase_tools
     if _codebase_tools is None:
         from doxygen_index.tools import create_toolset
-        from backend.db.neo4j.connection import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+        from codegraph.neo4j import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 
         _codebase_tools = create_toolset(
             uri=NEO4J_URI,

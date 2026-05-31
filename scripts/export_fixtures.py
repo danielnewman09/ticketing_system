@@ -139,7 +139,7 @@ def export_sqlite():
 
 def export_neo4j():
     """Dump Design nodes, relationships, and verification data from Neo4j to JSON."""
-    from backend.db.neo4j.connection import Neo4jConnection
+    from codegraph.neo4j import Neo4jConnection
     from backend.db.neo4j.repositories.verification import VerificationRepository
 
     neo4j = Neo4jConnection()

@@ -15,8 +15,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from backend.db.neo4j.connection import Neo4jConnection
+    from codegraph.neo4j import Neo4jConnection
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ def init_neo4j() -> Neo4jConnection:
         pass
 
     if _standalone_neo4j is None:
-        from backend.db.neo4j.connection import Neo4jConnection
+        from codegraph.neo4j import Neo4jConnection
 
         _standalone_neo4j = Neo4jConnection()
         log.info("Standalone Neo4j connection initialized")
@@ -76,7 +75,7 @@ def get_neo4j() -> Neo4jConnection:
     # 2. Standalone connection (explicitly initialised or lazily created)
     global _standalone_neo4j
     if _standalone_neo4j is None:
-        from backend.db.neo4j.connection import Neo4jConnection
+        from codegraph.neo4j import Neo4jConnection
 
         _standalone_neo4j = Neo4jConnection()
         log.info("Lazy standalone Neo4j connection created")

@@ -26,7 +26,7 @@ LOGS_DIR = os.path.join(REPO_ROOT, "logs")
 
 def _nuke_neo4j():
     """Delete ALL nodes, relationships, constraints, and indexes from Neo4j."""
-    from backend.db.neo4j.connection import Neo4jConnection
+    from codegraph.neo4j import Neo4jConnection
 
     print("Nuking Neo4j - this will delete EVERYTHING (nodes, constraints, indexes)...")
     conn = Neo4jConnection()

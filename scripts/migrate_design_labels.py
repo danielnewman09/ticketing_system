@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from backend.db.neo4j.connection import Neo4jConnection
+from codegraph.neo4j import Neo4jConnection
 
 
 COMPOUND_KINDS = {"class", "struct", "template_class", "interface", "abstract_class", "enum", "enum_class"}

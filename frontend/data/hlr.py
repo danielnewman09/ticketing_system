@@ -116,7 +116,7 @@ def fetch_hlr_detail(hlr_id):
 
 def create_hlr(description: str, component_id: int | None = None) -> int:
     """Create a new HLR in Neo4j. Returns the new HLR id."""
-    from backend.db.neo4j.connection import Neo4jConnection
+    from codegraph.neo4j import Neo4jConnection
     neo4j_conn = Neo4jConnection()
     neo4j_conn.ensure_requirement_constraints()
 

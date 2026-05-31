@@ -25,7 +25,7 @@ load_dotenv()
 from services.dependencies import get_neo4j, init_neo4j, close_neo4j
 from backend.db import init_db, get_session, get_or_create
 from backend.db.models import Component
-from backend.db.neo4j.connection import Neo4jConnection
+from codegraph.neo4j import Neo4jConnection
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
