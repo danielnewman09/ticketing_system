@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
     from codegraph.neo4j import Neo4jConnection
 
 log = logging.getLogger(__name__)
