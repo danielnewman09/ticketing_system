@@ -13,9 +13,9 @@ from codegraph.designs import ClassDiagram
 
 
 def _sample_design_dict():
-    """Return a minimal valid OODesign dict."""
+    """Return a minimal valid ClassDiagram dict."""
     return {
-        "modules": ["calculation_engine"],
+        "module_names": ["calculation_engine"],
         "classes": [
             {
                 "name": "Calculator",
@@ -27,7 +27,7 @@ def _sample_design_dict():
                 "attributes": [
                     {
                         "name": "result",
-                        "type_name": "double",
+                        "type_signature": "double",
                         "visibility": "private",
                         "description": "Last result",
                     }
@@ -37,12 +37,12 @@ def _sample_design_dict():
                         "name": "add",
                         "description": "Add two numbers",
                         "visibility": "public",
-                        "parameters": [],
-                        "return_type": "double",
+                        "argsstring": "",
+                        "type_signature": "double",
                     }
                 ],
                 "inherits_from": [],
-                "realizes_interfaces": [],
+                "realizes": [],
             }
         ],
         "interfaces": [],
@@ -105,9 +105,9 @@ class TestValidateDesignDispatcher:
         design = _sample_design_dict()
         design["associations"] = [
             {
-                "from_class": "Calculator",
-                "to_class": "NonExistentClass",
-                "kind": "depends_on",
+                "subject": "Calculator",
+                "object": "NonExistentClass",
+                "predicate": "depends_on",
                 "description": "Missing ref",
             }
         ]
@@ -122,7 +122,7 @@ class TestValidateDesignDispatcher:
         design["classes"][0]["attributes"].append(
             {
                 "name": "display",
-                "type_name": "DisplayArea",
+                "type_signature": "DisplayArea",
                 "visibility": "private",
                 "description": "The display",
             }
@@ -137,16 +137,16 @@ class TestValidateDesignDispatcher:
         design["classes"][0]["attributes"].append(
             {
                 "name": "display",
-                "type_name": "DisplayArea",
+                "type_signature": "DisplayArea",
                 "visibility": "private",
                 "description": "The display",
             }
         )
         design["associations"] = [
             {
-                "from_class": "Calculator",
-                "to_class": "user_interface::DisplayArea",
-                "kind": "depends_on",
+                "subject": "Calculator",
+                "object": "user_interface::DisplayArea",
+                "predicate": "depends_on",
                 "description": "Uses display",
             }
         ]
@@ -165,9 +165,9 @@ class TestValidateDesignDispatcher:
         design = _sample_design_dict()
         design["associations"] = [
             {
-                "from_class": "Calculator",
-                "to_class": "Fl_Window",
-                "kind": "depends_on",
+                "subject": "Calculator",
+                "object": "Fl_Window",
+                "predicate": "depends_on",
                 "description": "UI dependency",
             }
         ]
@@ -231,7 +231,7 @@ class TestDisconnectedEntityValidation:
 
         design = _sample_design_dict()
         design["enums"] = [
-            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": [{"name": "ADD"}, {"name": "SUBTRACT"}]}
         ]
         oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
@@ -243,10 +243,10 @@ class TestDisconnectedEntityValidation:
 
         design = _sample_design_dict()
         design["enums"] = [
-            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": [{"name": "ADD"}, {"name": "SUBTRACT"}]}
         ]
         design["classes"][0]["attributes"].append(
-            {"name": "op", "type_name": "Operation", "visibility": "private", "description": "Current operation"}
+            {"name": "op", "type_signature": "Operation", "visibility": "private", "description": "Current operation"}
         )
         oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
@@ -258,10 +258,10 @@ class TestDisconnectedEntityValidation:
 
         design = _sample_design_dict()
         design["enums"] = [
-            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": [{"name": "ADD"}, {"name": "SUBTRACT"}]}
         ]
         design["classes"][0]["methods"].append(
-            {"name": "getOperation", "description": "Get operation", "visibility": "public", "parameters": [], "return_type": "Operation"}
+            {"name": "getOperation", "description": "Get operation", "visibility": "public", "argsstring": "", "type_signature": "Operation"}
         )
         oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
@@ -273,10 +273,10 @@ class TestDisconnectedEntityValidation:
 
         design = _sample_design_dict()
         design["enums"] = [
-            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": [{"name": "ADD"}, {"name": "SUBTRACT"}]}
         ]
         design["associations"] = [
-            {"from_class": "Calculator", "to_class": "Operation", "kind": "depends_on", "description": "Uses operation enum"}
+            {"subject": "Calculator", "object": "Operation", "predicate": "depends_on", "description": "Uses operation enum"}
         ]
         oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
@@ -290,7 +290,7 @@ class TestDisconnectedEntityValidation:
         design["classes"].append(
             {"name": "Orphan", "module": "calculation_engine", "description": "Disconnected class",
              "visibility": "public", "is_intercomponent": False, "requirement_ids": [],
-             "attributes": [], "methods": [], "inherits_from": [], "realizes_interfaces": []}
+             "attributes": [], "methods": [], "inherits_from": [], "realizes": []}
         )
         oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])
@@ -302,10 +302,10 @@ class TestDisconnectedEntityValidation:
 
         design = _sample_design_dict()
         design["enums"] = [
-            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": ["ADD", "SUBTRACT"]}
+            {"name": "Operation", "module": "calculation_engine", "description": "Operations", "values": [{"name": "ADD"}, {"name": "SUBTRACT"}]}
         ]
         design["classes"][0]["methods"].append(
-            {"name": "setOperator", "description": "Set the operator", "visibility": "public", "parameters": ["Operation op"], "return_type": "void"}
+            {"name": "setOperator", "description": "Set the operator", "visibility": "public", "argsstring": "(Operation op)", "type_signature": "void"}
         )
         oo = ClassDiagram.model_validate(design)
         errors = validate_oo_design(oo, prior_class_lookup={}, dependency_lookup={}, intercomponent_classes=[])

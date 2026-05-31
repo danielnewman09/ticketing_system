@@ -52,7 +52,7 @@ class TestMechanismInference:
         # Should also create a node for std::vector
         vector_nodes = [n for n in result.nodes if n.qualified_name == "std::vector"]
         assert len(vector_nodes) == 1
-        assert vector_nodes[0].source_type == "dependency"
+        assert vector_nodes[0].layer == "dependency"
 
     def test_references_mechanism_unique_ptr_dep(self):
         """references with mechanism=std::unique_ptr should infer depends_on std::unique_ptr."""

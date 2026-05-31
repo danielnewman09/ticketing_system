@@ -77,7 +77,7 @@ class TestClassSkeleton:
         src = generate_class_skeleton(
             {
                 "name": "MyCalc",
-                "realizes_interfaces": ["ICalculator"],
+                "realizes": ["ICalculator"],
                 "methods": [],
             }
         )

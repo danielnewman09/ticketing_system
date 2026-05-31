@@ -62,15 +62,6 @@ class TestDiagramNode:
         assert node.line_number == 42
         assert node.implementation_status == "implemented"
 
-    def test_invalid_layer(self):
-        with pytest.raises(ValidationError):
-            DiagramNode(
-                name="X",
-                qualified_name="X",
-                kind="class",
-                layer="invalid",
-            )
-
     def test_dependency_layer(self):
         node = DiagramNode(
             name="Fl_Button",

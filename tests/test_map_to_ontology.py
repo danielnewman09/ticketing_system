@@ -49,8 +49,7 @@ class TestDependencyLookupInAssociations:
         # There should also be a dependency stub node for Fl_Window
         dep_node = [n for n in result.nodes if n.qualified_name == "Fl_Window"]
         assert len(dep_node) == 1
-        assert dep_node[0].source_type == "dependency"
-        assert dep_node[0].is_intercomponent is True
+        assert dep_node[0].layer == "dependency"
 
     def test_association_to_dependency_with_namespaced_qname(self):
         oo = ClassDiagram(
@@ -83,7 +82,7 @@ class TestDependencyLookupInAssociations:
         assert len(dep_triples) >= 1
         dep_node = [n for n in result.nodes if n.qualified_name == "std::string"]
         assert len(dep_node) == 1
-        assert dep_node[0].source_type == "dependency"
+        assert dep_node[0].layer == "dependency"
 
 
 class TestDependencyLookupInInheritance:
@@ -114,7 +113,7 @@ class TestDependencyLookupInInheritance:
         assert len(gen_triples) == 1
         dep_node = [n for n in result.nodes if n.qualified_name == "Fl_Window"]
         assert len(dep_node) == 1
-        assert dep_node[0].source_type == "dependency"
+        assert dep_node[0].layer == "dependency"
 
 
 class TestDependsOnFromTypeSignatures:
@@ -153,7 +152,7 @@ class TestDependsOnFromTypeSignatures:
         assert len(dep_triples) == 1
         dep_node = [n for n in result.nodes if n.qualified_name == "Fl_Output"]
         assert len(dep_node) == 1
-        assert dep_node[0].source_type == "dependency"
+        assert dep_node[0].layer == "dependency"
 
     def test_pointer_type_still_resolves(self):
         """Fl_Output* should still resolve Fl_Output."""
@@ -427,7 +426,7 @@ class TestNoDependencyLookup:
         assert len(random_nodes) == 0
 
 class TestAssociationKinds:
-    """Association.kind should accept composes and returns."""
+    """Association.predicate should accept composes and returns."""
 
     def test_composes_association(self):
         assoc = Association(
@@ -436,7 +435,7 @@ class TestAssociationKinds:
             predicate="composes",
             description="ErrorType member variable",
         )
-        assert assoc.kind == "composes"
+        assert assoc.predicate == "composes"
 
     def test_returns_association(self):
         assoc = Association(
@@ -445,7 +444,7 @@ class TestAssociationKinds:
             predicate="returns",
             description="Returns calculation result",
         )
-        assert assoc.kind == "returns"
+        assert assoc.predicate == "returns"
 
 
 class TestEnumInClassLookup:
@@ -455,7 +454,7 @@ class TestEnumInClassLookup:
     def test_class_references_enum_from_attribute_type(self):
         """When a class has an attribute typed by an enum, a class-level
         references edge should be emitted (class → enum)."""
-        from backend.codebase.schemas import EnumNode, InterfaceNode
+        from codegraph.designs import EnumNode, EnumValueNode, InterfaceNode
 
         oo = ClassDiagram(
             module_names=["calc_engine"],
@@ -464,7 +463,7 @@ class TestEnumInClassLookup:
                     name="ErrorType",
                     module="calc_engine",
                     description="Error types",
-                    values=["MALFORMED_STRING", "NULL_INPUT"],
+                    values=[EnumValueNode(name="MALFORMED_STRING"), EnumValueNode(name="NULL_INPUT")],
                 ),
             ],
             classes=[
@@ -538,7 +537,7 @@ class TestEnumInClassLookup:
     def test_class_references_interface_from_attribute_type(self):
         """When a class has an attribute typed by a design interface,
         a class-level references edge should be emitted."""
-        from backend.codebase.schemas import InterfaceNode
+        from codegraph.designs import InterfaceNode
 
         oo = ClassDiagram(
             module_names=["app"],
@@ -616,7 +615,7 @@ class TestReturnsEdge:
     """Methods returning design-internal types should get a returns edge."""
 
     def test_method_returns_design_class(self):
-        from backend.codebase.schemas import MethodNode
+        from codegraph.designs import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -653,7 +652,7 @@ class TestReturnsEdge:
         assert len(returns_triples) == 1
 
     def test_method_returns_design_enum(self):
-        from backend.codebase.schemas import EnumNode, MethodNode
+        from codegraph.designs import EnumNode, EnumValueNode, MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -662,7 +661,7 @@ class TestReturnsEdge:
                     name="Status",
                     module="calc",
                     description="Status codes",
-                    values=["OK", "ERROR"],
+                    values=[EnumValueNode(name="OK"), EnumValueNode(name="ERROR")],
                 ),
             ],
             classes=[
@@ -692,7 +691,7 @@ class TestReturnsEdge:
         assert len(returns_triples) == 1
 
     def test_no_returns_for_primitive_type(self):
-        from backend.codebase.schemas import MethodNode
+        from codegraph.designs import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -728,7 +727,7 @@ class TestReferencesFromAttributeTypes:
     from _add_depends_from_type."""
 
     def test_attribute_type_produces_references_not_composes(self):
-        from backend.codebase.schemas import EnumNode
+        from codegraph.designs import EnumNode, EnumValueNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -737,7 +736,7 @@ class TestReferencesFromAttributeTypes:
                     name="ErrorType",
                     module="calc",
                     description="Errors",
-                    values=["NONE"],
+                    values=[EnumValueNode(name="NONE")],
                 ),
             ],
             classes=[
@@ -779,7 +778,7 @@ class TestReferencesFromAttributeTypes:
         )
 
     def test_method_return_type_produces_returns_not_references(self):
-        from backend.codebase.schemas import MethodNode
+        from codegraph.designs import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -875,7 +874,7 @@ class TestStdlibTypeLinking:
                         MethodNode(
                             name="add",
                             visibility="public",
-                            parameters=["const std::string& operand1", "const std::string& operand2"],
+                            argsstring="(const std::string& operand1, const std::string& operand2)",
                             type_signature="CalculationResult",
                         ),
                     ],
@@ -925,7 +924,7 @@ class TestStdlibTypeLinking:
                         MethodNode(
                             name="parse",
                             visibility="public",
-                            parameters=["const std::string& expr"],
+                            argsstring="(const std::string& expr)",
                             type_signature="std::vector<std::string>",
                         ),
                     ],
@@ -988,7 +987,7 @@ class TestExistingBehaviorPreserved:
                         MethodNode(
                             name="add",
                             visibility="public",
-                            parameters=["const CalculationResult& result"],
+                            argsstring="(const CalculationResult& result)",
                             type_signature="CalculationResult",
                         ),
                     ],

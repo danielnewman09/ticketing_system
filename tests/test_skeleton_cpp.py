@@ -308,7 +308,7 @@ class TestClassSkeleton:
     def test_class_with_interface_realization(self):
         header, source = generate_class_skeleton({
             "name": "MyCalc",
-            "realizes_interfaces": ["ICalculator"],
+            "realizes": ["ICalculator"],
             "methods": [],
         })
         assert "ICalculator" in header

@@ -6,7 +6,7 @@ from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_
 
 
 def _make_design(associations=None, classes=None, class_attrs=None, class_methods=None):
-    """Helper to create a minimal OODesignSchema for testing."""
+    """Helper to create a minimal ClassDiagram for testing."""
     if classes is None:
         classes = [ClassNode(
             name="TestClass",
@@ -18,9 +18,9 @@ def _make_design(associations=None, classes=None, class_attrs=None, class_method
             attributes=class_attrs or [],
             methods=class_methods or [],
             inherits_from=[],
-            realizes_interfaces=[],
+            realizes=[],
         )]
-    return OODesignSchema(
+    return ClassDiagram(
         module_names=["test"],
         classes=classes,
         interfaces=[],
@@ -51,10 +51,10 @@ class TestValidateOODesign:
                 name="TestClass", module="test", description="test",
                 visibility="public", is_intercomponent=False,
                 requirement_ids=[],
-                attributes=[{"name": "disp", "type_name": "Display", "visibility": "private", "description": "display"}],
+                attributes=[{"name": "disp", "type_signature": "Display", "visibility": "private", "description": "display"}],
                 methods=[],
                 inherits_from=[],
-                realizes_interfaces=[],
+                realizes=[],
             )],
         )
         intercomp = [{"qualified_name": "ui::Display", "kind": "class", "description": "Display", "name": "Display", "methods": [], "attributes": []}]
@@ -83,11 +83,11 @@ class TestValidateOODesign:
 
 class TestDesignOOToolLoop:
     def test_design_oo_returns_schema_on_valid_output(self):
-        """Verify design_oo function returns OODesignSchema via call_tool_loop."""
+        """Verify design_oo function returns ClassDiagram via call_tool_loop."""
         from backend.ticketing_agent.design.design_oo import design_oo
 
         mock_result = {
-            "modules": ["test_ns"],
+            "module_names": ["test_ns"],
             "classes": [{
                 "name": "TestClass",
                 "module": "test_ns",
@@ -98,7 +98,7 @@ class TestDesignOOToolLoop:
                 "attributes": [],
                 "methods": [],
                 "inherits_from": [],
-                "realizes_interfaces": [],
+                "realizes": [],
             }],
             "interfaces": [],
             "enums": [],
@@ -110,7 +110,7 @@ class TestDesignOOToolLoop:
                 llrs=[],
                 prior_class_lookup={},
             )
-        assert isinstance(result, OODesignSchema)
-        assert result.modules == ["test_ns"]
+        assert isinstance(result, ClassDiagram)
+        assert result.module_names == ["test_ns"]
         assert len(result.classes) == 1
         assert result.classes[0].name == "TestClass"

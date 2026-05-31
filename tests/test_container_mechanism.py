@@ -145,7 +145,7 @@ class TestMechanismResolution:
             Association(
                 subject="MyClass",
                 object="Widget",
-                kind="aggregates",
+                predicate="aggregates",
                 mechanism="std::vector",
             ),
         ])
@@ -160,7 +160,7 @@ class TestMechanismResolution:
         assert len(dep_triples) >= 1, f"Expected depends_on std::vector, got: {[t.object_qualified_name for t in result.triples if t.predicate == 'depends_on']}"
 
         # Should NOT have a stub node for std::vector (it should resolve to real one)
-        stub_nodes = [n for n in result.nodes if n.qualified_name == "std::vector" and n.source_type == "dependency" and "Standard library" in n.description]
+        stub_nodes = [n for n in result.nodes if n.qualified_name == "std::vector" and n.layer == "dependency" and "Standard library" in n.brief_description]
         # When resolved via dep_lookup, the _add_node in _resolve_ref creates the node with layer="dependency"
         # but it's a real node from the lookup, not a stub
         assert len([n for n in result.nodes if n.qualified_name == "std::vector"]) >= 1
@@ -173,7 +173,7 @@ class TestMechanismResolution:
             Association(
                 subject="MyClass",
                 object="Widget",
-                kind="aggregates",
+                predicate="aggregates",
                 mechanism="std::vector",
             ),
         ])
@@ -195,7 +195,7 @@ class TestMechanismResolution:
             Association(
                 subject="MyClass",
                 object="Widget",
-                kind="references",
+                predicate="references",
                 mechanism="raw_pointer",
             ),
         ])
@@ -294,7 +294,7 @@ class TestAggregatesValidation:
                 Association(
                     subject="MyClass",
                     object="Widget",
-                    kind="aggregates",
+                    predicate="aggregates",
                     mechanism="",
                 ),
             ],
@@ -323,7 +323,7 @@ class TestAggregatesValidation:
                 Association(
                     subject="MyClass",
                     object="Widget",
-                    kind="aggregates",
+                    predicate="aggregates",
                     mechanism="std::vector",
                 ),
             ],
@@ -352,7 +352,7 @@ class TestAggregatesValidation:
                 Association(
                     subject="MyClass",
                     object="Widget",
-                    kind="aggregates",
+                    predicate="aggregates",
                     mechanism="std::hypothetical_container",
                 ),
             ],
@@ -381,7 +381,7 @@ class TestAggregatesValidation:
                 Association(
                     subject="MyClass",
                     object="Engine",
-                    kind="references",
+                    predicate="references",
                     mechanism="",
                 ),
             ],
