@@ -378,8 +378,8 @@ def map_oo_to_ontology(
             assoc.subject = _strip_wrong_ns(assoc.subject)
             assoc.object = _strip_wrong_ns(assoc.object)
         for cls in oo.classes:
-            if hasattr(cls, 'inherits_from'):
-                cls.inherits_from = [_strip_wrong_ns(p) for p in cls.inherits_from]
+            if hasattr(cls, 'base_classes') and cls.base_classes:
+                cls.base_classes = [_strip_wrong_ns(p) for p in cls.base_classes]
             if hasattr(cls, 'realizes'):
                 cls.realizes = [_strip_wrong_ns(i) for i in cls.realizes]
 

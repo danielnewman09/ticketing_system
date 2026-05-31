@@ -133,7 +133,7 @@ def validate_oo_design(
                     param_text = param_text.strip()
                     if param_text:
                         extract_type_refs(param_text, all_design_names, outbound[cls.name])
-        for parent in (cls.inherits_from or []):
+        for parent in (cls.base_classes or []):
             if parent in all_design_names:
                 outbound[cls.name].add(parent)
                 inbound[parent].add(cls.name)

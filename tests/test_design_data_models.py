@@ -2,23 +2,21 @@
 
 import pytest
 from pydantic import ValidationError
-import pytest
-from backend.design_data.models import (
+
+from codegraph.models import (
     ClassNode,
     InterfaceNode,
     EnumNode,
-    ModuleNode,
-    AttributeNode,
     MethodNode,
+    AttributeNode,
     EnumValueNode,
-    Association,
-    ClassDiagram,
 )
+from codegraph.diagram import ClassDiagram, Association
 
 
-class TestDiagramNode:
+class TestClassNode:
     def test_minimal_creation(self):
-        node = DiagramNode(
+        node = ClassNode(
             name="Calculator",
             qualified_name="calc::Calculator",
             kind="class",
@@ -33,7 +31,7 @@ class TestDiagramNode:
         assert node.implementation_status == "designed"
 
     def test_all_fields(self):
-        node = DiagramNode(
+        node = ClassNode(
             name="calculate",
             qualified_name="calc::Calculator::calculate",
             kind="method",
@@ -63,7 +61,7 @@ class TestDiagramNode:
         assert node.implementation_status == "implemented"
 
     def test_dependency_layer(self):
-        node = DiagramNode(
+        node = ClassNode(
             name="Fl_Button",
             qualified_name="Fl_Button",
             kind="class",
