@@ -14,8 +14,8 @@ from backend.pipeline.services import (
 class TestTopologicalSort:
     def test_no_deps(self):
         tasks = [
-            TaskSchema(title="A"),
-            TaskSchema(title="B"),
+            TaskSchema(title="A", description="test"),
+            TaskSchema(title="B", description="test"),
         ]
         result = _topological_sort(tasks, [])
         assert len(result) == 2
@@ -24,8 +24,8 @@ class TestTopologicalSort:
 
     def test_with_deps(self):
         tasks = [
-            TaskSchema(title="B"),
-            TaskSchema(title="A"),
+            TaskSchema(title="B", description="test"),
+            TaskSchema(title="A", description="test"),
         ]
         result = _topological_sort(tasks, [("A", "B")])
         assert result[0].title == "A"
@@ -69,7 +69,7 @@ class TestPersistTasks:
     def test_persist_task_with_parent(self, seeded_session):
         batch = TaskBatchSchema(
             tasks=[
-                TaskSchema(title="Parent"),
+                TaskSchema(title="Parent", description="test"),
                 TaskSchema(
                     title="Child",
                     description="depends_on_parent",

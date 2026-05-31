@@ -37,7 +37,7 @@ def _seed_design_nodes(neo4j_session):
     # Create a class with members
     repo.merge_node(ClassNode(
         name="Calculator", qualified_name="calc::Calculator", kind="class",
-        description="Main calculator class", component_id=1,
+        brief_description="Main calculator class", component_id=1,
     ))
     repo.merge_node(MemberNode(
         name="result_", qualified_name="calc::Calculator::result_", kind="attribute",
@@ -54,7 +54,7 @@ def _seed_design_nodes(neo4j_session):
     # Create an interface
     repo.merge_node(ClassNode(
         name="ICalculator", qualified_name="calc::ICalculator", kind="interface",
-        description="Calculator interface", component_id=1,
+        brief_description="Calculator interface", component_id=1,
     ))
     repo.merge_node(MemberNode(
         name="add", qualified_name="calc::ICalculator::add", kind="method",
@@ -65,7 +65,7 @@ def _seed_design_nodes(neo4j_session):
     # Create an enum
     repo.merge_node(ClassNode(
         name="Operation", qualified_name="calc::Operation", kind="enum",
-        description="Supported operations", component_id=1,
+        brief_description="Supported operations", component_id=1,
     ))
 
 

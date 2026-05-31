@@ -30,7 +30,7 @@ class TestClassNodeModel:
             layer="as-built",
             specialization="template_class",
             visibility="public",
-            description="A struct",
+            brief_description="A struct",
             refid="classns_1_1Foo_1a123",
             type_signature="int(int, int)",
             argsstring="(int x, int y)",
@@ -183,7 +183,7 @@ class TestDesignRepositoryIntegration:
         # Dependency-layer nodes are merged normally (no source_type skip anymore)
         node = ClassNode(qualified_name="dep::stub", name="stub", kind="class",
                            layer="dependency", is_intercomponent=True,
-                           description="External dependency")
+                           brief_description="External dependency")
         result = repo.merge_node(node)
         assert result.qualified_name == "dep::stub"
 
