@@ -4,13 +4,13 @@ import pytest
 from pydantic import ValidationError
 
 
-class TestCompoundNodeModel:
+class TestClassNodeModel:
     """Tests for the CompoundNode Pydantic model."""
 
     def test_create_minimal(self):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
 
-        node = CompoundNode(qualified_name="ns::Foo", name="Foo", kind="class")
+        node = ClassNode(qualified_name="ns::Foo", name="Foo", kind="class")
         assert node.qualified_name == "ns::Foo"
         assert node.name == "Foo"
         assert node.kind == "class"
@@ -21,16 +21,16 @@ class TestCompoundNodeModel:
         assert node.implementation_status == "designed"
 
     def test_create_all_fields(self):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
 
-        node = CompoundNode(
+        node = ClassNode(
             qualified_name="ns::Foo",
             name="Foo",
             kind="struct",
             layer="as-built",
             specialization="template_class",
             visibility="public",
-            description="A struct",
+            brief_description="A struct",
             refid="classns_1_1Foo_1a123",
             type_signature="int(int, int)",
             argsstring="(int x, int y)",
@@ -56,9 +56,9 @@ class TestCompoundNodeModel:
         assert node.implementation_status == "implemented"
 
     def test_defaults_populated(self):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
 
-        node = CompoundNode(qualified_name="X", name="X", kind="class")
+        node = ClassNode(qualified_name="X", name="X", kind="class")
         assert node.layer == "design"
         assert node.implementation_status == "designed"
         assert node.is_intercomponent is False
@@ -98,48 +98,48 @@ class TestDesignRepositoryIntegration:
     """Integration tests for DesignRepository (require Neo4j)."""
 
     def test_merge_node_creates_new(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
-        node = CompoundNode(qualified_name="test::merge", name="merge", kind="class",
+        node = ClassNode(qualified_name="test::merge", name="merge", kind="class",
                            layer="design")
         result = repo.merge_node(node)
         assert result.qualified_name == "test::merge"
 
     def test_merge_node_updates_existing(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
-        node1 = CompoundNode(qualified_name="test::update", name="old", kind="class",
-                            layer="design", description="old desc")
+        node1 = ClassNode(qualified_name="test::update", name="old", kind="class",
+                            layer="design")
         repo.merge_node(node1)
-        node2 = CompoundNode(qualified_name="test::update", name="old", kind="class",
-                            layer="design", description="new desc")
+        node2 = ClassNode(qualified_name="test::update", name="old", kind="class",
+                            layer="design")
         result = repo.merge_node(node2)
         fetched = repo.get_by_qualified_name("test::update")
         assert fetched is not None
         assert fetched.description == "new desc"
 
     def test_merge_triple_creates_relationship(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
-        repo.merge_node(CompoundNode(qualified_name="test::tripleS", name="tripleS", kind="class",
+        repo.merge_node(ClassNode(qualified_name="test::tripleS", name="tripleS", kind="class",
                                      layer="design"))
-        repo.merge_node(CompoundNode(qualified_name="test::tripleO", name="tripleO", kind="class",
+        repo.merge_node(ClassNode(qualified_name="test::tripleO", name="tripleO", kind="class",
                                      layer="design"))
         repo.merge_triple("test::tripleS", "depends_on", "test::tripleO")
         # Success = no exception
 
     def test_get_by_qualified_name(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
-        repo.merge_node(CompoundNode(qualified_name="test::getMe", name="getMe", kind="class",
+        repo.merge_node(ClassNode(qualified_name="test::getMe", name="getMe", kind="class",
                                      layer="design"))
         fetched = repo.get_by_qualified_name("test::getMe")
         assert fetched is not None
@@ -153,11 +153,11 @@ class TestDesignRepositoryIntegration:
         assert fetched is None
 
     def test_find_nodes_by_kind(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
-        repo.merge_node(CompoundNode(qualified_name="test::findMe", name="findMe", kind="class",
+        repo.merge_node(ClassNode(qualified_name="test::findMe", name="findMe", kind="class",
                                      layer="design"))
         results = repo.find_nodes(kind="class")
         assert len(results) >= 1
@@ -165,36 +165,36 @@ class TestDesignRepositoryIntegration:
         assert "test::findMe" in names
 
     def test_delete_node(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
-        repo.merge_node(CompoundNode(qualified_name="test::deleteMe", name="deleteMe", kind="class",
+        repo.merge_node(ClassNode(qualified_name="test::deleteMe", name="deleteMe", kind="class",
                                      layer="design"))
         result = repo.delete_node("test::deleteMe")
         assert result is True
         assert repo.get_by_qualified_name("test::deleteMe") is None
 
     def test_skips_dependency_stub_in_merge(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
         # Dependency-layer nodes are merged normally (no source_type skip anymore)
-        node = CompoundNode(qualified_name="dep::stub", name="stub", kind="class",
+        node = ClassNode(qualified_name="dep::stub", name="stub", kind="class",
                            layer="dependency", is_intercomponent=True,
-                           description="External dependency")
+                           brief_description="External dependency")
         result = repo.merge_node(node)
         assert result.qualified_name == "dep::stub"
 
     def test_find_nodes_excludes_layers(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
 
         repo = DesignRepository(neo4j_session)
-        repo.merge_node(CompoundNode(qualified_name="test::dep1", name="dep1", kind="class",
+        repo.merge_node(ClassNode(qualified_name="test::dep1", name="dep1", kind="class",
                                      layer="dependency", is_intercomponent=True))
-        repo.merge_node(CompoundNode(qualified_name="test::design1", name="design1", kind="class",
+        repo.merge_node(ClassNode(qualified_name="test::design1", name="design1", kind="class",
                                      layer="design"))
         results = repo.find_nodes(exclude_layers=["dependency"])
         names = [n.qualified_name for n in results]

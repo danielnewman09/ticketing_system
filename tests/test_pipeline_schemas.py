@@ -64,8 +64,8 @@ class TestTaskBatchSchema:
         batch = TaskBatchSchema(
             component_name="Calculator",
             tasks=[
-                TaskSchema(title="Task A", description="First"),
-                TaskSchema(title="Task B", description="Second", dependencies=["Task A"]),
+                TaskSchema(title="Task A", description="First task"),
+                TaskSchema(title="Task B", description="Second task", dependencies=["Task A"]),
             ],
             dependency_graph=[("Task A", "Task B")],
         )
@@ -75,7 +75,7 @@ class TestTaskBatchSchema:
         assert batch.dependency_graph[0] == ("Task A", "Task B")
 
     def test_serialization(self):
-        batch = TaskBatchSchema(tasks=[TaskSchema(title="t", description="d")])
+        batch = TaskBatchSchema(tasks=[TaskSchema(title="t", description="test")])
         d = batch.model_dump()
         assert d["component_name"] == ""
         assert len(d["tasks"]) == 1
@@ -85,6 +85,7 @@ def test_design_and_verification_schema_creation():
     """DesignAndVerificationSchema accepts valid input."""
     from backend.codebase.schemas import DesignAndVerificationSchema
     from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema
+    from codegraph.diagram import ClassDiagram
 
     v = VerificationSchema(
         method="automated",
@@ -101,26 +102,23 @@ def test_design_and_verification_schema_creation():
         postconditions=[],
     )
     schema = DesignAndVerificationSchema(
-        oo_design={
-            "modules": ["calculation_engine"],
+        oo_design=ClassDiagram.model_validate({
+            "module_names": ["calculation_engine"],
             "classes": [
                 {
                     "name": "Calculator",
                     "module": "calculation_engine",
-                    "description": "Calculator",
-                    "visibility": "public",
-                    "is_intercomponent": False,
+                    "brief_description": "Calculator",
+                    "kind": "class",
                     "requirement_ids": [],
-                    "attributes": [],
-                    "methods": [],
                     "inherits_from": [],
-                    "realizes_interfaces": [],
+                    "realizes": [],
                 }
             ],
             "interfaces": [],
             "enums": [],
             "associations": [],
-        },
+        }),
         verifications={1: [v]},
     )
     assert len(schema.verifications) == 1

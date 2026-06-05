@@ -1,12 +1,10 @@
 """Design node and triple repository — Neo4j-primary data access.
 
-All design graph CRUD goes through this class. No SQLAlchemy models
-are used for design data.
+All design graph CRUD goes through this class.
 
-Graph primitives (CompoundNode, MemberNode, NamespaceNode, CodebaseEdge)
-are the typed Pydantic models for Neo4j nodes and edges. The repository
-dispatches to the correct Neo4j label (:Compound, :Member, :Namespace)
-based on the node model type.
+Atomized neomodel types (ClassNode, InterfaceNode, etc.) are used for
+all node operations. The repository dispatches to the correct Neo4j
+label (:Compound, :Member, :Namespace) based on the node kind.
 """
 
 from __future__ import annotations
@@ -16,8 +14,11 @@ from typing import Union
 
 from neo4j import Session as Neo4jSession
 
-from backend.db.neo4j.models.edges import CodebaseEdge
-from backend.db.neo4j.models.nodes import CompoundNode, MemberNode, NamespaceNode
+from codegraph.models import (
+    ClassNode, InterfaceNode, EnumNode, UnionNode, ModuleNode,
+    MethodNode, AttributeNode, EnumValueNode, FunctionNode, DefineNode,
+    NamespaceNode,
+)
 from codegraph.graph import (
     CompoundGraph,
     GraphEdge,
@@ -36,32 +37,52 @@ MEMBER_KIND_KEYS = {k for k, _ in MEMBER_KINDS}
 NAMESPACE_KIND_KEYS = {k for k, _ in NAMESPACE_KINDS}
 
 # Type alias for any codebase graph node
-NodeModel = Union[CompoundNode, MemberNode, NamespaceNode]
+NodeModel = (
+    ClassNode | InterfaceNode | EnumNode | UnionNode | ModuleNode
+    | MethodNode | AttributeNode | EnumValueNode | FunctionNode | DefineNode
+    | NamespaceNode
+)
 
 log = logging.getLogger(__name__)
 
 
-def _determine_node_type(kind: str) -> type[CompoundNode | MemberNode | NamespaceNode]:
+def _determine_node_type(kind: str) -> type[NodeModel]:
     """Return the correct model class for a given kind value."""
-    if kind in COMPOUND_KIND_KEYS:
-        return CompoundNode
-    elif kind in MEMBER_KIND_KEYS:
-        return MemberNode
-    elif kind in NAMESPACE_KIND_KEYS:
+    if kind in ("class", "struct", "template_class", "abstract_class"):
+        return ClassNode
+    elif kind == "interface":
+        return InterfaceNode
+    elif kind in ("enum", "enum_class"):
+        return EnumNode
+    elif kind == "union":
+        return UnionNode
+    elif kind in ("module", "namespace", "package"):
         return NamespaceNode
+    elif kind == "method":
+        return MethodNode
+    elif kind in ("variable", "attribute"):
+        return AttributeNode
+    elif kind == "enumvalue":
+        return EnumValueNode
+    elif kind == "function":
+        return FunctionNode
+    elif kind == "define":
+        return DefineNode
     else:
-        # Default to Compound for unknown kinds
-        log.debug("Unknown kind %r — defaulting to CompoundNode", kind)
-        return CompoundNode
+        # Default to ClassNode for unknown kinds
+        log.debug("Unknown kind %r — defaulting to ClassNode", kind)
+        return ClassNode
 
 
 def _determine_label(kind: str) -> str:
     """Return the Neo4j label for a given kind value."""
-    if kind in COMPOUND_KIND_KEYS:
+    if kind in ("class", "struct", "template_class", "abstract_class",
+                "interface", "enum", "enum_class", "union"):
         return "Compound"
-    elif kind in MEMBER_KIND_KEYS:
+    elif kind in ("method", "variable", "attribute", "enumvalue",
+                   "function", "define"):
         return "Member"
-    elif kind in NAMESPACE_KIND_KEYS:
+    elif kind in ("module", "namespace", "package"):
         return "Namespace"
     else:
         return "Compound"
@@ -131,19 +152,12 @@ class DesignRepository:
         """Create or update a node by qualified_name.
 
         Dispatches to the appropriate Neo4j label (:Compound, :Member,
-        :Namespace) based on the node model type.
+        :Namespace) based on the node kind.
 
-        Dependency-layer compounds are written normally with
+        Dependency-layer nodes are written normally with
         layer='dependency'.
         """
-        if isinstance(node, CompoundNode):
-            label = "Compound"
-        elif isinstance(node, MemberNode):
-            label = "Member"
-        elif isinstance(node, NamespaceNode):
-            label = "Namespace"
-        else:
-            raise ValueError(f"Unknown node type: {type(node)}")
+        label = _determine_label(getattr(node, 'kind', ''))
 
         # Extract neomodel properties (exclude None and empty strings)
         props = {k: v for k, v in node.__properties__.items()
@@ -287,14 +301,14 @@ class DesignRepository:
             return None
 
         c_props = dict(record["c"])
-        compound = CompoundNode(**c_props)
+        compound = _props_to_node(c_props)
 
-        members: list[MemberNode] = []
+        members: list = []
         for m in (record["members"] or []):
             if m is None:
                 continue
             try:
-                members.append(MemberNode(**dict(m)))
+                members.append(_props_to_node(dict(m)))
             except Exception:
                 log.debug("Skipping invalid member: %s",
                           m.get("qualified_name", "?"))
@@ -441,12 +455,12 @@ class DesignRepository:
             c_props = dict(c)
             c_qn = c_props.get("qualified_name", "")
 
-            members: list[MemberNode] = []
+            members: list = []
             for m in (record["members"] or []):
                 if m is None:
                     continue
                 try:
-                    members.append(MemberNode(**dict(m)))
+                    members.append(_props_to_node(dict(m)))
                 except Exception:
                     pass
 
@@ -466,7 +480,7 @@ class DesignRepository:
                     e["rel"], e.get("source_qn", ""), e.get("target_qn", ""),
                 ))
 
-            compound = CompoundNode(**c_props)
+            compound = _props_to_node(c_props)
             cg = CompoundGraph(
                 node=compound,
                 members=members,
@@ -730,7 +744,7 @@ class DesignRepository:
                 seen_qns.add(d_qn)
                 d_props = dict(d)
                 compounds.append(CompoundGraph(
-                    node=CompoundNode(**d_props),
+                    node=_props_to_node(d_props),
                 ))
 
             for item in (record["dep_links"] or []):
@@ -743,7 +757,7 @@ class DesignRepository:
                     seen_qns.add(dep_qn)
                     try:
                         compounds.append(CompoundGraph(
-                            node=CompoundNode(**dep_props),
+                            node=_props_to_node(dep_props),
                         ))
                     except Exception:
                         pass
@@ -773,75 +787,68 @@ class DesignRepository:
         return record is not None and record["cnt"] > 0
 
     # -----------------------------------------------------------------------
-    # Triple / relationship operations
+    # Relationship operations
     # -----------------------------------------------------------------------
 
-    def merge_triple(
+    def save_associations(
         self,
-        subject_qualified_name: str,
-        predicate: str,
-        object_qualified_name: str,
-        mechanism: str = "",
-        position: int | None = None,
-        name: str = "",
-        display_name: str = "",
-    ) -> None:
-        """MERGE a typed relationship between two codebase nodes.
+        associations: list[dict],
+        qname_to_node: dict[str, NodeModel],
+    ) -> int:
+        """Create Neo4j relationships from association dicts.
 
-        Matches subject and object across :Compound, :Member, :Namespace.
+        Each association dict has keys: subject, predicate, object,
+        and optionally mechanism, position, name, display_name.
 
-        Args:
-            subject_qualified_name: Qualified name of the source node.
-            predicate: Relationship predicate (lowercase, e.g. "aggregates").
-            object_qualified_name: Qualified name of the target node.
-            mechanism: Optional mechanism property (e.g. "std::vector",
-                "std::unique_ptr") for aggregates/references relationships.
-            position: For TYPE_ARGUMENT: parameter position (0-based).
-            name: For TEMPLATE_PARAM: parameter name (e.g. "T").
-            display_name: Alias display name (e.g. "std::string" for
-                std::basic_string edge).
+        Returns count of relationships created.
         """
-        rel_type = PREDICATE_TO_REL_TYPE.get(predicate)
-        if not rel_type:
-            log.warning("Unknown predicate %r — skipping triple", predicate)
-            return
+        created = 0
+        for assoc in associations:
+            subj_qn = assoc["subject"]
+            obj_qn = assoc["object"]
+            predicate = assoc["predicate"]
 
-        # Build SET clause for extra properties
-        set_props = []
-        if mechanism:
-            set_props.append("r.mechanism = $mechanism")
-        if position is not None:
-            set_props.append("r.position = $position")
-        if name:
-            set_props.append("r.name = $name")
-        if display_name:
-            set_props.append("r.display_name = $display_name")
-        set_clause = "\n            " + "\n            ".join(set_props) if set_props else ""
+            subj = qname_to_node.get(subj_qn)
+            obj = qname_to_node.get(obj_qn)
+            if not subj or not obj:
+                continue
 
-        subj_clause = _label_match("s")
-        obj_clause = _label_match("target")
-        cypher = f"""
-        MATCH (s)
-        WHERE s.qualified_name = $subj AND {subj_clause}
-        MATCH (target)
-        WHERE target.qualified_name = $obj AND {obj_clause}
-        MERGE (s)-[r:REL_TYPE]->(target)
-        """
-        if set_clause:
-            cypher += "\n        SET" + set_clause
-        cypher = cypher.replace("REL_TYPE", rel_type)
+            rel_type = PREDICATE_TO_REL_TYPE.get(predicate, "").upper()
+            if not rel_type:
+                continue
 
-        params = {"subj": subject_qualified_name, "obj": object_qualified_name}
-        if mechanism:
-            params["mechanism"] = mechanism
-        if position is not None:
-            params["position"] = position
-        if name:
-            params["name"] = name
-        if display_name:
-            params["display_name"] = display_name
+            mechanism = assoc.get("mechanism", "")
+            position = assoc.get("position")
+            name = assoc.get("name", "")
+            display_name = assoc.get("display_name", "")
 
-        self._session.run(cypher, params)
+            cypher = f"""
+            MATCH (s {{qualified_name: $subj_qn}})
+            MATCH (t {{qualified_name: $obj_qn}})
+            MERGE (s)-[r:{rel_type}]->(t)
+            """
+            params = {"subj_qn": subj_qn, "obj_qn": obj_qn}
+            set_clauses = []
+            if mechanism:
+                set_clauses.append("r.mechanism = $mechanism")
+                params["mechanism"] = mechanism
+            if position is not None:
+                set_clauses.append("r.position = $position")
+                params["position"] = position
+            if name:
+                set_clauses.append("r.name = $name")
+                params["name"] = name
+            if display_name:
+                set_clauses.append("r.display_name = $display_name")
+                params["display_name"] = display_name
+
+            if set_clauses:
+                cypher += "\nSET " + ", ".join(set_clauses)
+
+            self._session.run(cypher, params)
+            created += 1
+
+        return created
 
     # -----------------------------------------------------------------------
     # Bulk operations

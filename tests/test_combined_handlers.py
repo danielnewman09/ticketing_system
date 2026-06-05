@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 
 
 class MockContext:

@@ -12,7 +12,8 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-from codegraph.designs import ClassDiagram, Association, ClassNode
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import ClassNode
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
 from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,
@@ -156,8 +157,8 @@ class TestMechanismResolution:
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
 
         # Should have a depends_on to std::vector (resolved via dep_lookup)
-        dep_triples = [t for t in result.triples if t.predicate == "depends_on" and t.object_qualified_name == "std::vector"]
-        assert len(dep_triples) >= 1, f"Expected depends_on std::vector, got: {[t.object_qualified_name for t in result.triples if t.predicate == 'depends_on']}"
+        dep_triples = [t for t in result.associations if t['predicate'] == "depends_on" and t['object'] == "std::vector"]
+        assert len(dep_triples) >= 1, f"Expected depends_on std::vector, got: {[t['object'] for t in result.associations if t['predicate'] == 'depends_on']}"
 
         # Should NOT have a stub node for std::vector (it should resolve to real one)
         stub_nodes = [n for n in result.nodes if n.qualified_name == "std::vector" and n.layer == "dependency" and "Standard library" in n.brief_description]
@@ -184,7 +185,7 @@ class TestMechanismResolution:
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
 
         # Should still have depends_on to std::vector (via fallback)
-        dep_triples = [t for t in result.triples if t.predicate == "depends_on" and t.object_qualified_name == "std::vector"]
+        dep_triples = [t for t in result.associations if t['predicate'] == "depends_on" and t['object'] == "std::vector"]
         assert len(dep_triples) >= 1
 
     def test_no_dep_mechanisms_skip_dependency(self):
@@ -203,7 +204,7 @@ class TestMechanismResolution:
         result = map_oo_to_ontology(oo, dependency_lookup={})
 
         # Should NOT have depends_on from raw_pointer mechanism
-        ptr_deps = [t for t in result.triples if t.predicate == "depends_on" and t.object_qualified_name == "raw_pointer"]
+        ptr_deps = [t for t in result.associations if t['predicate'] == "depends_on" and t['object'] == "raw_pointer"]
         assert len(ptr_deps) == 0
 
 

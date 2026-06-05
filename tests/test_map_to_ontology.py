@@ -2,12 +2,14 @@
 
 import pytest
 from backend.codebase.schemas import DesignSchema
-from codegraph.designs import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import (
     ClassNode,
     MethodNode,
+    EnumNode,
+    EnumValueNode,
+    InterfaceNode,
+    AttributeNode,
 )
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
@@ -32,7 +34,6 @@ class TestDependencyLookupInAssociations:
                     subject="Calculator",
                     object="Fl_Window",
                     predicate="aggregates",
-                    description="Calculator window",
                 ),
             ],
         )
@@ -42,8 +43,8 @@ class TestDependencyLookupInAssociations:
         )
         # There should be a triple: calc::Calculator -[aggregates]-> Fl_Window
         dep_agg = [
-            t for t in result.triples
-            if t.predicate == "aggregates" and t.object_qualified_name == "Fl_Window"
+            t for t in result.associations
+            if t['predicate'] == "aggregates" and t['object'] == "Fl_Window"
         ]
         assert len(dep_agg) == 1
         # There should also be a dependency stub node for Fl_Window
@@ -67,7 +68,6 @@ class TestDependencyLookupInAssociations:
                     subject="Calculator",
                     object="string",
                     predicate="depends_on",
-                    description="Uses strings",
                 ),
             ],
         )
@@ -76,8 +76,8 @@ class TestDependencyLookupInAssociations:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples
-            if t.object_qualified_name == "std::string"
+            t for t in result.associations
+            if t['object'] == "std::string"
         ]
         assert len(dep_triples) >= 1
         dep_node = [n for n in result.nodes if n.qualified_name == "std::string"]
@@ -107,8 +107,8 @@ class TestDependencyLookupInInheritance:
             oo, dependency_lookup=dep_lookup
         )
         gen_triples = [
-            t for t in result.triples
-            if t.predicate == "generalizes" and t.object_qualified_name == "Fl_Window"
+            t for t in result.associations
+            if t['predicate'] == "generalizes" and t['object'] == "Fl_Window"
         ]
         assert len(gen_triples) == 1
         dep_node = [n for n in result.nodes if n.qualified_name == "Fl_Window"]
@@ -132,7 +132,6 @@ class TestDependsOnFromTypeSignatures:
                             name="display",
                             type_signature="Fl_Output",
                             visibility="private",
-                            description="The display",
                         ),
                     ],
                     methods=[],
@@ -144,10 +143,10 @@ class TestDependsOnFromTypeSignatures:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::Calculator"
-            and t.object_qualified_name == "Fl_Output"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::Calculator"
+            and t['object'] == "Fl_Output"
         ]
         assert len(dep_triples) == 1
         dep_node = [n for n in result.nodes if n.qualified_name == "Fl_Output"]
@@ -167,7 +166,6 @@ class TestDependsOnFromTypeSignatures:
                             name="display",
                             type_signature="Fl_Output*",
                             visibility="private",
-                            description="Pointer to display",
                         ),
                     ],
                     methods=[],
@@ -179,9 +177,9 @@ class TestDependsOnFromTypeSignatures:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.object_qualified_name == "Fl_Output"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['object'] == "Fl_Output"
         ]
         assert len(dep_triples) == 1
 
@@ -198,7 +196,6 @@ class TestDependsOnFromTypeSignatures:
                             name="result",
                             type_signature="CalculationResult",
                             visibility="private",
-                            description="The result",
                         ),
                     ],
                     methods=[],
@@ -216,7 +213,7 @@ class TestDependsOnFromTypeSignatures:
             oo, dependency_lookup=dep_lookup
         )
         dep_triples = [
-            t for t in result.triples if t.predicate == "depends_on"
+            t for t in result.associations if t['predicate'] == "depends_on"
         ]
         assert len(dep_triples) == 0
 
@@ -243,7 +240,6 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="aggregates",
-                    description="Button widget",
                 ),
             ],
         )
@@ -253,22 +249,22 @@ class TestAggregatesInfersDependsOn:
         )
 
         agg_triples = [
-            t for t in result.triples
-            if t.predicate == "aggregates"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "aggregates"
+            and t['subject'] == "ui::CalculatorWindow"
+            and t['object'] == "Fl_Button"
         ]
         assert len(agg_triples) == 1
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::CalculatorWindow"
+            and t['object'] == "Fl_Button"
         ]
         assert len(dep_triples) == 1, (
             f"Expected 1 inferred depends_on triple, got {dep_triples}. "
-            f"All triples: {[(t.predicate, t.subject_qualified_name, t.object_qualified_name) for t in result.triples]}"
+            f"All triples: {[(t['predicate'], t['subject'], t['object']) for t in result.associations]}"
         )
 
     def test_aggregates_dependency_no_duplicate_depends_on(self):
@@ -288,13 +284,11 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="aggregates",
-                    description="Button widget",
                 ),
                 Association(
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="depends_on",
-                    description="Uses Fl_Button",
                 ),
             ],
         )
@@ -304,10 +298,10 @@ class TestAggregatesInfersDependsOn:
         )
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::CalculatorWindow"
+            and t['object'] == "Fl_Button"
         ]
         assert len(dep_triples) == 1, (
             f"Expected exactly 1 depends_on triple (no duplicates), got {len(dep_triples)}"
@@ -336,7 +330,6 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="CalculatorDisplay",
                     predicate="aggregates",
-                    description="Display component",
                 ),
             ],
         )
@@ -346,8 +339,8 @@ class TestAggregatesInfersDependsOn:
         )
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
         ]
         assert len(dep_triples) == 0, (
             f"No depends_on should be inferred for design-internal aggregates, "
@@ -371,13 +364,11 @@ class TestAggregatesInfersDependsOn:
                     subject="CalculatorWindow",
                     object="Fl_Button",
                     predicate="aggregates",
-                    description="Button",
                 ),
                 Association(
                     subject="CalculatorWindow",
                     object="Fl_Box",
                     predicate="aggregates",
-                    description="Box",
                 ),
             ],
         )
@@ -387,11 +378,11 @@ class TestAggregatesInfersDependsOn:
         )
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::CalculatorWindow"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::CalculatorWindow"
         ]
-        dep_targets = {t.object_qualified_name for t in dep_triples}
+        dep_targets = {t['object'] for t in dep_triples}
         assert "Fl_Button" in dep_targets
         assert "Fl_Box" in dep_targets
 
@@ -410,15 +401,14 @@ class TestNoDependencyLookup:
                     subject="Calculator",
                     object="RandomThing",
                     predicate="associates",
-                    description="Something",
                 ),
             ],
         )
         result = map_oo_to_ontology(oo)
         # Triple uses bare name (no resolution)
         assoc_triples = [
-            t for t in result.triples
-            if t.predicate == "associates" and t.object_qualified_name == "RandomThing"
+            t for t in result.associations
+            if t['predicate'] == "associates" and t['object'] == "RandomThing"
         ]
         assert len(assoc_triples) == 1
         # No dependency stub node
@@ -433,7 +423,6 @@ class TestAssociationKinds:
             subject="CalculatorResult",
             object="ErrorType",
             predicate="composes",
-            description="ErrorType member variable",
         )
         assert assoc.predicate == "composes"
 
@@ -442,7 +431,6 @@ class TestAssociationKinds:
             subject="CalculatorEngine",
             object="CalculationResult",
             predicate="returns",
-            description="Returns calculation result",
         )
         assert assoc.predicate == "returns"
 
@@ -454,7 +442,7 @@ class TestEnumInClassLookup:
     def test_class_references_enum_from_attribute_type(self):
         """When a class has an attribute typed by an enum, a class-level
         references edge should be emitted (class → enum)."""
-        from codegraph.designs import EnumNode, EnumValueNode, InterfaceNode
+        from codegraph.models import EnumNode, EnumValueNode, InterfaceNode
 
         oo = ClassDiagram(
             module_names=["calc_engine"],
@@ -462,7 +450,6 @@ class TestEnumInClassLookup:
                 EnumNode(
                     name="ErrorType",
                     module="calc_engine",
-                    description="Error types",
                     values=[EnumValueNode(name="MALFORMED_STRING"), EnumValueNode(name="NULL_INPUT")],
                 ),
             ],
@@ -475,7 +462,6 @@ class TestEnumInClassLookup:
                             name="error_signal",
                             type_signature="ErrorType",
                             visibility="private",
-                            description="Error indicator",
                         ),
                     ],
                     methods=[],
@@ -486,15 +472,15 @@ class TestEnumInClassLookup:
 
         # Class-level references edge: CalculationResult → ErrorType
         references_triples = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "calc_engine::CalculationResult"
-            and t.object_qualified_name == "calc_engine::ErrorType"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "calc_engine::CalculationResult"
+            and t['object'] == "calc_engine::ErrorType"
         ]
         assert len(references_triples) == 1, (
             f"Expected 1 class-level references edge from CalculationResult to ErrorType, "
             f"got {references_triples}. "
-            f"All triples: {[(t.predicate, t.subject_qualified_name, t.object_qualified_name) for t in result.triples]}"
+            f"All triples: {[(t['predicate'], t['subject'], t['object']) for t in result.associations]}"
         )
 
     def test_class_references_class_from_attribute_type(self):
@@ -517,7 +503,6 @@ class TestEnumInClassLookup:
                             name="engine",
                             type_signature="Engine",
                             visibility="private",
-                            description="The engine",
                         ),
                     ],
                     methods=[],
@@ -527,17 +512,17 @@ class TestEnumInClassLookup:
         result = map_oo_to_ontology(oo)
 
         references_triples = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "core::Controller"
-            and t.object_qualified_name == "core::Engine"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "core::Controller"
+            and t['object'] == "core::Engine"
         ]
         assert len(references_triples) == 1
 
     def test_class_references_interface_from_attribute_type(self):
         """When a class has an attribute typed by a design interface,
         a class-level references edge should be emitted."""
-        from codegraph.designs import InterfaceNode
+        from codegraph.models import InterfaceNode
 
         oo = ClassDiagram(
             module_names=["app"],
@@ -545,7 +530,6 @@ class TestEnumInClassLookup:
                 InterfaceNode(
                     name="IHandler",
                     module="app",
-                    description="Handler interface",
                     methods=[],
                 ),
             ],
@@ -558,7 +542,6 @@ class TestEnumInClassLookup:
                             name="handler",
                             type_signature="IHandler",
                             visibility="private",
-                            description="The handler",
                         ),
                     ],
                     methods=[],
@@ -568,10 +551,10 @@ class TestEnumInClassLookup:
         result = map_oo_to_ontology(oo)
 
         references_triples = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "app::Processor"
-            and t.object_qualified_name == "app::IHandler"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "app::Processor"
+            and t['object'] == "app::IHandler"
         ]
         assert len(references_triples) == 1
 
@@ -588,7 +571,6 @@ class TestEnumInClassLookup:
                             name="enabled",
                             type_signature="bool",
                             visibility="public",
-                            description="Enabled flag",
                         ),
                     ],
                     methods=[],
@@ -598,15 +580,15 @@ class TestEnumInClassLookup:
         result = map_oo_to_ontology(oo)
 
         composes_triples = [
-            t for t in result.triples
-            if t.predicate == "composes"
-            and t.subject_qualified_name == "core::Config"
+            t for t in result.associations
+            if t['predicate'] == "composes"
+            and t['subject'] == "core::Config"
         ]
         # Only the attribute containment composes (Config → Config::enabled)
         # No class-level composes to a primitive
         entity_composes = [
             t for t in composes_triples
-            if "::" not in t.object_qualified_name.replace("core::", "")
+            if "::" not in t['object'].replace("core::", "")
         ]
         assert len(entity_composes) == 0
 
@@ -615,7 +597,7 @@ class TestReturnsEdge:
     """Methods returning design-internal types should get a returns edge."""
 
     def test_method_returns_design_class(self):
-        from codegraph.designs import MethodNode
+        from codegraph.models import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -628,7 +610,6 @@ class TestReturnsEdge:
                         MethodNode(
                             name="compute",
                             visibility="public",
-                            description="Compute result",
                             type_signature="CalcResult",
                         ),
                     ],
@@ -644,15 +625,15 @@ class TestReturnsEdge:
         result = map_oo_to_ontology(oo)
 
         returns_triples = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Calculator::compute"
-            and t.object_qualified_name == "calc::CalcResult"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Calculator::compute"
+            and t['object'] == "calc::CalcResult"
         ]
         assert len(returns_triples) == 1
 
     def test_method_returns_design_enum(self):
-        from codegraph.designs import EnumNode, EnumValueNode, MethodNode
+        from codegraph.models import EnumNode, EnumValueNode, MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -660,7 +641,6 @@ class TestReturnsEdge:
                 EnumNode(
                     name="Status",
                     module="calc",
-                    description="Status codes",
                     values=[EnumValueNode(name="OK"), EnumValueNode(name="ERROR")],
                 ),
             ],
@@ -673,7 +653,6 @@ class TestReturnsEdge:
                         MethodNode(
                             name="check",
                             visibility="public",
-                            description="Check status",
                             type_signature="Status",
                         ),
                     ],
@@ -683,15 +662,15 @@ class TestReturnsEdge:
         result = map_oo_to_ontology(oo)
 
         returns_triples = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Processor::check"
-            and t.object_qualified_name == "calc::Status"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Processor::check"
+            and t['object'] == "calc::Status"
         ]
         assert len(returns_triples) == 1
 
     def test_no_returns_for_primitive_type(self):
-        from codegraph.designs import MethodNode
+        from codegraph.models import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -704,7 +683,6 @@ class TestReturnsEdge:
                         MethodNode(
                             name="count",
                             visibility="public",
-                            description="Count items",
                             type_signature="int",
                         ),
                     ],
@@ -714,9 +692,9 @@ class TestReturnsEdge:
         result = map_oo_to_ontology(oo)
 
         returns_triples = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Calculator::count"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Calculator::count"
         ]
         assert len(returns_triples) == 0
 
@@ -727,7 +705,7 @@ class TestReferencesFromAttributeTypes:
     from _add_depends_from_type."""
 
     def test_attribute_type_produces_references_not_composes(self):
-        from codegraph.designs import EnumNode, EnumValueNode
+        from codegraph.models import EnumNode, EnumValueNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -735,7 +713,6 @@ class TestReferencesFromAttributeTypes:
                 EnumNode(
                     name="ErrorType",
                     module="calc",
-                    description="Errors",
                     values=[EnumValueNode(name="NONE")],
                 ),
             ],
@@ -748,7 +725,6 @@ class TestReferencesFromAttributeTypes:
                             name="error",
                             type_signature="ErrorType",
                             visibility="private",
-                            description="Error",
                         ),
                     ],
                     methods=[],
@@ -759,26 +735,26 @@ class TestReferencesFromAttributeTypes:
 
         # Should have class-level references
         references = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "calc::Result"
-            and t.object_qualified_name == "calc::ErrorType"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "calc::Result"
+            and t['object'] == "calc::ErrorType"
         ]
         assert len(references) == 1
 
         # Should NOT have composes from class to enum
         composes = [
-            t for t in result.triples
-            if t.predicate == "composes"
-            and t.subject_qualified_name == "calc::Result"
-            and t.object_qualified_name == "calc::ErrorType"
+            t for t in result.associations
+            if t['predicate'] == "composes"
+            and t['subject'] == "calc::Result"
+            and t['object'] == "calc::ErrorType"
         ]
         assert len(composes) == 0, (
             f"Expected no composes edge, got {composes}"
         )
 
     def test_method_return_type_produces_returns_not_references(self):
-        from codegraph.designs import MethodNode
+        from codegraph.models import MethodNode
 
         oo = ClassDiagram(
             module_names=["calc"],
@@ -791,7 +767,6 @@ class TestReferencesFromAttributeTypes:
                         MethodNode(
                             name="run",
                             visibility="public",
-                            description="Run",
                             type_signature="Result",
                         ),
                     ],
@@ -808,19 +783,19 @@ class TestReferencesFromAttributeTypes:
 
         # Should have returns edge from method
         returns_edges = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Engine::run"
-            and t.object_qualified_name == "calc::Result"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Engine::run"
+            and t['object'] == "calc::Result"
         ]
         assert len(returns_edges) == 1
 
         # Should NOT have references from class to class
         references = [
-            t for t in result.triples
-            if t.predicate == "references"
-            and t.subject_qualified_name == "calc::Engine"
-            and t.object_qualified_name == "calc::Result"
+            t for t in result.associations
+            if t['predicate'] == "references"
+            and t['subject'] == "calc::Engine"
+            and t['object'] == "calc::Result"
         ]
         assert len(references) == 0
 
@@ -838,7 +813,6 @@ class TestReferencesFromAttributeTypes:
                             name="button",
                             type_signature="Fl_Button*",
                             visibility="private",
-                            description="Button",
                         ),
                     ],
                     methods=[],
@@ -849,10 +823,10 @@ class TestReferencesFromAttributeTypes:
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
 
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::Window"
-            and t.object_qualified_name == "Fl_Button"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::Window"
+            and t['object'] == "Fl_Button"
         ]
         assert len(dep_triples) == 1
 
@@ -891,19 +865,19 @@ class TestStdlibTypeLinking:
 
         # Should have has_argument edges from add to std::basic_string
         has_arg = [
-            t for t in result.triples
-            if t.predicate == "has_argument"
-            and t.object_qualified_name == "std::basic_string"
+            t for t in result.associations
+            if t['predicate'] == "has_argument"
+            and t['object'] == "std::basic_string"
         ]
         assert len(has_arg) >= 1, (
             f"Expected has_argument edge to std::basic_string, "
-            f"got: {[t.object_qualified_name for t in result.triples if t.predicate == 'has_argument']}"
+            f"got: {[t['object'] for t in result.associations if t['predicate'] == 'has_argument']}"
         )
 
         # The edge should carry display_name "std::string"
         string_edges = [
-            t for t in result.triples
-            if t.object_qualified_name == "std::basic_string"
+            t for t in result.associations
+            if t['object'] == "std::basic_string"
             and t.display_name == "std::string"
         ]
         assert len(string_edges) >= 1, (
@@ -944,25 +918,25 @@ class TestStdlibTypeLinking:
 
         # Should have a returns edge from parse to std::vector
         ret_edges = [
-            t for t in result.triples
-            if t.predicate == "returns"
-            and t.subject_qualified_name == "calc::Parser::parse"
-            and t.object_qualified_name == "std::vector"
+            t for t in result.associations
+            if t['predicate'] == "returns"
+            and t['subject'] == "calc::Parser::parse"
+            and t['object'] == "std::vector"
         ]
         assert len(ret_edges) == 1, (
             f"Expected returns edge to std::vector. "
-            f"All returns: {[(t.subject_qualified_name, t.object_qualified_name) for t in result.triples if t.predicate == 'returns']}"
+            f"All returns: {[(t['subject'], t['object']) for t in result.associations if t['predicate'] == 'returns']}"
         )
 
         # Should have TYPE_ARGUMENT edge from std::vector to std::basic_string
         type_arg_edges = [
-            t for t in result.triples
-            if t.predicate == "type_argument"
-            and t.object_qualified_name == "std::basic_string"
+            t for t in result.associations
+            if t['predicate'] == "type_argument"
+            and t['object'] == "std::basic_string"
         ]
         assert len(type_arg_edges) >= 1, (
             f"Expected TYPE_ARGUMENT edge to std::basic_string. "
-            f"All type_argument: {[(t.subject_qualified_name, t.object_qualified_name) for t in result.triples if t.predicate == 'type_argument']}"
+            f"All type_argument: {[(t['subject'], t['object']) for t in result.associations if t['predicate'] == 'type_argument']}"
         )
 
         # The TYPE_ARGUMENT edge should have position=0
@@ -1002,9 +976,9 @@ class TestExistingBehaviorPreserved:
         )
         result = map_oo_to_ontology(oo)
         has_arg = [
-            t for t in result.triples
-            if t.predicate == "has_argument"
-            and t.object_qualified_name == "calc::CalculationResult"
+            t for t in result.associations
+            if t['predicate'] == "has_argument"
+            and t['object'] == "calc::CalculationResult"
         ]
         assert len(has_arg) == 1
 
@@ -1021,7 +995,6 @@ class TestExistingBehaviorPreserved:
                             name="display",
                             type_signature="Fl_Output",
                             visibility="private",
-                            description="The display",
                         ),
                     ],
                     methods=[],
@@ -1031,9 +1004,9 @@ class TestExistingBehaviorPreserved:
         dep_lookup = {"Fl_Output": "Fl_Output"}
         result = map_oo_to_ontology(oo, dependency_lookup=dep_lookup)
         dep_triples = [
-            t for t in result.triples
-            if t.predicate == "depends_on"
-            and t.subject_qualified_name == "ui::Calculator"
-            and t.object_qualified_name == "Fl_Output"
+            t for t in result.associations
+            if t['predicate'] == "depends_on"
+            and t['subject'] == "ui::Calculator"
+            and t['object'] == "Fl_Output"
         ]
         assert len(dep_triples) == 1

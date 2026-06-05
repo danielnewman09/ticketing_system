@@ -9,7 +9,7 @@ Provides three tools:
 import json
 import logging
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design, extract_type_refs
 
 log = logging.getLogger("agents.design")

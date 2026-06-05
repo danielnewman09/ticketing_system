@@ -7,13 +7,13 @@ from codegraph.graph import (
     GraphEdge,
     OntologyGraph,
 )
-from backend.db.neo4j.models.nodes import CompoundNode
+from codegraph.models import ClassNode
 from backend.graph import format_ontology_graph
 
 
 def _make_compound(qn: str, name: str, kind: str = "class", layer: str = "design", **kwargs) -> CompoundGraph:
     """Build a minimal CompoundGraph for testing."""
-    node = CompoundNode(qualified_name=qn, name=name, kind=kind, layer=layer, **kwargs)
+    node = ClassNode(qualified_name=qn, name=name, kind=kind, layer=layer, **kwargs)
     return CompoundGraph(node=node, members=[], edges_out=[], edges_in=[])
 
 

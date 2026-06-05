@@ -9,7 +9,7 @@ import logging
 import os
 
 from llm_caller import call_tool_loop
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.requirements.schemas import VerificationSchema
 from backend.requirements.schemas import VerificationSchema
 from backend.requirements.formatting import format_hlr_dict, format_llrs_with_verifications_for_prompt

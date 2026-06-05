@@ -1,19 +1,21 @@
-"""TODO(2026-06): Remove this shim — import from codegraph.designs directly.
+"""TODO(2026-06): Remove this shim — import from codegraph directly.
 
-All models now live in codegraph/designs/. This file re-exports them for
+All models now live in codegraph. This file re-exports them for
 backward compatibility during the transition.
 """
-from codegraph.designs import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
+
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import (
     ClassNode,
-    DiagramNode,
-    EnumNode,
-    EnumValueNode,
     InterfaceNode,
-    MethodNode,
+    EnumNode,
+    UnionNode,
     ModuleNode,
+    MethodNode,
+    AttributeNode,
+    EnumValueNode,
+    FunctionNode,
+    DefineNode,
 )
 
 __all__ = [
@@ -21,10 +23,13 @@ __all__ = [
     "AttributeNode",
     "ClassDiagram",
     "ClassNode",
-    "DiagramNode",
-    "EnumNode",
-    "EnumValueNode",
     "InterfaceNode",
-    "MethodNode",
+    "EnumNode",
+    "UnionNode",
     "ModuleNode",
+    "MethodNode",
+    "AttributeNode",
+    "EnumValueNode",
+    "FunctionNode",
+    "DefineNode",
 ]

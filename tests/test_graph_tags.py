@@ -33,13 +33,13 @@ class TestEnrichWithRequirementTagsCypher:
         assert "requirements" not in result[0]["data"]
 
     def test_tags_design_nodes_with_hlr_badges(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
         from backend.db.neo4j.repositories.requirement import RequirementRepository
         from backend.requirements.services.graph_tags import enrich_with_requirement_tags
 
         design_repo = DesignRepository(neo4j_session)
-        design_repo.merge_node(CompoundNode(qualified_name="calc::Foo", name="Foo", kind="class"))
+        design_repo.merge_node(ClassNode(qualified_name="calc::Foo", name="Foo", kind="class"))
 
         req_repo = RequirementRepository(neo4j_session)
         hlr = req_repo.create_hlr(description="The system shall calculate")
@@ -75,14 +75,14 @@ class TestEnrichWithRequirementTagsCypher:
 
 class TestTagDirectNodesOnlyCypher:
     def test_marks_seed_nodes_with_highlight(self, neo4j_session):
-        from backend.db.neo4j.models.nodes import CompoundNode
+        from codegraph.models import ClassNode
         from backend.db.neo4j.repositories.design import DesignRepository
         from backend.db.neo4j.repositories.requirement import RequirementRepository
         from backend.requirements.services.graph_tags import tag_direct_nodes_only
 
         design_repo = DesignRepository(neo4j_session)
-        design_repo.merge_node(CompoundNode(qualified_name="calc::Direct", name="Direct", kind="class"))
-        design_repo.merge_node(CompoundNode(qualified_name="calc::Neighbour", name="Neighbour", kind="class"))
+        design_repo.merge_node(ClassNode(qualified_name="calc::Direct", name="Direct", kind="class"))
+        design_repo.merge_node(ClassNode(qualified_name="calc::Neighbour", name="Neighbour", kind="class"))
 
         req_repo = RequirementRepository(neo4j_session)
         hlr = req_repo.create_hlr(description="A requirement")

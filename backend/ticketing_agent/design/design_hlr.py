@@ -11,7 +11,7 @@ import logging
 import os
 
 from backend.codebase.schemas import DesignSchema
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, build_alias_lookup
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 

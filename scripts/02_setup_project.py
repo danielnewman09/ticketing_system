@@ -48,11 +48,7 @@ def load_stdlib():
 
     try:
         from doxygen_index.cppreference import download, parse
-        from doxygen_index.neo4j_backend import (
-            _get_driver,
-            ensure_schema,
-            write_result,
-        )
+        from doxygen_index.neo4j_backend import ensure_schema, write_result
     except ImportError:
         print("  doxygen-index[cppreference] not installed — skipping stdlib load")
         print("  Install with: pip install doxygen-index[cppreference]\n")
@@ -74,7 +70,7 @@ def load_stdlib():
     parsed = parse(archive_root)
 
     print("  Ingesting into Neo4j...")
-    write_result(get_neo4j().get_driver(), parsed)
+    write_result(parsed)
 
     print(f"  Loaded {len(parsed.compounds)} classes, {len(parsed.members)} members\n")
 

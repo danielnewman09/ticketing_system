@@ -7,7 +7,7 @@ import os
 
 import pytest
 from backend.db.neo4j.repositories.design import DesignRepository
-from backend.db.neo4j.models.nodes import CompoundNode, MemberNode
+from codegraph.models import ClassNode, MethodNode
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_NEO4J_INTEGRATION") != "1",
@@ -36,14 +36,14 @@ class TestGetCompoundGraph:
     def test_returns_compound_with_members(self, neo4j_session):
         repo = DesignRepository(neo4j_session)
         # Create test data
-        node = CompoundNode(
+        node = ClassNode(
             qualified_name="test_graph::TestClass",
             name="TestClass",
             kind="class",
             layer="design",
         )
         repo.merge_node(node)
-        member = MemberNode(
+        member = MethodNode(
             qualified_name="test_graph::TestClass::do_thing",
             name="do_thing",
             kind="method",

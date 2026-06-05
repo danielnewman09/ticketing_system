@@ -11,9 +11,11 @@ log = logging.getLogger(__name__)
 
 from backend.codebase.schemas import DesignSchema, RequirementTripleLinkSchema
 from backend.codebase.type_parser import parse_type_refs
-from codegraph.designs import ClassDiagram
-from codegraph.models import CompoundNode, MemberNode, NamespaceNode
-from codegraph.edges import CodebaseEdge
+from codegraph.diagram import ClassDiagram
+from codegraph.models import (
+    ClassNode, InterfaceNode, EnumNode, MethodNode, AttributeNode,
+    EnumValueNode, NamespaceNode,
+)
 
 
 def _qualify(module: str, name: str) -> str:
@@ -60,20 +62,16 @@ def map_oo_to_ontology(
             underlying qualified names (e.g. "std::basic_string"). Used to
             resolve type references so that edges link to the real node.
     """
-    nodes: list[CompoundNode | MemberNode | NamespaceNode] = []
-    triples: list[CodebaseEdge] = []
+    nodes: list = []
+    associations: list[dict] = []
     links: list[RequirementTripleLinkSchema] = []
 
     # Track qualified_name -> index in nodes list for dedup
     node_index: dict[str, int] = {}
 
-    # Kind sets for dispatching
-    _COMPOUND_KINDS = {"class", "struct", "interface", "enum"}
-    _MEMBER_KINDS = {"method", "variable", "enumvalue", "function"}
-
-    def _add_node(kind, name, qualified_name, is_intercomponent=False, **kwargs):
+    def _add_node(kind, name, qualified_name, **kwargs):
         if qualified_name in node_index:
-            return
+            return qualified_name
         node_index[qualified_name] = len(nodes)
         # Map source_type to layer
         source_type = kwargs.pop("source_type", "")
@@ -89,54 +87,56 @@ def map_oo_to_ontology(
         description = kwargs.pop("description", "")
         # Map visibility to protection for member nodes
         visibility = kwargs.pop("visibility", "")
-        if kind in _MEMBER_KINDS:
-            nodes.append(
-                MemberNode(
-                    qualified_name=qualified_name,
-                    name=name,
-                    kind=kind,  # type: ignore[arg-type]
-                    layer=layer,  # type: ignore[arg-type]
-                    component_id=component_id,
-                    brief_description=description,
-                    protection=visibility,  # type: ignore[arg-type]
-                    **kwargs,
-                )
-            )
-        elif kind in _COMPOUND_KINDS:
-            nodes.append(
-                CompoundNode(
-                    qualified_name=qualified_name,
-                    name=name,
-                    kind=kind,  # type: ignore[arg-type]
-                    layer=layer,  # type: ignore[arg-type]
-                    component_id=component_id,
-                    brief_description=description,
-                    **kwargs,
-                )
-            )
-        else:
-            # module/namespace
-            nodes.append(
-                NamespaceNode(
-                    qualified_name=qualified_name,
-                    name=name,
-                    kind=kind,
-                    layer=layer,  # type: ignore[arg-type]
-                    component_id=component_id,
-                    brief_description=description,
-                )
-            )
+        # Remove ticketing-specific fields not on atomized types
+        kwargs.pop("is_intercomponent", None)
+        kwargs.pop("specialization", None)
+        kwargs.pop("implementation_status", None)
+        kwargs.pop("test_file", None)
 
-    def _add_triple(subject_qname, predicate, object_qname, mechanism=""):
-        idx = len(triples)
-        triples.append(
-            CodebaseEdge(
-                subject_qualified_name=subject_qname,
-                predicate=predicate,
-                object_qualified_name=object_qname,
-                mechanism=mechanism,
-            )
+        common = dict(
+            qualified_name=qualified_name,
+            name=name,
+            kind=kind,
+            layer=layer,
+            brief_description=description,
         )
+
+        if kind == "class":
+            node = ClassNode(**common, **kwargs)
+        elif kind == "interface":
+            node = InterfaceNode(**common, is_abstract=True, **kwargs)
+        elif kind == "enum":
+            node = EnumNode(**common, **kwargs)
+        elif kind == "method":
+            node = MethodNode(**common, protection=visibility, **kwargs)
+        elif kind in ("variable", "attribute"):
+            node = AttributeNode(
+                qualified_name=qualified_name, name=name, kind="variable",
+                layer=layer, brief_description=description,
+                protection=visibility, **kwargs,
+            )
+        elif kind == "enumvalue":
+            node = EnumValueNode(**common, **kwargs)
+        elif kind in ("module", "namespace", "package"):
+            node = NamespaceNode(**common, **kwargs)
+        else:
+            raise ValueError(f"Unknown kind: {kind}")
+
+        nodes.append(node)
+        return qualified_name
+
+    def _add_association(subject_qname, predicate, object_qname, mechanism="", position=None, name="", display_name=""):
+        idx = len(associations)
+        assoc = {"subject": subject_qname, "predicate": predicate, "object": object_qname}
+        if mechanism:
+            assoc["mechanism"] = mechanism
+        if position is not None:
+            assoc["position"] = position
+        if name:
+            assoc["name"] = name
+        if display_name:
+            assoc["display_name"] = display_name
+        associations.append(assoc)
         return idx
 
     def _link_reqs(tagged_ids, triple_idx):
@@ -244,15 +244,10 @@ def map_oo_to_ontology(
         display_name: str,
     ) -> int:
         """Create a TYPE_ARGUMENT edge from a template to its type argument."""
-        t = CodebaseEdge(
-            subject_qualified_name=template_qname,
-            predicate="type_argument",
-            object_qualified_name=arg_qname,
-            position=position,
-            display_name=display_name,
+        return _add_association(
+            template_qname, "type_argument", arg_qname,
+            position=position, display_name=display_name,
         )
-        triples.append(t)
-        return len(triples) - 1
 
     def _resolve_type_refs(
         type_text: str,
@@ -284,9 +279,9 @@ def map_oo_to_ontology(
                 resolved_display = ref.name  # Show the alias name in the graph
 
             # Create the subject --predicate--> object edge
-            idx = _add_triple(subject_qname, predicate, resolved_name)
+            idx = _add_association(subject_qname, predicate, resolved_name)
             if resolved_display:
-                triples[idx].display_name = resolved_display
+                associations[idx]["display_name"] = resolved_display
 
             # For template types, also create TYPE_ARGUMENT edges
             for pos, arg_ref in enumerate(ref.template_args):
@@ -320,7 +315,7 @@ def map_oo_to_ontology(
             if ref.name in dep_lookup:
                 key = (cls_qname, resolved)
                 if key not in existing_depends:
-                    _add_triple(cls_qname, "depends_on", resolved)
+                    _add_association(cls_qname, "depends_on", resolved)
                     existing_depends.add(key)
             # Also check template arguments for external dependencies
             for arg_ref in ref.template_args:
@@ -330,7 +325,7 @@ def map_oo_to_ontology(
                 if arg_ref.name in dep_lookup:
                     key = (cls_qname, arg_resolved)
                     if key not in existing_depends:
-                        _add_triple(cls_qname, "depends_on", arg_resolved)
+                        _add_association(cls_qname, "depends_on", arg_resolved)
                         existing_depends.add(key)
 
     # --- Correct modules to match component namespace ---
@@ -383,8 +378,10 @@ def map_oo_to_ontology(
             assoc.subject = _strip_wrong_ns(assoc.subject)
             assoc.object = _strip_wrong_ns(assoc.object)
         for cls in oo.classes:
-            cls.inherits_from = [_strip_wrong_ns(p) for p in cls.inherits_from]
-            cls.realizes = [_strip_wrong_ns(i) for i in cls.realizes]
+            if hasattr(cls, 'base_classes') and cls.base_classes:
+                cls.base_classes = [_strip_wrong_ns(p) for p in cls.base_classes]
+            if hasattr(cls, 'realizes'):
+                cls.realizes = [_strip_wrong_ns(i) for i in cls.realizes]
 
     # --- Modules (source_type="namespace") ---
     for module in oo.module_names:
@@ -394,7 +391,7 @@ def map_oo_to_ontology(
             _add_node("module", parts[i], prefix, source_type="namespace")
             if i > 0:
                 parent_prefix = "::".join(parts[:i])
-                _add_triple(parent_prefix, "composes", prefix)
+                _add_association(parent_prefix, "composes", prefix)
 
     # --- Interfaces (source_type="compound") ---
     for iface in oo.interfaces:
@@ -403,28 +400,28 @@ def map_oo_to_ontology(
             "interface",
             iface.name,
             iface_qname,
-            is_intercomponent=iface.is_intercomponent,
-            specialization=iface.specialization,
-            description=iface.description,
+            is_intercomponent=getattr(iface, 'is_intercomponent', False),
+            specialization=getattr(iface, 'specialization', ''),
+            description=getattr(iface, 'description', ''),
             source_type="compound",
             is_abstract=True,
         )
         if iface.module:
-            _add_triple(iface.module, "composes", iface_qname)
+            _add_association(iface.module, "composes", iface_qname)
         for method in iface.methods:
             method_qname = f"{iface_qname}::{method.name}"
             _add_node(
                 "method",
                 method.name,
                 method_qname,
-                visibility=method.visibility,
-                description=method.description,
+                visibility=getattr(method, 'protection', '') or getattr(method, 'visibility', ''),
+                description=getattr(method, 'brief_description', '') or getattr(method, 'description', ''),
                 source_type="member",
                 type_signature=method.type_signature,
                 argsstring=method.argsstring,
                 is_virtual=True,
             )
-            _add_triple(iface_qname, "composes", method_qname)
+            _add_association(iface_qname, "composes", method_qname)
 
     # --- Enums (source_type="compound") ---
     for enum in oo.enums:
@@ -433,15 +430,15 @@ def map_oo_to_ontology(
             "enum",
             enum.name,
             enum_qname,
-            description=enum.description,
+            description=getattr(enum, 'brief_description', '') or getattr(enum, 'description', ''),
             source_type="compound",
         )
         if enum.module:
-            _add_triple(enum.module, "composes", enum_qname)
+            _add_association(enum.module, "composes", enum_qname)
         for value in enum.values:
             val_qname = value.qualified_name
             _add_node("enumvalue", value.name, val_qname, source_type="member")
-            _add_triple(enum_qname, "composes", val_qname)
+            _add_association(enum_qname, "composes", val_qname)
 
     # --- Classes ---
     # Build a name -> qualified_name lookup for resolving references.
@@ -463,14 +460,14 @@ def map_oo_to_ontology(
             "class",
             cls.name,
             cls_qname,
-            is_intercomponent=cls.is_intercomponent,
-            specialization=cls.specialization,
-            description=cls.description,
+            is_intercomponent=getattr(cls, 'is_intercomponent', False),
+            specialization=getattr(cls, 'specialization', ''),
+            description=getattr(cls, 'description', ''),
             source_type="compound",
         )
         # Module composes class
         if cls.module:
-            _add_triple(cls.module, "composes", cls_qname)
+            _add_association(cls.module, "composes", cls_qname)
 
         # Attributes -> composes triples (source_type="member")
         for attr in cls.attributes:
@@ -479,13 +476,13 @@ def map_oo_to_ontology(
                 "variable",
                 attr.name,
                 attr_qname,
-                visibility=attr.visibility,
-                description=attr.description,
+                visibility=getattr(attr, 'protection', '') or getattr(attr, 'visibility', ''),
+                description=getattr(attr, 'brief_description', '') or getattr(attr, 'description', ''),
                 source_type="member",
                 type_signature=attr.type_signature,
             )
-            triple_idx = _add_triple(cls_qname, "composes", attr_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            triple_idx = _add_association(cls_qname, "composes", attr_qname)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
             # references edge: class → design-internal entity type (attribute type reference)
             # AND type resolution for external deps and TYPE_ARGUMENT edges
@@ -501,7 +498,7 @@ def map_oo_to_ontology(
                     type_name = match.group(1)
                     if type_name in class_lookup:
                         target_qname = class_lookup[type_name]
-                        _add_triple(cls_qname, "references", target_qname)
+                        _add_association(cls_qname, "references", target_qname)
 
         # Methods -> composes triples (source_type="member")
         for method in cls.methods:
@@ -510,14 +507,14 @@ def map_oo_to_ontology(
                 "method",
                 method.name,
                 method_qname,
-                visibility=method.visibility,
-                description=method.description,
+                visibility=getattr(method, 'protection', '') or getattr(method, 'visibility', ''),
+                description=getattr(method, 'brief_description', '') or getattr(method, 'description', ''),
                 source_type="member",
                 type_signature=method.type_signature,
                 argsstring=method.argsstring,
             )
-            triple_idx = _add_triple(cls_qname, "composes", method_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            triple_idx = _add_association(cls_qname, "composes", method_qname)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
             # has_argument edges: method → types used as parameters
             # Parse argsstring to extract parameter types
@@ -551,23 +548,23 @@ def map_oo_to_ontology(
                             _add_class_depends_from_type(param_text, cls_qname, _existing_depends)
 
         # Inheritance -> generalizes triples (with dependency resolution)
-        for parent_name in cls.inherits_from:
+        for parent_name in getattr(cls, 'inherits_from', []):
             parent_qname = _resolve_ref(parent_name) or class_lookup.get(parent_name, parent_name)
-            triple_idx = _add_triple(cls_qname, "generalizes", parent_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            triple_idx = _add_association(cls_qname, "generalizes", parent_qname)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
         # Interface realization -> realizes triples (with dependency resolution)
-        for iface_name in cls.realizes:
+        for iface_name in getattr(cls, 'realizes', []):
             iface_qname = _resolve_ref(iface_name) or class_lookup.get(iface_name, iface_name)
-            triple_idx = _add_triple(cls_qname, "realizes", iface_qname)
-            _link_reqs(cls.requirement_ids, triple_idx)
+            triple_idx = _add_association(cls_qname, "realizes", iface_qname)
+            _link_reqs(getattr(cls, 'requirement_ids', []), triple_idx)
 
     # --- Associations (with dependency resolution) ---
     for assoc in oo.associations:
         from_qname = _resolve_ref(assoc.subject) or class_lookup.get(assoc.subject, assoc.subject)
         to_qname = _resolve_ref(assoc.object) or class_lookup.get(assoc.object, assoc.object)
         mechanism = assoc.mechanism if assoc.predicate in ("aggregates", "references") else ""
-        triple_idx = _add_triple(from_qname, assoc.predicate, to_qname, mechanism=mechanism)
+        triple_idx = _add_association(from_qname, assoc.predicate, to_qname, mechanism=mechanism)
         _link_reqs(assoc.requirement_ids, triple_idx)
 
     # --- Infer DEPENDS_ON from mechanism fields and aggregation/references ---
@@ -594,10 +591,10 @@ def map_oo_to_ontology(
     # Mechanisms that don't add a dependency
     _NO_DEP_MECHANISMS = {"raw_pointer", "reference", "pointer"}
 
-    # Collect existing depends_on triples for dedup
-    for t in triples:
-        if t.predicate == "depends_on":
-            _existing_depends.add((t.subject_qualified_name, t.object_qualified_name))
+    # Collect existing depends_on associations for dedup
+    for t in associations:
+        if t["predicate"] == "depends_on":
+            _existing_depends.add((t["subject"], t["object"]))
 
     _dep_qnames: set[str] = set(dep_lookup.values())
 
@@ -615,7 +612,7 @@ def map_oo_to_ontology(
                 if resolved:
                     # Real dependency node found — create depends_on edge to it
                     if (from_qname, resolved) not in _existing_depends:
-                        _add_triple(from_qname, "depends_on", resolved)
+                        _add_association(from_qname, "depends_on", resolved)
                         _existing_depends.add((from_qname, resolved))
                         log.info(
                             "Inferring depends_on from mechanism %s (resolved): %s -> %s",
@@ -635,7 +632,7 @@ def map_oo_to_ontology(
                                 description=f"Standard library: {dep_qname}",
                                 source_type="dependency",
                             )
-                        _add_triple(from_qname, "depends_on", dep_qname)
+                        _add_association(from_qname, "depends_on", dep_qname)
                         _existing_depends.add((from_qname, dep_qname))
                         log.info(
                             "Inferring depends_on from mechanism %s (stub): %s -> %s",
@@ -651,12 +648,12 @@ def map_oo_to_ontology(
                     from_qname,
                     to_qname,
                 )
-                _add_triple(from_qname, "depends_on", to_qname)
+                _add_association(from_qname, "depends_on", to_qname)
                 _existing_depends.add((from_qname, to_qname))
 
     return DesignSchema(
         nodes=nodes,
-        triples=triples,
+        associations=associations,
         requirement_links=links,
     )
 
@@ -706,7 +703,7 @@ def validate_coverage(
                     tagged_llrs.add(req_id)
 
     for cls in oo.classes:
-        _collect(cls.requirement_ids)
+        _collect(getattr(cls, 'requirement_ids', []))
     for assoc in oo.associations:
         _collect(assoc.requirement_ids)
 

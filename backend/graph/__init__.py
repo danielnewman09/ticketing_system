@@ -4,14 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from backend.graph.transforms import (
-    _assign_component_parents,
-    _assign_inferred_parents,
-    _build_uml_html,
-    _build_uml_label,
-    _ENTITY_KINDS,
-)
-
 if TYPE_CHECKING:
     from codegraph.graph import (
         CompoundGraph,
@@ -58,6 +50,7 @@ def tag_cross_layer(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], l
 
 # ---------------------------------------------------------------------------
 # Typed-pipeline: format directly from OntologyGraph (no raw-dict round-trip)
+# Retained for fetch_hlr_graph_data which uses DesignRepository for TRACES_TO.
 # ---------------------------------------------------------------------------
 
 # Map codegraph MemberNode.kind → canonical UML compartment group.
@@ -81,25 +74,25 @@ _CODEGRAPH_STEREOTYPE_MAP = {
     "union": "class",
 }
 
+# Entity kinds — excluded from member compartments.
+_ENTITY_KINDS = {"class", "interface", "enum", "struct"}
+
 
 def _build_compound_cytoscape_node(
     cg: "CompoundGraph",
 ) -> dict:
     """Build a Cytoscape node-data dict from a CompoundGraph.
 
-    Members are collapsed into UML-style labels (both plain-text and
-    HTML variants) using the same rendering functions that
-    ``collapse_members`` calls.  Entity-kind members (nested
-    classes/enums/etc.) are excluded from the compartment — their
-    typed attributes already convey the reference.
+    Retained for format_ontology_graph (used by fetch_hlr_graph_data).
     """
+    from backend.graph.transforms import _build_uml_label, _build_uml_html
+
     node = cg.node
     owner_kind = getattr(node, "kind", "")
     layer = getattr(node, "layer", "design")
     is_dep = layer == "dependency"
-    change_status = "new"  # design-intent nodes start as "new"
+    change_status = "new"
 
-    # Group members by canonical UML kind, skipping entity kinds.
     by_kind: dict[str, list[dict]] = {}
     for m in cg.members:
         m_kind = getattr(m, "kind", "")
@@ -182,19 +175,18 @@ def _build_namespace_cytoscape_node(ns_node) -> dict:
 def format_ontology_graph(ontograph: "OntologyGraph") -> dict:
     """Transform a typed OntologyGraph into Cytoscape.js format.
 
-    Walks the typed hierarchy directly — members are pre-grouped inside
-    CompoundGraph objects, so there is no need for a separate collapse
-    step.  Namespace parent references come from the typed tree, with
-    component/inferred namespaces applied as a fallback for unparented
-    nodes.
-
-    Returns ``{"nodes": [...], "edges": [...]}`` in Cytoscape shape.
+    Retained for fetch_hlr_graph_data which uses DesignRepository for TRACES_TO.
+    The frontend read paths now use layer_graph_to_cytoscape() instead.
     """
+    from backend.graph.transforms import (
+        _assign_component_parents,
+        _assign_inferred_parents,
+    )
+
     nodes: list[dict] = []
     edges: list[dict] = []
     assigned_parents: set[str] = set()
 
-    # Walk namespace tree — explicit namespace → compound hierarchy.
     for nsg in ontograph.namespaces:
         ns_node_data = _build_namespace_cytoscape_node(nsg.node)
         nodes.append(ns_node_data)
@@ -208,24 +200,19 @@ def format_ontology_graph(ontograph: "OntologyGraph") -> dict:
             for ge in cg.edges_out:
                 edges.append(_build_graph_edge(ge))
 
-    # Unparented compounds.
     for cg in ontograph.compounds:
         c_node = _build_compound_cytoscape_node(cg)
         nodes.append(c_node)
         for ge in cg.edges_out:
             edges.append(_build_graph_edge(ge))
 
-    # Cross-cutting edges (between namespaces or unparented compounds).
     for ge in ontograph.edges:
         edges.append(_build_graph_edge(ge))
 
-    # Apply component / inferred namespace parents for nodes that were
-    # not already parented by the explicit namespace tree.
     synth_ns: dict[str, str] = {}
     _assign_component_parents(nodes, assigned_parents, synth_ns)
     _assign_inferred_parents(nodes, assigned_parents, synth_ns)
 
-    # Style tags (cross-layer, as-built, dependency source).
     nodes, edges = tag_cross_layer(nodes, edges)
 
     return {"nodes": nodes, "edges": edges}

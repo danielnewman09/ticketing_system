@@ -2,9 +2,7 @@
 
 Phase 4: OntologyNode, OntologyTriple, Predicate ORM models deleted.
 Design data lives in Neo4j via DesignRepository using typed graph
-primitives (CompoundNode, MemberNode, NamespaceNode, CodebaseEdge)
-from backend.db.neo4j.models.
-Constants moved to backend.db.neo4j.models.constants.
+primitives from codegraph.models.
 """
 
 from backend.db.models.associations import (

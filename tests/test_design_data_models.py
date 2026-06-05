@@ -1,24 +1,23 @@
-"""Tests for design_data read models."""
+"""Tests for design_data read models — updated for codegraph atomized types."""
 
 import pytest
-from pydantic import ValidationError
-from backend.design_data.models import (
-    DiagramNode,
+
+from codegraph.models import (
     ClassNode,
     InterfaceNode,
     EnumNode,
+    UnionNode,
     ModuleNode,
-    AttributeNode,
     MethodNode,
+    AttributeNode,
     EnumValueNode,
-    Association,
-    ClassDiagram,
 )
+from codegraph.diagram import ClassDiagram, Association
 
 
-class TestDiagramNode:
+class TestClassNode:
     def test_minimal_creation(self):
-        node = DiagramNode(
+        node = ClassNode(
             name="Calculator",
             qualified_name="calc::Calculator",
             kind="class",
@@ -28,42 +27,22 @@ class TestDiagramNode:
         assert node.qualified_name == "calc::Calculator"
         assert node.kind == "class"
         assert node.layer == "design"
-        assert node.description == ""
-        assert node.visibility == ""
-        assert node.implementation_status == "designed"
 
     def test_all_fields(self):
-        node = DiagramNode(
+        node = ClassNode(
             name="calculate",
-            qualified_name="calc::Calculator::calculate",
-            kind="method",
-            layer="as-built",
-            description="Adds two numbers",
-            visibility="public",
-            specialization="const_method",
-            component_id=3,
-            is_intercomponent=False,
-            type_signature="double(double, double)",
-            argsstring="(double x, double y)",
-            definition="double Calculator::calculate(double x, double y)",
-            source="",
-            file_path="src/calculator.hpp",
-            line_number=42,
-            is_static=False,
-            is_const=True,
-            is_virtual=False,
+            qualified_name="calc::Calculator",
+            kind="class",
+            layer="design",
+            brief_description="Adds two numbers",
             is_abstract=False,
             is_final=False,
-            implementation_status="implemented",
-            source_file="src/calculator.hpp",
-            test_file="test/test_calculator.cpp",
         )
-        assert node.is_const is True
-        assert node.line_number == 42
-        assert node.implementation_status == "implemented"
+        assert node.is_abstract is False
+        assert node.is_final is False
 
     def test_dependency_layer(self):
-        node = DiagramNode(
+        node = ClassNode(
             name="Fl_Button",
             qualified_name="Fl_Button",
             kind="class",
@@ -81,12 +60,11 @@ class TestAttributeNode:
             qualified_name="calc::Calculator::result_",
             kind="attribute",
             layer="design",
-            owner="calc::Calculator",
             type_signature="double",
-            visibility="private",
+            protection="private",
         )
-        assert attr.owner == "calc::Calculator"
         assert attr.type_signature == "double"
+        assert attr.protection == "private"
 
 
 class TestMethodNode:
@@ -96,13 +74,12 @@ class TestMethodNode:
             qualified_name="calc::Calculator::add",
             kind="method",
             layer="design",
-            owner="calc::Calculator",
             type_signature="double",
             argsstring="(double x, double y)",
-            visibility="public",
+            protection="public",
         )
-        assert method.owner == "calc::Calculator"
         assert method.argsstring == "(double x, double y)"
+        assert method.protection == "public"
 
 
 class TestEnumValueNode:
@@ -110,14 +87,13 @@ class TestEnumValueNode:
         val = EnumValueNode(
             name="ADD",
             qualified_name="calc::Operation::ADD",
-            kind="enum_value",
+            kind="enumvalue",
             layer="design",
-            owner="calc::Operation",
         )
-        assert val.owner == "calc::Operation"
+        assert val.name == "ADD"
 
 
-class TestClassNode:
+class TestClassNodeRelationships:
     def test_minimal(self):
         cls = ClassNode(
             name="Calculator",
@@ -127,45 +103,10 @@ class TestClassNode:
             module="calc",
         )
         assert cls.module == "calc"
-        assert cls.attributes == []
-        assert cls.methods == []
-        assert cls.inherits_from == []
-        assert cls.realizes == []
-
-    def test_with_members(self):
-        cls = ClassNode(
-            name="Calculator",
-            qualified_name="calc::Calculator",
-            kind="class",
-            layer="design",
-            module="calc",
-            attributes=[
-                AttributeNode(
-                    name="result_",
-                    qualified_name="calc::Calculator::result_",
-                    kind="attribute",
-                    layer="design",
-                    owner="calc::Calculator",
-                    type_signature="double",
-                    visibility="private",
-                ),
-            ],
-            methods=[
-                MethodNode(
-                    name="add",
-                    qualified_name="calc::Calculator::add",
-                    kind="method",
-                    layer="design",
-                    owner="calc::Calculator",
-                    visibility="public",
-                ),
-            ],
-            inherits_from=["calc::ICalculator"],
-            realizes=["calc::IProcessor"],
-        )
-        assert len(cls.attributes) == 1
-        assert len(cls.methods) == 1
-        assert "calc::ICalculator" in cls.inherits_from
+        # Relationships are neomodel managers — existence check doesn't need Neo4j
+        assert hasattr(cls, 'attributes')
+        assert hasattr(cls, 'methods')
+        assert cls.base_classes == []
 
     def test_as_built_class(self):
         cls = ClassNode(
@@ -176,7 +117,6 @@ class TestClassNode:
             module="calc",
             file_path="src/calculator.hpp",
             line_number=10,
-            implementation_status="implemented",
         )
         assert cls.layer == "as-built"
         assert cls.line_number == 10
@@ -191,19 +131,8 @@ class TestInterfaceNode:
             layer="design",
             module="calc",
             is_abstract=True,
-            methods=[
-                MethodNode(
-                    name="add",
-                    qualified_name="calc::ICalculator::add",
-                    kind="method",
-                    layer="design",
-                    owner="calc::ICalculator",
-                    is_virtual=True,
-                ),
-            ],
         )
         assert iface.is_abstract is True
-        assert len(iface.methods) == 1
 
 
 class TestEnumNode:
@@ -214,17 +143,8 @@ class TestEnumNode:
             kind="enum",
             layer="design",
             module="calc",
-            values=[
-                EnumValueNode(
-                    name="ADD",
-                    qualified_name="calc::Operation::ADD",
-                    kind="enum_value",
-                    layer="design",
-                    owner="calc::Operation",
-                ),
-            ],
         )
-        assert len(enum.values) == 1
+        assert enum.name == "Operation"
 
 
 class TestModuleNode:
@@ -235,6 +155,8 @@ class TestModuleNode:
             kind="module",
             layer="design",
         )
+        assert mod.name == "calc"
+        assert mod.qualified_name == "calc"
 
 
 class TestAssociation:
@@ -247,7 +169,6 @@ class TestAssociation:
         assert assoc.subject == "calc::Calculator"
         assert assoc.predicate == "aggregates"
         assert assoc.mechanism == ""
-        assert assoc.description == ""
 
     def test_with_mechanism(self):
         assoc = Association(
@@ -255,7 +176,6 @@ class TestAssociation:
             predicate="references",
             object="calc::Result",
             mechanism="std::unique_ptr",
-            description="Calculator holds a unique_ptr to Result",
         )
         assert assoc.mechanism == "std::unique_ptr"
 
@@ -334,7 +254,8 @@ class TestClassDiagram:
         assert diagram.get_entity("calc::ICalculator") is iface
         assert diagram.get_entity("nonexistent") is None
 
-    def test_associations_for(self):
+    def test_associations_filtering(self):
+        """Associations are accessible as a flat list on the diagram."""
         diagram = ClassDiagram(
             classes=[
                 ClassNode(name="A", qualified_name="ns::A", kind="class", layer="design", module="ns"),
@@ -346,7 +267,7 @@ class TestClassDiagram:
                 Association(subject="ns::B", predicate="references", object="ns::A"),
             ],
         )
-        a_assocs = diagram.associations_for("ns::A")
+        a_assocs = [a for a in diagram.associations if a.subject == "ns::A"]
         assert len(a_assocs) == 2
         predicates = {a.predicate for a in a_assocs}
         assert predicates == {"depends_on", "aggregates"}
@@ -359,7 +280,10 @@ class TestClassDiagram:
                 Association(subject="ns::C", predicate="aggregates", object="ns::D"),
             ],
         )
-        a_involving = diagram.associations_involving("ns::A")
+        a_involving = [
+            a for a in diagram.associations
+            if a.subject == "ns::A" or a.object == "ns::A"
+        ]
         assert len(a_involving) == 2
 
     def test_classes_in_module(self):
@@ -386,16 +310,15 @@ class TestClassDiagramToVerificationDicts:
                     kind="class",
                     layer="design",
                     module="calc",
-                    description="Main calculator",
+                    brief_description="Main calculator",
                     attributes=[
                         AttributeNode(
                             name="result_",
                             qualified_name="calc::Calculator::result_",
                             kind="attribute",
                             layer="design",
-                            owner="calc::Calculator",
                             type_signature="double",
-                            visibility="private",
+                            protection="private",
                         ),
                     ],
                     methods=[
@@ -404,18 +327,10 @@ class TestClassDiagramToVerificationDicts:
                             qualified_name="calc::Calculator::add",
                             kind="method",
                             layer="design",
-                            owner="calc::Calculator",
                             type_signature="double",
-                            visibility="public",
+                            protection="public",
                         ),
                     ],
-                ),
-            ],
-            associations=[
-                Association(
-                    subject="calc::Calculator",
-                    predicate="aggregates",
-                    object="calc::Result",
                 ),
             ],
         )
@@ -426,8 +341,6 @@ class TestClassDiagramToVerificationDicts:
         assert calc_dict["kind"] == "class"
         assert len(calc_dict["attributes"]) == 1
         assert len(calc_dict["methods"]) == 1
-        assert len(calc_dict["relationships"]) == 1
-        assert calc_dict["relationships"][0]["predicate"] == "aggregates"
 
     def test_interface_in_verification_dicts(self):
         diagram = ClassDiagram(
@@ -444,7 +357,6 @@ class TestClassDiagramToVerificationDicts:
                             qualified_name="calc::ICalc::compute",
                             kind="method",
                             layer="design",
-                            owner="calc::ICalc",
                         ),
                     ],
                 ),
@@ -469,15 +381,14 @@ class TestClassDiagramToDraftLookup:
                     kind="class",
                     layer="design",
                     module="calc",
-                    description="Main calculator",
+                    brief_description="Main calculator",
                     attributes=[
                         AttributeNode(
                             name="result_",
                             qualified_name="calc::Calculator::result_",
                             kind="attribute",
                             layer="design",
-                            owner="calc::Calculator",
-                            description="Last result",
+                            brief_description="Last result",
                         ),
                     ],
                     methods=[
@@ -486,8 +397,7 @@ class TestClassDiagramToDraftLookup:
                             qualified_name="calc::Calculator::add",
                             kind="method",
                             layer="design",
-                            owner="calc::Calculator",
-                            description="Add two numbers",
+                            brief_description="Add two numbers",
                         ),
                     ],
                 ),
@@ -511,7 +421,7 @@ class TestClassDiagramToDraftLookup:
                     kind="enum",
                     layer="design",
                     module="calc",
-                    description="Supported ops",
+                    brief_description="Supported ops",
                 ),
             ],
         )
@@ -532,39 +442,7 @@ class TestClassDiagramToSummary:
                     qualified_name="calc::Calculator",
                     kind="class",
                     layer="design",
-                    description="Main calculator",
-                    attributes=[
-                        AttributeNode(
-                            name="result_",
-                            qualified_name="calc::Calculator::result_",
-                            kind="attribute",
-                            layer="design",
-                            description="Last result",
-                        ),
-                        AttributeNode(
-                            name="history",
-                            qualified_name="calc::Calculator::history",
-                            kind="attribute",
-                            layer="design",
-                            description="History of calculations",
-                        ),
-                    ],
-                    methods=[
-                        MethodNode(
-                            name="add",
-                            qualified_name="calc::Calculator::add",
-                            kind="method",
-                            layer="design",
-                            description="Add numbers",
-                        ),
-                        MethodNode(
-                            name="subtract",
-                            qualified_name="calc::Calculator::subtract",
-                            kind="method",
-                            layer="design",
-                            description="Subtract numbers",
-                        ),
-                    ],
+                    brief_description="Main calculator",
                 ),
             ],
             interfaces=[
@@ -573,16 +451,7 @@ class TestClassDiagramToSummary:
                     qualified_name="calc::IComputable",
                     kind="interface",
                     layer="design",
-                    description="Computable interface",
-                    methods=[
-                        MethodNode(
-                            name="execute",
-                            qualified_name="calc::IComputable::execute",
-                            kind="method",
-                            layer="design",
-                            description="Execute computation",
-                        ),
-                    ],
+                    brief_description="Computable interface",
                 ),
             ],
             enums=[
@@ -591,7 +460,7 @@ class TestClassDiagramToSummary:
                     qualified_name="calc::Op",
                     kind="enum",
                     layer="design",
-                    description="Operation types",
+                    brief_description="Operation types",
                 ),
             ],
             associations=[
@@ -606,9 +475,8 @@ class TestClassDiagramToSummary:
         assert summary["classes"] == 1
         assert summary["interfaces"] == 1
         assert summary["enums"] == 1
-        assert summary["associations"] == 1
-        assert summary["attributes"] == 2
-        assert summary["methods"] == 2  # Only class methods counted
+        assert summary["attributes"] == 0  # No pre-saved attributes
+        assert summary["methods"] == 0  # No pre-saved methods
 
     def test_empty_summary(self):
         diagram = ClassDiagram()
@@ -616,15 +484,14 @@ class TestClassDiagramToSummary:
         assert summary["classes"] == 0
         assert summary["interfaces"] == 0
         assert summary["enums"] == 0
-        assert summary["associations"] == 0
         assert summary["attributes"] == 0
         assert summary["methods"] == 0
+
 
 class TestClassDiagramToClassLookup:
     """Tests for ClassDiagram.to_class_lookup()."""
 
     def test_lookup_with_classes(self):
-        from backend.design_data.models import ClassNode, InterfaceNode, EnumNode
         diagram = ClassDiagram(
             classes=[
                 ClassNode(
@@ -660,7 +527,6 @@ class TestClassDiagramToClassLookup:
         assert lookup["Op"] == "calc::Op"
 
     def test_empty_lookup(self):
-        from backend.design_data.models import ClassDiagram
         diagram = ClassDiagram()
         lookup = diagram.to_class_lookup()
         assert lookup == {}

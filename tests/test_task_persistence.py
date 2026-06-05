@@ -14,8 +14,8 @@ from backend.pipeline.services import (
 class TestTopologicalSort:
     def test_no_deps(self):
         tasks = [
-            TaskSchema(title="A", description="a"),
-            TaskSchema(title="B", description="b"),
+            TaskSchema(title="A", description="test"),
+            TaskSchema(title="B", description="test"),
         ]
         result = _topological_sort(tasks, [])
         assert len(result) == 2
@@ -24,8 +24,8 @@ class TestTopologicalSort:
 
     def test_with_deps(self):
         tasks = [
-            TaskSchema(title="B", description="b"),
-            TaskSchema(title="A", description="a"),
+            TaskSchema(title="B", description="test"),
+            TaskSchema(title="A", description="test"),
         ]
         result = _topological_sort(tasks, [("A", "B")])
         assert result[0].title == "A"
@@ -69,7 +69,7 @@ class TestPersistTasks:
     def test_persist_task_with_parent(self, seeded_session):
         batch = TaskBatchSchema(
             tasks=[
-                TaskSchema(title="Parent", description="root"),
+                TaskSchema(title="Parent", description="test"),
                 TaskSchema(
                     title="Child",
                     description="depends_on_parent",
@@ -107,7 +107,7 @@ class TestPersistTasks:
         assert result.links_to_verification == 0  # No Neo4j session in unit tests
 
     def test_mark_task_status(self, seeded_session):
-        task = Task(title="test", description="test")
+        task = Task(title="test")
         seeded_session.add(task)
         seeded_session.flush()
 

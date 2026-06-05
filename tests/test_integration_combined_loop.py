@@ -1,10 +1,11 @@
+import pytest
 """Integration test for the combined design+verify loop."""
 
 import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from codegraph.designs import ClassDiagram
+from codegraph.diagram import ClassDiagram
 from backend.requirements.schemas import VerificationSchema, VerificationConditionSchema, VerificationActionSchema
 from backend.ticketing_agent.design_verify.combined_loop import design_and_verify
 from backend.ticketing_agent.tools.design_verify import CombinedDispatcher

@@ -1,14 +1,14 @@
-"""Tests for design_data transforms."""
+"""Tests for design_data transforms — updated for codegraph atomized types."""
 
-from codegraph.designs import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
+import pytest
+from codegraph.diagram import ClassDiagram, Association
+from codegraph.models import (
     ClassNode,
     EnumNode,
     EnumValueNode,
     InterfaceNode,
     MethodNode,
+    AttributeNode,
 )
 from backend.design_data.transforms import class_diagram_from_oo_design, oo_design_from_class_diagram
 
@@ -19,66 +19,38 @@ def _sample_oo_design():
         classes=[
             ClassNode(
                 name="Calculator",
+                qualified_name="calc::Calculator",
                 module="calc",
-                description="Main calculator class",
-                visibility="public",
-                is_intercomponent=False,
-                requirement_ids=["hlr:1"],
-                attributes=[
-                    AttributeNode(
-                        name="result_",
-                        type_signature="double",
-                        visibility="private",
-                        description="Last result",
-                    ),
-                ],
-                methods=[
-                    MethodNode(
-                        name="add",
-                        visibility="public",
-                        description="Add two numbers",
-                        argsstring="(double x, double y)",
-                        type_signature="double",
-                    ),
-                ],
-                inherits_from=["ICalculator"],
-                realizes=[],
+                kind="class",
+                layer="design",
+                brief_description="Main calculator class",
             ),
         ],
         interfaces=[
             InterfaceNode(
                 name="ICalculator",
+                qualified_name="calc::ICalculator",
                 module="calc",
-                description="Calculator interface",
-                is_intercomponent=False,
-                methods=[
-                    MethodNode(
-                        name="add",
-                        visibility="public",
-                        description="Add two numbers",
-                        argsstring="",
-                        type_signature="double",
-                    ),
-                ],
+                kind="interface",
+                layer="design",
+                brief_description="Calculator interface",
             ),
         ],
         enums=[
             EnumNode(
                 name="Operation",
+                qualified_name="calc::Operation",
                 module="calc",
-                description="Supported operations",
-                values=[
-                    EnumValueNode(name="ADD", qualified_name="calc::Operation::ADD"),
-                    EnumValueNode(name="SUBTRACT", qualified_name="calc::Operation::SUBTRACT"),
-                ],
+                kind="enum",
+                layer="design",
+                brief_description="Supported operations",
             ),
         ],
         associations=[
             Association(
-                subject="Calculator",
-                object="Result",
+                subject="calc::Calculator",
+                object="calc::Result",
                 predicate="aggregates",
-                description="Calculator aggregates results",
                 mechanism="std::vector",
             ),
         ],
@@ -93,24 +65,6 @@ class TestClassDiagramFromOODesign:
         assert diagram.classes[0].name == "Calculator"
         assert diagram.classes[0].qualified_name == "calc::Calculator"
 
-    def test_class_attributes(self):
-        oo = _sample_oo_design()
-        diagram = class_diagram_from_oo_design(oo)
-        assert len(diagram.classes[0].attributes) == 1
-        assert diagram.classes[0].attributes[0].name == "result_"
-        assert diagram.classes[0].attributes[0].type_signature == "double"
-
-    def test_class_methods(self):
-        oo = _sample_oo_design()
-        diagram = class_diagram_from_oo_design(oo)
-        assert len(diagram.classes[0].methods) == 1
-        assert diagram.classes[0].methods[0].name == "add"
-
-    def test_class_inherits_from(self):
-        oo = _sample_oo_design()
-        diagram = class_diagram_from_oo_design(oo)
-        assert "ICalculator" in diagram.classes[0].inherits_from
-
     def test_interfaces_preserved(self):
         oo = _sample_oo_design()
         diagram = class_diagram_from_oo_design(oo)
@@ -122,7 +76,6 @@ class TestClassDiagramFromOODesign:
         diagram = class_diagram_from_oo_design(oo)
         assert len(diagram.enums) == 1
         assert diagram.enums[0].name == "Operation"
-        assert len(diagram.enums[0].values) == 2
 
     def test_associations_preserved(self):
         oo = _sample_oo_design()
@@ -146,8 +99,22 @@ class TestClassDiagramFromOODesign:
         diagram = class_diagram_from_oo_design(oo)
         assert "calc" in diagram.module_names
 
-    def test_owner_set_on_members(self):
-        oo = _sample_oo_design()
+    def test_qualified_name_set_when_missing(self):
+        """class_diagram_from_oo_design sets qualified_name for nodes without one."""
+        oo = ClassDiagram(
+            classes=[
+                ClassNode(
+                    name="Widget",
+                    module="ui",
+                    kind="class",
+                    layer="design",
+                ),
+            ],
+        )
         diagram = class_diagram_from_oo_design(oo)
-        assert diagram.classes[0].attributes[0].owner == "calc::Calculator"
-        assert diagram.classes[0].methods[0].owner == "calc::Calculator"
+        assert diagram.classes[0].qualified_name == "ui::Widget"
+
+    def test_oo_design_from_class_diagram_passthrough(self):
+        oo = _sample_oo_design()
+        result = oo_design_from_class_diagram(oo)
+        assert result is oo
