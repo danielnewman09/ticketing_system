@@ -48,9 +48,8 @@ def enrich_with_requirement_tags(
     if session is not None:
         _enrich_via_cypher(session, node_qns, nodes)
     else:
-        from services.dependencies import get_neo4j
-        neo4j_conn = get_neo4j()
-        with neo4j_conn.session() as sess:
+        from codegraph.connection import get_session
+        with get_session() as sess:
             _enrich_via_cypher(sess, node_qns, nodes)
 
     return nodes
@@ -124,8 +123,8 @@ def tag_direct_nodes_only(
     if session is not None:
         _query(session)
     else:
-        from services.dependencies import get_neo4j
-        with get_neo4j().session() as sess:
+        from codegraph.connection import get_session
+        with get_session() as sess:
             _query(sess)
 
     if not seed_qns:
@@ -141,8 +140,8 @@ def tag_direct_nodes_only(
         if rec:
             hlr_desc = (rec["desc"] or "")[:80]
     else:
-        from services.dependencies import get_neo4j
-        with get_neo4j().session() as sess:
+        from codegraph.connection import get_session
+        with get_session() as sess:
             rec = sess.run(
                 "MATCH (hlr:HLR {id: $hid}) RETURN hlr.description AS desc",
                 {"hid": hlr_id},

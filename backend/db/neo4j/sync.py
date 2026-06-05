@@ -27,11 +27,11 @@ log = logging.getLogger(__name__)
 
 def clear_design_graph():
     """Delete all design graph nodes (and their relationships) from Neo4j."""
-    from services.dependencies import get_neo4j
+    from codegraph.connection import get_session
     from backend.db.neo4j.repositories.design import DesignRepository
 
     try:
-        with get_neo4j().session() as session:
+        with get_session() as session:
             repo = DesignRepository(session)
             repo.clear_design_graph()
         return True

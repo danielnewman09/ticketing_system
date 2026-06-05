@@ -305,10 +305,10 @@ def design_and_persist_hlr(
     from backend.db.models import Component
     from backend.db.neo4j.repositories.requirement import RequirementRepository
     from backend.requirements.services.persistence import persist_design
-    from services.dependencies import get_neo4j
+    from codegraph.connection import get_session as get_neo4j_session
 
     # --- Load data from Neo4j ---
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         req_repo = RequirementRepository(ns)
         hlr_obj = req_repo.get_hlr(hlr_id)
         if not hlr_obj:
@@ -384,9 +384,9 @@ def design_and_persist_hlr(
             log.info("Dependency graph disconnected for HLR %d", hlr_id)
 
     # --- Persist ---
-    from services.dependencies import get_neo4j
+    from codegraph.connection import get_session as get_neo4j_session
     with get_session() as session:
-        with get_neo4j().session() as neo4j_session:
+        with get_neo4j_session() as neo4j_session:
             result = persist_design(ontology, neo4j_session)
             return {
                 "nodes_created": result.nodes_created,

@@ -127,7 +127,7 @@ def run_pipeline(
     from backend.db.models.tasks import Task
     from backend.db.neo4j.repositories.requirement import RequirementRepository
     from backend.db.neo4j.repositories.verification import VerificationRepository
-    from services.dependencies import get_neo4j
+    from codegraph.connection import get_session as get_neo4j_session
 
     result = PipelineResult()
     log.info("Pipeline started: %s", initial_prompt[:100])
@@ -139,7 +139,7 @@ def run_pipeline(
     from backend.ticketing_agent.decompose.decompose_hlr import decompose
     from backend.requirements.services.persistence import persist_decomposition
 
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         req_repo = RequirementRepository(ns)
         hlrs_neo4j = req_repo.list_hlrs()
         all_llrs_neo4j = req_repo.list_llrs()
@@ -155,7 +155,7 @@ def run_pipeline(
             continue
 
         decomp_result = decompose(hlr.description, model=model)
-        with get_neo4j().session() as ns:
+        with get_neo4j_session() as ns:
             persisted = persist_decomposition(
                 ns,
                 hlr.id,
@@ -176,7 +176,7 @@ def run_pipeline(
         persist_verification,
     )
 
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         ver_repo = VerificationRepository(ns)
         class_contexts = build_verification_context_from_diagram(ns)
 
@@ -240,7 +240,7 @@ def run_pipeline(
         accumulated_diagram = _merge_diagrams(accumulated_diagram, diagram)
 
         # Persist design to Neo4j
-        with get_neo4j().session() as neo4j_session:
+        with get_neo4j_session() as neo4j_session:
             persist_result = persist_design(
                 ontology,
                 neo4j_session=neo4j_session,
@@ -260,7 +260,7 @@ def run_pipeline(
     from backend.ticketing_agent.generate_tasks import generate_tasks
     from backend.pipeline.services import persist_tasks
 
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         all_verifications = _get_verification_dicts(ns)
 
     for hlr in hlrs_neo4j:
@@ -435,7 +435,7 @@ def run_pipeline(
         )
 
         with get_session() as session:
-            with get_neo4j().session() as neo4j_sess:
+            with get_neo4j_session() as neo4j_sess:
                 full_stats = sync_full_design(neo4j_sess, session)
 
                 for task in session.query(Task).all():

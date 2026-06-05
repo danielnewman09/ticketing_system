@@ -77,11 +77,11 @@ if __name__ == "__main__":
 
     from backend.db import init_db
     from backend.db.neo4j.repositories.requirement import RequirementRepository
-    from services.dependencies import get_neo4j
+    from codegraph.connection import get_session
 
     init_db()
 
-    with get_neo4j().session() as ns:
+    with get_session() as ns:
         req_repo = RequirementRepository(ns)
         hlrs = [{"id": h.id, "description": h.description} for h in req_repo.list_hlrs()]
         llrs = [{"id": l.id, "description": l.description, "hlr_id": l.high_level_requirement_id} for l in req_repo.list_llrs()]
