@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from neomodel import config, db as neomodel_db
+from neomodel import config, get_config, db as neomodel_db
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +30,10 @@ class Neo4jSessionManager:
 
     def session(self):
         """Return a Neo4j driver session as a context manager."""
+        if neomodel_db.driver is None:
+            cfg = get_config()
+            if cfg.database_url:
+                neomodel_db.set_connection(url=cfg.database_url)
         return neomodel_db.driver.session()
 
     def verify_connectivity(self) -> bool:
