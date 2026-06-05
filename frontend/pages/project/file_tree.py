@@ -3,7 +3,7 @@
 import os
 import re
 
-from services.dependencies import get_neo4j
+from codegraph.connection import get_session
 
 from nicegui import ui
 
@@ -108,7 +108,7 @@ def get_conan_deps(project_dir: str) -> dict[str, str]:
     # Check which deps have been indexed into Neo4j
     indexed: set[str] = set()
     try:
-        with get_neo4j().session() as session:
+        with get_session() as session:
             result = session.run(
                 "MATCH (n) WHERE n.source IS NOT NULL " "RETURN DISTINCT n.source AS source"
             )

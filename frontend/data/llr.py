@@ -7,7 +7,7 @@ import logging
 
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.db.neo4j.repositories.verification import VerificationRepository
-from services.dependencies import get_neo4j
+from codegraph.connection import get_session as get_neo4j_session
 from backend.db import get_session
 
 log = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 def fetch_llr_detail(llr_id):
     """Fetch all data needed for LLR detail page."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         ver_repo = VerificationRepository(ns)
         llr = repo.get_llr(llr_id)
@@ -47,7 +47,7 @@ def fetch_llr_detail(llr_id):
 
 def create_llr(hlr_id: int, description: str) -> int:
     """Create a new LLR under an HLR in Neo4j. Returns the new LLR id."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         llr = repo.create_llr(hlr_id=hlr_id, description=description)
         return llr.id
@@ -55,7 +55,7 @@ def create_llr(hlr_id: int, description: str) -> int:
 
 def update_llr(llr_id: int, description: str) -> bool:
     """Update an LLR's description in Neo4j. Returns True on success."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         result = repo.update_llr(llr_id, description=description)
         return result is not None
@@ -63,7 +63,7 @@ def update_llr(llr_id: int, description: str) -> bool:
 
 def delete_llr(llr_id: int) -> bool:
     """Delete an LLR from Neo4j. Returns True on success."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         return repo.delete_llr(llr_id)
 

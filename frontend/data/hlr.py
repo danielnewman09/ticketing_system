@@ -7,7 +7,7 @@ import logging
 
 from backend.db.neo4j.repositories.requirement import RequirementRepository
 from backend.db.neo4j.repositories.verification import VerificationRepository
-from services.dependencies import get_neo4j
+from codegraph.connection import get_session as get_neo4j_session
 from backend.db import get_session
 
 log = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 def fetch_requirements_data():
     """Fetch all data needed for the requirements dashboard."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         ver_repo = VerificationRepository(ns)
         hlrs_neo4j = repo.list_hlrs()
@@ -81,7 +81,7 @@ def fetch_requirements_data():
 
 def fetch_hlr_detail(hlr_id):
     """Fetch all data needed for HLR detail page."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         ver_repo = VerificationRepository(ns)
         hlr = repo.get_hlr(hlr_id)
@@ -119,7 +119,7 @@ def create_hlr(description: str, component_id: int | None = None) -> int:
     from backend.db.neo4j.constraints import ensure_ticketing_constraints
     ensure_ticketing_constraints()
 
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         hlr = repo.create_hlr(description=description, component_id=component_id)
         return hlr.id
@@ -127,7 +127,7 @@ def create_hlr(description: str, component_id: int | None = None) -> int:
 
 def update_hlr(hlr_id: int, description: str, component_id: int | None = None) -> bool:
     """Update an HLR's description and component in Neo4j. Returns True on success."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         result = repo.update_hlr(hlr_id, description=description, component_id=component_id)
         return result is not None
@@ -135,7 +135,7 @@ def update_hlr(hlr_id: int, description: str, component_id: int | None = None) -
 
 def delete_hlr(hlr_id: int) -> bool:
     """Delete an HLR and its child LLRs from Neo4j. Returns True on success."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         return repo.delete_hlr(hlr_id)
 
@@ -151,7 +151,7 @@ def decompose_hlr(hlr_id: int) -> dict:
     os.makedirs(log_dir, exist_ok=True)
     prompt_log_file = os.path.join(log_dir, f"decompose_hlr{hlr_id}_raw.txt")
 
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         hlr = repo.get_hlr(hlr_id)
         if not hlr:
