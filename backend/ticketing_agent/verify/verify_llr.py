@@ -190,14 +190,14 @@ if __name__ == "__main__":
     from backend.db.neo4j.repositories.requirement import RequirementRepository
     from backend.db.neo4j.repositories.verification import VerificationRepository
     from backend.requirements.services.persistence import build_verification_context_from_diagram
-    from services.dependencies import get_neo4j
+    from codegraph.connection import get_session
 
     llr_id = int(sys.argv[1]) if len(sys.argv) > 1 else None
     if not llr_id:
         print("Usage: python -m agents.verify_llr <llr_id>")
         sys.exit(1)
 
-    with get_neo4j().session() as ns:
+    with get_session() as ns:
         req_repo = RequirementRepository(ns)
         ver_repo = VerificationRepository(ns)
         llr = req_repo.get_llr(llr_id)

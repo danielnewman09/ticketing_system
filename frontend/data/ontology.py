@@ -10,7 +10,7 @@ Architecture (Phase 3):
 
 import logging
 
-from services.dependencies import get_neo4j
+from codegraph.connection import get_session as get_neo4j_session
 
 log = logging.getLogger(__name__)
 
@@ -202,7 +202,7 @@ def fetch_hlr_graph_data(
         from backend.graph import format_ontology_graph
         from backend.requirements.services.graph_tags import tag_direct_nodes_only
 
-        with get_neo4j().session() as session:
+        with get_neo4j_session() as session:
             repo = DesignRepository(session)
             graph = repo.get_hlr_subgraph(hlr_id, component_id)
 
@@ -341,7 +341,7 @@ def fetch_node_detail_full(qualified_name: str) -> dict | None:
     # Fetch requirement tags from Neo4j TRACES_TO edges
     requirements = []
     try:
-        with get_neo4j().session() as ns:
+        with get_neo4j_session() as ns:
             label_clause = _label_match_direct("d")
             result = ns.run(
                 f"""
@@ -378,7 +378,7 @@ def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
 def update_member_type(qualified_name: str, type_signature: str) -> bool:
     """Update type_signature on a design member node in Neo4j (primary store)."""
     try:
-        with get_neo4j().session() as ns:
+        with get_neo4j_session() as ns:
             ns.run(
                 "MATCH (n:Member {qualified_name: $qn}) SET n.type_signature = $ts",
                 {"qn": qualified_name, "ts": type_signature},

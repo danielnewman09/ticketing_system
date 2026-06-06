@@ -29,7 +29,7 @@ from backend.requirements.services.persistence import (
     persist_design,
     persist_verification,
 )
-from services.dependencies import get_neo4j
+from codegraph.connection import get_session as get_neo4j_session
 
 init_db()
 mcp = FastMCP("ticketing-system")
@@ -56,7 +56,7 @@ def _get_component_name(component_id: int | None) -> str | None:
 @mcp.tool()
 def list_requirements() -> str:
     """List all HLRs with their LLRs and verification methods."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         ver_repo = VerificationRepository(ns)
         hlrs_neo4j = repo.list_hlrs()
@@ -87,9 +87,9 @@ def list_requirements() -> str:
 def list_ontology() -> str:
     """List all ontology nodes and relationships."""
     from backend.db.neo4j.repositories.design import DesignRepository
-    from services.dependencies import get_neo4j
+    from codegraph.connection import get_session as get_neo4j_session
 
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = DesignRepository(ns)
         stats = repo.get_graph_stats()
 
@@ -151,7 +151,7 @@ def list_component_dependencies(component_id: int) -> str:
 @mcp.tool()
 def save_dependency_assessment(hlr_id: int, assessment: dict) -> str:
     """Save a dependency assessment to an HLR's dependency_context field."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         hlr = repo.update_hlr(hlr_id, dependency_context=assessment)
         if not hlr:
@@ -190,7 +190,7 @@ def save_decomposed_requirement(
     from backend.db.neo4j.constraints import ensure_ticketing_constraints
     ensure_ticketing_constraints()
 
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         repo = RequirementRepository(ns)
         hlr = repo.create_hlr(description=hlr_description)
         llrs = [LowLevelRequirementSchema.model_validate(d) for d in low_level_requirements]
@@ -212,7 +212,7 @@ def save_ontology_design(
     requirement_links: list[dict] | None = None,
 ) -> str:
     """Save ontology nodes, associations, and requirement links to Neo4j."""
-    with get_neo4j().session() as neo4j_session:
+    with get_neo4j_session() as neo4j_session:
         design = DesignSchema.model_validate(
             {
                 "nodes": nodes,
@@ -237,7 +237,7 @@ def save_verification(
     verifications: list[dict],
 ) -> str:
     """Save fleshed-out verification procedures for an LLR, replacing any existing ones."""
-    with get_neo4j().session() as ns:
+    with get_neo4j_session() as ns:
         schemas = [VerificationSchema.model_validate(v) for v in verifications]
         result = persist_verification(ns, llr_id, schemas)
 

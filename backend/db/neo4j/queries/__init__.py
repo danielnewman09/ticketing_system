@@ -10,16 +10,15 @@ from backend.db.neo4j.repositories.design import DesignRepository
 
 
 def _get_neo4j():
-    """Lazy import to avoid circular dependency with services.dependencies."""
-    from services.dependencies import get_neo4j
-    return get_neo4j()
+    """Lazy import to avoid circular dependency."""
+    from codegraph.connection import get_session
+    return get_session()
 
 
 def fetch_design_graph(
     kind_filter=None, search=None, component_id=None
 ):
-    conn = _get_neo4j()
-    with conn.session() as session:
+    with _get_neo4j() as session:
         repo = DesignRepository(session)
         graph = repo.get_ontology_graph(
             layer="design",
@@ -31,24 +30,21 @@ def fetch_design_graph(
 
 
 def fetch_hlr_subgraph(hlr_id, component_id=None):
-    conn = _get_neo4j()
-    with conn.session() as session:
+    with _get_neo4j() as session:
         repo = DesignRepository(session)
         graph = repo.get_hlr_subgraph(hlr_id, component_id)
         return graph.to_raw()
 
 
 def fetch_neighbourhood_graph(qualified_name):
-    conn = _get_neo4j()
-    with conn.session() as session:
+    with _get_neo4j() as session:
         repo = DesignRepository(session)
         graph = repo.get_neighbourhood_graph(qualified_name)
         return graph.to_raw()
 
 
 def fetch_node_detail(qualified_name):
-    conn = _get_neo4j()
-    with conn.session() as session:
+    with _get_neo4j() as session:
         repo = DesignRepository(session)
         cg = repo.get_compound_graph(qualified_name)
         if cg is None:
@@ -73,8 +69,7 @@ def fetch_node_detail(qualified_name):
 
 
 def fetch_codebase_compounds(search=None):
-    conn = _get_neo4j()
-    with conn.session() as session:
+    with _get_neo4j() as session:
         repo = DesignRepository(session)
         graph = repo.get_ontology_graph(
             layer="as-built", search=search,
@@ -83,8 +78,7 @@ def fetch_codebase_compounds(search=None):
 
 
 def fetch_dependency_compounds(search=None, source_filter=None, limit=100):
-    conn = _get_neo4j()
-    with conn.session() as session:
+    with _get_neo4j() as session:
         repo = DesignRepository(session)
         graph = repo.get_ontology_graph(
             layer="dependency", search=search,
@@ -94,8 +88,7 @@ def fetch_dependency_compounds(search=None, source_filter=None, limit=100):
 
 
 def fetch_design_dependency_links(design_qnames):
-    conn = _get_neo4j()
-    with conn.session() as session:
+    with _get_neo4j() as session:
         repo = DesignRepository(session)
         graph = repo.get_dependency_links(design_qnames)
         return graph.to_raw()
