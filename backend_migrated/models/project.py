@@ -1,0 +1,90 @@
+"""ProjectMeta node model (:ProjectMeta label in Neo4j).
+
+Singleton node storing project-level settings — name, description, and
+working directory. Extends CodeGraphNode to share serialization,
+registry, and relationship introspection infrastructure.
+
+The singleton is identified by ``refid = "project"``.  All code that
+needs the project meta should call
+``ProjectMeta.nodes.get(refid="project")`` or use the helpers in
+``frontend_migrated.data.project``.
+"""
+
+from neomodel import StringProperty
+
+from codegraph.models.tags import CodeGraphNode
+
+# Use the combined metaclass from CodeGraphNode so that StructuredNode
+# machinery is initialised correctly.
+from neomodel import StructuredNode
+
+
+class ProjectMeta(StructuredNode, CodeGraphNode):
+    """Project-level metadata node — :ProjectMeta label in Neo4j.
+
+    Singleton node that stores project-wide settings.  The singleton
+    instance is identified by ``refid = "project"``, which serves as
+    the unique lookup key (replacing the SQLAlchemy auto-increment
+    ``id=1`` pattern).
+
+    Attributes:
+        name: Project name (e.g. 'calculator-engine'), inherited from
+            CodeGraphNode.
+        refid: Fixed as ``'project'`` — unique lookup key for the
+            singleton. Inherited from CodeGraphNode.
+        source: Project source identifier, inherited from CodeGraphNode.
+        description: Human-readable project description.
+        working_directory: Filesystem path where the project lives
+            (e.g. '/home/user/dev/calculator-engine').
+    """
+
+    # --- Project metadata ---
+    description = StringProperty(default="",
+        help_text="Human-readable project description.")
+    working_directory = StringProperty(default="",
+        help_text="Filesystem path where the project lives "
+                  "(e.g. '/home/user/dev/calculator-engine').")
+
+    # --- Serialization contract ---
+    _llm_fields: set[str] = {
+        "name", "description", "working_directory",
+    }
+
+    # ------------------------------------------------------------------
+    # Singleton helpers
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def get_singleton(cls) -> "ProjectMeta":
+        """Return the singleton ProjectMeta node, creating it if absent.
+
+        Uses ``refid = 'project'`` as the stable lookup key.
+
+        Returns:
+            The single ProjectMeta node.
+        """
+        try:
+            node = cls.nodes.get(refid="project")
+        except cls.DoesNotExist:
+            node = cls(refid="project", name="", description="",
+                       working_directory="").save()
+        return node
+
+    @classmethod
+    def update_singleton(cls, *, name: str = "", description: str = "",
+                         working_directory: str = "") -> "ProjectMeta":
+        """Update the singleton ProjectMeta node, creating it if absent.
+
+        Args:
+            name: Project name.
+            description: Project description.
+            working_directory: Filesystem path for the project.
+
+        Returns:
+            The updated (and saved) ProjectMeta node.
+        """
+        node = cls.get_singleton()
+        node.name = name
+        node.description = description
+        node.working_directory = working_directory
+        return node.save()

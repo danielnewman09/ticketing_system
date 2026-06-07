@@ -1,8 +1,8 @@
 """Neo4j constraints and indexes for migrated ticketing node types.
 
 Creates uniqueness constraints on refid and lookup indexes for
-Component, Language, and Dependency nodes. Follows the same pattern
-as backend.db.neo4j.constraints for ticketing-specific constraints.
+ProjectMeta, Component, Language, and Dependency nodes. Follows the same
+pattern as backend.db.neo4j.constraints for ticketing-specific constraints.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 
 def ensure_migrated_constraints() -> bool:
-    """Create constraints and indexes for Component, Language, Dependency nodes.
+    """Create constraints and indexes for ProjectMeta, Component, Language, Dependency nodes.
 
     Returns:
         True if constraints were created successfully, False if Neo4j
@@ -30,6 +30,8 @@ def ensure_migrated_constraints() -> bool:
     with db.driver.session() as session:
         # Unique constraints — refid must be unique for each label
         for stmt in [
+            "CREATE CONSTRAINT projectmeta_refid IF NOT EXISTS "
+            "FOR (p:ProjectMeta) REQUIRE p.refid IS UNIQUE",
             "CREATE CONSTRAINT component_refid IF NOT EXISTS "
             "FOR (c:Component) REQUIRE c.refid IS UNIQUE",
             "CREATE CONSTRAINT language_refid IF NOT EXISTS "
@@ -44,6 +46,10 @@ def ensure_migrated_constraints() -> bool:
 
         # Lookup indexes
         for stmt in [
+            "CREATE INDEX projectmeta_name IF NOT EXISTS "
+            "FOR (p:ProjectMeta) ON (p.name)",
+            "CREATE INDEX projectmeta_working_directory IF NOT EXISTS "
+            "FOR (p:ProjectMeta) ON (p.working_directory)",
             "CREATE INDEX component_name IF NOT EXISTS "
             "FOR (c:Component) ON (c.name)",
             "CREATE INDEX component_namespace IF NOT EXISTS "

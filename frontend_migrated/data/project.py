@@ -1,13 +1,15 @@
-"""Project metadata and environment data — stubs.
+"""Project metadata and environment data — migrated backend.
 
-Return types are documented via TypedDicts. All functions raise
-NotImplementedError until reimplemented against the migrated backend.
-No imports from backend/ anywhere in this module.
+Uses neomodel-based ProjectMeta node (singleton pattern) and the
+migrated Component/Language/Dependency nodes. No imports from
+backend/ (SQLAlchemy) anywhere in this module.
 """
 
 from __future__ import annotations
 
 from typing import TypedDict
+
+from backend_migrated.models import Dependency, Language, ProjectMeta
 
 
 class BuildSystemRow(TypedDict):
@@ -52,16 +54,90 @@ class LanguageEnvironment(TypedDict):
     dependencies: list[EnvironmentDependency]
 
 
+def _require_neo4j() -> None:
+    """Ensure neomodel's database connection is configured.
+
+    Importing backend.db.neo4j.connection triggers the config setup.
+    Safe to call multiple times — idempotent.
+    """
+    import backend.db.neo4j.connection  # noqa: F401
+
+
 def fetch_project_meta() -> ProjectMeta:
-    """Fetch project metadata (single row), creating defaults if missing."""
-    raise NotImplementedError("fetch_project_meta — requires backend_migrated data layer")
+    """Fetch project metadata (singleton), creating defaults if missing.
+
+    Returns:
+        A dict with keys ``name``, ``description``, ``working_directory``.
+    """
+    _require_neo4j()
+    node = ProjectMeta.get_singleton()
+    return {
+        "name": node.name or "",
+        "description": node.description or "",
+        "working_directory": node.working_directory or "",
+    }
 
 
 def update_project_meta(name: str, description: str, working_directory: str) -> bool:
-    """Update project metadata. Returns True on success."""
-    raise NotImplementedError("update_project_meta — requires backend_migrated data layer")
+    """Update project metadata. Returns True on success.
+
+    Args:
+        name: Project name.
+        description: Project description.
+        working_directory: Filesystem path for the project.
+
+    Returns:
+        True if the update succeeded.
+    """
+    _require_neo4j()
+    ProjectMeta.update_singleton(
+        name=name,
+        description=description,
+        working_directory=working_directory,
+    )
+    return True
 
 
 def fetch_environment_data() -> list[LanguageEnvironment]:
-    """Fetch languages with their build systems, test frameworks, and dependencies."""
-    raise NotImplementedError("fetch_environment_data — requires backend_migrated data layer")
+    """Fetch languages with their dependencies.
+
+    NOTE: BuildSystem, TestFramework, and DependencyManager have not
+    been migrated yet. The returned dicts include empty lists for those
+    fields. Dependencies are populated via the migrated Dependency
+    neomodel node.
+    """
+    _require_neo4j()
+    result: list[LanguageEnvironment] = []
+
+    for lang in Language.nodes.all():
+        # Dependencies linked to this language via components
+        # Since Dependency has a manager_name string property (until
+        # DependencyManager is migrated), we group by language.
+        deps: list[EnvironmentDependency] = []
+        for component in lang.components.all():
+            for dep in component.dependencies.all():
+                deps.append({
+                    "id": id(dep),
+                    "name": dep.name or "",
+                    "version": dep.version or "",
+                    "github_url": dep.github_url or "",
+                    "manager": dep.manager_name or "",
+                    "is_dev": bool(dep.is_dev),
+                    "index_file_patterns": dep.index_file_patterns or "*.h *.hpp",
+                    "index_subdir": dep.index_subdir or "",
+                    "index_exclude_patterns": dep.index_exclude_patterns or "",
+                    "index_recursive": bool(dep.index_recursive),
+                    "components": [{"id": id(component), "name": component.name or ""}],
+                })
+
+        result.append({
+            "id": id(lang),
+            "name": lang.name or "",
+            "version": lang.version or "",
+            "build_systems": [],
+            "test_frameworks": [],
+            "dependency_managers": [],
+            "dependencies": deps,
+        })
+
+    return result
