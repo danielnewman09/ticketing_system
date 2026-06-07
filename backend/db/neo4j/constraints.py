@@ -62,5 +62,9 @@ def ensure_ticketing_constraints(conn=None) -> bool:
             except Exception:
                 log.debug("No %s nodes with sqlite_id to remove", label)
 
+    # Migrated node type constraints (Component, Language, Dependency)
+    from backend_migrated.constraints import ensure_migrated_constraints
+    ensure_migrated_constraints()
+
     log.info("Ticketing-specific Neo4j constraints and indexes ensured")
     return True
