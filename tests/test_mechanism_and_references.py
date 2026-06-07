@@ -2,7 +2,7 @@
 
 import pytest
 from codegraph.diagram import ClassDiagram, Association
-from codegraph.models import ClassNode
+from codegraph.diagram import DiagramClassNode as ClassNode
 from backend.ticketing_agent.design.map_to_ontology import map_oo_to_ontology
 
 

@@ -12,17 +12,6 @@ from typing import Literal
 
 from neo4j import Session as Neo4jSession
 
-from backend.design_data.models import (
-    Association,
-    AttributeNode,
-    ClassDiagram,
-    ClassNode,
-    EnumNode,
-    EnumValueNode,
-    InterfaceNode,
-    MethodNode,
-    ModuleNode,
-)
 
 log = logging.getLogger(__name__)
 
@@ -108,10 +97,9 @@ class DesignDataRepository:
         """
         result = self._session.run(cypher, params)
 
-        classes: list[ClassNode] = []
-        interfaces: list[InterfaceNode] = []
-        enums: list[EnumNode] = []
-        modules: list[ModuleNode] = []
+        classes: list[DiagramClassNode] = []
+        interfaces: list[DiagramInterfaceNode] = []
+        enums: list[DiagramEnumNode] = []
         module_names: list[str] = []
 
         for record in result:
@@ -130,21 +118,10 @@ class DesignDataRepository:
                 if iface.module and iface.module not in module_names:
                     module_names.append(iface.module)
             elif kind in _ENUM_KINDS:
-                enum = self._hydrate_enum(d, members)
-                enums.append(enum)
-                if enum.module and enum.module not in module_names:
-                    module_names.append(enum.module)
-            elif kind in _MODULE_KINDS:
-                mod = ModuleNode(
-                    name=d.get("name", ""),
-                    qualified_name=d.get("qualified_name", ""),
-                    kind="module",
-                    layer=_map_layer(d),
-                    description=d.get("description", ""),
-                )
-                modules.append(mod)
-                if mod.name and mod.name not in module_names:
-                    module_names.append(mod.name)
+                enum_node = self._hydrate_enum(d, members)
+                enums.append(enum_node)
+                if enum_node.module and enum_node.module not in module_names:
+                    module_names.append(enum_node.module)
 
         # Fetch associations
         associations = self._fetch_associations(conditions, params)
@@ -216,9 +193,9 @@ class DesignDataRepository:
             """
             result = self._session.run(cypher_simple, params)
 
-        classes: list[ClassNode] = []
-        interfaces: list[InterfaceNode] = []
-        enums: list[EnumNode] = []
+        classes: list[DiagramClassNode] = []
+        interfaces: list[DiagramInterfaceNode] = []
+        enums: list[DiagramEnumNode] = []
         module_names: list[str] = []
 
         for record in result:
@@ -237,10 +214,10 @@ class DesignDataRepository:
                 if iface.module and iface.module not in module_names:
                     module_names.append(iface.module)
             elif kind in _ENUM_KINDS:
-                enum = self._hydrate_enum(d, members)
-                enums.append(enum)
-                if enum.module and enum.module not in module_names:
-                    module_names.append(enum.module)
+                enum_node = self._hydrate_enum(d, members)
+                enums.append(enum_node)
+                if enum_node.module and enum_node.module not in module_names:
+                    module_names.append(enum_node.module)
 
         return ClassDiagram(
             module_names=module_names,
@@ -254,7 +231,7 @@ class DesignDataRepository:
     # Single-entity queries
     # -----------------------------------------------------------------------
 
-    def get_class(self, qualified_name: str) -> ClassNode | None:
+    def get_class(self, qualified_name: str) -> DiagramClassNode | None:
         """Fetch a single class with hydrated members."""
         cypher = """
         MATCH (d:Compound {qualified_name: $qn})
@@ -271,7 +248,7 @@ class DesignDataRepository:
         members = record["members"] or []
         return self._hydrate_class(d, members)
 
-    def get_interface(self, qualified_name: str) -> InterfaceNode | None:
+    def get_interface(self, qualified_name: str) -> DiagramInterfaceNode | None:
         """Fetch a single interface with hydrated methods."""
         cypher = """
         MATCH (d:Compound {qualified_name: $qn})
@@ -288,7 +265,7 @@ class DesignDataRepository:
         members = record["members"] or []
         return self._hydrate_interface(d, members)
 
-    def get_enum(self, qualified_name: str) -> EnumNode | None:
+    def get_enum(self, qualified_name: str) -> DiagramEnumNode | None:
         """Fetch a single enum with hydrated values."""
         cypher = """
         MATCH (d:Compound {qualified_name: $qn})
@@ -309,7 +286,7 @@ class DesignDataRepository:
     # Prompt helper queries
     # -----------------------------------------------------------------------
 
-    def get_classes_for_component(self, component_id: int) -> list[ClassNode]:
+    def get_classes_for_component(self, component_id: int) -> list[DiagramClassNode]:
         """Get all class-like entities for a component, with hydrated members.
 
         Useful for building prompt context about existing designs.
@@ -370,17 +347,17 @@ class DesignDataRepository:
     # Private hydration helpers
     # -----------------------------------------------------------------------
 
-    def _hydrate_class(self, d: dict, members: list) -> ClassNode:
-        """Hydrate a ClassNode from a Neo4j node dict and its member nodes."""
-        attrs = []
-        methods = []
+    def _hydrate_class(self, d: dict, members: list) -> DiagramClassNode:
+        """Hydrate a DiagramClassNode from a Neo4j node dict and its member nodes."""
+        attrs: list[DiagramAttributeNode] = []
+        methods: list[DiagramMethodNode] = []
         for m in members:
             if m is None:
                 continue
             md = dict(m)
             kind = md.get("kind", "")
             if kind in ("attribute", "constant"):
-                attrs.append(AttributeNode(
+                attrs.append(DiagramAttributeNode(
                     name=md.get("name", ""),
                     qualified_name=md.get("qualified_name", ""),
                     kind="attribute",
@@ -391,7 +368,7 @@ class DesignDataRepository:
                     owner=d.get("qualified_name", ""),
                 ))
             elif kind == "method":
-                methods.append(MethodNode(
+                methods.append(DiagramMethodNode(
                     name=md.get("name", ""),
                     qualified_name=md.get("qualified_name", ""),
                     kind="method",
@@ -403,7 +380,7 @@ class DesignDataRepository:
                     owner=d.get("qualified_name", ""),
                 ))
 
-        return ClassNode(
+        return DiagramClassNode(
             name=d.get("name", ""),
             qualified_name=d.get("qualified_name", ""),
             kind="class",
@@ -424,21 +401,21 @@ class DesignDataRepository:
             implementation_status=d.get("implementation_status", "designed"),
             test_file=d.get("test_file", ""),
             module=_extract_module(d.get("qualified_name", "")),
-            inherits_from=[],  # Populated from relationships below
+            inherits_from=[],
             realizes=[],
             attributes=attrs,
             methods=methods,
         )
 
-    def _hydrate_interface(self, d: dict, members: list) -> InterfaceNode:
-        """Hydrate an InterfaceNode from a Neo4j node dict and its member nodes."""
-        methods = []
+    def _hydrate_interface(self, d: dict, members: list) -> DiagramInterfaceNode:
+        """Hydrate a DiagramInterfaceNode from a Neo4j node dict and its member nodes."""
+        methods: list[DiagramMethodNode] = []
         for m in members:
             if m is None:
                 continue
             md = dict(m)
             if md.get("kind") == "method":
-                methods.append(MethodNode(
+                methods.append(DiagramMethodNode(
                     name=md.get("name", ""),
                     qualified_name=md.get("qualified_name", ""),
                     kind="method",
@@ -451,7 +428,7 @@ class DesignDataRepository:
                     is_virtual=True,
                 ))
 
-        return InterfaceNode(
+        return DiagramInterfaceNode(
             name=d.get("name", ""),
             qualified_name=d.get("qualified_name", ""),
             kind="interface",
@@ -465,15 +442,15 @@ class DesignDataRepository:
             methods=methods,
         )
 
-    def _hydrate_enum(self, d: dict, members: list) -> EnumNode:
-        """Hydrate an EnumNode from a Neo4j node dict and its member nodes."""
-        values = []
+    def _hydrate_enum(self, d: dict, members: list) -> DiagramEnumNode:
+        """Hydrate a DiagramEnumNode from a Neo4j node dict and its member nodes."""
+        values: list[DiagramEnumValueNode] = []
         for m in members:
             if m is None:
                 continue
             md = dict(m)
             if md.get("kind") == "enum_value":
-                values.append(EnumValueNode(
+                values.append(DiagramEnumValueNode(
                     name=md.get("name", ""),
                     qualified_name=md.get("qualified_name", ""),
                     kind="enum_value",
@@ -481,7 +458,7 @@ class DesignDataRepository:
                     owner=d.get("qualified_name", ""),
                 ))
 
-        return EnumNode(
+        return DiagramEnumNode(
             name=d.get("name", ""),
             qualified_name=d.get("qualified_name", ""),
             kind="enum",

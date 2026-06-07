@@ -12,8 +12,7 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-from codegraph.diagram import ClassDiagram, Association
-from codegraph.models import ClassNode
+from codegraph.diagram import ClassDiagram, Association, DiagramClassNode
 from backend.ticketing_agent.design.container_lookup import seed_container_lookup, get_container_class_info
 from backend.ticketing_agent.design.design_oo_tools import (
     ALL_TOOLS,
@@ -133,7 +132,7 @@ class TestMechanismResolution:
         return ClassDiagram(
             module_names=["test"],
             classes=[
-                ClassNode(name="MyClass", module="test", visibility="public"),
+                DiagramClassNode(name="MyClass", module="test", visibility="public"),
             ],
             associations=associations,
         )
@@ -288,8 +287,8 @@ class TestAggregatesValidation:
         oo = ClassDiagram(
             module_names=["test"],
             classes=[
-                ClassNode(name="MyClass", module="test", visibility="public"),
-                ClassNode(name="Widget", module="test", visibility="public"),
+                DiagramClassNode(name="MyClass", module="test", visibility="public"),
+                DiagramClassNode(name="Widget", module="test", visibility="public"),
             ],
             associations=[
                 Association(
@@ -317,8 +316,8 @@ class TestAggregatesValidation:
         oo = ClassDiagram(
             module_names=["test"],
             classes=[
-                ClassNode(name="MyClass", module="test", visibility="public"),
-                ClassNode(name="Widget", module="test", visibility="public"),
+                DiagramClassNode(name="MyClass", module="test", visibility="public"),
+                DiagramClassNode(name="Widget", module="test", visibility="public"),
             ],
             associations=[
                 Association(
@@ -346,8 +345,8 @@ class TestAggregatesValidation:
         oo = ClassDiagram(
             module_names=["test"],
             classes=[
-                ClassNode(name="MyClass", module="test", visibility="public"),
-                ClassNode(name="Widget", module="test", visibility="public"),
+                DiagramClassNode(name="MyClass", module="test", visibility="public"),
+                DiagramClassNode(name="Widget", module="test", visibility="public"),
             ],
             associations=[
                 Association(
@@ -375,8 +374,8 @@ class TestAggregatesValidation:
         oo = ClassDiagram(
             module_names=["test"],
             classes=[
-                ClassNode(name="MyClass", module="test", visibility="public"),
-                ClassNode(name="Engine", module="test", visibility="public"),
+                DiagramClassNode(name="MyClass", module="test", visibility="public"),
+                DiagramClassNode(name="Engine", module="test", visibility="public"),
             ],
             associations=[
                 Association(

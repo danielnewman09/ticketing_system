@@ -36,7 +36,7 @@ def _get_component_name(component_id: int | None) -> str | None:
 
 def _merge_diagrams(base, new):
     """Merge new diagram into base, returning a fresh ClassDiagram with rebuilt index."""
-    from backend.design_data.models import ClassDiagram
+    from codegraph.diagram import ClassDiagram
     return ClassDiagram(
         module_names=list(dict.fromkeys(base.module_names + new.module_names)),
         classes=base.classes + new.classes,
@@ -207,7 +207,7 @@ def run_pipeline(
     from backend.ticketing_agent.design.design_hlr import design_hlr
     from backend.requirements.services.persistence import persist_design
     from backend.design_data import class_diagram_from_oo_design, oo_design_from_class_diagram
-    from backend.design_data.models import ClassDiagram
+    from codegraph.diagram import ClassDiagram
 
     qname_to_node = {}
     accumulated_diagram = ClassDiagram()

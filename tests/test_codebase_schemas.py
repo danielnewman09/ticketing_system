@@ -17,7 +17,7 @@ from backend.codebase.schemas import (
     SourceType,
     Visibility,
 )
-from codegraph.diagram import ClassDiagram, Association
+from codegraph.diagram import ClassDiagram, Association, DiagramClassNode, DiagramEnumNode
 from codegraph.models import (
     ClassNode,
     EnumNode,
@@ -186,8 +186,8 @@ class TestClassDiagram:
     def test_with_classes(self):
         d = ClassDiagram(
             module_names=["app"],
-            classes=[ClassNode(name="Foo")],
-            enums=[EnumNode(name="Bar")],
+            classes=[DiagramClassNode(name="Foo", kind="class", layer="design")],
+            enums=[DiagramEnumNode(name="Bar", kind="enum", layer="design")],
         )
         assert len(d.classes) == 1
         assert d.module_names == ["app"]

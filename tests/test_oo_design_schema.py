@@ -11,13 +11,14 @@ schema supports it.
 
 import pytest
 
-from codegraph.diagram import ClassDiagram, Association
-from codegraph.models import (
-    ClassNode,
-    EnumNode,
-    EnumValueNode,
-    MethodNode,
-    AttributeNode,
+from codegraph.diagram import (
+    ClassDiagram,
+    Association,
+    DiagramClassNode,
+    DiagramEnumNode,
+    DiagramEnumValueNode,
+    DiagramMethodNode,
+    DiagramAttributeNode,
 )
 
 # ---------------------------------------------------------------------------
@@ -31,63 +32,63 @@ def hlr2_design():
     return ClassDiagram(
         module_names=["calc::engine"],
         classes=[
-            ClassNode(
+            DiagramClassNode(
                 name="Calculator",
                 module="calc::engine",
                 specialization="class",
-                brief_description=(
+                description=(
                     "Core calculation engine performing arithmetic operations "
                     "with error handling and state maintenance for recovery."
                 ),
                 attributes=[
-                    AttributeNode(
+                    DiagramAttributeNode(
                         name="current_result",
                         type_signature="double",
                         visibility="private",
-                        brief_description="Stores the last computed result or zero if no valid operation completed.",
+                        description="Stores the last computed result or zero if no valid operation completed.",
                     ),
-                    AttributeNode(
+                    DiagramAttributeNode(
                         name="status",
                         type_signature="Status",
                         visibility="private",
-                        brief_description="Tracks the current error state or success status of the engine.",
+                        description="Tracks the current error state or success status of the engine.",
                     ),
                 ],
                 methods=[
-                    MethodNode(
+                    DiagramMethodNode(
                         name="add",
                         visibility="public",
                         argsstring="(operand1, operand2)",
                         type_signature="CalculationResult",
-                        brief_description="Computes sum of operands; returns error indicator if inputs are invalid.",
+                        description="Computes sum of operands; returns error indicator if inputs are invalid.",
                     ),
-                    MethodNode(
+                    DiagramMethodNode(
                         name="subtract",
                         visibility="public",
                         argsstring="(operand1, operand2)",
                         type_signature="CalculationResult",
-                        brief_description="Computes difference of operands; returns error indicator if inputs are invalid.",
+                        description="Computes difference of operands; returns error indicator if inputs are invalid.",
                     ),
-                    MethodNode(
+                    DiagramMethodNode(
                         name="multiply",
                         visibility="public",
                         argsstring="(operand1, operand2)",
                         type_signature="CalculationResult",
-                        brief_description="Computes product of operands; returns error indicator if inputs are invalid.",
+                        description="Computes product of operands; returns error indicator if inputs are invalid.",
                     ),
-                    MethodNode(
+                    DiagramMethodNode(
                         name="divide",
                         visibility="public",
                         argsstring="(operand1, operand2)",
                         type_signature="CalculationResult",
-                        brief_description="Computes quotient; returns error indicator for division by zero or invalid inputs.",
+                        description="Computes quotient; returns error indicator for division by zero or invalid inputs.",
                     ),
-                    MethodNode(
+                    DiagramMethodNode(
                         name="getStatus",
                         visibility="public",
                         argsstring="()",
                         type_signature="Status",
-                        brief_description="Retrieves the current internal status for error recovery verification.",
+                        description="Retrieves the current internal status for error recovery verification.",
                     ),
                 ],
                 inherits_from=[],
@@ -103,42 +104,42 @@ def hlr2_design():
                     "llr:15",
                 ],
             ),
-            ClassNode(
+            DiagramClassNode(
                 name="CalculationResult",
                 module="calc::engine",
                 specialization="class",
-                brief_description=(
+                description=(
                     "Encapsulates the outcome of a calculation including the "
                     "numeric value and associated status indicator."
                 ),
                 attributes=[
-                    AttributeNode(
+                    DiagramAttributeNode(
                         name="value",
                         type_signature="double",
                         visibility="private",
-                        brief_description="The numeric result of the operation if successful.",
+                        description="The numeric result of the operation if successful.",
                     ),
-                    AttributeNode(
+                    DiagramAttributeNode(
                         name="status",
                         type_signature="Status",
                         visibility="private",
-                        brief_description="The error indicator or success code returned by the operation.",
+                        description="The error indicator or success code returned by the operation.",
                     ),
                 ],
                 methods=[
-                    MethodNode(
+                    DiagramMethodNode(
                         name="getValue",
                         visibility="public",
                         argsstring="()",
                         type_signature="double",
-                        brief_description="Returns the numeric value if status is valid, otherwise returns default.",
+                        description="Returns the numeric value if status is valid, otherwise returns default.",
                     ),
-                    MethodNode(
+                    DiagramMethodNode(
                         name="getStatus",
                         visibility="public",
                         argsstring="()",
                         type_signature="Status",
-                        brief_description="Returns the status indicator.",
+                        description="Returns the status indicator.",
                     ),
                 ],
                 inherits_from=[],
@@ -148,25 +149,25 @@ def hlr2_design():
         ],
         interfaces=[],
         enums=[
-            EnumNode(
+            DiagramEnumNode(
                 name="Status",
                 module="calc::engine",
-                brief_description="Defines valid calculation outcomes and error indicators.",
+                description="Defines valid calculation outcomes and error indicators.",
                 values=[
-                    EnumValueNode(name="OK", qualified_name="calc::engine::Status::OK"),
-                    EnumValueNode(name="INVALID_INPUT", qualified_name="calc::engine::Status::INVALID_INPUT"),
-                    EnumValueNode(name="DIVISION_BY_ZERO", qualified_name="calc::engine::Status::DIVISION_BY_ZERO"),
+                    DiagramEnumValueNode(name="OK", qualified_name="calc::engine::Status::OK"),
+                    DiagramEnumValueNode(name="INVALID_INPUT", qualified_name="calc::engine::Status::INVALID_INPUT"),
+                    DiagramEnumValueNode(name="DIVISION_BY_ZERO", qualified_name="calc::engine::Status::DIVISION_BY_ZERO"),
                 ],
             ),
-            EnumNode(
+            DiagramEnumNode(
                 name="Operation",
                 module="calc::engine",
-                brief_description="Defines supported arithmetic operations for the engine.",
+                description="Defines supported arithmetic operations for the engine.",
                 values=[
-                    EnumValueNode(name="ADD", qualified_name="calc::engine::Operation::ADD"),
-                    EnumValueNode(name="SUBTRACT", qualified_name="calc::engine::Operation::SUBTRACT"),
-                    EnumValueNode(name="MULTIPLY", qualified_name="calc::engine::Operation::MULTIPLY"),
-                    EnumValueNode(name="DIVIDE", qualified_name="calc::engine::Operation::DIVIDE"),
+                    DiagramEnumValueNode(name="ADD", qualified_name="calc::engine::Operation::ADD"),
+                    DiagramEnumValueNode(name="SUBTRACT", qualified_name="calc::engine::Operation::SUBTRACT"),
+                    DiagramEnumValueNode(name="MULTIPLY", qualified_name="calc::engine::Operation::MULTIPLY"),
+                    DiagramEnumValueNode(name="DIVIDE", qualified_name="calc::engine::Operation::DIVIDE"),
                 ],
             ),
         ],
@@ -265,7 +266,6 @@ class TestClassDiagramHLR2:
 
     # --- Round-trip: model_dump / model_validate ---
 
-    @pytest.mark.skip(reason="ClassDiagram is no longer a Pydantic model — no model_dump()")
     def test_round_trip_preserves_attributes_and_methods(self, hlr2_design):
         """Serialize to dict and back — attributes/methods must survive."""
         data = hlr2_design.model_dump()
@@ -279,7 +279,6 @@ class TestClassDiagramHLR2:
                 orig.methods
             ), f"Class {orig.name}: methods lost in round-trip"
 
-    @pytest.mark.skip(reason="ClassDiagram is no longer a Pydantic model — no model_dump_json()")
     def test_json_round_trip(self, hlr2_design):
         """Serialize to JSON string and back — nested arrays must survive."""
         json_str = hlr2_design.model_dump_json()
@@ -306,7 +305,7 @@ class TestClassDiagramHLR2:
                     "name": "Calculator",
                     "module": "calc::engine",
                     "specialization": "class",
-                    "brief_description": "Core calculation engine performing arithmetic operations with error handling and state maintenance for recovery.",
+                    "description": "Core calculation engine performing arithmetic operations with error handling and state maintenance for recovery.",
                     "inherits_from": [],
                     "realizes": [],
                     "requirement_ids": [
@@ -324,7 +323,7 @@ class TestClassDiagramHLR2:
                     "name": "CalculationResult",
                     "module": "calc::engine",
                     "specialization": "class",
-                    "brief_description": "Encapsulates the outcome of a calculation including the numeric value and associated status indicator.",
+                    "description": "Encapsulates the outcome of a calculation including the numeric value and associated status indicator.",
                     "inherits_from": [],
                     "realizes": [],
                     "requirement_ids": ["hlr:2", "llr:13", "llr:14"],
@@ -335,7 +334,7 @@ class TestClassDiagramHLR2:
                 {
                     "name": "Status",
                     "module": "calc::engine",
-                    "brief_description": "Defines valid calculation outcomes and error indicators.",
+                    "description": "Defines valid calculation outcomes and error indicators.",
                     "values": [
                         {"name": "OK", "qualified_name": "calc::engine::Status::OK"},
                         {"name": "INVALID_INPUT", "qualified_name": "calc::engine::Status::INVALID_INPUT"},
@@ -345,7 +344,7 @@ class TestClassDiagramHLR2:
                 {
                     "name": "Operation",
                     "module": "calc::engine",
-                    "brief_description": "Defines supported arithmetic operations for the engine.",
+                    "description": "Defines supported arithmetic operations for the engine.",
                     "values": [
                         {"name": "ADD", "qualified_name": "calc::engine::Operation::ADD"},
                         {"name": "SUBTRACT", "qualified_name": "calc::engine::Operation::SUBTRACT"},

@@ -378,8 +378,8 @@ def map_oo_to_ontology(
             assoc.subject = _strip_wrong_ns(assoc.subject)
             assoc.object = _strip_wrong_ns(assoc.object)
         for cls in oo.classes:
-            if hasattr(cls, 'base_classes') and cls.base_classes:
-                cls.base_classes = [_strip_wrong_ns(p) for p in cls.base_classes]
+            if hasattr(cls, 'inherits_from') and cls.inherits_from:
+                cls.inherits_from = [_strip_wrong_ns(p) for p in cls.inherits_from]
             if hasattr(cls, 'realizes'):
                 cls.realizes = [_strip_wrong_ns(i) for i in cls.realizes]
 
@@ -414,7 +414,7 @@ def map_oo_to_ontology(
                 "method",
                 method.name,
                 method_qname,
-                visibility=getattr(method, 'protection', '') or getattr(method, 'visibility', ''),
+                visibility=getattr(method, 'visibility', '') or getattr(method, 'protection', ''),
                 description=getattr(method, 'brief_description', '') or getattr(method, 'description', ''),
                 source_type="member",
                 type_signature=method.type_signature,
@@ -507,7 +507,7 @@ def map_oo_to_ontology(
                 "method",
                 method.name,
                 method_qname,
-                visibility=getattr(method, 'protection', '') or getattr(method, 'visibility', ''),
+                visibility=getattr(method, 'visibility', '') or getattr(method, 'protection', ''),
                 description=getattr(method, 'brief_description', '') or getattr(method, 'description', ''),
                 source_type="member",
                 type_signature=method.type_signature,

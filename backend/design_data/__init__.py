@@ -1,18 +1,16 @@
 """Design data module — typed read models and query API for class diagram data."""
 
-from backend.design_data.models import (
-    Association,
+from codegraph.models import (
     AttributeNode,
-    ClassDiagram,
     ClassNode,
+    DefineNode,
     EnumNode,
     EnumValueNode,
+    FunctionNode,
     InterfaceNode,
     MethodNode,
     ModuleNode,
     UnionNode,
-    FunctionNode,
-    DefineNode,
 )
 from backend.design_data.repository import DesignDataRepository
 from backend.design_data.transforms import (
@@ -21,11 +19,10 @@ from backend.design_data.transforms import (
 )
 
 __all__ = [
-    "Association",
-    "AttributeNode",
-    "ClassDiagram",
-    "ClassNode",
     "DesignDataRepository",
+    # Neomodel types (for Neo4j persistence)
+    "AttributeNode",
+    "ClassNode",
     "EnumNode",
     "EnumValueNode",
     "InterfaceNode",

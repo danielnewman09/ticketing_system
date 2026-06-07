@@ -62,12 +62,12 @@ def _extract_existing_classes(oo: ClassDiagram) -> list[dict]:
             {
                 "qualified_name": qname,
                 "kind": "class",
-                "description": cls.brief_description,
-                "methods": [{"name": m.name, "visibility": m.protection} for m in cls.methods],
+                "description": cls.description,
+                "methods": [{"name": m.name, "visibility": m.visibility} for m in cls.methods],
                 "attributes": [
-                    {"name": a.name, "visibility": a.protection} for a in cls.attributes
+                    {"name": a.name, "visibility": a.visibility} for a in cls.attributes
                 ],
-                "inherits_from": getattr(cls, 'base_classes', []),
+                "inherits_from": cls.inherits_from,
                 "realizes": cls.realizes,
                 "associations": assoc_lookup.get(cls.name, []),
             }
@@ -80,8 +80,8 @@ def _extract_existing_classes(oo: ClassDiagram) -> list[dict]:
             {
                 "qualified_name": qname,
                 "kind": "interface",
-                "description": iface.brief_description,
-                "methods": [{"name": m.name, "visibility": m.protection} for m in iface.methods],
+                "description": iface.description,
+                "methods": [{"name": m.name, "visibility": m.visibility} for m in iface.methods],
                 "attributes": [],
                 "inherits_from": [],
                 "realizes": [],

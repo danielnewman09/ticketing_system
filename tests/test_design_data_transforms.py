@@ -1,14 +1,15 @@
-"""Tests for design_data transforms — updated for codegraph atomized types."""
+"""Tests for design_data transforms — updated for codegraph diagram Pydantic types."""
 
 import pytest
-from codegraph.diagram import ClassDiagram, Association
-from codegraph.models import (
-    ClassNode,
-    EnumNode,
-    EnumValueNode,
-    InterfaceNode,
-    MethodNode,
-    AttributeNode,
+from codegraph.diagram import (
+    ClassDiagram,
+    Association,
+    DiagramClassNode,
+    DiagramEnumNode,
+    DiagramEnumValueNode,
+    DiagramInterfaceNode,
+    DiagramMethodNode,
+    DiagramAttributeNode,
 )
 from backend.design_data.transforms import class_diagram_from_oo_design, oo_design_from_class_diagram
 
@@ -17,33 +18,33 @@ def _sample_oo_design():
     return ClassDiagram(
         module_names=["calc"],
         classes=[
-            ClassNode(
+            DiagramClassNode(
                 name="Calculator",
                 qualified_name="calc::Calculator",
                 module="calc",
                 kind="class",
                 layer="design",
-                brief_description="Main calculator class",
+                description="Main calculator class",
             ),
         ],
         interfaces=[
-            InterfaceNode(
+            DiagramInterfaceNode(
                 name="ICalculator",
                 qualified_name="calc::ICalculator",
                 module="calc",
                 kind="interface",
                 layer="design",
-                brief_description="Calculator interface",
+                description="Calculator interface",
             ),
         ],
         enums=[
-            EnumNode(
+            DiagramEnumNode(
                 name="Operation",
                 qualified_name="calc::Operation",
                 module="calc",
                 kind="enum",
                 layer="design",
-                brief_description="Supported operations",
+                description="Supported operations",
             ),
         ],
         associations=[
@@ -103,7 +104,7 @@ class TestClassDiagramFromOODesign:
         """class_diagram_from_oo_design sets qualified_name for nodes without one."""
         oo = ClassDiagram(
             classes=[
-                ClassNode(
+                DiagramClassNode(
                     name="Widget",
                     module="ui",
                     kind="class",

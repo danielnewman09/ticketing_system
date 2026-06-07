@@ -2,18 +2,17 @@
 
 import pytest
 from unittest.mock import patch
-from codegraph.diagram import ClassDiagram, Association
-from codegraph.models import ClassNode
+from codegraph.diagram import ClassDiagram, Association, DiagramClassNode, DiagramAttributeNode
 from backend.ticketing_agent.tools.helpers.design_validation import validate_oo_design
 
 
 def _make_design(associations=None, classes=None, class_attrs=None, class_methods=None):
     """Helper to create a minimal ClassDiagram for testing."""
     if classes is None:
-        classes = [ClassNode(
+        classes = [DiagramClassNode(
             name="TestClass",
             module="test",
-            brief_description="A test class",
+            description="A test class",
             visibility="public",
             is_intercomponent=False,
             requirement_ids=[],
@@ -49,11 +48,13 @@ class TestValidateOODesign:
 
     def test_missing_intercomponent_association_flagged(self):
         oo = _make_design(
-            classes=[ClassNode(
+            classes=[DiagramClassNode(
                 name="TestClass", module="test",
                 visibility="public", is_intercomponent=False,
                 requirement_ids=[],
-                attributes=[{"name": "disp", "type_signature": "Display", "visibility": "private", "description": "display"}],
+                attributes=[DiagramAttributeNode(
+                    name="disp", type_signature="Display", visibility="private", description="display",
+                )],
                 methods=[],
                 inherits_from=[],
                 realizes=[],

@@ -5,6 +5,14 @@
       "args": [
         "@playwright/mcp@latest"
       ]
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "mcp",
+        "gateway",
+        "run"
+      ]
     }
   }
 }
