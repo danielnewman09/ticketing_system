@@ -5,7 +5,6 @@ singleton helper methods without requiring a live Neo4j connection.
 """
 
 import ast
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -121,10 +120,6 @@ class TestProjectMetaSingleton:
 
     def test_get_singleton_creates_when_absent(self):
         """get_singleton should create the node when it doesn't exist."""
-        # We can't fully instantiate neomodel nodes without a database,
-        # so we test the method logic via direct import with mocking.
-        #
-        # Instead, verify the source code contains the expected logic pattern.
         with open("backend_migrated/models/project.py") as f:
             source = f.read()
 
@@ -157,12 +152,12 @@ class TestProjectMetaSingleton:
 
 
 # ---------------------------------------------------------------------------
-# Frontend data layer tests — verify project.py no longer raises NotImplementedError
+# Frontend data layer tests — verify project.py uses serialize()
 # ---------------------------------------------------------------------------
 
 
 class TestFrontendDataProject:
-    """Verify frontend_migrated/data/project.py has real implementations."""
+    """Verify frontend_migrated/data/project.py uses serialize() directly."""
 
     def test_fetch_project_meta_is_implemented(self):
         with open("frontend_migrated/data/project.py") as f:
@@ -174,6 +169,25 @@ class TestFrontendDataProject:
             stripped = line.strip()
             if "fetch_project_meta" in stripped and "NotImplementedError" in stripped:
                 pytest.fail("fetch_project_meta still raises NotImplementedError")
+
+    def test_fetch_project_meta_returns_serialize(self):
+        """fetch_project_meta should return node.serialize() directly."""
+        with open("frontend_migrated/data/project.py") as f:
+            source = f.read()
+
+        # The function should return node.serialize() directly
+        assert "node.serialize()" in source, (
+            "fetch_project_meta should return node.serialize() directly"
+        )
+        # No TypedDict class named ProjectMeta in this file —
+        # the return type is just dict
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ClassDef) and node.name == "ProjectMeta":
+                pytest.fail(
+                    "ProjectMeta TypedDict should not exist in "
+                    "frontend_migrated/data/project.py — "
+                    "serialize() already defines the shape"
+                )
 
     def test_update_project_meta_is_implemented(self):
         with open("frontend_migrated/data/project.py") as f:
@@ -202,3 +216,29 @@ class TestFrontendDataProject:
 
         assert "from backend_migrated.models import" in source
         assert "ProjectMeta" in source
+
+    def test_fetch_environment_data_uses_serialize(self):
+        """fetch_environment_data should use .serialize() for nodes and merge dicts."""
+        with open("frontend_migrated/data/project.py") as f:
+            source = f.read()
+
+        # Should call .serialize() on language nodes
+        assert "lang.serialize()" in source, (
+            "fetch_environment_data should call lang.serialize() "
+            "instead of manually constructing dicts"
+        )
+        # Should call .serialize(fields='all') on dependency nodes
+        # to capture indexing config outside _llm_fields
+        assert '.serialize(fields="all")' in source or ".serialize(fields='all')" in source, (
+            "fetch_environment_data should call dep.serialize(fields='all') "
+            "to include indexing config fields"
+        )
+        # No TypedDict classes for EnvironmentDependency or LanguageEnvironment
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ClassDef):
+                if node.name in ("EnvironmentDependency", "LanguageEnvironment"):
+                    pytest.fail(
+                        f"TypedDict {node.name} should not exist in "
+                        "frontend_migrated/data/project.py — "
+                        "serialize() already defines the shape"
+                    )

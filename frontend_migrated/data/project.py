@@ -1,13 +1,16 @@
 """Project metadata and environment data — migrated backend.
 
 Uses neomodel-based ProjectMeta node (singleton pattern) and the
-migrated Component/Language/Dependency nodes. No imports from
+migrated Component/Language/Dependency nodes.  No imports from
 backend/ (SQLAlchemy) anywhere in this module.
+
+All node-to-dict conversions use ``CodeGraphNode.serialize()`` from
+the shared codegraph layer — the canonical representation of a node
+as a plain dict.  TypedDict wrappers are unnecessary because
+``serialize()`` already defines the shape.
 """
 
 from __future__ import annotations
-
-from typing import TypedDict
 
 # Importing codegraph.config at module level ensures the neomodel
 # database URL is configured from environment variables before any
@@ -15,48 +18,6 @@ from typing import TypedDict
 from codegraph.config import config as _neo4j_config  # noqa: F401
 
 from backend_migrated.models import Dependency, Language, ProjectMeta
-
-
-class BuildSystemRow(TypedDict):
-    name: str
-    config_file: str | None
-    version: str | None
-
-
-class TestFrameworkRow(TypedDict):
-    name: str
-    config_file: str | None
-    discovery_path: str | None
-
-
-class ProjectMeta(TypedDict):
-    name: str
-    description: str
-    working_directory: str
-
-
-class EnvironmentDependency(TypedDict):
-    id: int
-    name: str
-    version: str
-    github_url: str
-    manager: str
-    is_dev: bool
-    index_file_patterns: str
-    index_subdir: str
-    index_exclude_patterns: str
-    index_recursive: bool
-    components: list[dict]  # {id: int, name: str}
-
-
-class LanguageEnvironment(TypedDict):
-    id: int
-    name: str
-    version: str
-    build_systems: list[BuildSystemRow]
-    test_frameworks: list[TestFrameworkRow]
-    dependency_managers: list[str]
-    dependencies: list[EnvironmentDependency]
 
 
 def _ensure_driver() -> None:
@@ -70,19 +31,21 @@ def _ensure_driver() -> None:
     _cg_ensure()
 
 
-def fetch_project_meta() -> ProjectMeta:
+# ---------------------------------------------------------------------------
+# Project metadata
+# ---------------------------------------------------------------------------
+
+
+def fetch_project_meta() -> dict:
     """Fetch project metadata (singleton), creating defaults if missing.
 
-    Returns:
-        A dict with keys ``name``, ``description``, ``working_directory``.
+    Returns the ``serialize()`` dict from the ProjectMeta node.
+    The dict contains ``type``, ``name``, ``description``,
+    ``working_directory``, and ``edges`` keys.
     """
     _ensure_driver()
     node = ProjectMeta.get_singleton()
-    return {
-        "name": node.name or "",
-        "description": node.description or "",
-        "working_directory": node.working_directory or "",
-    }
+    return node.serialize()
 
 
 def update_project_meta(name: str, description: str, working_directory: str) -> bool:
@@ -105,42 +68,52 @@ def update_project_meta(name: str, description: str, working_directory: str) -> 
     return True
 
 
-def fetch_environment_data() -> list[LanguageEnvironment]:
+# ---------------------------------------------------------------------------
+# Environment data
+# ---------------------------------------------------------------------------
+
+
+def fetch_environment_data() -> list[dict]:
     """Fetch languages with their dependencies.
+
+    Language nodes are returned via ``Language.serialize()`` (LLM fields:
+    ``name``, ``version``).  Dependency nodes use
+    ``Dependency.serialize(fields="all")`` so that indexing config
+    (``index_file_patterns``, etc.) is included even though it falls
+    outside ``_llm_fields``.
+
+    Each language dict has the serialized node properties plus:
+    ``build_systems``, ``test_frameworks``, ``dependency_managers``
+    (empty lists — not yet migrated), and ``dependencies``
+    (assembled from relationships).
+
+    Each dependency dict has the serialized node properties plus:
+    ``manager`` (mapped from ``manager_name``) and ``components``
+    (assembled from relationships).
 
     NOTE: BuildSystem, TestFramework, and DependencyManager have not
     been migrated yet. The returned dicts include empty lists for those
-    fields. Dependencies are populated via the migrated Dependency
-    neomodel node.
+    fields.
     """
     _ensure_driver()
-    result: list[LanguageEnvironment] = []
+    result: list[dict] = []
 
     for lang in Language.nodes.all():
-        # Dependencies linked to this language via components
-        # Since Dependency has a manager_name string property (until
-        # DependencyManager is migrated), we group by language.
-        deps: list[EnvironmentDependency] = []
-        for component in lang.components.all():
-            for dep in component.dependencies.all():
-                deps.append({
-                    "id": id(dep),
-                    "name": dep.name or "",
-                    "version": dep.version or "",
-                    "github_url": dep.github_url or "",
-                    "manager": dep.manager_name or "",
-                    "is_dev": bool(dep.is_dev),
-                    "index_file_patterns": dep.index_file_patterns or "*.h *.hpp",
-                    "index_subdir": dep.index_subdir or "",
-                    "index_exclude_patterns": dep.index_exclude_patterns or "",
-                    "index_recursive": bool(dep.index_recursive),
-                    "components": [{"id": id(component), "name": component.name or ""}],
-                })
+        lang_data = lang.serialize()
 
-        result.append({
-            "id": id(lang),
-            "name": lang.name or "",
-            "version": lang.version or "",
+        deps: list[dict] = []
+        for component in lang.components.all():
+            comp_name = component.name or ""
+            for dep in component.dependencies.all():
+                dep_data = dep.serialize(fields="all")
+
+                # Attach the component(s) that use this dependency.
+                dep_data["components"] = [{"name": comp_name}]
+
+                deps.append(dep_data)
+
+        # Merge language serialization with the relationship-assembled deps.
+        result.append(lang_data | {
             "build_systems": [],
             "test_frameworks": [],
             "dependency_managers": [],
