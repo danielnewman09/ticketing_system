@@ -42,7 +42,7 @@ for _name in ("backend", "frontend", "agents", "__main__"):
 from nicegui import app, ui
 
 from backend.db import init_db
-from backend.db.neo4j.connection import Neo4jSessionManager
+from backend_migrated.connection import Neo4jSessionManager
 import frontend.pages  # noqa: F401 — registers all @ui.page routes
 
 log = logging.getLogger(__name__)

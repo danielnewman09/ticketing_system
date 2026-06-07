@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from typing import TypedDict
 
+# Importing codegraph.config at module level ensures the neomodel
+# database URL is configured from environment variables before any
+# neomodel model is touched.
+from codegraph.config import config as _neo4j_config  # noqa: F401
+
 from backend_migrated.models import Dependency, Language, ProjectMeta
 
 
@@ -54,13 +59,15 @@ class LanguageEnvironment(TypedDict):
     dependencies: list[EnvironmentDependency]
 
 
-def _require_neo4j() -> None:
-    """Ensure neomodel's database connection is configured.
+def _ensure_driver() -> None:
+    """Ensure neomodel's database driver is initialised.
 
-    Importing backend.db.neo4j.connection triggers the config setup.
-    Safe to call multiple times — idempotent.
+    Importing :mod:`codegraph.config` (done at module level) already
+    sets the database URL.  This call ensures the driver object exists
+    so that neomodel queries can proceed.  Safe to call multiple times.
     """
-    import backend.db.neo4j.connection  # noqa: F401
+    from codegraph.connection import _ensure_driver as _cg_ensure
+    _cg_ensure()
 
 
 def fetch_project_meta() -> ProjectMeta:
@@ -69,7 +76,7 @@ def fetch_project_meta() -> ProjectMeta:
     Returns:
         A dict with keys ``name``, ``description``, ``working_directory``.
     """
-    _require_neo4j()
+    _ensure_driver()
     node = ProjectMeta.get_singleton()
     return {
         "name": node.name or "",
@@ -89,7 +96,7 @@ def update_project_meta(name: str, description: str, working_directory: str) -> 
     Returns:
         True if the update succeeded.
     """
-    _require_neo4j()
+    _ensure_driver()
     ProjectMeta.update_singleton(
         name=name,
         description=description,
@@ -106,7 +113,7 @@ def fetch_environment_data() -> list[LanguageEnvironment]:
     fields. Dependencies are populated via the migrated Dependency
     neomodel node.
     """
-    _require_neo4j()
+    _ensure_driver()
     result: list[LanguageEnvironment] = []
 
     for lang in Language.nodes.all():

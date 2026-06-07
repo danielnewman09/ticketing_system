@@ -3,9 +3,8 @@
 Migrated NiceGUI frontend — test dashboard for frontend_migrated/.
 
 This entry point uses the migrated UI modules (theme, widgets, layout,
-graph formatting) and registers stub page routes. Data functions all
-raise NotImplementedError until the backend_migrated data layer is
-connected, but the app shell starts and routes are registered.
+graph formatting) and registers page routes. Neo4j connectivity is
+provided by codegraph.connection via backend_migrated.connection.
 
 Run with:
     source .venv/bin/activate
@@ -22,8 +21,8 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-# Configure file logging before any app imports so all loggers are captured
-# from the moment they're first instantiated.
+# Configure file logging before any app imports so all backend/frontend
+# loggers are captured from the moment they're first instantiated.
 _LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
 os.makedirs(_LOG_DIR, exist_ok=True)
 _file_handler = RotatingFileHandler(
@@ -38,7 +37,7 @@ _file_handler.setFormatter(
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 )
-for _name in ("frontend_migrated", "agents", "__main__"):
+for _name in ("frontend_migrated", "backend_migrated", "agents", "__main__"):
     _logger = logging.getLogger(_name)
     _logger.addHandler(_file_handler)
     _logger.setLevel(logging.DEBUG)
@@ -46,13 +45,13 @@ for _name in ("frontend_migrated", "agents", "__main__"):
 
 from nicegui import app, ui
 
-# No backend/ imports — the migrated frontend is standalone.
-# Database and Neo4j initialization will be wired up once
-# backend_migrated has a compatible data layer.
+from backend_migrated.connection import Neo4jSessionManager
 
 import frontend_migrated.pages  # noqa: F401 — registers all @ui.page routes
 
 log = logging.getLogger(__name__)
+
+app.neo4j = Neo4jSessionManager()
 
 
 @app.on_startup
@@ -61,6 +60,12 @@ def on_startup() -> None:
 
     install_hooks()
     log.info("Starting Migrated NiceGUI Application (frontend_migrated)...")
+
+
+@app.on_shutdown
+def on_shutdown() -> None:
+    app.neo4j.close()
+    log.info("Neo4j connection closed.")
 
 
 if __name__ in {"__main__", "__mp_main__"}:

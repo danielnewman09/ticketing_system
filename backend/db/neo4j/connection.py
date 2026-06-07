@@ -1,59 +1,29 @@
-"""Neomodel connection configuration for the ticketing system.
+"""Backward-compatible re-exports from :mod:`backend_migrated.connection`.
 
-Replaces the old codegraph.neo4j re-export shim.
-Import this module before any neomodel model class is imported.
+All connection lifecycle and driver management now lives in
+:mod:`backend_migrated.connection`, which delegates to
+:mod:`codegraph.connection` and :mod:`codegraph.config` for the modern
+neomodel 6.x configuration API.
+
+This module re-exports the public names so that existing imports like::
+
+    from backend.db.neo4j.connection import Neo4jSessionManager, NEO4J_URI
+
+continue to work unchanged.
 """
 
 from __future__ import annotations
 
-import logging
-import os
-from neomodel import config, get_config, db as neomodel_db
+# Re-export the canonical Neo4jSessionManager and lifecycle functions.
+from backend_migrated.connection import (  # noqa: F401
+    Neo4jSessionManager,
+    close_neo4j,
+    ensure_connection,
+    get_neo4j,
+    init_neo4j,
+)
 
-log = logging.getLogger(__name__)
-
-NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "")
-
-_bolt_host = NEO4J_URI.replace("bolt://", "")
-config.DATABASE_URL = f"bolt://{NEO4J_USER}:{NEO4J_PASSWORD}@{_bolt_host}"
-config.ALLOW_RELOAD = True
-
-
-class Neo4jSessionManager:
-    """Lightweight wrapper that provides .session() for getting Neo4j driver sessions.
-
-    Uses neomodel's configured driver under the hood. Replaces the old
-    codegraph.neo4j.Neo4jConnection pattern.
-    """
-
-    def session(self):
-        """Return a Neo4j driver session as a context manager."""
-        if neomodel_db.driver is None:
-            cfg = get_config()
-            if cfg.database_url:
-                neomodel_db.set_connection(url=cfg.database_url)
-        return neomodel_db.driver.session()
-
-    def verify_connectivity(self) -> bool:
-        """Check that Neo4j is reachable."""
-        try:
-            neomodel_db.cypher_query("RETURN 1")
-            return True
-        except Exception:
-            log.warning("Neo4j connectivity check failed", exc_info=True)
-            return False
-
-    def get_driver(self):
-        """Return the underlying neomodel driver (for callers that need it)."""
-        return neomodel_db.driver
-
-    def ensure_constraints(self) -> None:
-        """Ensure ticketing-specific constraints exist (backward compat)."""
-        from backend.db.neo4j.constraints import ensure_ticketing_constraints
-        ensure_ticketing_constraints()
-
-    def close(self) -> None:
-        """No-op — neomodel manages the driver lifecycle."""
-        pass
+# Re-export the Neo4j environment variables from codegraph.config.
+# These are read once at import time from NEO4J_URI, NEO4J_USER,
+# NEO4J_PASSWORD environment variables.
+from codegraph.config import NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER  # noqa: F401
