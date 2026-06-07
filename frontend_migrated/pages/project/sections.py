@@ -1,30 +1,140 @@
-"""Page sections for the project homepage — stubs.
+"""Page sections for the project homepage — migrated backend.
 
-Each section renders one card/block on the project page.
-All functions raise NotImplementedError until reimplemented.
+Project metadata uses the migrated neomodel data layer.
+Other sections are stubs until their data layers are migrated.
 """
 
+import asyncio
 
-def section_project_meta():
-    """STUB: Render project metadata edit section."""
-    raise NotImplementedError("section_project_meta — requires data layer reimplementation")
+from nicegui import ui
+
+from frontend_migrated.theme import BACKGROUNDS, COLORS, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS
+from frontend_migrated.data.project import fetch_project_meta, update_project_meta
+
+
+# ---------------------------------------------------------------------------
+# Project metadata
+# ---------------------------------------------------------------------------
+
+
+async def section_project_meta():
+    """Project name, description, working directory with edit dialog.
+
+    Uses ``ProjectMeta.serialize()`` for the data dict — keys include
+    ``type``, ``name``, ``description``, ``working_directory``, ``edges``,
+    etc.  The UI reads only the content keys it needs.
+    """
+
+    @ui.refreshable
+    async def card():
+        # fetch_project_meta() returns ProjectMeta.serialize() — a dict
+        # with {type, name, description, working_directory, edges, ...}.
+        meta = await asyncio.to_thread(fetch_project_meta)
+        with (
+            ui.card()
+            .classes("w-full mx-2 mt-4")
+            .style(
+                f"background: {BACKGROUNDS['surface']}; border-left: 4px solid {COLORS['primary']};"
+            )
+        ):
+            with ui.row().classes("w-full items-start justify-between"):
+                with ui.column().classes("flex-1 gap-1"):
+                    ui.label(meta.get("name") or "Untitled Project").classes("text-lg font-bold")
+                    if meta.get("description"):
+                        ui.label(meta["description"]).classes("text-sm text-gray-400")
+                    if meta.get("working_directory"):
+                        with ui.row().classes("items-center gap-1"):
+                            ui.icon("folder", size="xs").classes("text-gray-500")
+                            ui.label(meta["working_directory"]).classes(
+                                "text-xs text-blue-400 font-mono cursor-pointer"
+                            ).tooltip("Open in VS Code").on(
+                                "click",
+                                lambda wd=meta["working_directory"]: _open_vscode(wd),
+                            )
+                ui.button(
+                    icon="edit",
+                    on_click=lambda: _show_edit_dialog(meta, card),
+                ).props("flat round size=sm")
+
+    await card()
+
+
+def _show_edit_dialog(meta: dict, refreshable):
+    from frontend_migrated.widgets import directory_picker
+
+    with ui.dialog() as dialog, ui.card().classes(CLS_DIALOG_MD):
+        ui.label("Project Settings").classes(CLS_DIALOG_TITLE)
+        name_input = ui.input("Name", value=meta.get("name", "")).classes("w-full")
+        desc_input = ui.textarea("Description", value=meta.get("description", "")).classes("w-full")
+
+        with ui.row().classes("w-full items-end gap-2"):
+            dir_input = ui.input(
+                "Working Directory",
+                value=meta.get("working_directory", ""),
+            ).classes("flex-1 font-mono")
+            dir_input.props("readonly")
+
+            def open_picker():
+                picker = directory_picker(
+                    initial_path=dir_input.value,
+                    on_select=lambda path: setattr(dir_input, "value", path),
+                )
+                picker.open()
+
+            ui.button(icon="folder_open", on_click=open_picker).props("flat round size=sm").tooltip(
+                "Browse…"
+            )
+
+        with ui.row().classes(CLS_DIALOG_ACTIONS):
+            ui.button("Cancel", on_click=dialog.close).props("flat")
+
+            async def do_save():
+                await asyncio.to_thread(
+                    update_project_meta,
+                    name_input.value.strip(),
+                    desc_input.value.strip(),
+                    dir_input.value.strip(),
+                )
+                dialog.close()
+                ui.notify("Project settings saved", type="positive")
+                refreshable.refresh()
+
+            ui.button("Save", on_click=do_save).props("color=primary")
+
+    dialog.open()
+
+
+def _open_vscode(path: str):
+    """Open a directory in VS Code."""
+    import subprocess
+    try:
+        subprocess.Popen(["code", path])
+    except FileNotFoundError:
+        # VS Code CLI not available — try generic opener
+        import webbrowser
+        webbrowser.open(f"file://{path}")
+
+
+# ---------------------------------------------------------------------------
+# Stubs — not yet migrated
+# ---------------------------------------------------------------------------
 
 
 def section_stats():
     """STUB: Render requirements statistics cards."""
-    raise NotImplementedError("section_stats — requires data layer reimplementation")
+    ui.label("Stats — not yet migrated").classes("text-gray-500 text-sm mx-2 mt-4")
 
 
-def section_dependencies():
+def section_dependencies(project_dir: str = ""):
     """STUB: Render dependency management section."""
-    raise NotImplementedError("section_dependencies — requires data layer reimplementation")
+    ui.label("Dependencies — not yet migrated").classes("text-gray-500 text-sm mx-2 mt-4")
 
 
 def section_pending_recommendations():
     """STUB: Render pending dependency recommendations section."""
-    raise NotImplementedError("section_pending_recommendations — requires data layer reimplementation")
+    pass
 
 
-def section_scaffold():
+def section_scaffold(meta: dict, project_dir: str = ""):
     """STUB: Render project scaffolding section."""
-    raise NotImplementedError("section_scaffold — requires data layer reimplementation")
+    pass

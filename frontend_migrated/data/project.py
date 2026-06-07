@@ -88,8 +88,7 @@ def fetch_environment_data() -> list[dict]:
     (assembled from relationships).
 
     Each dependency dict has the serialized node properties plus:
-    ``manager`` (mapped from ``manager_name``) and ``components``
-    (assembled from relationships).
+    ``components`` (assembled from relationships).
 
     NOTE: BuildSystem, TestFramework, and DependencyManager have not
     been migrated yet. The returned dicts include empty lists for those
