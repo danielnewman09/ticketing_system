@@ -39,7 +39,6 @@ from frontend.data.llr import (
 from frontend.data.ontology import (
     fetch_graph_node_detail,
     fetch_hlr_graph_data,
-    fetch_neighbourhood_graph_data,
     fetch_node_detail_full,
     fetch_ontology_data,
     fetch_ontology_graph_data,
@@ -84,7 +83,6 @@ __all__ = [
     "fetch_ontology_data",
     "fetch_ontology_graph_data",
     "fetch_hlr_graph_data",
-    "fetch_neighbourhood_graph_data",
     "fetch_graph_node_detail",
     "fetch_node_detail_full",
     "resolve_node_id_by_qualified_name",

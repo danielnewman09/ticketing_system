@@ -15,8 +15,9 @@ from frontend.theme import (
 )
 from frontend.widgets import breadcrumb, GraphConfig, render_cytoscape_graph
 from frontend.layout import page_layout
+from codegraph.repository import GraphRepository
+from frontend.graph.format import layer_graph_to_cytoscape
 from frontend.data.ontology import (
-    fetch_neighbourhood_graph_data,
     fetch_node_detail_full,
     resolve_node_id_by_qualified_name,
     update_member_type,
@@ -176,8 +177,9 @@ async def node_detail_page(node_id: int):
                 f'"style": {{"border-width": 3, "border-color": "{STATUS_COLORS["selected"]}", "border-style": "solid"}}}}'
             )
             graph = await asyncio.to_thread(
-                fetch_neighbourhood_graph_data,
-                node["qualified_name"],
+                lambda qn=node["qualified_name"]: layer_graph_to_cytoscape(
+                    GraphRepository().get_by_neighbourhood(qn)
+                ),
             )
             if graph["nodes"]:
                 # extra_styles are per-render (center node highlighting)

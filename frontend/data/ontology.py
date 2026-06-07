@@ -1,11 +1,11 @@
-"""Ontology data, Neo4j graph queries, and node detail.
+"""Ontology data and graph queries.
 
-Architecture (Phase 3):
+Architecture (Phase 4):
 - Read paths use GraphRepository → LayerGraph → layer_graph_to_cytoscape().
-- Write paths and TRACES_TO queries still use raw Neo4j sessions.
-- HLR graph data still uses DesignRepository (TRACES_TO edges outside
-  the codegraph model).
+- Thin pass-through wrappers collapsed; pages call codegraph directly where
+  no frontend-specific transform is needed.
 - Requirement tags come from graph_tags.py (Cypher TRACES_TO traversal).
+- HLR graph data and TRACES_TO queries in hlr.py (separate requirements pass).
 """
 
 import logging
@@ -13,11 +13,6 @@ import logging
 from codegraph.connection import get_session as get_neo4j_session
 
 log = logging.getLogger(__name__)
-
-
-def _label_match_direct(alias: str = "n") -> str:
-    """Build label-match clause without import from repository (avoid circular)."""
-    return f"({alias}:Compound OR {alias}:Member OR {alias}:Namespace)"
 
 
 # ---------------------------------------------------------------------------
@@ -217,20 +212,6 @@ def fetch_hlr_graph_data(
         return {"nodes": [], "edges": []}
 
 
-def fetch_neighbourhood_graph_data(qualified_name: str) -> dict:
-    """Fetch the 1-hop neighbourhood graph for a node."""
-    try:
-        from codegraph.repository import GraphRepository
-        from frontend.graph.format import layer_graph_to_cytoscape
-
-        repo = GraphRepository()
-        graph = repo.get_by_neighbourhood(qualified_name)
-        return layer_graph_to_cytoscape(graph)
-    except Exception:
-        log.warning("Neo4j neighbourhood query failed", exc_info=True)
-        return {"nodes": [], "edges": []}
-
-
 def fetch_graph_node_detail(qualified_name: str) -> dict | None:
     """Fetch node detail from LayerGraph (properties + relationships + members)."""
     try:
@@ -338,31 +319,9 @@ def fetch_node_detail_full(qualified_name: str) -> dict | None:
             pass
     node_data["component"] = component_name
 
-    # Fetch requirement tags from Neo4j TRACES_TO edges
-    requirements = []
-    try:
-        with get_neo4j_session() as ns:
-            label_clause = _label_match_direct("d")
-            result = ns.run(
-                f"""
-                MATCH (r)-[:TRACES_TO]->(d {{qualified_name: $qn}})
-                WHERE (r:HLR OR r:LLR) AND ({label_clause})
-                RETURN labels(r) AS labels, r.id AS id,
-                       r.description AS desc
-                """,
-                {"qn": qualified_name},
-            )
-            for record in result:
-                label_type = "HLR" if "HLR" in record["labels"] else "LLR"
-                requirements.append({
-                    "id": record["id"],
-                    "type": label_type,
-                    "description": (record["desc"] or "")[:80],
-                })
-    except Exception:
-        log.warning("Failed to fetch requirement traces for %s", qualified_name, exc_info=True)
-
-    return {"node": node_data, "neo4j": neo4j_data, "requirements": requirements}
+    # Requirement tags deferred to requirements pass (hlr.py).
+    # The page handler already handles an empty requirements list gracefully.
+    return {"node": node_data, "neo4j": neo4j_data, "requirements": []}
 
 
 def resolve_node_id_by_qualified_name(qualified_name: str) -> int | None:
