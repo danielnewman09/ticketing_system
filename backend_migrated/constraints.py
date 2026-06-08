@@ -41,6 +41,12 @@ def ensure_migrated_constraints() -> bool:
             "FOR (h:HLR) REQUIRE h.refid IS UNIQUE",
             "CREATE CONSTRAINT llr_refid IF NOT EXISTS "
             "FOR (l:LLR) REQUIRE l.refid IS UNIQUE",
+            "CREATE CONSTRAINT verificationmethod_refid IF NOT EXISTS "
+            "FOR (v:VerificationMethod) REQUIRE v.refid IS UNIQUE",
+            "CREATE CONSTRAINT condition_refid IF NOT EXISTS "
+            "FOR (c:Condition) REQUIRE c.refid IS UNIQUE",
+            "CREATE CONSTRAINT action_refid IF NOT EXISTS "
+            "FOR (a:Action) REQUIRE a.refid IS UNIQUE",
         ]:
             try:
                 session.run(stmt)
@@ -71,6 +77,16 @@ def ensure_migrated_constraints() -> bool:
             "FOR (l:LLR) ON (l.description)",
             "CREATE INDEX llr_layer IF NOT EXISTS "
             "FOR (l:LLR) ON (l.layer)",
+            "CREATE INDEX verificationmethod_method IF NOT EXISTS "
+            "FOR (v:VerificationMethod) ON (v.method)",
+            "CREATE INDEX verificationmethod_layer IF NOT EXISTS "
+            "FOR (v:VerificationMethod) ON (v.layer)",
+            "CREATE INDEX condition_phase IF NOT EXISTS "
+            "FOR (c:Condition) ON (c.phase)",
+            "CREATE INDEX condition_layer IF NOT EXISTS "
+            "FOR (c:Condition) ON (c.layer)",
+            "CREATE INDEX action_layer IF NOT EXISTS "
+            "FOR (a:Action) ON (a.layer)",
         ]:
             try:
                 session.run(stmt)

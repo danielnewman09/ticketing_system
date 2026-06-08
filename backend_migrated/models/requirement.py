@@ -178,10 +178,18 @@ class LLR(StructuredNode, CodeGraphNode):
     #
     #    This is the same COMPOSES pattern used by Namespace → Class →
     #    Method in the codegraph — the parent "composes" its parts.
+    #
+    #  • COMPOSES (outgoing) — LLR → VerificationMethod
+    #    An LLR composes its verification methods.  In a LayerGraph,
+    #    VerificationMethods appear as children of their LLR entry
+    #    under ``entry.children["VerificationMethod"]``.
+    #    Example: LLR("Validate inputs")-[:COMPOSES]->VerificationMethod("Unit test")
     # --------------------------------------------------------------------------
 
     hlr = RelationshipFrom(
         'backend_migrated.models.requirement.HLR', 'COMPOSES')
+    verification_methods = RelationshipTo(
+        'backend_migrated.models.verification.VerificationMethod', 'COMPOSES')
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {"name", "description", "layer"}
