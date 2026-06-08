@@ -1,7 +1,8 @@
-"""Data-fetching stubs for UI pages. Run in threads via asyncio.to_thread.
+"""Data-fetching functions for UI pages. Run in threads via asyncio.to_thread.
 
-All functions raise NotImplementedError until reimplemented against the
-migrated backend. Return types are documented via TypedDicts in each module.
+Functions that have been migrated return dicts produced by
+``CodeGraphNode.serialize()`` from the neomodel models.  Functions
+not yet migrated raise NotImplementedError.
 """
 
 from frontend_migrated.data.components import (
