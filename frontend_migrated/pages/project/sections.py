@@ -1,6 +1,6 @@
 """Page sections for the project homepage — migrated backend.
 
-Project metadata uses the migrated neomodel data layer.
+Project metadata and stats use the migrated data layer.
 Other sections are stubs until their data layers are migrated.
 """
 
@@ -10,6 +10,8 @@ from nicegui import ui
 
 from frontend_migrated.theme import BACKGROUNDS, COLORS, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS
 from frontend_migrated.data.project import fetch_project_meta, update_project_meta
+from frontend_migrated.layout import stat_card
+from frontend_migrated.data.hlr import fetch_requirements_data
 
 
 # ---------------------------------------------------------------------------
@@ -120,9 +122,16 @@ def _open_vscode(path: str):
 # ---------------------------------------------------------------------------
 
 
-def section_stats():
-    """STUB: Render requirements statistics cards."""
-    ui.label("Stats — not yet migrated").classes("text-gray-500 text-sm mx-2 mt-4")
+async def section_stats():
+    """Stat cards row — HLRs, LLRs, Components, Ontology Nodes."""
+    data = await asyncio.to_thread(fetch_requirements_data)
+    with ui.row().classes("w-full gap-4 flex-wrap px-2 mt-4"):
+        stat_card("HLRs", data["total_hlrs"], "blue-5")
+        stat_card("LLRs", data["total_llrs"], "green-5")
+        stat_card(
+            "Components", len({h["component"] for h in data["hlrs"] if h["component"]}), "teal-5"
+        )
+        stat_card("Ontology Nodes", data["total_nodes"], "purple-5")
 
 
 def section_dependencies(project_dir: str = ""):

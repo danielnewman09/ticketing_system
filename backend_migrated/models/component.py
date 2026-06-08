@@ -22,9 +22,10 @@ class Component(StructuredNode, CodeGraphNode):
     nodes via GROUPS relationships to indicate which code belongs to
     which project component.
 
-    Components form a self-referential hierarchy via PARENT_OF edges,
+    Components form a self-referential hierarchy via COMPOSES edges
+    (the same edge type used by HLR → LLR and Namespace → Class),
     linking to languages via WRITTEN_IN, dependencies via DEPENDS_ON,
-    and code-level namespaces/classes via GROUPS.
+    requirements via COMPOSES, and code-level namespaces/classes via GROUPS.
 
     Attributes:
         name: Short name of the component (e.g. 'calculation_engine'),
@@ -47,19 +48,21 @@ class Component(StructuredNode, CodeGraphNode):
 
     # --- Self-referential hierarchy -------------------------------------------
     #
-    #  • PARENT_OF (outgoing)  — Component(parent) → Component(child)
+    #  • COMPOSES (outgoing)  — Component(parent) → Component(child)
     #    A component can contain sub-components. The parent is the
     #    broader subsystem; the child is a more specific module within it.
-    #    Example: Component('backend')-[:PARENT_OF]->Component('calculation_engine')
+    #    Uses the same COMPOSES edge type as HLR → LLR and Namespace → Class
+    #    so that LayerGraph traverses the entire hierarchy uniformly.
+    #    Example: Component('backend')-[:COMPOSES]->Component('calculation_engine')
     #
-    #  • PARENT_OF (incoming)  — Component(parent) → Component(child)
+    #  • COMPOSES (incoming)  — Component(parent) → Component(child)
     #    Traversed via ``parent`` to find the parent component.
     # --------------------------------------------------------------------------
 
     children = RelationshipTo(
-        'backend_migrated.models.component.Component', 'PARENT_OF')
+        'backend_migrated.models.component.Component', 'COMPOSES')
     parent = RelationshipFrom(
-        'backend_migrated.models.component.Component', 'PARENT_OF')
+        'backend_migrated.models.component.Component', 'COMPOSES')
 
     # --- Language -------------------------------------------------------------
     #
@@ -101,6 +104,20 @@ class Component(StructuredNode, CodeGraphNode):
         'codegraph.models.namespace.NamespaceNode', 'GROUPS')
     classes = RelationshipTo(
         'codegraph.models.compound.ClassNode', 'GROUPS')
+
+    # --- Requirements ----------------------------------------------------------
+    #
+    #  • COMPOSES (outgoing)  — Component → HLR
+    #    A component composes its high-level requirements.  This is the
+    #    same COMPOSES edge type used by NamespaceNode → ClassNode and
+    #    HLR → LLR.  In a LayerGraph, an HLR composed by a Component
+    #    appears as a child entry under that Component, and the HLR's own
+    #    LLR children nest recursively.
+    #    Example: Component('calculation_engine')-[:COMPOSES]->HLR('Handle errors')
+    # --------------------------------------------------------------------------
+
+    requirements = RelationshipTo(
+        'backend_migrated.models.requirement.HLR', 'COMPOSES')
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {

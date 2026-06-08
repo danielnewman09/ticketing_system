@@ -37,7 +37,7 @@ async def project_page():
         else ""
     )
 
-    section_stats()
+    await section_stats()
     section_dependencies(project_dir)
     section_pending_recommendations()
     section_scaffold(meta, project_dir)

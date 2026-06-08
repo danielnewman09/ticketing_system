@@ -1,8 +1,7 @@
 """Neo4j constraints and indexes for migrated ticketing node types.
 
 Creates uniqueness constraints on refid and lookup indexes for
-ProjectMeta, Component, Language, and Dependency nodes. Follows the same
-pattern as backend.db.neo4j.constraints for ticketing-specific constraints.
+ProjectMeta, Component, Language, Dependency, HLR, and LLR nodes.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 def ensure_migrated_constraints() -> bool:
-    """Create constraints and indexes for ProjectMeta, Component, Language, Dependency nodes.
+    """Create constraints and indexes for all migrated node types.
 
     Returns:
         True if constraints were created successfully, False if Neo4j
@@ -38,6 +37,10 @@ def ensure_migrated_constraints() -> bool:
             "FOR (l:Language) REQUIRE l.refid IS UNIQUE",
             "CREATE CONSTRAINT dependency_refid IF NOT EXISTS "
             "FOR (d:Dependency) REQUIRE d.refid IS UNIQUE",
+            "CREATE CONSTRAINT hlr_refid IF NOT EXISTS "
+            "FOR (h:HLR) REQUIRE h.refid IS UNIQUE",
+            "CREATE CONSTRAINT llr_refid IF NOT EXISTS "
+            "FOR (l:LLR) REQUIRE l.refid IS UNIQUE",
         ]:
             try:
                 session.run(stmt)
@@ -60,6 +63,14 @@ def ensure_migrated_constraints() -> bool:
             "FOR (d:Dependency) ON (d.name)",
             "CREATE INDEX dependency_manager IF NOT EXISTS "
             "FOR (d:Dependency) ON (d.manager_name)",
+            "CREATE INDEX hlr_description IF NOT EXISTS "
+            "FOR (h:HLR) ON (h.description)",
+            "CREATE INDEX hlr_layer IF NOT EXISTS "
+            "FOR (h:HLR) ON (h.layer)",
+            "CREATE INDEX llr_description IF NOT EXISTS "
+            "FOR (l:LLR) ON (l.description)",
+            "CREATE INDEX llr_layer IF NOT EXISTS "
+            "FOR (l:LLR) ON (l.layer)",
         ]:
             try:
                 session.run(stmt)
