@@ -13,7 +13,7 @@ from frontend_migrated.data.components import (
     ensure_component_language,
     fetch_component_detail,
     fetch_components_data,
-    fetch_components_options,
+    fetch_components,
     update_dependency_index_config,
 )
 from frontend_migrated.data.dependencies import (
@@ -77,7 +77,7 @@ __all__ = [
     # components
     "fetch_components_data",
     "fetch_component_detail",
-    "fetch_components_options",
+    "fetch_components",
     "ensure_component_language",
     "create_dependency_manager",
     "add_dependency",

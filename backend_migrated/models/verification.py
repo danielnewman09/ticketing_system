@@ -39,6 +39,7 @@ from neomodel import (
     StructuredNode,
     StringProperty,
     IntegerProperty,
+    UniqueIdProperty,
     RelationshipTo,
     RelationshipFrom,
 )
@@ -77,6 +78,9 @@ class VerificationMethod(StructuredNode, CodeGraphNode):
             ``llr`` COMPOSES relationship.
     """
 
+    # --- Identity (overrides CodeGraphNode.refid) ----------------------------
+    refid = UniqueIdProperty()
+
     # --- Verification method properties ------------------------------------------
     method = StringProperty(required=True,
         help_text="Verification method type - 'Analysis', 'Test', 'Inspection', etc.")
@@ -85,7 +89,7 @@ class VerificationMethod(StructuredNode, CodeGraphNode):
     description = StringProperty(default="",
         help_text="Human-readable description of the verification.")
 
-    # --- Layer & provenance (same mechanism as CompoundNodeNode/Member/Namespace) --------
+    # --- Layer & provenance (same mechanism as CompoundNode/Member/Namespace) --------
     layer = StringProperty(default="design",
         help_text="Provenance layer - 'design' (speculative) or "
                   "'as-built' (implemented/verified).")
@@ -149,6 +153,9 @@ class Condition(StructuredNode, CodeGraphNode):
             by the ``verification_method`` COMPOSES relationship.
     """
 
+    # --- Identity (overrides CodeGraphNode.refid) ----------------------------
+    refid = UniqueIdProperty()
+
     # --- Condition properties ----------------------------------------------------
     phase = StringProperty(required=True,
         help_text="Condition phase - 'pre' or 'post'.")
@@ -176,9 +183,9 @@ class Condition(StructuredNode, CodeGraphNode):
     #  • COMPOSES (incoming) - VerificationMethod → Condition
     #    The parent verification method that composes this condition.
     #
-    #  • LEFT_OPERAND (outgoing) - Condition → CompoundNodeNode
+    #  • LEFT_OPERAND (outgoing) - Condition → CompoundNode
     #    The design-graph compound node that is the subject of the assertion.
-    #    ``CompoundNodeNode`` covers all compound types (ClassNode, InterfaceNode,
+    #    ``CompoundNode`` covers all compound types (ClassNode, InterfaceNode,
     #    EnumNode, UnionNode, ModuleNode).  The ``subject_qualified_name``
     #    property serves as a fallback when the target node does not yet exist.
     #
@@ -186,7 +193,7 @@ class Condition(StructuredNode, CodeGraphNode):
     #    Neo4j and traversable via raw Cypher, but neomodel only supports a
     #    single target class per RelationshipTo declaration.
     #
-    #  • RIGHT_OPERAND (outgoing) - Condition → CompoundNodeNode
+    #  • RIGHT_OPERAND (outgoing) - Condition → CompoundNode
     #    The design-graph compound node that is the reference value.
     #    The ``object_qualified_name`` property serves as a fallback.
     #    Same NamespaceNode/MemberNode caveat as LEFT_OPERAND.
@@ -195,9 +202,9 @@ class Condition(StructuredNode, CodeGraphNode):
     verification_method = RelationshipFrom(
         'backend_migrated.models.verification.VerificationMethod', 'COMPOSES')
     left_operand = RelationshipTo(
-        'codegraph.models.compound.CompoundNodeNode', 'LEFT_OPERAND')
+        'codegraph.models.compound.CompoundNode', 'LEFT_OPERAND')
     right_operand = RelationshipTo(
-        'codegraph.models.compound.CompoundNodeNode', 'RIGHT_OPERAND')
+        'codegraph.models.compound.CompoundNode', 'RIGHT_OPERAND')
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {
@@ -234,6 +241,9 @@ class Action(StructuredNode, CodeGraphNode):
             by the ``verification_method`` COMPOSES relationship.
     """
 
+    # --- Identity (overrides CodeGraphNode.refid) ----------------------------
+    refid = UniqueIdProperty()
+
     # --- Action properties -------------------------------------------------------
     order = IntegerProperty(default=0,
         help_text="Sort order within the verification method (0-based).")
@@ -255,15 +265,15 @@ class Action(StructuredNode, CodeGraphNode):
     #  • COMPOSES (incoming) - VerificationMethod → Action
     #    The parent verification method that composes this action step.
     #
-    #  • CALLER (outgoing) — Action → CompoundNodeNode
+    #  • CALLER (outgoing) — Action → CompoundNode
     #    The design-graph compound node that performs the action.
     #    The ``caller_qualified_name`` property serves as a fallback.
-    #    Same NamespaceNode/MemberNode caveat as Condition’s LEFT_OPERAND.
+    #    Same NamespaceNode/MemberNode caveat as Condition's LEFT_OPERAND.
     #
-    #  • CALLEE (outgoing) — Action → CompoundNodeNode
+    #  • CALLEE (outgoing) — Action → CompoundNode
     #    The design-graph compound node that is invoked by the action.
     #    The ``callee_qualified_name`` property serves as a fallback.
-    #    Same NamespaceNode/MemberNode caveat as Condition’s LEFT_OPERAND.
+    #    Same NamespaceNode/MemberNode caveat as Condition's LEFT_OPERAND.
     # --------------------------------------------------------------------------
 
     verification_method = RelationshipFrom(

@@ -24,3 +24,6 @@ llm_caller/
 logs_test/
 .worktrees/
 tests/integration/__snapshots__/
+
+# Unit test serialized output (debugging)
+unit_test_data/

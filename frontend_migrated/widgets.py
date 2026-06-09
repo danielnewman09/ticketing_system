@@ -605,36 +605,46 @@ def render_hlr_card(hlr):
 
 
 def render_llr_table(llrs, on_delete=None, on_edit=None):
-    """Render an LLR table from plain dicts.
+    """Render an LLR table from serialized node dicts.
+
+    Each LLR dict is expected to have ``refid``, ``description``,
+    and a ``composes`` key (from ``serialize(nested=True)``) containing
+    VerificationMethod children.  The verification method type badges
+    are extracted from ``composes`` and displayed in the table.
 
     If *on_edit* is provided, an edit button is shown per row.
     If *on_delete* is provided, a delete button is shown per row.
     """
     columns = [
-        {"name": "id", "label": "ID", "field": "id", "align": "left", "sortable": True},
+        {"name": "refid", "label": "ID", "field": "refid", "align": "left", "sortable": True},
         {"name": "description", "label": "Description", "field": "description", "align": "left"},
         {"name": "verification", "label": "Verification", "field": "verification", "align": "left"},
     ]
     if on_edit or on_delete:
-        columns.append({"name": "actions", "label": "", "field": "id", "align": "right"})
+        columns.append({"name": "actions", "label": "", "field": "refid", "align": "right"})
 
-    # Keep full descriptions for edit callbacks, truncated for display.
+    # Build rows from serialized dicts.
     full_descriptions = {}
     rows = []
     for llr in llrs:
         desc = llr["description"]
-        full_descriptions[llr["id"]] = desc
+        full_descriptions[llr["refid"]] = desc
+        methods = [
+            child["method"]
+            for child in llr.get("composes", [])
+            if child.get("type") == "VerificationMethod" and child.get("method")
+        ]
         rows.append(
             {
-                "id": llr["id"],
+                "refid": llr["refid"],
                 "description": desc[:120] + ("..." if len(desc) > 120 else ""),
-                "verification": ", ".join(llr["methods"]) if llr["methods"] else "-",
+                "verification": ", ".join(methods) if methods else "-",
             }
         )
 
-    table = ui.table(columns=columns, rows=rows, row_key="id").classes("w-full")
+    table = ui.table(columns=columns, rows=rows, row_key="refid").classes("w-full")
     table.props("dense flat")
-    table.on("row-click", lambda e: ui.navigate.to(f"/llr/{e.args[1]['id']}"))
+    table.on("row-click", lambda e: ui.navigate.to(f"/llr/{e.args[1]['refid']}"))
 
     table.add_slot(
         "body-cell-verification",
@@ -657,13 +667,13 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
         if on_edit:
             edit_btn = (
                 '<q-btn flat round dense size="xs" icon="edit" color="primary"'
-                "       @click.stop=\"$parent.$emit('edit', props.row.id)\" />"
+                "       @click.stop=\"$parent.$emit('edit', props.row.refid)\" />"
             )
         delete_btn = ""
         if on_delete:
             delete_btn = (
                 '<q-btn flat round dense size="xs" icon="delete" color="negative"'
-                "       @click.stop=\"$parent.$emit('delete', props.row.id)\" />"
+                "       @click.stop=\"$parent.$emit('delete', props.row.refid)\" />"
             )
         table.add_slot(
             "body-cell-actions",

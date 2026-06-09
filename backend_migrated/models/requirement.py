@@ -18,20 +18,16 @@ project-management node types (Component, Language, Dependency, ProjectMeta).
 
 Identity
 ~~~~~~~~
-Existing HLR/LLR nodes use an integer ``id`` property as their primary
-identifier.  Neomodel does not allow ``id`` as a property name (it
-conflicts with an internal attribute), so the neomodel models use
-``refid`` — the ``CodeGraphNode`` unique key — with the convention
-``"hlr-1"`` / ``"llr-5"`` derived from the legacy integer ``id``.
-A data migration in ``backend_migrated.constraints`` back-fills ``refid``
-on existing nodes.
+HLR and LLR override ``CodeGraphNode.refid`` as ``UniqueIdProperty()``,
+matching the pattern used by ``FileNode`` in the codegraph.  This makes
+``refid`` the canonical unique identifier enforced by Neo4j, and
+neomodel auto-generates a UUID on ``.save()``.  The legacy integer
+``id`` property on pre-existing nodes is no longer set on newly created
+nodes — ``refid`` replaces it for all lookups and serialisation.
 
-Legacy properties retained on existing nodes but **not** managed by
-neomodel include ``component_id`` (integer FK, superseded by the
-``COMPOSES`` relationship from Component), ``dependency_context`` (Neo4j
-map, accessed via raw Cypher by the decomposition agent), and
-``high_level_requirement_id`` / ``component_ids`` (replaced by
-relationship edges).
+A data migration in ``backend_migrated.constraints`` back-fills
+``refid`` on existing nodes that were created before the neomodel
+switch.
 
 LayerGraph integration
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -51,6 +47,7 @@ must be configured (done by importing ``codegraph.config`` or calling
 from neomodel import (
     StructuredNode,
     StringProperty,
+    UniqueIdProperty,
     RelationshipTo,
     RelationshipFrom,
 )
@@ -73,24 +70,20 @@ class HLR(StructuredNode, CodeGraphNode):
     trees by ``layer_graph_to_cytoscape()``.
 
     Attributes:
+        refid: Auto-generated unique identifier.  Overrides
+            ``CodeGraphNode.refid`` as ``UniqueIdProperty``, matching
+            the pattern used by ``FileNode`` in the codegraph.  Serves
+            as the primary lookup key.
         name: Short label for the requirement (inherited from CodeGraphNode).
-        refid: Unique identifier with convention ``"hlr-{legacy_id}"``
-            (inherited from CodeGraphNode).  Serves as the primary
-            lookup key, replacing the legacy auto-increment integer ``id``.
         description: Full requirement text.
         layer: Provenance layer — ``"design"`` (speculative/abstracted)
             or ``"as-built"`` (implemented/verified).  Mirrors the same
             ``layer`` property on Compound/Member/Namespace nodes.
         source: Project source, inherited from CodeGraphNode.
-
-    Legacy properties on existing nodes (not managed by neomodel):
-        id: Integer identifier (pre-neomodel).  Retained for backward
-            compatibility with raw-Cypher queries in RequirementRepository.
-        component_id: Integer FK to Component (pre-neomodel).  Superseded
-            by the incoming ``component`` COMPOSES relationship from Component.
-        dependency_context: Neo4j map stored by the decomposition agent.
-            Accessed via raw Cypher, not modelled as a neomodel property.
     """
+
+    # --- Identity (overrides CodeGraphNode.refid) ----------------------------
+    refid = UniqueIdProperty()
 
     # --- Requirement text -------------------------------------------------------
     description = StringProperty(required=True,
@@ -143,20 +136,18 @@ class LLR(StructuredNode, CodeGraphNode):
     ``BELONGS_TO`` edge.
 
     Attributes:
+        refid: Auto-generated unique identifier.  Overrides
+            ``CodeGraphNode.refid`` as ``UniqueIdProperty``, matching
+            the pattern used by ``FileNode`` in the codegraph.  Serves
+            as the primary lookup key.
         name: Short label for the requirement (inherited from CodeGraphNode).
-        refid: Unique identifier with convention ``"llr-{legacy_id}"``
-            (inherited from CodeGraphNode).  Serves as the primary
-            lookup key, replacing the legacy auto-increment integer ``id``.
         description: Full requirement text.
         layer: Provenance layer — ``"design"`` or ``"as-built"``.
         source: Project source, inherited from CodeGraphNode.
-
-    Legacy properties on existing nodes (not managed by neomodel):
-        id: Integer identifier (pre-neomodel).  Retained for backward
-            compatibility with raw-Cypher queries.
-        high_level_requirement_id: Integer FK to HLR (pre-neomodel).
-            Superseded by the ``hlr`` relationship (COMPOSES edge).
     """
+
+    # --- Identity (overrides CodeGraphNode.refid) ----------------------------
+    refid = UniqueIdProperty()
 
     # --- Requirement text -------------------------------------------------------
     description = StringProperty(required=True,

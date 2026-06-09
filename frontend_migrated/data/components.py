@@ -1,13 +1,24 @@
-"""Component CRUD, detail, options, and environment CRUD — stubs.
+"""Component CRUD, detail, options, and environment CRUD — migrated.
 
-Return types are documented via TypedDicts. All functions raise
-NotImplementedError until reimplemented against the migrated backend.
+Component nodes live in Neo4j and are managed via neomodel.
+``fetch_components`` returns node objects for UI dropdowns.
+Other functions remain stubs until their pages are migrated.
+
+Neomodel auto-initialises its database driver on first query, so no
+explicit ``_ensure_driver()`` call is needed.
+
 No imports from backend/ anywhere in this module.
 """
 
 from __future__ import annotations
 
+import logging
+
 from typing import TypedDict
+
+from backend_migrated.models import Component
+
+log = logging.getLogger(__name__)
 
 
 class ComponentRow(TypedDict):
@@ -80,7 +91,6 @@ class ComponentDetail(TypedDict):
 
 
 class ComponentOption(TypedDict):
-    id: int
     name: str
 
 
@@ -94,9 +104,14 @@ def fetch_component_detail(component_id: int) -> ComponentDetail | None:
     raise NotImplementedError("fetch_component_detail — requires backend_migrated data layer")
 
 
-def fetch_components_options() -> list[ComponentOption]:
-    """Return list of {id, name} for component dropdowns."""
-    raise NotImplementedError("fetch_components_options — requires backend_migrated data layer")
+def fetch_components() -> list[Component]:
+    """Return all Component nodes for UI dropdowns.
+
+    Components are read from Neo4j via neomodel.  The caller can
+    access ``.name``, ``.refid``, and any other property directly
+    on the node object.
+    """
+    return sorted(Component.nodes.all(), key=lambda c: c.name)
 
 
 def ensure_component_language(component_id: int, language_name: str, version: str = "") -> int:
