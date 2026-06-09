@@ -64,7 +64,7 @@ def fetch_ontology_graph_data(
     layer: str = "design",
     kind_filter: str | None = None,
     search: str | None = None,
-    component_id: int | None = None,
+    component_id: str | None = None,
     source_filter: str | None = None,
     requirement_tags: str = "hlr",
     include_dependencies: bool = True,
@@ -77,8 +77,8 @@ def fetch_ontology_graph_data(
 
 
 def fetch_hlr_graph_data(
-    hlr_id: int,
-    component_id: int | None = None,
+    hlr_id: str | int,
+    component_id: str | None = None,
     requirement_tags: str = "hlr",
 ) -> dict:
     """Fetch the ontology subgraph around an HLR for Cytoscape.js.

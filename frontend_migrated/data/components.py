@@ -1,7 +1,9 @@
-"""Component CRUD, detail, options, and environment CRUD — migrated.
+"""Component CRUD, detail, and environment CRUD — migrated.
 
 Component nodes live in Neo4j and are managed via neomodel.
-``fetch_components`` returns node objects for UI dropdowns.
+``fetch_components`` returns node objects for UI dropdowns and pages.
+``get_component`` looks up a single component by refid.
+
 Other functions remain stubs until their pages are migrated.
 
 Neomodel auto-initialises its database driver on first query, so no
@@ -14,89 +16,43 @@ from __future__ import annotations
 
 import logging
 
-from typing import TypedDict
-
 from backend_migrated.models import Component
 
 log = logging.getLogger(__name__)
 
 
-class ComponentChild(TypedDict):
-    id: int
-    name: str
-    namespace: str | None
-    hlr_count: int
-    node_count: int
+# ---------------------------------------------------------------------------
+# Read queries — implemented against neomodel
+# ---------------------------------------------------------------------------
 
 
-class BuildSystemRow(TypedDict):
-    name: str
-    config_file: str | None
-    version: str | None
+def get_component(refid: str) -> Component | None:
+    """Look up a Component node by refid.
 
-
-class TestFrameworkRow(TypedDict):
-    name: str
-    config_file: str | None
-    discovery_path: str | None
-
-
-class DependencyInManager(TypedDict):
-    id: int
-    name: str
-    version: str
-    is_dev: bool
-
-
-class DependencyManagerRow(TypedDict):
-    id: int
-    name: str
-    manifest_file: str
-    lock_file: str
-    dependencies: list[DependencyInManager]
-
-
-class ComponentEnvironment(TypedDict):
-    language_id: int
-    language: str
-    build_systems: list[BuildSystemRow]
-    test_frameworks: list[TestFrameworkRow]
-    dependency_managers: list[DependencyManagerRow]
-
-
-class ComponentDetail(TypedDict):
-    id: int
-    name: str
-    description: str
-    namespace: str
-    parent: dict | None  # {id: int, name: str}
-    children: list[ComponentChild]
-    environment: ComponentEnvironment | None
-    hlrs: list[dict]  # {id, description, llr_count}
-    dependencies: list[dict]  # {id, name, version, is_dev}
-    default_manager_id: int | None
-    node_kinds: dict[str, int]
-    nodes_sample: list[dict]
-    node_count: int
-
-
-class ComponentOption(TypedDict):
-    name: str
-
-
-def fetch_component_detail(component_id: int) -> ComponentDetail | None:
-    """Fetch full component detail including children, environment, requirements, and nodes."""
-    raise NotImplementedError("fetch_component_detail — requires backend_migrated data layer")
+    Returns the node object (with all relationship managers available)
+    or None if not found.
+    """
+    return Component.nodes.get_or_none(refid=refid)
 
 
 def fetch_components() -> list[Component]:
-    """Return all Component nodes for UI dropdowns.
+    """Return all Component nodes for UI dropdowns and pages.
 
     Components are read from Neo4j via neomodel.  The caller can
     access ``.name``, ``.refid``, and any other property directly
     on the node object.
     """
     return sorted(Component.nodes.all(), key=lambda c: c.name)
+
+
+# ---------------------------------------------------------------------------
+# Stubs — not yet reimplemented against neomodel
+# ---------------------------------------------------------------------------
+
+
+def fetch_component_detail(component_id: int) -> dict | None:
+    """Fetch full component detail including children, environment, requirements, and nodes."""
+    raise NotImplementedError("fetch_component_detail — requires backend_migrated data layer")
 
 
 def ensure_component_language(component_id: int, language_name: str, version: str = "") -> int:
