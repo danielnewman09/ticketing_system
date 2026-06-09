@@ -36,6 +36,15 @@ PATCH_TARGETS = {
     "delete_dependency": "frontend_migrated.pages.component_detail.delete_dependency",
     "fetch_ontology_graph_data": "frontend_migrated.pages.component_detail.fetch_ontology_graph_data",
     "resolve_node_id_by_qualified_name": "frontend_migrated.pages.component_detail.resolve_node_id_by_qualified_name",
+    # Requirements page (route)
+    "fetch_requirements_data": "frontend_migrated.pages.requirements.route.fetch_requirements_data",
+    # Requirements page (dialogs)
+    "create_hlr": "frontend_migrated.pages.requirements.dialogs.create_hlr",
+    "delete_hlr": "frontend_migrated.pages.requirements.dialogs.delete_hlr",
+    "decompose_hlr": "frontend_migrated.pages.requirements.dialogs.decompose_hlr",
+    "design_single_hlr": "frontend_migrated.pages.requirements.dialogs.design_single_hlr",
+    "create_llr": "frontend_migrated.pages.requirements.dialogs.create_llr",
+    "fetch_components_for_dialog": "frontend_migrated.pages.requirements.dialogs.fetch_components",
 }
 
 
@@ -57,3 +66,67 @@ async def user():
     async with user_simulation(root=lambda: None) as test_user:
         import frontend_migrated.pages  # noqa: F401
         yield test_user
+
+
+# ---------------------------------------------------------------------------
+# Screenshot server fixture (shared by all screenshot test files)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def screenshot_server():
+    """Start the NiceGUI screenshot server as a subprocess.
+
+    The server applies all data-layer patches before importing pages,
+    so no Neo4j or database connection is needed.  It listens on
+    port 19000 and serves all migrated page routes.
+
+    Yields the base URL (e.g. ``http://localhost:19000``).
+    """
+    import os
+    import subprocess
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+    from pathlib import Path
+
+    _SERVER_SCRIPT = Path(__file__).parent / "_screenshot_server.py"
+    _SERVER_PORT = 19000
+
+    # Start the server subprocess
+    env = {**os.environ, "NICEGUI_SCREEN_TEST_PORT": str(_SERVER_PORT)}
+    proc = subprocess.Popen(
+        [sys.executable, str(_SERVER_SCRIPT)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+
+    # Wait for the server to respond
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(f"http://localhost:{_SERVER_PORT}/components", timeout=1)
+            break
+        except (urllib.error.URLError, ConnectionRefusedError):
+            if proc.poll() is not None:
+                stdout, stderr = proc.communicate(timeout=5)
+                raise RuntimeError(
+                    f"Server process exited ({proc.returncode}):\n"
+                    f"stderr: {stderr.decode()}\n"
+                    f"stdout: {stdout.decode()}"
+                )
+            time.sleep(0.5)
+    else:
+        proc.terminate()
+        raise RuntimeError(f"Server on port {_SERVER_PORT} did not start within 20s")
+
+    yield f"http://localhost:{_SERVER_PORT}"
+
+    # Cleanup
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()

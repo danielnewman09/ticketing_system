@@ -230,3 +230,39 @@ def make_language(
     lang.version = version
     lang.refid = refid
     return lang
+
+
+# ---------------------------------------------------------------------------
+# Serialized dict factories (for pages that consume fetch_requirements_data)
+# ---------------------------------------------------------------------------
+
+
+def make_llr_dict(
+    *,
+    refid: str = "test::LLR-1",
+    description: str = "A test low-level requirement",
+    verification_methods: list[dict] | None = None,
+) -> dict:
+    """Build a serialized LLR dict matching ``CodeGraphNode.serialize()`` output.
+
+    Parameters
+    ----------
+    refid :
+        Unique identifier (used as row key and navigation target).
+    description :
+        Full requirement text.
+    verification_methods :
+        List of verification method dicts added under the ``composes`` key.
+        Each dict should have ``type`` (``"VerificationMethod"``) and
+        ``method`` (``"automated"``, ``"review"``, etc.).
+        If *None*, a single automated verification is included by default.
+    """
+    if verification_methods is None:
+        verification_methods = [{"type": "VerificationMethod", "method": "automated"}]
+
+    return {
+        "refid": refid,
+        "id": refid,
+        "description": description,
+        "composes": verification_methods,
+    }
