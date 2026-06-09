@@ -41,3 +41,8 @@ line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "screenshot: marks screenshot-capture tests (slow, requires Playwright)",
+    "integration: marks tests that require a running application",
+]

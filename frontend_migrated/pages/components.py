@@ -28,7 +28,7 @@ def _render_component_card(comp):
             ui.label(comp.name).classes("text-lg font-semibold")
             langs = comp.language.all()
             if langs:
-                ui.badge(repr(langs[0]), color="grey").classes("text-xs")
+                ui.badge(langs[0].name, color="grey").classes("text-xs")
 
         if comp.namespace:
             ui.label(comp.namespace).classes("text-xs text-gray-500 font-mono")
