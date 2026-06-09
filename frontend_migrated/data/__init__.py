@@ -12,7 +12,6 @@ from frontend_migrated.data.components import (
     delete_dependency_manager,
     ensure_component_language,
     fetch_component_detail,
-    fetch_components_data,
     fetch_components,
     update_dependency_index_config,
 )
@@ -75,7 +74,6 @@ __all__ = [
     "update_llr",
     "delete_llr",
     # components
-    "fetch_components_data",
     "fetch_component_detail",
     "fetch_components",
     "ensure_component_language",

@@ -21,16 +21,6 @@ from backend_migrated.models import Component
 log = logging.getLogger(__name__)
 
 
-class ComponentRow(TypedDict):
-    id: int
-    name: str
-    namespace: str
-    language: str | None
-    parent: str | None
-    hlr_count: int
-    node_count: int
-
-
 class ComponentChild(TypedDict):
     id: int
     name: str
@@ -92,11 +82,6 @@ class ComponentDetail(TypedDict):
 
 class ComponentOption(TypedDict):
     name: str
-
-
-def fetch_components_data() -> list[ComponentRow]:
-    """Fetch all data needed for the components page."""
-    raise NotImplementedError("fetch_components_data — requires backend_migrated data layer")
 
 
 def fetch_component_detail(component_id: int) -> ComponentDetail | None:
