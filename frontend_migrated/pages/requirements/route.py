@@ -2,6 +2,9 @@
 
 Orchestrates the HLR dashboard: fetches requirements data, renders
 stat cards and the HLR list, and wires up dialog actions.
+
+All dialog ``show()`` methods are async — they must be called from
+async event handlers so NiceGUI's slot context is preserved.
 """
 
 from __future__ import annotations
@@ -43,10 +46,14 @@ async def requirements_page():
 
         with ui.row().classes("w-full items-center justify-between px-2 mt-6 mb-2"):
             ui.label("High-Level Requirements").classes("text-xl font-semibold")
+
+            async def _create_hlr():
+                await CreateHLRDialog(on_done=content.refresh).show()
+
             ui.button(
                 "+ HLR",
                 icon="add",
-                on_click=lambda: CreateHLRDialog(on_done=content.refresh).show(),
+                on_click=_create_hlr,
             ).props("color=positive size=sm")
 
         for hlr in data["hlrs"]:

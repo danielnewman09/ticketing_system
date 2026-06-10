@@ -3,6 +3,12 @@
 Each dialog encapsulates its own UI, validation, API call, and
 notifications.  All accept an ``on_done`` callback that fires after
 a successful action so the page can re-fetch and re-render.
+
+All ``show()`` methods are **async** — they must be called from an
+async NiceGUI event handler so the slot context is preserved for
+UI element creation.  Calling ``show()`` from a sync handler or
+via ``asyncio.create_task`` will raise a RuntimeError because the
+NiceGUI slot context is lost.
 """
 
 from __future__ import annotations
@@ -37,11 +43,8 @@ class CreateHLRDialog:
         self._desc = None
         self._comp = None
 
-    def show(self):
-        """Open the dialog (safe to call from sync ``on_click`` handlers)."""
-        asyncio.create_task(self._build_and_open())
-
-    async def _build_and_open(self):
+    async def show(self):
+        """Build and open the dialog.  Must be called from an async handler."""
         components = await asyncio.to_thread(fetch_components)
         comp_names = ["(none)"] + [c.name for c in components]
 
@@ -77,10 +80,8 @@ class DeleteHLRDialog:
         self._on_done = on_done
         self._dialog = None
 
-    def show(self):
-        asyncio.create_task(self._build_and_open())
-
-    async def _build_and_open(self):
+    async def show(self):
+        """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_SM):
             ui.label(f"Delete HLR {self._hlr_refid}?").classes("text-lg font-bold")
@@ -109,10 +110,8 @@ class DecomposeHLRDialog:
         self._on_done = on_done
         self._dialog = None
 
-    def show(self):
-        asyncio.create_task(self._build_and_open())
-
-    async def _build_and_open(self):
+    async def show(self):
+        """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_MD):
             ui.label(f"Decompose HLR {self._hlr_refid}?").classes("text-lg font-bold")
@@ -150,10 +149,8 @@ class DesignHLRDialog:
         self._on_done = on_done
         self._dialog = None
 
-    def show(self):
-        asyncio.create_task(self._build_and_open())
-
-    async def _build_and_open(self):
+    async def show(self):
+        """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_MD):
             ui.label(f"Design HLR {self._hlr_refid}?").classes("text-lg font-bold")
@@ -198,10 +195,8 @@ class AddLLRDialog:
         self._dialog = None
         self._desc = None
 
-    def show(self):
-        asyncio.create_task(self._build_and_open())
-
-    async def _build_and_open(self):
+    async def show(self):
+        """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_MD):
             ui.label(f"Add LLR to HLR {self._hlr_refid}").classes(CLS_DIALOG_TITLE)

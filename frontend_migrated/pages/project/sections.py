@@ -1,7 +1,8 @@
 """Page sections for the project homepage — migrated backend.
 
-Project metadata, stats, and stubs.  Dependency management lives in
-:mod:`frontend_migrated.pages.project.dependencies`.
+Project metadata and stats.  Dependency management lives in
+:mod:`frontend_migrated.pages.project.dependencies` and
+scaffolding in :mod:`frontend_migrated.pages.project.scaffold`.
 """
 
 import asyncio
@@ -151,9 +152,4 @@ async def section_stats():
 
 def section_pending_recommendations():
     """STUB: Render pending dependency recommendations section."""
-    pass
-
-
-def section_scaffold(meta: dict, project_dir: str = ""):
-    """STUB: Render project scaffolding section."""
     pass

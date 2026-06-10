@@ -191,11 +191,12 @@ class IntegrateDialog:
         self._version = None
         self._consuming_lib = None
 
-    def show(self, row: dict):
-        """Open the dialog pre-filled from *row*."""
-        asyncio.create_task(self._build_and_open(row))
+    async def show(self, row: dict):
+        """Build and open the dialog pre-filled from *row*.
 
-    async def _build_and_open(self, row: dict):
+        Must be called from an async NiceGUI event handler so the
+        slot context is preserved for UI element creation.
+        """
         self._dep_name = row["name"]
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes("w-[480px]"):
@@ -288,11 +289,12 @@ class IndexConfigDialog:
         self._exclude = None
         self._recursive = None
 
-    def show(self, row: dict):
-        """Open the dialog pre-filled from *row*."""
-        asyncio.create_task(self._build_and_open(row))
+    async def show(self, row: dict):
+        """Build and open the dialog pre-filled from *row*.
 
-    async def _build_and_open(self, row: dict):
+        Must be called from an async NiceGUI event handler so the
+        slot context is preserved for UI element creation.
+        """
         self._dep_refid = row.get("refid", "")
         self._dep_name = row["name"]
         self._dialog = ui.dialog()
@@ -461,9 +463,15 @@ class DependencyPanel:
                 tbl.add_slot("body-cell-status", _SLOT_STATUS)
                 tbl.add_slot("body-cell-source_url", _SLOT_SOURCE_URL)
                 tbl.add_slot("body-cell-actions", _SLOT_ACTIONS)
-                tbl.on("integrate", lambda e: self._integrate.show(e.args))
+                async def _integrate(e):
+                    await self._integrate.show(e.args)
+
+                async def _configure(e):
+                    await self._config.show(e.args)
+
+                tbl.on("integrate", _integrate)
                 tbl.on("reindex", lambda e: self._on_index(e.args["name"]))
-                tbl.on("configure", lambda e: self._config.show(e.args))
+                tbl.on("configure", _configure)
                 tbl.on("remove", lambda e: self._on_delete(e.args))
 
         if self._project_dir:

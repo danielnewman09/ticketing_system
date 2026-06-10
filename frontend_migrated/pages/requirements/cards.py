@@ -50,26 +50,22 @@ def render_hlr_card(
                         on_click=lambda h=hlr_refid: ui.navigate.to(f"/hlr/{h}"),
                     )
                     if on_add_llr:
-                        ui.menu_item(
-                            "Add LLR",
-                            on_click=lambda h=hlr_refid: on_add_llr(h),
-                        )
+                        async def _add_llr(r=hlr_refid):
+                            await on_add_llr(r)
+                        ui.menu_item("Add LLR", on_click=_add_llr)
                     if on_decompose:
-                        ui.menu_item(
-                            "Decompose",
-                            on_click=lambda h=hlr_refid: on_decompose(h),
-                        )
+                        async def _decompose(r=hlr_refid):
+                            await on_decompose(r)
+                        ui.menu_item("Decompose", on_click=_decompose)
                     if on_design:
-                        ui.menu_item(
-                            "Design",
-                            on_click=lambda h=hlr_refid: on_design(h),
-                        )
+                        async def _design(r=hlr_refid):
+                            await on_design(r)
+                        ui.menu_item("Design", on_click=_design)
                     if on_delete:
+                        async def _delete(r=hlr_refid):
+                            await on_delete(r)
                         ui.separator()
-                        ui.menu_item(
-                            "Delete",
-                            on_click=lambda h=hlr_refid: on_delete(h),
-                        )
+                        ui.menu_item("Delete", on_click=_delete)
 
         if hlr["llrs"]:
             with (
