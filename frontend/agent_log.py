@@ -28,24 +28,45 @@ class LogEntry:
 
 
 class AgentLog:
-    """Thread-safe, bounded log buffer."""
+    """Thread-safe, bounded log buffer.
+
+    Every push() also appends a human-readable line to
+    logs/agent_console.log so the dashboard console output
+    is persisted to disk.
+    """
+
+    _CONSOLE_LOG_PATH = Path(__file__).resolve().parent.parent / "logs" / "agent_console.log"
 
     def __init__(self, maxlen: int = MAX_ENTRIES):
         self._entries: deque[LogEntry] = deque(maxlen=maxlen)
         self._lock = threading.Lock()
         self._version = 0
+        # Ensure the log directory exists up front
+        self._CONSOLE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    def _append_console_log(self, entry: LogEntry):
+        """Write a human-readable line to the on-disk console log."""
+        ts = time.strftime("%H:%M:%S", time.localtime(entry.timestamp))
+        line = f"{ts} [{entry.kind}] {entry.summary}"
+        if entry.detail:
+            line += f"  {entry.detail}"
+        try:
+            with open(self._CONSOLE_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass  # non-critical; don't break the agent if the disk write fails
 
     def push(self, kind: str, summary: str, detail: str = ""):
         with self._lock:
-            self._entries.append(
-                LogEntry(
-                    timestamp=time.time(),
-                    kind=kind,
-                    summary=summary,
-                    detail=detail,
-                )
+            entry = LogEntry(
+                timestamp=time.time(),
+                kind=kind,
+                summary=summary,
+                detail=detail,
             )
+            self._entries.append(entry)
             self._version += 1
+            self._append_console_log(entry)
 
     @property
     def version(self) -> int:
@@ -66,6 +87,12 @@ class AgentLog:
         with self._lock:
             self._entries.clear()
             self._version += 1
+            # Write a separator to the console log so cleared sessions are visible
+            try:
+                with open(self._CONSOLE_LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(f"\n{'—' * 60} [clear] {'—' * 60}\n")
+            except OSError:
+                pass
 
 
 # Singleton
@@ -439,6 +466,19 @@ def install_hooks():
                 llm_caller.call_tool_loop = patched_call_tool_loop
         except (ImportError, AttributeError):
             pass
+
+        # Patch any already-imported modules that did
+        # `from llm_caller.tool_loop import call_tool_loop`
+        # (e.g. skill_runner, scaffold_project).  Without this,
+        # Phase 2 (run_skill) bypasses the logging wrapper.
+        for mod in list(sys.modules.values()):
+            if mod is None or mod is tool_loop:
+                continue
+            try:
+                if getattr(mod, "call_tool_loop", None) is _orig_call_tool_loop:
+                    mod.call_tool_loop = patched_call_tool_loop
+            except Exception:
+                pass
 
     except (ImportError, AttributeError):
         pass

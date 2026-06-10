@@ -112,7 +112,22 @@ class ScaffoldDialog:
         ui.notify("Scaffolding project — this may take a few minutes…", type="info")
 
         try:
-            from backend.ticketing_agent.design.scaffold_project import scaffold_project
+            from backend_migrated.agents.scaffold_project import scaffold_project
+
+            # Ensure the lazy-imported module uses the patched call_tool_loop
+            # (install_hooks patches already-imported modules, but this lazy
+            # import happens at click time and may not have been caught)
+            try:
+                from frontend_migrated.agent_log import agent_log as _agent_log
+                import backend_migrated.agents.scaffold_project as _sp
+                import llm_caller.tool_loop as _tl
+                if not _sp.call_tool_loop.__qualname__.startswith("install_hooks"):
+                    _sp.call_tool_loop = _tl.call_tool_loop
+                import llm_caller.skill_runner as _sr
+                if not _sr.call_tool_loop.__qualname__.startswith("install_hooks"):
+                    _sr.call_tool_loop = _tl.call_tool_loop
+            except Exception:
+                pass
 
             result = await asyncio.to_thread(
                 scaffold_project,
