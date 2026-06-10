@@ -36,6 +36,9 @@ class {{PROJECT_CLASS_NAME}}(ConanFile):
     }
 
     def configure(self):
+        # Override the Conan profile's cppstd with the project's C++ standard.
+        # Note: The "Input profile" display during `conan install` will still show the
+        # profile's default value, but CMake will receive the correct standard via the toolchain.
         self.settings.compiler.cppstd = "{{CXX_STANDARD}}"
 
     exports_sources = "../../CMakeLists.txt", "../../src/*", "../../test/*", "../../*.cmake"

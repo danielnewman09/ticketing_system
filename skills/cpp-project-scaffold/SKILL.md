@@ -154,13 +154,17 @@ Use the template from `assets/conanfile.py.md`. Key features:
 ### 4. Generate CMakeUserPresets.json
 
 Use the template from `assets/cmake-user-presets.json.md`. Generate:
-- Include paths for Conan-generated presets
+- Include paths for Conan-generated presets (both Debug and Release)
 - `coverage-debug` and `profiling-release` configure presets
 - Per-library build presets: `debug-{lib}-only`, `release-{lib}-only`
 - `debug-tests-only` and `release-tests-only` aggregating all test targets
 - `coverage-all` preset
 - `doxygen`, `codebase-db` presets
 - `debug-all` preset listing all targets
+
+<HARD-GATE>
+The `include` array references both `build/Debug/generators/CMakePresets.json` and `build/Release/generators/CMakePresets.json`. If either file is missing, CMake will fail to parse the entire presets file. See Step 12 (Verify Build) for the required install commands.
+</HARD-GATE>
 
 ### 5. Generate Test Directory (test/CMakeLists.txt)
 
@@ -226,28 +230,38 @@ Use the template from `assets/c-cpp-properties.json.md`. Creates `.vscode/c_cpp_
 - C++ standard matching the project
 - CMake Tools as the configuration provider
 
-### 12. Generate .gitignore
+**Note:** The template contains platform-specific paths (e.g., `/Users/*/.conan2/...` for Mac, `/home/*/.conan2/...` for Linux). Generate only the configuration matching the current platform, or include both if the project must support cross-platform development. See the Platform Awareness section in `assets/c-cpp-properties.json.md`.
+
+### 11. Generate .gitignore
 
 Standard C++ project gitignore including `build/`, `installs/`, `python/.venv/`, etc.
 
-### 13. Generate Placeholder Source Files
+### 12. Generate Placeholder Source Files
 
 For each compiled library:
 - `src/placeholder.cpp` with namespace and a stub function
 - `src/placeholder.hpp` with header guard and declaration
 - `test/placeholder_test.cpp` with a GTest that includes the header
 
-### 12. Verify Build
+### 13. Verify Build
 
-After generation, run:
+After generation, run the full build pipeline **from the project root directory** (the directory containing `CMakeLists.txt` and `conanfile.py`).
+
+**You MUST run both Debug and Release Conan installs** because `CMakeUserPresets.json` includes
+both preset paths, and CMake will fail to parse the file if either is missing:
+
 ```bash
 cd {project-name}
-python/setup.sh
+bash python/setup.sh
 conan install . --build=missing -s build_type=Debug
+conan install . --build=missing -s build_type=Release
 cmake --preset conan-debug
 cmake --build --preset conan-debug
 ctest --preset conan-debug
 ```
+
+If `python/setup.sh` fails on optional dependencies (e.g., `doxygen-index`), note the failure
+and continue — it is not required for the build to succeed.
 
 Report success or any issues.
 

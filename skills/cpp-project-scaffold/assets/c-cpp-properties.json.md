@@ -54,3 +54,12 @@ Variables to substitute:
   "${workspaceFolder}/calculator/calculation_engine",
   "${workspaceFolder}/calculator/user_interface",
   ```
+
+## Platform Awareness
+
+The template includes **both Mac and Linux configurations** with platform-specific Conan cache paths and compiler settings. Generate only the configuration matching the current platform, or include both if the project must support cross-platform development. The key platform-specific elements:
+
+- **Mac**: `/Users/*/.conan2/p/**/p/include`, `/opt/homebrew/include`, `clang++`, `macos-clang-arm64`
+- **Linux**: `/home/*/.conan2/p/*/p/include`, `/usr/bin/g++`, `linux-gcc-x64`
+
+If generating for a single platform, remove the other configuration entirely rather than leaving incorrect paths.

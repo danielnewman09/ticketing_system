@@ -29,7 +29,15 @@ This skill is designed to be called after other skills (scaffolding, adding depe
 
 ## Build Pipeline
 
-Run these commands in order from the project root:
+Run these commands in order **from the project root directory** — the directory containing `CMakeLists.txt` and `conanfile.py`. Confirm your working directory before running commands by checking for these files.
+
+### 0. Confirm Working Directory
+
+Before running any commands, verify you are in the project root:
+```bash
+ls CMakeLists.txt conanfile.py
+```
+If these files are not found, navigate to the correct directory or report the issue. Do NOT guess paths relative to a subdirectory.
 
 ### 1. Python Environment (if applicable)
 
@@ -38,10 +46,18 @@ If `python/setup.sh` exists, run it first:
 bash python/setup.sh
 ```
 
+If this step fails, check the error output:
+- **Optional dependency failure** (e.g., `doxygen-index` package not found): note the failure and proceed. Documentation targets will be unavailable but the build is not blocked.
+- **Core dependency failure** (e.g., pip itself is broken): report `build_success: false` with an explanation.
+
 ### 2. Install Dependencies
+
+**Both Debug and Release profiles must be installed** because `CMakeUserPresets.json` includes
+paths for both. If only one is installed, CMake will fail to parse the presets file entirely.
 
 ```bash
 conan install . --build=missing -s build_type=Debug
+conan install . --build=missing -s build_type=Release
 ```
 
 ### 3. Configure
@@ -62,6 +78,12 @@ cmake --build --preset conan-debug
 ctest --preset conan-debug
 ```
 
+### 6. Stop
+
+**After all 5 pipeline steps pass**, call `task_complete` immediately with `build_success: true`.
+Do NOT re-read files to "verify the final state" — the successful command outputs are sufficient.
+Do NOT loop reading the same file multiple times.
+
 ## Error Handling
 
 When a step fails:
@@ -78,11 +100,16 @@ Common issues and fixes:
 - **Conan package not found**: Verify the dependency is in `conanfile.py` and `find_package` is called
 - **Test failure**: Read the test output, fix the test or the code under test
 - **CMake configuration error**: Check variable names, target names, and preset definitions
+- **CMake presets parse error** (e.g., `Invalid "configurePreset"`): If the error references `conan-release` or a Release preset, the Release Conan profile has not been installed. Run `conan install . --build=missing -s build_type=Release` and retry. Do NOT remove Release presets from `CMakeUserPresets.json` — they are needed for Release builds.
+- **CMake presets include error** (missing `build/Release/generators/CMakePresets.json`): Same root cause — run `conan install . --build=missing -s build_type=Release` to generate the file. Do NOT remove the Release include path.
 
 ## Important Rules
 
 - Do NOT start over from scratch — make targeted fixes
 - Do NOT modify files that aren't related to the error
+- Do NOT remove functionality to fix errors (e.g., don't delete Release presets to fix a missing Conan profile — install the profile instead)
 - If the build passes but tests fail, still report `build_success: false`
 - If you cannot fix an issue after 3 attempts, report failure with a clear explanation
 - Call `task_complete` when done with `build_success: true/false`
+- Once all pipeline steps pass, call `task_complete` immediately — do NOT re-read files to "verify the final state"
+- Do NOT read the same file multiple times with the same arguments — if you've already read it, use the information you have

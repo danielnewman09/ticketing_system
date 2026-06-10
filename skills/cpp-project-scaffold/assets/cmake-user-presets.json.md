@@ -6,6 +6,16 @@ Variables to substitute:
 - `{{ALL_TEST_TARGETS}}` — Comma-separated list of all test targets
 - `{{JOBS}}` — Parallel job count (default: number of CPU cores)
 
+## CRITICAL INVARIANT: Both Debug and Release Conan Installs Are Required
+This template includes **both** Debug and Release Conan preset paths and build presets. CMake will fail to parse this file if either include path references a missing file, or if any build preset references a `configurePreset` that doesn't exist.
+
+**You MUST run both Conan installs before CMake can use any preset:**
+
+```bash
+conan install . --build=missing -s build_type=Debug
+conan install . --build=missing -s build_type=Release
+```
+
 ```json
 {
     "version": 4,
@@ -111,7 +121,8 @@ Variables to substitute:
 
 ## Per-Library Build Preset Pattern
 
-For each library `{lib}` with target `{project}_{lib}` and test target `{project}_{lib}_test`:
+For each library `{lib}` with target `{project}_{lib}` and test target `{project}_{lib}_test`,
+generate **both** a Debug and Release preset:
 
 ```json
 {
