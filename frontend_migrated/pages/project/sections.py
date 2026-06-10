@@ -1,14 +1,20 @@
 """Page sections for the project homepage — migrated backend.
 
-Project metadata and stats use the migrated data layer.
-Other sections are stubs until their data layers are migrated.
+Project metadata, stats, and stubs.  Dependency management lives in
+:mod:`frontend_migrated.pages.project.dependencies`.
 """
 
 import asyncio
 
 from nicegui import ui
 
-from frontend_migrated.theme import BACKGROUNDS, COLORS, CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS
+from frontend_migrated.theme import (
+    BACKGROUNDS,
+    COLORS,
+    CLS_DIALOG_MD,
+    CLS_DIALOG_TITLE,
+    CLS_DIALOG_ACTIONS,
+)
 from frontend_migrated.data.project import fetch_project_meta, update_project_meta
 from frontend_migrated.layout import stat_card
 from frontend_migrated.data.hlr import fetch_requirements_data
@@ -109,16 +115,18 @@ def _show_edit_dialog(meta: dict, refreshable):
 def _open_vscode(path: str):
     """Open a directory in VS Code."""
     import subprocess
+
     try:
         subprocess.Popen(["code", path])
     except FileNotFoundError:
         # VS Code CLI not available — try generic opener
         import webbrowser
+
         webbrowser.open(f"file://{path}")
 
 
 # ---------------------------------------------------------------------------
-# Stubs — not yet migrated
+# Stats
 # ---------------------------------------------------------------------------
 
 
@@ -129,14 +137,16 @@ async def section_stats():
         stat_card("HLRs", data["total_hlrs"], "blue-5")
         stat_card("LLRs", data["total_llrs"], "green-5")
         stat_card(
-            "Components", len({h["component"] for h in data["hlrs"] if h["component"]}), "teal-5"
+            "Components",
+            len({h["component"] for h in data["hlrs"] if h["component"]}),
+            "teal-5",
         )
         stat_card("Ontology Nodes", data["total_nodes"], "purple-5")
 
 
-def section_dependencies(project_dir: str = ""):
-    """STUB: Render dependency management section."""
-    ui.label("Dependencies — not yet migrated").classes("text-gray-500 text-sm mx-2 mt-4")
+# ---------------------------------------------------------------------------
+# Stubs — not yet migrated
+# ---------------------------------------------------------------------------
 
 
 def section_pending_recommendations():

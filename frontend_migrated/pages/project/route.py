@@ -15,10 +15,10 @@ from frontend_migrated.data.project import fetch_project_meta
 from frontend_migrated.pages.project.sections import (
     section_project_meta,
     section_stats,
-    section_dependencies,
     section_pending_recommendations,
     section_scaffold,
 )
+from frontend_migrated.pages.project.dependencies import section_dependencies
 
 
 @ui.page("/")
@@ -38,6 +38,6 @@ async def project_page():
     )
 
     await section_stats()
-    section_dependencies(project_dir)
+    await section_dependencies(project_dir)
     section_pending_recommendations()
     section_scaffold(meta, project_dir)
