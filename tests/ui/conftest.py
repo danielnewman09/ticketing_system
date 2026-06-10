@@ -45,6 +45,18 @@ PATCH_TARGETS = {
     "design_single_hlr": "frontend_migrated.pages.requirements.dialogs.design_single_hlr",
     "create_llr": "frontend_migrated.pages.requirements.dialogs.create_llr",
     "fetch_components_for_dialog": "frontend_migrated.pages.requirements.dialogs.fetch_components",
+    # Dependencies page (DependencyPanel)
+    "fetch_environment_data": "frontend_migrated.pages.project.dependencies.fetch_environment_data",
+    "delete_dependency_dep": "frontend_migrated.pages.project.dependencies.delete_dependency",
+    "update_dependency_index_config": "frontend_migrated.pages.project.dependencies.update_dependency_index_config",
+    # Project page (sections)
+    "fetch_project_meta": "frontend_migrated.pages.project.sections.fetch_project_meta",
+    "fetch_project_meta_route": "frontend_migrated.pages.project.route.fetch_project_meta",
+    "fetch_requirements_data_sections": "frontend_migrated.pages.project.sections.fetch_requirements_data",
+    # Project page (scaffold)
+    "fetch_project_meta_scaffold": "frontend_migrated.pages.project.scaffold.fetch_project_meta",
+    "fetch_components_scaffold": "frontend_migrated.pages.project.scaffold.fetch_components",
+    "project_file_tree_scaffold": "frontend_migrated.pages.project.scaffold.ProjectFileTree",
 }
 
 

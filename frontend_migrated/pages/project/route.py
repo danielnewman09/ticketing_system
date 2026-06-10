@@ -10,6 +10,7 @@ import os
 
 from nicegui import ui
 
+from frontend_migrated.theme import apply_theme
 from frontend_migrated.layout import page_layout
 from frontend_migrated.data.project import fetch_project_meta
 from frontend_migrated.pages.project.sections import (
@@ -23,6 +24,7 @@ from frontend_migrated.pages.project.scaffold import section_scaffold
 
 @ui.page("/")
 async def project_page():
+    apply_theme()
     page_layout("Project")
 
     await section_project_meta()

@@ -266,3 +266,80 @@ def make_llr_dict(
         "description": description,
         "composes": verification_methods,
     }
+
+
+# ---------------------------------------------------------------------------
+# Environment data factories (for dependency table)
+# ---------------------------------------------------------------------------
+
+
+def make_dep_dict(
+    *,
+    name: str = "boost",
+    refid: str = "conan::boost",
+    github_url: str = "https://github.com/boostorg/boost",
+    version: str = "1.82.0",
+    is_dev: bool = False,
+    manager_name: str = "conan",
+    index_file_patterns: str = "*.h *.hpp",
+    index_subdir: str = "",
+    index_exclude_patterns: str = "",
+    index_recursive: bool = True,
+    component_names: list[str] | None = None,
+) -> dict:
+    """Build a serialized dependency dict for ``fetch_environment_data()``.
+
+    Matches the structure returned by ``Dependency.serialize(fields='all')``
+    plus the ``components`` key added by the data layer.
+    """
+    if component_names is None:
+        component_names = ["Calculator"]
+
+    return {
+        "refid": refid,
+        "id": refid,
+        "name": name,
+        "github_url": github_url,
+        "version": version,
+        "is_dev": is_dev,
+        "manager_name": manager_name,
+        "index_file_patterns": index_file_patterns,
+        "index_subdir": index_subdir,
+        "index_exclude_patterns": index_exclude_patterns,
+        "index_recursive": index_recursive,
+        "components": [{"name": n} for n in component_names],
+    }
+
+
+def make_env_data(
+    *,
+    languages: list[dict] | None = None,
+) -> list[dict]:
+    """Build a mock return value for ``fetch_environment_data()``.
+
+    If *languages* is None, returns a single C++ language with two
+    dependencies (boost and eigen).  Each language dict has the
+    ``dependencies`` key populated with serialized dependency dicts.
+    """
+    if languages is not None:
+        return languages
+
+    return [
+        {
+            "name": "C++",
+            "version": "20",
+            "dependencies": [
+                make_dep_dict(name="boost", component_names=["Calculator"]),
+                make_dep_dict(
+                    name="eigen",
+                    refid="conan::eigen",
+                    github_url="https://gitlab.com/libeigen/eigen",
+                    version="3.4.0",
+                    component_names=["Calculator", "UI"],
+                ),
+            ],
+            "build_systems": [],
+            "test_frameworks": [],
+            "dependency_managers": [],
+        },
+    ]
