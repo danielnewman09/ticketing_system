@@ -3,6 +3,8 @@
 Component nodes live in Neo4j and are managed via neomodel.
 ``fetch_components`` returns node objects for UI dropdowns and pages.
 ``get_component`` looks up a single component by refid.
+``create_component`` creates a new Component node with optional
+parent and language relationships.
 
 Other functions remain stubs until their pages are migrated.
 
@@ -16,7 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from backend_migrated.models import Component
+from backend_migrated.models import Component, Language
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +45,55 @@ def fetch_components() -> list[Component]:
     on the node object.
     """
     return sorted(Component.nodes.all(), key=lambda c: c.name)
+
+
+# ---------------------------------------------------------------------------
+# Create
+# ---------------------------------------------------------------------------
+
+
+def create_component(
+    name: str,
+    description: str = "",
+    namespace: str = "",
+    parent_refid: str | None = None,
+    language_name: str | None = None,
+) -> Component:
+    """Create a new Component node in Neo4j.
+
+    Args:
+        name: Component name (e.g. "calculation_engine").
+        description: Human-readable description.
+        namespace: Code-level namespace (e.g. "calculation_engine::").
+        parent_refid: Optional refid of the parent Component.
+        language_name: Optional language name to link via WRITTEN_IN
+            (e.g. "C++").  If the Language node doesn't exist it is created.
+
+    Returns:
+        The newly created Component node.
+    """
+    comp = Component(name=name, description=description, namespace=namespace)
+    comp.save()
+
+    if parent_refid:
+        parent = Component.nodes.get_or_none(refid=parent_refid)
+        if parent:
+            parent.children.connect(comp)
+
+    if language_name:
+        lang = Language.nodes.get_or_none(name=language_name)
+        if lang is None:
+            lang = Language(name=language_name)
+            lang.save()
+        comp.language.connect(lang)
+
+    log.info("Created component %s (refid=%s)", name, comp.refid)
+    return comp
+
+
+def fetch_languages() -> list[Language]:
+    """Return all Language nodes, sorted by name."""
+    return sorted(Language.nodes.all(), key=lambda l: l.name)
 
 
 # ---------------------------------------------------------------------------

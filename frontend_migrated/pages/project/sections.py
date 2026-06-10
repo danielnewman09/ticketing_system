@@ -19,6 +19,8 @@ from frontend_migrated.theme import (
 from frontend_migrated.data.project import fetch_project_meta, update_project_meta
 from frontend_migrated.layout import stat_card
 from frontend_migrated.data.hlr import fetch_requirements_data
+from frontend_migrated.data.components import fetch_components
+from frontend_migrated.pages.components import _is_environment
 
 
 # ---------------------------------------------------------------------------
@@ -133,15 +135,17 @@ def _open_vscode(path: str):
 
 async def section_stats():
     """Stat cards row — HLRs, LLRs, Components, Ontology Nodes."""
-    data = await asyncio.to_thread(fetch_requirements_data)
+    data, components = await asyncio.gather(
+        asyncio.to_thread(fetch_requirements_data),
+        asyncio.to_thread(fetch_components),
+    )
+    # Count non-Environment components directly from Neo4j rather than
+    # deriving the count from HLRs (which misses components with no HLRs).
+    comp_count = sum(1 for c in components if not _is_environment(c))
     with ui.row().classes("w-full gap-4 flex-wrap px-2 mt-4"):
         stat_card("HLRs", data["total_hlrs"], "blue-5")
         stat_card("LLRs", data["total_llrs"], "green-5")
-        stat_card(
-            "Components",
-            len({h["component"] for h in data["hlrs"] if h["component"]}),
-            "teal-5",
-        )
+        stat_card("Components", comp_count, "teal-5")
         stat_card("Ontology Nodes", data["total_nodes"], "purple-5")
 
 
