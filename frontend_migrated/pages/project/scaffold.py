@@ -8,11 +8,14 @@ status, file tree, and create/open actions).
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+
+log = logging.getLogger(__name__)
 
 from nicegui import ui
 
-from frontend_migrated.data.project import fetch_project_meta
+from frontend_migrated.data.project import fetch_project_meta, fetch_environment_data
 from frontend_migrated.data.components import fetch_components
 from frontend_migrated.pages.project.file_tree import ProjectFileTree
 from frontend_migrated.pages.project.vscode import open_directory
@@ -31,8 +34,9 @@ _SKILL_SCAFFOLD = os.path.join(_REPO_ROOT, "skills", "cpp-project-scaffold")
 class ScaffoldDialog:
     """Dialog for creating a project scaffold.
 
-    Pre-fills the libraries field with non-Environment component names.
-    On success, navigates to the project root (full page refresh).
+    Pre-fills the libraries field with non-Environment component names
+    and the dependencies field with any Dependency nodes already in
+    Neo4j.  On success, navigates to the project root (full page refresh).
     """
 
     def __init__(self, project_dir: str):
@@ -55,8 +59,27 @@ class ScaffoldDialog:
                 for c in components
                 if c.name != "Environment" and not c.name.startswith("Environment:")
             ]
-        except Exception:
+        except Exception as exc:
+            log.warning("Could not fetch components for scaffold dialog: %s", exc)
             lib_names = []
+
+        # Pre-fill dependencies from Neo4j — any Dependency nodes that
+        # the user has already registered (e.g. via the Add Dependency
+        # dialog on the project page).
+        dep_str = ""
+        try:
+            env_data = await asyncio.to_thread(fetch_environment_data)
+            dep_tokens: list[str] = []
+            for lang in env_data:
+                for dep in lang.get("dependencies", []):
+                    name = dep.get("name", "")
+                    version = dep.get("version", "")
+                    if name:
+                        token = f"{name}/{version}" if version else name
+                        dep_tokens.append(token)
+            dep_str = ", ".join(dep_tokens)
+        except Exception as exc:
+            log.warning("Could not fetch environment data for scaffold dialog: %s", exc)
 
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes("w-[480px]"):
@@ -72,9 +95,13 @@ class ScaffoldDialog:
                 placeholder="e.g. core, physics, rendering",
             ).classes("w-full")
             self._deps_input = ui.input(
-                "Extra Conan dependencies (optional)",
+                "Conan dependencies",
+                value=dep_str,
                 placeholder="e.g. eigen/3.4.0, spdlog/1.14.1",
             ).classes("w-full")
+            self._deps_input.props(
+                'hint="Pre-filled from registered dependencies — edit as needed"'
+            )
             self._cpp_select = ui.select(
                 {20: "C++20", 23: "C++23", 26: "C++26"},
                 value=20,
@@ -126,8 +153,8 @@ class ScaffoldDialog:
                 import llm_caller.skill_runner as _sr
                 if not _sr.call_tool_loop.__qualname__.startswith("install_hooks"):
                     _sr.call_tool_loop = _tl.call_tool_loop
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Could not patch call_tool_loop: %s", exc)
 
             result = await asyncio.to_thread(
                 scaffold_project,
@@ -142,6 +169,21 @@ class ScaffoldDialog:
                 ui.notify("Project scaffolded and build verified!", type="positive")
             else:
                 ui.notify("Project scaffolded (build not verified)", type="warning")
+
+            # Sync the project environment to Neo4j so that
+            # Language/Component/Dependency nodes exist for the
+            # dependency table and project view.
+            project_dir = os.path.join(
+                meta.get("working_directory", ""),
+                meta.get("name", ""),
+            )
+            if project_dir:
+                try:
+                    from frontend_migrated.data.environment import sync_project_environment
+                    await asyncio.to_thread(sync_project_environment, project_dir)
+                except Exception as exc:
+                    log.warning("sync_project_environment after scaffold failed: %s", exc)
+
             ui.navigate.to("/")
         except Exception as e:
             ui.notify(f"Scaffold failed: {e}", type="negative")
@@ -199,6 +241,7 @@ async def section_scaffold(meta: dict, project_dir: str = ""):
                 cmake_tree = tree.cmake_tree()
                 if cmake_tree:
                     tree.render(cmake_tree)
-            except Exception:
+            except Exception as exc:
                 # Neo4J unreachable — still show the card, just skip the tree
+                log.debug("File tree render failed: %s", exc)
                 ui.label("(File tree unavailable)").classes("text-xs text-gray-500")

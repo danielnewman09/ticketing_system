@@ -1,8 +1,11 @@
 """Components page — list of architectural components with add dialog."""
 
 import asyncio
+import logging
 
 from nicegui import ui
+
+log = logging.getLogger(__name__)
 
 from frontend_migrated.theme import (
     apply_theme,
@@ -79,7 +82,8 @@ class AddComponentDialog:
         try:
             self._all_components = await asyncio.to_thread(fetch_components)
             self._all_languages = await asyncio.to_thread(fetch_languages)
-        except Exception:
+        except Exception as exc:
+            log.warning("Could not fetch components: %s", exc)
             self._all_components = []
             self._all_languages = []
 

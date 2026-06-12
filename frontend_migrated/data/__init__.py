@@ -50,6 +50,7 @@ from frontend_migrated.data.ontology import (
     resolve_node_id_by_qualified_name,
     update_member_type,
 )
+from frontend_migrated.data.environment import sync_project_environment
 from frontend_migrated.data.project import (
     fetch_environment_data,
     fetch_project_meta,
@@ -61,6 +62,7 @@ __all__ = [
     "fetch_project_meta",
     "update_project_meta",
     "fetch_environment_data",
+    "sync_project_environment",
     # hlr
     "fetch_requirements_data",
     "fetch_hlr_detail",

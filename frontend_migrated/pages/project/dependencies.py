@@ -1,15 +1,15 @@
 """Project dependency management — panel, dialogs, and data transforms.
 
 Contains the refreshable dependency table (:class:`DependencyPanel`),
-two form dialogs (:class:`IntegrateDialog`, :class:`IndexConfigDialog`),
-pure data transforms for flattening and formatting dependency data,
-and the Vue slot templates used by the table.
+three form dialogs (:class:`AddDependencyDialog`, :class:`IntegrateDialog`,
+:class:`IndexConfigDialog`), pure data transforms for flattening and
+formatting dependency data, and the Vue slot templates used by the table.
 
 Layout pattern
 ~~~~~~~~~~~~~~
 - **Classes** for stateful sections that own refreshable UI or mutable
-  dialog state (``DependencyPanel``, ``IntegrateDialog``,
-  ``IndexConfigDialog``).
+  dialog state (``DependencyPanel``, ``AddDependencyDialog``,
+  ``IntegrateDialog``, ``IndexConfigDialog``).
 - **Free functions** for stateless data transforms (``_flatten_deps``,
   ``_build_dep_columns``, ``_build_dep_rows``).
 - **Module constants** for static Vue templates (``_SLOT_STATUS``, etc.).
@@ -18,6 +18,7 @@ Layout pattern
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import Callable
 
@@ -26,10 +27,14 @@ from nicegui import ui
 from frontend_migrated.theme import CLS_DIALOG_MD, CLS_DIALOG_TITLE, CLS_DIALOG_ACTIONS
 from frontend_migrated.data.project import fetch_environment_data
 from frontend_migrated.data.components import (
+    add_dependency,
     delete_dependency,
+    fetch_components,
     update_dependency_index_config,
 )
 from frontend_migrated.pages.project.file_tree import ProjectFileTree
+
+log = logging.getLogger(__name__)
 
 _REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -47,13 +52,17 @@ _SKILL_INTEGRATE = os.path.join(_REPO_ROOT, "skills", "add-conan-dependency")
 def _flatten_deps(
     env_data: list[dict],
     conan_deps: dict[str, str],
-    has_project_dir: bool,
+    project_scaffolded: bool,
 ) -> list[dict]:
     """Flatten language→dependency nesting into a single list with status.
 
     Each dependency dict gains ``language`` (e.g. ``"C++ 20"``) and
-    ``integration_status`` (``"indexed"``, ``"integrated"``,
-    ``"not in build"``, or ``"unknown"``) keys.
+    ``integration_status`` keys.  Status values:
+
+    - ``"indexed"``     — in conanfile AND indexed in Neo4j
+    - ``"integrated"``  — in conanfile but not yet indexed
+    - ``"not in build"`` — NOT in conanfile but project is scaffolded
+    - ``"registered"``  — declared in Neo4j but project not yet scaffolded
     """
     all_deps: list[dict] = []
     for lang in env_data:
@@ -62,10 +71,12 @@ def _flatten_deps(
             lang_label += f" {lang['version']}"
         for dep in lang.get("dependencies", []):
             dep_lower = dep["name"].lower()
-            status = conan_deps.get(
-                dep_lower,
-                "not in build" if has_project_dir else "unknown",
-            )
+            if dep_lower in conan_deps:
+                status = conan_deps[dep_lower]
+            elif project_scaffolded:
+                status = "not in build"
+            else:
+                status = "registered"
             all_deps.append({**dep, "language": lang_label, "integration_status": status})
     return all_deps
 
@@ -122,9 +133,9 @@ def _build_dep_rows(all_deps: list[dict]) -> list[dict]:
 _SLOT_STATUS = r"""
     <q-td :props="props">
         <q-badge
-            :color="props.value === 'indexed' ? 'positive' : props.value === 'integrated' ? 'info' : props.value === 'not in build' ? 'negative' : 'grey'"
+            :color="props.value === 'indexed' ? 'positive' : props.value === 'integrated' ? 'info' : props.value === 'not in build' ? 'negative' : props.value === 'registered' ? 'grey-7' : 'grey'"
             class="text-xs"
-        >{{ props.value }}</q-badge>
+        >{{ props.value === 'registered' ? 'registered' : props.value }}</q-badge>
     </q-td>
 """
 
@@ -153,17 +164,17 @@ _SLOT_ACTIONS = r"""
             @click="$parent.$emit('reindex', props.row)">
             <q-tooltip>Index into documentation graph</q-tooltip>
         </q-btn>
-        <q-btn v-if="props.row.status !== 'not in build'"
+        <q-btn v-if="props.row.status !== 'not in build' && props.row.status !== 'registered'"
             flat round dense size="xs" icon="settings"
             class="text-gray-400"
             @click="$parent.$emit('configure', props.row)">
             <q-tooltip>Configure indexing</q-tooltip>
         </q-btn>
-        <q-btn v-if="props.row.unused"
+        <q-btn v-if="props.row.unused || props.row.status === 'registered'"
             flat round dense size="xs" icon="delete"
             class="text-red-400"
             @click="$parent.$emit('remove', props.row)">
-            <q-tooltip>Remove unused dependency</q-tooltip>
+            <q-tooltip>Remove dependency</q-tooltip>
         </q-btn>
     </q-td>
 """
@@ -172,6 +183,149 @@ _SLOT_ACTIONS = r"""
 # ---------------------------------------------------------------------------
 # Dialog classes
 # ---------------------------------------------------------------------------
+
+
+class AddDependencyDialog:
+    """Dialog for adding a dependency before or after scaffolding.
+
+    Creates a Dependency node in Neo4j and connects it to the
+    selected Component via DEPENDS_ON.  On success, refreshes the
+    dependency table.
+    """
+
+    def __init__(self, on_done: Callable | None = None):
+        self._on_done = on_done
+        self._dialog = None
+        self._name_input = None
+        self._version_input = None
+        self._url_input = None
+        self._comp_select = None
+        self._all_components: list = []
+
+    async def show(self):
+        """Build and open the dialog.
+
+        Must be called from an async NiceGUI event handler so the
+        slot context is preserved for UI element creation.
+        """
+        try:
+            self._all_components = await asyncio.to_thread(fetch_components)
+        except Exception as exc:
+            log.warning("Could not fetch components for Add Dependency dialog: %s", exc)
+            self._all_components = []
+
+        # Use a list of strings for component options so new_value_mode="add"
+        # works without a key_generator (dict options require one).
+        comp_names = [
+            c.name
+            for c in self._all_components
+            if c.name != "Environment" and not c.name.startswith("Environment:")
+        ]
+        # Build a name→refid lookup for resolving the selection at submit time.
+        self._comp_name_to_refid = {
+            c.name: c.refid
+            for c in self._all_components
+            if c.name != "Environment" and not c.name.startswith("Environment:")
+        }
+
+        self._dialog = ui.dialog()
+        with self._dialog, ui.card().classes("w-[480px]"):
+            ui.label("Add Dependency").classes("text-lg font-bold mb-2")
+            ui.label(
+                "Register a third-party dependency. It will appear in the "
+                "dependency table and be included when you scaffold the project."
+            ).classes("text-sm text-gray-400 mb-3")
+
+            self._name_input = ui.input(
+                "Dependency name",
+                placeholder="e.g. spdlog, eigen, fmt",
+            ).classes("w-full")
+            self._name_input.props('hint="Required — Conan package name"')
+
+            self._version_input = ui.input(
+                "Version",
+                placeholder="e.g. 1.14.1",
+            ).classes("w-full")
+
+            self._url_input = ui.input(
+                "GitHub / Source URL (optional)",
+                placeholder="e.g. https://github.com/gabime/spdlog",
+            ).classes("w-full")
+
+            self._comp_select = ui.select(
+                label="Component",
+                options=comp_names,
+                value=None,
+                with_input=True,
+                new_value_mode="add",
+            ).classes("w-full")
+            self._comp_select.props('hint="Which component uses this dependency"')
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancel", on_click=self._dialog.close).props("flat size=sm")
+                ui.button(
+                    "Add", icon="add", on_click=self._run
+                ).props("color=primary size=sm")
+
+        self._dialog.open()
+
+    async def _run(self):
+        dep_name = self._name_input.value.strip()
+        if not dep_name:
+            ui.notify("Dependency name is required", type="warning")
+            return
+
+        version = self._version_input.value.strip()
+        github_url = self._url_input.value.strip()
+        comp_name = self._comp_select.value
+        component_refid = self._comp_name_to_refid.get(comp_name) if comp_name else None
+
+        # Guard against empty-string refids (components created before
+        # the refid-autogeneration fix).  Try a name-based lookup instead.
+        if comp_name and not component_refid:
+            try:
+                from backend_migrated.models import Component as _Comp
+                existing = _Comp.nodes.get_or_none(name=comp_name)
+                if existing and existing.refid:
+                    component_refid = existing.refid
+            except Exception as exc:
+                log.debug("Component name fallback lookup failed: %s", exc)
+
+        # If the user typed a new component name (not already in Neo4j),
+        # create the component first.
+        if comp_name and not component_refid:
+            try:
+                from frontend_migrated.data.components import create_component
+
+                comp = await asyncio.to_thread(
+                    create_component,
+                    name=comp_name,
+                    language_name="C++",
+                )
+                component_refid = comp.refid
+                ui.notify(
+                    f"Created component '{comp.name}' for dependency",
+                    type="info",
+                )
+            except Exception as exc:
+                ui.notify(f"Failed to create component: {exc}", type="negative")
+                return
+
+        try:
+            refid = await asyncio.to_thread(
+                add_dependency,
+                dep_name=dep_name,
+                version=version,
+                github_url=github_url,
+                manager_name="conan",
+                component_refid=component_refid or None,
+            )
+            ui.notify(f"Added dependency '{dep_name}'", type="positive")
+            self._dialog.close()
+            if self._on_done:
+                self._on_done()
+        except Exception as exc:
+            ui.notify(f"Failed to add dependency: {exc}", type="negative")
 
 
 class IntegrateDialog:
@@ -349,10 +503,10 @@ class IndexConfigDialog:
                 self._exclude.value.strip(),
                 self._recursive.value,
             )
-        except NotImplementedError:
+        except Exception as exc:
             ui.notify(
-                "Index config not yet available in migrated backend",
-                type="warning",
+                f"Failed to save index config: {exc}",
+                type="negative",
             )
             self._dialog.close()
             return
@@ -385,6 +539,7 @@ class DependencyPanel:
     def __init__(self, project_dir: str):
         self._project_dir = project_dir
         self._tree: ProjectFileTree | None = None
+        self._add_dep = None
         self._integrate = None
         self._config = None
         self._refreshable = None
@@ -401,20 +556,29 @@ class DependencyPanel:
         """Conan integration status — returns {} on any failure."""
         try:
             return self._get_tree().conan_dependency_status()
-        except Exception:
+        except Exception as exc:
+            log.debug("conan_dependency_status failed: %s", exc)
             return {}
 
     def _conan_tree(self) -> list:
         """Conan file tree — returns [] on any failure."""
         try:
             return self._get_tree().conan_tree()
-        except Exception:
+        except Exception as exc:
+            log.debug("conan_tree failed: %s", exc)
             return []
+
+    def _project_scaffolded(self) -> bool:
+        """Whether the project has been scaffolded on disk."""
+        if not self._project_dir:
+            return False
+        return os.path.isfile(os.path.join(self._project_dir, "CMakeLists.txt"))
 
     # -- public API ----------------------------------------------------------
 
     async def render(self):
         """Initial render — create persistent dialogs, then mount table."""
+        self._add_dep = AddDependencyDialog(on_done=self.refresh)
         self._integrate = IntegrateDialog(self._project_dir, on_done=self.refresh)
         self._config = IndexConfigDialog(on_done=self.refresh)
 
@@ -434,24 +598,38 @@ class DependencyPanel:
 
     async def _render_table(self):
         conan_deps = self._conan_status()
+        project_scaffolded = self._project_scaffolded()
         try:
             env_data = await asyncio.to_thread(fetch_environment_data)
-        except Exception:
+        except Exception as exc:
+            log.warning("fetch_environment_data failed: %s", exc)
             env_data = []
 
-        all_deps = _flatten_deps(env_data, conan_deps, bool(self._project_dir))
+        all_deps = _flatten_deps(env_data, conan_deps, project_scaffolded)
 
         with ui.card().classes("w-full mx-2 mt-4"):
-            ui.label("Dependency Management").classes("text-sm font-semibold mb-2")
+            with ui.row().classes("w-full items-center justify-between"):
+                ui.label("Dependency Management").classes("text-sm font-semibold")
+                ui.button(
+                    "Add Dependency",
+                    icon="add",
+                    on_click=lambda: self._add_dep.show(),
+                ).props("outline size=sm color=primary")
 
             if not env_data:
-                ui.label("No language environment data available.").classes(
-                    "text-sm text-gray-500"
-                )
+                ui.label(
+                    "No components with a language set yet. "
+                    "Create a component and assign a language first."
+                ).classes("text-sm text-gray-500 mt-2")
             elif not all_deps:
-                ui.label("No dependencies configured.").classes(
-                    "text-sm text-gray-500"
-                )
+                with ui.row().classes("items-center gap-2 mt-2"):
+                    ui.label("No dependencies registered.").classes(
+                        "text-sm text-gray-500"
+                    )
+                    ui.button(
+                        "Add one",
+                        on_click=lambda: self._add_dep.show(),
+                    ).props("flat dense size=sm color=primary")
             else:
                 columns = _build_dep_columns()
                 rows = _build_dep_rows(all_deps)
@@ -474,7 +652,7 @@ class DependencyPanel:
                 tbl.on("configure", _configure)
                 tbl.on("remove", lambda e: self._on_delete(e.args))
 
-        if self._project_dir:
+        if project_scaffolded:
             conan_files = self._conan_tree()
             if conan_files:
                 ui.separator().classes("my-2")
@@ -485,10 +663,10 @@ class DependencyPanel:
         dep_name = row.get("name", "")
         try:
             await asyncio.to_thread(delete_dependency, dep_refid)
-        except NotImplementedError:
+        except Exception as exc:
             ui.notify(
-                "Delete not yet available in migrated backend",
-                type="warning",
+                f"Failed to remove dependency: {exc}",
+                type="negative",
             )
             return
         ui.notify(f"Removed {dep_name}", type="info")

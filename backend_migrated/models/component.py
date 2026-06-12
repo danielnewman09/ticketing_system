@@ -119,6 +119,17 @@ class Component(StructuredNode, CodeGraphNode):
     requirements = RelationshipTo(
         'backend_migrated.models.requirement.HLR', 'COMPOSES')
 
+    # --- Project membership ---------------------------------------------------
+    #
+    #  • COMPOSES (incoming)  — ProjectMeta → Component
+    #    The project that this component belongs to.  Traversed via
+    #    ``project``.  Every top-level component should have an incoming
+    #    COMPOSES edge from the ProjectMeta singleton.
+    # --------------------------------------------------------------------------
+
+    project = RelationshipFrom(
+        'backend_migrated.models.project.ProjectMeta', 'COMPOSES')
+
     # --- Serialization contract ---
     _llm_fields: set[str] = {
         "name", "description", "namespace",

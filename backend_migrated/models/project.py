@@ -10,7 +10,7 @@ needs the project meta should call
 ``frontend_migrated.data.project``.
 """
 
-from neomodel import StringProperty
+from neomodel import StringProperty, RelationshipTo
 
 from codegraph.models.tags import CodeGraphNode
 
@@ -26,6 +26,12 @@ class ProjectMeta(StructuredNode, CodeGraphNode):
     instance is identified by ``refid = "project"``, which serves as
     the unique lookup key (replacing the SQLAlchemy auto-increment
     ``id=1`` pattern).
+
+    ProjectMeta COMPOSES Components — the project owns its top-level
+    components in the same way that a Component COMPOSES sub-components
+    or HLRs.  This edge lets the project page discover all components
+    directly from the ProjectMeta node without relying solely on the
+    Language→Component traversal.
 
     Attributes:
         name: Project name (e.g. 'calculator-engine'), inherited from
@@ -44,6 +50,23 @@ class ProjectMeta(StructuredNode, CodeGraphNode):
     working_directory = StringProperty(default="",
         help_text="Filesystem path where the project lives "
                   "(e.g. '/home/user/dev/calculator-engine').")
+
+    # --- COMPOSES relationship to Components ---
+    #
+    #  • COMPOSES (outgoing)  — ProjectMeta → Component
+    #    The project directly composes its top-level components.
+    #    This mirrors the Component→Component COMPOSES edge used for
+    #    sub-components, giving a uniform hierarchy:
+    #
+    #      ProjectMeta -[:COMPOSES]-> Component -[:COMPOSES]-> Component
+    #                                              ↕
+    #                                    HLR -[:COMPOSES]-> LLR
+    #
+    #    The reverse traversal (Component→ProjectMeta) is available
+    #    via the ``project`` relationship.
+    # --------------------------------------------------------------------------
+    components = RelationshipTo(
+        'backend_migrated.models.component.Component', 'COMPOSES')
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {
