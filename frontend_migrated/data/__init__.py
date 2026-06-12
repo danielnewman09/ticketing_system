@@ -51,6 +51,7 @@ from frontend_migrated.data.ontology import (
     update_member_type,
 )
 from frontend_migrated.data.environment import sync_project_environment
+from frontend_migrated.data.tags import sync_all_tags, sync_dependency_tags, sync_component_tags, sync_language_tags, sync_project_tags
 from frontend_migrated.data.project import (
     fetch_environment_data,
     fetch_project_meta,
@@ -63,6 +64,12 @@ __all__ = [
     "update_project_meta",
     "fetch_environment_data",
     "sync_project_environment",
+    # tags
+    "sync_all_tags",
+    "sync_dependency_tags",
+    "sync_component_tags",
+    "sync_language_tags",
+    "sync_project_tags",
     # hlr
     "fetch_requirements_data",
     "fetch_hlr_detail",

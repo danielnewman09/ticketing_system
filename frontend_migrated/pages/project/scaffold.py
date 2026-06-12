@@ -183,6 +183,11 @@ class ScaffoldDialog:
                     await asyncio.to_thread(sync_project_environment, project_dir)
                 except Exception as exc:
                     log.warning("sync_project_environment after scaffold failed: %s", exc)
+                try:
+                    from frontend_migrated.data.tags import sync_all_tags
+                    await asyncio.to_thread(sync_all_tags, project_dir)
+                except Exception as exc:
+                    log.warning("sync_all_tags after scaffold failed: %s", exc)
 
             ui.navigate.to("/")
         except Exception as e:

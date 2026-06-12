@@ -13,6 +13,7 @@ from nicegui import ui
 from frontend_migrated.theme import apply_theme
 from frontend_migrated.layout import page_layout
 from frontend_migrated.data.environment import sync_project_environment
+from frontend_migrated.data.tags import sync_all_tags
 from frontend_migrated.data.project import fetch_project_meta
 from frontend_migrated.pages.project.sections import (
     section_project_meta,
@@ -61,6 +62,18 @@ async def project_page():
             # Sync is best-effort — don't block the page if it fails
             import logging
             logging.getLogger(__name__).warning("sync_project_environment failed: %s", exc)
+
+    # Sync workflow tags on all node types based on deterministic
+    # state checks (filesystem presence, conanfile contents, etc.).
+    # Tags are mutually exclusive within each phase (e.g. a
+    # dependency is exactly one of: registered, missing, integrated,
+    # indexed).
+    if project_dir:
+        try:
+            await asyncio.to_thread(sync_all_tags, project_dir)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("sync_all_tags failed: %s", exc)
 
     await section_stats()
     await section_dependencies(project_dir)

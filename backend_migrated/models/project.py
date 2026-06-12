@@ -10,7 +10,7 @@ needs the project meta should call
 ``frontend_migrated.data.project``.
 """
 
-from neomodel import StringProperty, RelationshipTo
+from neomodel import StringProperty, ArrayProperty, RelationshipTo
 
 from codegraph.models.tags import CodeGraphNode
 
@@ -51,6 +51,17 @@ class ProjectMeta(StructuredNode, CodeGraphNode):
         help_text="Filesystem path where the project lives "
                   "(e.g. '/home/user/dev/calculator-engine').")
 
+    # --- Workflow tags ---
+    #
+    #  Tags reflect deterministic state checks on the project's lifecycle:
+    #
+    #  • "scaffolded"  — CMakeLists.txt exists on disk
+    #  • "passing"     — project builds successfully
+    #  • "failing"     — project build fails
+    #
+    tags = ArrayProperty(StringProperty(), default=list,
+        help_text="Workflow tags: 'scaffolded', 'passing', 'failing'.")
+
     # --- COMPOSES relationship to Components ---
     #
     #  • COMPOSES (outgoing)  — ProjectMeta → Component
@@ -70,7 +81,7 @@ class ProjectMeta(StructuredNode, CodeGraphNode):
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {
-        "name", "description", "working_directory",
+        "name", "description", "working_directory", "tags",
     }
 
     # ------------------------------------------------------------------

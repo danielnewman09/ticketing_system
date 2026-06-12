@@ -12,13 +12,21 @@ writing to SQLite, we write to Neo4j via neomodel.
 The sync is **idempotent** — running it multiple times produces the same
 result without creating duplicate nodes or relationships.
 
+**Tag policy**: this module does NOT set workflow tags on nodes.  Tag
+computation is the sole responsibility of
+:mod:`frontend_migrated.data.tags`, which runs after this module in the
+page-load sequence.  Nodes created here start with an empty ``tags``
+list; ``sync_all_tags()`` fills in the correct tags based on
+deterministic state checks.
+
 Usage::
 
     from frontend_migrated.data.environment import sync_project_environment
+    from frontend_migrated.data.tags import sync_all_tags
 
-    # After scaffolding or on page load:
-    env = sync_project_environment(project_dir)
-    # env is a dict suitable for passing to _flatten_deps()
+    # After scaffolding or on page load — sync nodes, then tags:
+    sync_project_environment(project_dir)
+    sync_all_tags(project_dir)
 """
 
 from __future__ import annotations
@@ -179,6 +187,9 @@ def _get_or_create_language(name: str, version: str = "") -> Language:
 
     Looks up by name first. If found, updates version if provided.
     If not found, creates a new Language node.
+
+    Tags are NOT set here — :func:`sync_language_tags` is the sole
+    authority for tag computation.
     """
     existing = Language.nodes.get_or_none(name=name)
     if existing is not None:
@@ -202,7 +213,11 @@ def _get_or_create_component(name: str, description: str = "",
                               parent_refid: str | None = None,
                               language_name: str | None = None,
                               language_version: str = "") -> Component:
-    """Get or create a Component node with optional language connection."""
+    """Get or create a Component node with optional language connection.
+
+    Tags are NOT set here — :func:`sync_component_tags` is the sole
+    authority for tag computation.
+    """
     # Look up by name (components should have unique names within a project)
     existing = Component.nodes.get_or_none(name=name)
     if existing is not None:
@@ -240,6 +255,9 @@ def _get_or_create_dependency(name: str, version: str = "",
 
     Looks up by refid (constructed from manager_name and name).
     If found, updates properties. If not found, creates a new node.
+
+    Tags are NOT set here — :func:`sync_dependency_tags` is the sole
+    authority for tag computation.
     """
     refid = f"{manager_name}::{name}" if manager_name else name.lower()
 
@@ -278,6 +296,10 @@ def sync_project_environment(project_dir: str = "") -> list[dict]:
 
     This function is **idempotent** — calling it multiple times will not
     create duplicate nodes or relationships.
+
+    **Important**: this function does NOT set workflow tags.  Call
+    :func:`~frontend_migrated.data.tags.sync_all_tags` afterwards to
+    compute the correct tags based on deterministic state checks.
 
     Args:
         project_dir: Absolute path to the project directory. If empty,

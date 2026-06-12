@@ -51,33 +51,53 @@ _SKILL_INTEGRATE = os.path.join(_REPO_ROOT, "skills", "add-conan-dependency")
 
 def _flatten_deps(
     env_data: list[dict],
-    conan_deps: dict[str, str],
-    project_scaffolded: bool,
 ) -> list[dict]:
     """Flatten language→dependency nesting into a single list with status.
 
-    Each dependency dict gains ``language`` (e.g. ``"C++ 20"``) and
-    ``integration_status`` keys.  Status values:
+    Each dependency dict gains ``language`` (e.g. ``"C++ 20"``),
+    ``integration_status``, and ``health_tags`` keys.
 
-    - ``"indexed"``     — in conanfile AND indexed in Neo4j
-    - ``"integrated"``  — in conanfile but not yet indexed
-    - ``"not in build"`` — NOT in conanfile but project is scaffolded
-    - ``"registered"``  — declared in Neo4j but project not yet scaffolded
+    ``integration_status`` is derived from the dependency's workflow
+    tags — the single source of truth set by
+    :func:`~frontend_migrated.data.tags.sync_dependency_tags`.
+
+    Tag-to-status mapping:
+
+    - ``registered``  → ``"registered"``   — declared, not yet scaffolded
+    - ``missing``     → ``"not in build"``  — declared, scaffolded, absent from conanfile
+    - ``integrated``  → ``"integrated"``   — found in conanfile
+    - ``indexed``     → ``"indexed"``      — indexed into the doc graph
+
+    If a dependency has no presence tag at all (e.g. created before
+    the tag system), it defaults to ``"registered"``.
     """
+    _TAG_TO_STATUS = {
+        "registered": "registered",
+        "missing": "not in build",
+        "integrated": "integrated",
+        "indexed": "indexed",
+    }
+
     all_deps: list[dict] = []
     for lang in env_data:
         lang_label = lang["name"]
         if lang.get("version"):
             lang_label += f" {lang['version']}"
         for dep in lang.get("dependencies", []):
-            dep_lower = dep["name"].lower()
-            if dep_lower in conan_deps:
-                status = conan_deps[dep_lower]
-            elif project_scaffolded:
-                status = "not in build"
-            else:
-                status = "registered"
-            all_deps.append({**dep, "language": lang_label, "integration_status": status})
+            tags = dep.get("tags", [])
+            # Derive integration_status from presence tags
+            presence_tags = [t for t in tags if t in _TAG_TO_STATUS]
+            status = _TAG_TO_STATUS.get(presence_tags[0], "registered") if presence_tags else "registered"
+
+            # Extract health tags (passing/failing) for the row
+            health_tags = [t for t in tags if t in ("passing", "failing")]
+
+            all_deps.append({
+                **dep,
+                "language": lang_label,
+                "integration_status": status,
+                "health_tags": health_tags,
+            })
     return all_deps
 
 
@@ -92,6 +112,7 @@ def _build_dep_columns() -> list[dict]:
         {"name": "version", "label": "Version", "field": "version", "align": "left"},
         {"name": "components", "label": "Used in Components", "field": "components", "align": "left"},
         {"name": "status", "label": "Integration Status", "field": "status", "align": "left"},
+        {"name": "health", "label": "Health", "field": "health", "align": "center"},
         {"name": "language", "label": "Language", "field": "language", "align": "left"},
         {"name": "actions", "label": "", "field": "actions", "align": "right"},
     ]
@@ -101,12 +122,15 @@ def _build_dep_rows(all_deps: list[dict]) -> list[dict]:
     """Convert flattened dependency dicts into table row dicts.
 
     Adds convenience keys for the Vue action-slot templates:
-    ``unused`` (bool) and index-config fields with defaults.
+    ``unused`` (bool), ``health`` (passing/failing/empty), and
+    index-config fields with defaults.
     """
     rows: list[dict] = []
     for dep in all_deps:
         comps = dep.get("components", [])
         comp_names = ", ".join(c["name"] for c in comps) or "—"
+        health_tags = dep.get("health_tags", [])
+        health = health_tags[0] if health_tags else ""
         rows.append(
             {
                 "refid": dep.get("refid", dep.get("id", "")),
@@ -116,6 +140,7 @@ def _build_dep_rows(all_deps: list[dict]) -> list[dict]:
                 "components": comp_names,
                 "unused": len(comps) == 0,
                 "status": dep["integration_status"],
+                "health": health,
                 "language": dep["language"],
                 "index_file_patterns": dep.get("index_file_patterns", "*.h *.hpp"),
                 "index_subdir": dep.get("index_subdir", ""),
@@ -133,9 +158,17 @@ def _build_dep_rows(all_deps: list[dict]) -> list[dict]:
 _SLOT_STATUS = r"""
     <q-td :props="props">
         <q-badge
-            :color="props.value === 'indexed' ? 'positive' : props.value === 'integrated' ? 'info' : props.value === 'not in build' ? 'negative' : props.value === 'registered' ? 'grey-7' : 'grey'"
+            :color="props.value === 'indexed' ? 'positive' : props.value === 'integrated' ? 'info' : props.value === 'not in build' ? 'negative' : props.value === 'registered' ? 'grey-7' : props.value === 'missing' ? 'warning' : 'grey'"
             class="text-xs"
         >{{ props.value === 'registered' ? 'registered' : props.value }}</q-badge>
+    </q-td>
+"""
+
+_SLOT_HEALTH = r"""
+    <q-td :props="props">
+        <q-badge v-if="props.value === 'passing'" color="positive" class="text-xs">passing</q-badge>
+        <q-badge v-else-if="props.value === 'failing'" color="negative" class="text-xs">failing</q-badge>
+        <span v-else class="text-gray-400 text-xs">—</span>
     </q-td>
 """
 
@@ -552,14 +585,6 @@ class DependencyPanel:
             self._tree = ProjectFileTree()
         return self._tree
 
-    def _conan_status(self) -> dict[str, str]:
-        """Conan integration status — returns {} on any failure."""
-        try:
-            return self._get_tree().conan_dependency_status()
-        except Exception as exc:
-            log.debug("conan_dependency_status failed: %s", exc)
-            return {}
-
     def _conan_tree(self) -> list:
         """Conan file tree — returns [] on any failure."""
         try:
@@ -597,7 +622,6 @@ class DependencyPanel:
     # -- internals -----------------------------------------------------------
 
     async def _render_table(self):
-        conan_deps = self._conan_status()
         project_scaffolded = self._project_scaffolded()
         try:
             env_data = await asyncio.to_thread(fetch_environment_data)
@@ -605,7 +629,7 @@ class DependencyPanel:
             log.warning("fetch_environment_data failed: %s", exc)
             env_data = []
 
-        all_deps = _flatten_deps(env_data, conan_deps, project_scaffolded)
+        all_deps = _flatten_deps(env_data)
 
         with ui.card().classes("w-full mx-2 mt-4"):
             with ui.row().classes("w-full items-center justify-between"):
@@ -639,6 +663,7 @@ class DependencyPanel:
                     .props("dense flat")
                 )
                 tbl.add_slot("body-cell-status", _SLOT_STATUS)
+                tbl.add_slot("body-cell-health", _SLOT_HEALTH)
                 tbl.add_slot("body-cell-source_url", _SLOT_SOURCE_URL)
                 tbl.add_slot("body-cell-actions", _SLOT_ACTIONS)
                 async def _integrate(e):

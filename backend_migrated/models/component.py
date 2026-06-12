@@ -8,7 +8,8 @@ registry, and relationship introspection infrastructure.
 """
 
 from neomodel import (
-    StructuredNode, StringProperty, RelationshipTo, RelationshipFrom,
+    StructuredNode, StringProperty, ArrayProperty,
+    RelationshipTo, RelationshipFrom,
 )
 
 from codegraph.models.tags import CodeGraphNode
@@ -45,6 +46,18 @@ class Component(StructuredNode, CodeGraphNode):
     namespace = StringProperty(default="",
         help_text="Code-level namespace this component maps to "
                   "(e.g. 'calculation_engine::').")
+
+    # --- Workflow tags ---
+    #
+    #  Tags reflect deterministic state checks on the component's lifecycle:
+    #
+    #  • "declared"    — exists in Neo4j but no directory on disk
+    #  • "scaffolded"  — directory exists on disk (CMakeLists.txt present)
+    #  • "passing"     — component builds successfully
+    #  • "failing"     — component build fails
+    #
+    tags = ArrayProperty(StringProperty(), default=list,
+        help_text="Workflow tags: 'declared', 'scaffolded', 'passing', 'failing'.")
 
     # --- Self-referential hierarchy -------------------------------------------
     #
@@ -132,5 +145,5 @@ class Component(StructuredNode, CodeGraphNode):
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {
-        "name", "description", "namespace",
+        "name", "description", "namespace", "tags",
     }

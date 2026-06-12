@@ -10,7 +10,8 @@ future phase, this can become a MANAGED_BY relationship.
 """
 
 from neomodel import (
-    StructuredNode, StringProperty, BooleanProperty, RelationshipFrom,
+    StructuredNode, StringProperty, BooleanProperty, ArrayProperty,
+    RelationshipFrom,
 )
 
 from codegraph.models.tags import CodeGraphNode
@@ -67,6 +68,27 @@ class Dependency(StructuredNode, CodeGraphNode):
     index_recursive = BooleanProperty(default=True,
         help_text="Whether to index recursively.")
 
+    # --- Workflow tags ---
+    #
+    #  Tags reflect deterministic state checks on the dependency's lifecycle:
+    #
+    #  • "registered"   — declared in Neo4j, project not yet scaffolded
+    #  • "missing"       — declared in Neo4j, project scaffolded, but NOT
+    #                       found in conanfile.py (expected but absent)
+    #  • "integrated"    — found in conanfile.py (Conan knows about it)
+    #  • "indexed"       — indexed into the documentation graph (Doxygen)
+    #  • "passing"       — build/integration checks pass for this dep
+    #  • "failing"       — build/integration checks fail for this dep
+    #
+    #  Tags are mutually exclusive within a lifecycle phase.  For the
+    #  *presence* phase: exactly one of registered, missing, integrated.
+    #  For the *health* phase: passing or failing (or neither if not yet
+    #  checked).
+    #
+    tags = ArrayProperty(StringProperty(), default=list,
+        help_text="Workflow tags: 'registered', 'missing', 'integrated', "
+                  "'indexed', 'passing', 'failing'.")
+
     # --- Reverse relationships -------------------------------------------------
     #
     #  • DEPENDS_ON (incoming)  — Component → Dependency
@@ -81,5 +103,5 @@ class Dependency(StructuredNode, CodeGraphNode):
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {
-        "name", "version", "manager_name", "github_url", "is_dev",
+        "name", "version", "manager_name", "github_url", "is_dev", "tags",
     }
