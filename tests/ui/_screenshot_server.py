@@ -124,6 +124,7 @@ MOCK_ENV_DATA = [
                 "index_subdir": "",
                 "index_exclude_patterns": "",
                 "index_recursive": True,
+                "tags": ["integrated"],
                 "components": [{"name": "Calculator"}, {"name": "UI"}],
             },
             {
@@ -138,6 +139,7 @@ MOCK_ENV_DATA = [
                 "index_subdir": "Eigen",
                 "index_exclude_patterns": "",
                 "index_recursive": True,
+                "tags": ["indexed"],
                 "components": [{"name": "Calculator"}],
             },
             {
@@ -152,6 +154,7 @@ MOCK_ENV_DATA = [
                 "index_subdir": "fmt",
                 "index_exclude_patterns": "",
                 "index_recursive": False,
+                "tags": ["missing"],
                 "components": [],
             },
         ],
@@ -160,12 +163,6 @@ MOCK_ENV_DATA = [
         "dependency_managers": [],
     },
 ]
-
-MOCK_CONAN_STATUS = {
-    "boost": "integrated",
-    "eigen": "indexed",
-    "fmt": "not in build",
-}
 
 MOCK_REQUIREMENTS_DATA_FOR_PROJECT = {
     "hlrs": [],
@@ -198,14 +195,18 @@ _patches = [
     patch(P["design_single_hlr"], side_effect=NotImplementedError("stub")),
     patch(P["create_llr"], return_value="test::LLR-NEW"),
     patch(P["fetch_components_for_dialog"], return_value=MOCK_COMPONENTS),
-    # Project page — meta and stats
+    # Project page — stats
     patch(P["fetch_project_meta"], return_value=MOCK_PROJECT_META),
     patch(P["fetch_project_meta_route"], return_value=MOCK_PROJECT_META),
     patch(P["fetch_requirements_data_sections"], return_value=MOCK_REQUIREMENTS_DATA_FOR_PROJECT),
+    patch(P["fetch_components_sections"], return_value=MOCK_COMPONENTS),
     # Project page — dependencies
     patch(P["fetch_environment_data"], return_value=MOCK_ENV_DATA),
     patch(P["delete_dependency_dep"], side_effect=NotImplementedError("stub")),
     patch(P["update_dependency_index_config"], side_effect=NotImplementedError("stub")),
+    # Project page — route-level syncs (must not hit Neo4j)
+    patch("frontend_migrated.data.tags.sync_all_tags", return_value={"dependencies": 0, "components": 0, "languages": 0, "project": 0}),
+    patch("frontend_migrated.data.environment.sync_project_environment", return_value=[]),
     # Project page — scaffold
     patch(P["fetch_project_meta_scaffold"], return_value=MOCK_PROJECT_META),
     patch(P["fetch_components_scaffold"], return_value=MOCK_COMPONENTS),
@@ -214,7 +215,6 @@ _patches = [
 # -- Mock ProjectFileTree for dependencies and scaffold --
 
 _mock_tree = MagicMock()
-_mock_tree.conan_dependency_status.return_value = MOCK_CONAN_STATUS
 _mock_tree.cmake_tree.return_value = []
 _mock_tree.project_exists = True
 _mock_tree.project_dir = "/home/dev/projects/Calculator"

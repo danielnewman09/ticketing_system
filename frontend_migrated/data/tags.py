@@ -5,8 +5,10 @@ the system (filesystem + Neo4j) and apply them to nodes.  Tags are
 mutually exclusive within each phase — applying a new phase tag
 removes any prior tag in the same phase.
 
-Tag phases
-~~~~~~~~~~
+Workflow tags (this module)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+These tags reflect where a node is in its lifecycle:
+
 Dependency:
   - Presence: registered | missing | integrated | indexed
   - Health:   passing | failing  (or empty if not yet checked)
@@ -21,6 +23,21 @@ Language:
 ProjectMeta:
   - Presence: scaffolded  (or empty if not yet scaffolded)
   - Health:   passing | failing  (or empty if not yet checked)
+
+Provenance tags (set during indexing)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Code-level nodes (NamespaceNode, ClassNode, etc.) carry provenance
+tags to distinguish the *origin* of the code:
+
+  - ``"design"``      — from a design document or specification
+  - ``"as-built"``    — from the project's own source code
+  - ``"dependency"``  — from a third-party dependency's headers
+
+The ``"dependency"`` provenance tag is set by
+:func:`backend_migrated.codebase.indexing._tag_code_nodes_as_dependency`
+after doxygen-index ingests a dependency's headers into Neo4j.  It is
+**not** managed by this module — provenance tags are additive and
+never removed by workflow tag sync.
 
 Usage
 ~~~~~

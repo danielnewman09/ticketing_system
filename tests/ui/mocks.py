@@ -286,14 +286,27 @@ def make_dep_dict(
     index_exclude_patterns: str = "",
     index_recursive: bool = True,
     component_names: list[str] | None = None,
+    tags: list[str] | None = None,
 ) -> dict:
     """Build a serialized dependency dict for ``fetch_environment_data()``.
 
     Matches the structure returned by ``Dependency.serialize(fields='all')``
     plus the ``components`` key added by the data layer.
+
+    The ``tags`` key contains workflow tags set by ``sync_dependency_tags``.
+    Common values: ``"registered"``, ``"missing"``, ``"integrated"``,
+    ``"indexed"``, ``"passing"``, ``"failing"``.
     """
     if component_names is None:
         component_names = ["Calculator"]
+    if tags is None:
+        # Default: infer from name for realistic test data
+        tag_map = {
+            "boost": ["integrated"],
+            "eigen": ["indexed"],
+            "fmt": ["missing"],
+        }
+        tags = tag_map.get(name, ["integrated"])
 
     return {
         "refid": refid,
@@ -307,6 +320,7 @@ def make_dep_dict(
         "index_subdir": index_subdir,
         "index_exclude_patterns": index_exclude_patterns,
         "index_recursive": index_recursive,
+        "tags": tags,
         "components": [{"name": n} for n in component_names],
     }
 
@@ -320,6 +334,7 @@ def make_env_data(
     If *languages* is None, returns a single C++ language with two
     dependencies (boost and eigen).  Each language dict has the
     ``dependencies`` key populated with serialized dependency dicts.
+    Dependency dicts include ``tags`` from ``sync_dependency_tags``.
     """
     if languages is not None:
         return languages
@@ -329,12 +344,13 @@ def make_env_data(
             "name": "C++",
             "version": "20",
             "dependencies": [
-                make_dep_dict(name="boost", component_names=["Calculator"]),
+                make_dep_dict(name="boost", tags=["integrated"], component_names=["Calculator"]),
                 make_dep_dict(
                     name="eigen",
                     refid="conan::eigen",
                     github_url="https://gitlab.com/libeigen/eigen",
                     version="3.4.0",
+                    tags=["indexed"],
                     component_names=["Calculator", "UI"],
                 ),
             ],

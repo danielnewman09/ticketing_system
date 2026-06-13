@@ -41,16 +41,6 @@ async def project_page():
         else ""
     )
 
-    # Repair any Component nodes that have empty refids (created
-    # before the refid-autogeneration fix). Best-effort — don't
-    # block the page if it fails.
-    try:
-        from frontend_migrated.data.components import repair_component_refids
-        await asyncio.to_thread(repair_component_refids)
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("repair_component_refids failed: %s", exc)
-
     # Sync project environment from filesystem to Neo4j.
     # This ensures Language, Component, and Dependency nodes exist
     # for any project that has been scaffolded on disk but whose

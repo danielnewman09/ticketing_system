@@ -700,7 +700,7 @@ class DependencyPanel:
     async def _on_index(self, dep_name: str):
         ui.notify(f"Indexing {dep_name}…", type="info")
         try:
-            from backend.codebase.indexing import index_dependency
+            from backend_migrated.codebase.indexing import index_dependency
 
             result = await asyncio.to_thread(
                 index_dependency, self._project_dir, dep_name

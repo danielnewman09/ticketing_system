@@ -1,0 +1,1 @@
+"""Codebase indexing — migrated from SQLAlchemy to neomodel."""

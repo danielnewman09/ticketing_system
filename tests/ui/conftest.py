@@ -30,6 +30,8 @@ SCREENSHOT_DIR = Path(__file__).parent / "__screenshots__"
 PATCH_TARGETS = {
     # Component list page
     "fetch_components": "frontend_migrated.pages.components.fetch_components",
+    # Project stats (sections.py imports separately)
+    "fetch_components_sections": "frontend_migrated.pages.project.sections.fetch_components",
     # Component detail page
     "get_component": "frontend_migrated.pages.component_detail.get_component",
     "add_dependency": "frontend_migrated.pages.component_detail.add_dependency",

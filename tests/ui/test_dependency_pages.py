@@ -48,23 +48,13 @@ from tests.ui.conftest import PATCH_TARGETS as P
 # ---------------------------------------------------------------------------
 
 
-def make_conan_status(**overrides: str) -> dict[str, str]:
-    """Build a mock Conan integration status dict.
-
-    Maps lowercase dependency names to their status string:
-    ``"indexed"``, ``"integrated"``, or ``"not in build"``.
-    """
-    return {"boost": "integrated", "eigen": "indexed", **overrides}
-
-
-def make_mock_tree(conan_status: dict[str, str] | None = None, cmake_files: list | None = None):
+def make_mock_tree(cmake_files: list | None = None):
     """Build a mock ``ProjectFileTree`` that avoids Neo4J access.
 
-    Returns a MagicMock whose ``conan_dependency_status()`` and
-    ``cmake_tree()`` methods return predictable test data.
+    Returns a MagicMock whose ``cmake_tree()`` method returns
+    predictable test data.
     """
     tree = MagicMock()
-    tree.conan_dependency_status.return_value = conan_status or make_conan_status()
     tree.cmake_tree.return_value = cmake_files or []
     tree.project_exists = True
     tree.project_dir = "/tmp/test-project/Calculator"
@@ -121,7 +111,6 @@ def typical_env_data():
 def project_page_patches(
     *,
     env_data: list[dict] | None = None,
-    conan_status: dict[str, str] | None = None,
     project_meta: dict | None = None,
     requirements_data: dict | None = None,
     tree: MagicMock | None = None,
@@ -143,14 +132,19 @@ def project_page_patches(
     # Stats (called from sections.py)
     req_data = requirements_data or make_requirements_data()
     stack.enter_context(patch(P["fetch_requirements_data_sections"], return_value=req_data))
+    stack.enter_context(patch(P["fetch_components_sections"], return_value=[]))
 
     # Dependencies (called from dependencies.py)
     stack.enter_context(patch(P["fetch_environment_data"], return_value=env_data if env_data is not None else make_env_data()))
     stack.enter_context(patch(P["delete_dependency_dep"], side_effect=NotImplementedError("stub")))
     stack.enter_context(patch(P["update_dependency_index_config"], side_effect=NotImplementedError("stub")))
 
+    # Tag sync and environment sync (called from route.py on page load)
+    stack.enter_context(patch("frontend_migrated.pages.project.route.sync_all_tags", return_value={"dependencies": 0, "components": 0, "languages": 0, "project": 0}))
+    stack.enter_context(patch("frontend_migrated.pages.project.route.sync_project_environment", return_value=[]))
+
     # ProjectFileTree (used by dependencies.py and scaffold.py)
-    mock_tree_obj = tree or make_mock_tree(conan_status=conan_status)
+    mock_tree_obj = tree or make_mock_tree()
     stack.enter_context(
         patch("frontend_migrated.pages.project.dependencies.ProjectFileTree", return_value=mock_tree_obj)
     )
@@ -304,22 +298,105 @@ class TestFlattenDeps:
 
     def test_empty_env_data(self):
         from frontend_migrated.pages.project.dependencies import _flatten_deps
-        result = _flatten_deps([], {}, True)
+        result = _flatten_deps([])
         assert result == []
 
-    def test_language_with_version(self):
+    def test_tag_integrated(self):
+        """Tags are the source of truth — 'integrated' maps to status 'integrated'."""
         from frontend_migrated.pages.project.dependencies import _flatten_deps
         env = [{"name": "C++", "version": "20", "dependencies": [
             {"name": "boost", "refid": "conan::boost", "github_url": "", "version": "1.82.0",
              "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
              "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
+             "tags": ["integrated"],
              "components": [{"name": "Calculator"}]},
         ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
-        result = _flatten_deps(env, {"boost": "integrated"}, True)
+        result = _flatten_deps(env)
         assert len(result) == 1
         assert result[0]["name"] == "boost"
         assert result[0]["language"] == "C++ 20"
         assert result[0]["integration_status"] == "integrated"
+        assert result[0]["health_tags"] == []
+
+    def test_tag_indexed(self):
+        """Tags — 'indexed' maps to status 'indexed'."""
+        from frontend_migrated.pages.project.dependencies import _flatten_deps
+        env = [{"name": "C++", "version": "20", "dependencies": [
+            {"name": "eigen", "refid": "conan::eigen", "github_url": "", "version": "3.4.0",
+             "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
+             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
+             "tags": ["indexed"],
+             "components": [{"name": "Calculator"}]},
+        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
+        result = _flatten_deps(env)
+        assert result[0]["integration_status"] == "indexed"
+
+    def test_tag_missing_maps_to_not_in_build(self):
+        """Tags — 'missing' maps to status 'not in build'."""
+        from frontend_migrated.pages.project.dependencies import _flatten_deps
+        env = [{"name": "C++", "version": "20", "dependencies": [
+            {"name": "fmt", "refid": "conan::fmt", "github_url": "", "version": "10.2.1",
+             "is_dev": True, "manager_name": "conan", "index_file_patterns": "*.h",
+             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": False,
+             "tags": ["missing"],
+             "components": []},
+        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
+        result = _flatten_deps(env)
+        assert result[0]["integration_status"] == "not in build"
+
+    def test_tag_registered(self):
+        """Tags — 'registered' means declared but not yet scaffolded."""
+        from frontend_migrated.pages.project.dependencies import _flatten_deps
+        env = [{"name": "C++", "version": "20", "dependencies": [
+            {"name": "spdlog", "refid": "conan::spdlog", "github_url": "", "version": "1.14.1",
+             "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
+             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
+             "tags": ["registered"],
+             "components": [{"name": "Calculator"}]},
+        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
+        result = _flatten_deps(env)
+        assert result[0]["integration_status"] == "registered"
+
+    def test_no_tags_defaults_to_registered(self):
+        """If a dependency has no tags at all, defaults to 'registered'."""
+        from frontend_migrated.pages.project.dependencies import _flatten_deps
+        env = [{"name": "C++", "version": "20", "dependencies": [
+            {"name": "boost", "refid": "conan::boost", "github_url": "", "version": "1.82.0",
+             "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
+             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
+             "tags": [],
+             "components": [{"name": "Calculator"}]},
+        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
+        result = _flatten_deps(env)
+        assert result[0]["integration_status"] == "registered"
+
+    def test_health_tags_passing(self):
+        """Health tags — 'passing' appears in health_tags."""
+        from frontend_migrated.pages.project.dependencies import _flatten_deps
+        env = [{"name": "C++", "version": "20", "dependencies": [
+            {"name": "boost", "refid": "conan::boost", "github_url": "", "version": "1.82.0",
+             "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
+             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
+             "tags": ["integrated", "passing"],
+             "components": [{"name": "Calculator"}]},
+        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
+        result = _flatten_deps(env)
+        assert result[0]["integration_status"] == "integrated"
+        assert result[0]["health_tags"] == ["passing"]
+
+    def test_health_tags_failing(self):
+        """Health tags — 'failing' appears in health_tags."""
+        from frontend_migrated.pages.project.dependencies import _flatten_deps
+        env = [{"name": "C++", "version": "20", "dependencies": [
+            {"name": "boost", "refid": "conan::boost", "github_url": "", "version": "1.82.0",
+             "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
+             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
+             "tags": ["integrated", "failing"],
+             "components": [{"name": "Calculator"}]},
+        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
+        result = _flatten_deps(env)
+        assert result[0]["integration_status"] == "integrated"
+        assert result[0]["health_tags"] == ["failing"]
 
     def test_language_without_version(self):
         from frontend_migrated.pages.project.dependencies import _flatten_deps
@@ -327,33 +404,11 @@ class TestFlattenDeps:
             {"name": "requests", "refid": "pip::requests", "github_url": "", "version": "2.31.0",
              "is_dev": False, "manager_name": "pip", "index_file_patterns": "*.py",
              "index_subdir": "", "index_exclude_patterns": "", "index_recursive": False,
+             "tags": ["integrated"],
              "components": []},
         ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
-        result = _flatten_deps(env, {}, True)
+        result = _flatten_deps(env)
         assert result[0]["language"] == "Python"
-        assert result[0]["integration_status"] == "not in build"
-
-    def test_not_in_build_when_has_project_dir(self):
-        from frontend_migrated.pages.project.dependencies import _flatten_deps
-        env = [{"name": "C++", "version": "20", "dependencies": [
-            {"name": "boost", "refid": "conan::boost", "github_url": "", "version": "1.82.0",
-             "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
-             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
-             "components": []},
-        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
-        result = _flatten_deps(env, {}, True)
-        assert result[0]["integration_status"] == "not in build"
-
-    def test_unknown_when_no_project_dir(self):
-        from frontend_migrated.pages.project.dependencies import _flatten_deps
-        env = [{"name": "C++", "version": "20", "dependencies": [
-            {"name": "boost", "refid": "conan::boost", "github_url": "", "version": "1.82.0",
-             "is_dev": False, "manager_name": "conan", "index_file_patterns": "*.h",
-             "index_subdir": "", "index_exclude_patterns": "", "index_recursive": True,
-             "components": []},
-        ], "build_systems": [], "test_frameworks": [], "dependency_managers": []}]
-        result = _flatten_deps(env, {}, False)
-        assert result[0]["integration_status"] == "unknown"
 
 
 class TestBuildDepRows:
@@ -371,6 +426,7 @@ class TestBuildDepRows:
             "components": [{"name": "Calculator"}],
             "language": "C++ 20",
             "integration_status": "integrated",
+            "health_tags": [],
             "index_file_patterns": "*.h *.hpp",
             "index_subdir": "",
             "index_exclude_patterns": "",
@@ -383,6 +439,7 @@ class TestBuildDepRows:
         assert rows[0]["version"] == "1.82.0"
         assert rows[0]["components"] == "Calculator"
         assert rows[0]["status"] == "integrated"
+        assert rows[0]["health"] == ""
         assert rows[0]["language"] == "C++ 20"
         assert rows[0]["unused"] is False
 
@@ -398,6 +455,7 @@ class TestBuildDepRows:
             "components": [],
             "language": "C++ 20",
             "integration_status": "indexed",
+            "health_tags": [],
             "index_file_patterns": "*.h",
             "index_subdir": "Eigen",
             "index_exclude_patterns": "",
@@ -419,6 +477,7 @@ class TestBuildDepRows:
             "components": [{"name": "Calculator"}, {"name": "UI"}],
             "language": "C++ 20",
             "integration_status": "indexed",
+            "health_tags": [],
             "index_file_patterns": "*.h",
             "index_subdir": "",
             "index_exclude_patterns": "",
@@ -426,6 +485,48 @@ class TestBuildDepRows:
         }]
         rows = _build_dep_rows(all_deps)
         assert rows[0]["components"] == "Calculator, UI"
+
+    def test_health_passing(self):
+        from frontend_migrated.pages.project.dependencies import _build_dep_rows
+        all_deps = [{
+            "name": "boost",
+            "refid": "conan::boost",
+            "github_url": "",
+            "version": "1.82.0",
+            "is_dev": False,
+            "manager_name": "conan",
+            "components": [{"name": "Calculator"}],
+            "language": "C++ 20",
+            "integration_status": "integrated",
+            "health_tags": ["passing"],
+            "index_file_patterns": "*.h",
+            "index_subdir": "",
+            "index_exclude_patterns": "",
+            "index_recursive": True,
+        }]
+        rows = _build_dep_rows(all_deps)
+        assert rows[0]["health"] == "passing"
+
+    def test_health_failing(self):
+        from frontend_migrated.pages.project.dependencies import _build_dep_rows
+        all_deps = [{
+            "name": "boost",
+            "refid": "conan::boost",
+            "github_url": "",
+            "version": "1.82.0",
+            "is_dev": False,
+            "manager_name": "conan",
+            "components": [{"name": "Calculator"}],
+            "language": "C++ 20",
+            "integration_status": "integrated",
+            "health_tags": ["failing"],
+            "index_file_patterns": "*.h",
+            "index_subdir": "",
+            "index_exclude_patterns": "",
+            "index_recursive": True,
+        }]
+        rows = _build_dep_rows(all_deps)
+        assert rows[0]["health"] == "failing"
 
 
 class TestBuildDepColumns:
@@ -440,5 +541,6 @@ class TestBuildDepColumns:
         assert "version" in names
         assert "components" in names
         assert "status" in names
+        assert "health" in names
         assert "language" in names
         assert "actions" in names
