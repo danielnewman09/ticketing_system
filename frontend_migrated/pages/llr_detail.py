@@ -16,7 +16,7 @@ from frontend_migrated.theme import (
 )
 from frontend_migrated.layout import page_layout
 from frontend_migrated.widgets import render_verification_card, render_triples_card
-from frontend_migrated.data.llr import fetch_llr_detail, update_llr
+from frontend_migrated.data.llr import fetch_llr_detail, update_llr, update_verification
 
 
 def _short_refid(refid: str) -> str:
@@ -96,8 +96,12 @@ async def llr_detail_page(llr_id: str):
                         ).classes("text-sm no-underline mt-1")
 
                 if data["verifications"]:
+                    async def on_verification_save(vm_refid, raw_data):
+                        await asyncio.to_thread(update_verification, vm_refid, raw_data)
+                        content.refresh()
+
                     for v in data["verifications"]:
-                        render_verification_card(v)
+                        render_verification_card(v, on_save=on_verification_save)
                 else:
                     with ui.card().classes("w-full"):
                         ui.label("Verifications").classes(CLS_SECTION_HEADER)

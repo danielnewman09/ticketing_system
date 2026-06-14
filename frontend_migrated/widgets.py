@@ -700,49 +700,111 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
             table.on("delete", lambda e: on_delete(e.args))
 
 
-def render_verification_card(v):
-    """Render a single verification method as a card with conditions/actions."""
+def render_verification_card(v, on_save=None):
+    """Render a single verification method as a card with conditions/actions.
+
+    If *on_save* is provided, a toggle button appears in the card header
+    that switches between "Rendered" (the visual layout) and "Raw"
+    (an editable JSON textarea).  Changes saved from the raw view call
+    ``on_save(vm_refid, parsed_data)`` — the caller is responsible for
+    persisting and refreshing the page afterwards.
+    """
+    import json
     color = VERIFICATION_COLORS.get(v["method"], "grey")
+    # Serialisable form (exclude the immutable id)
+    raw_dict = {k: v for k, v in v.items() if k != "id"}
 
     with ui.card().classes("w-full"):
+        # Header
         with ui.row().classes("w-full items-center justify-between"):
             with ui.row().classes("items-center gap-2"):
                 ui.badge(v["method"], color=color).classes("text-xs")
                 if v["test_name"]:
                     ui.label(v["test_name"]).classes("text-sm font-mono text-gray-300")
+            if on_save:
+                ui.button(icon="code", on_click=lambda: _toggle_raw()).props("flat round size=xs").tooltip("Toggle raw editor")
 
-        if v["description"]:
-            ui.label(v["description"]).classes("text-xs text-gray-400 mt-1")
+        # Rendered view
+        rendered = ui.column().classes("w-full")
+        with rendered:
+            if v["description"]:
+                ui.label(v["description"]).classes("text-xs text-gray-400 mt-1")
 
-        if v["preconditions"]:
-            ui.separator().classes("my-2")
-            ui.label("Pre-conditions").classes(CLS_SECTION_SUBHEADER)
-            for c in v["preconditions"]:
-                with ui.row().classes("items-center gap-1"):
-                    ui.label(c["subject_qualified_name"]).classes("text-xs font-mono text-blue-300")
-                    ui.label(c["operator"]).classes("text-xs text-gray-500")
-                    ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
+            if v["preconditions"]:
+                ui.separator().classes("my-2")
+                ui.label("Pre-conditions").classes(CLS_SECTION_SUBHEADER)
+                for c in v["preconditions"]:
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label(c["subject_qualified_name"]).classes("text-xs font-mono text-blue-300")
+                        ui.label(c["operator"]).classes("text-xs text-gray-500")
+                        ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
 
-        if v["actions"]:
-            ui.separator().classes("my-2")
-            ui.label("Actions").classes(CLS_SECTION_SUBHEADER)
-            for i, a in enumerate(v["actions"], 1):
-                with ui.row().classes("items-center gap-2"):
-                    ui.badge(str(i), color="grey").props("rounded").classes("text-xs")
-                    ui.label(a["description"]).classes("text-xs")
-                    if a["callee_qualified_name"]:
-                        ui.label(a["callee_qualified_name"]).classes(
-                            "text-xs font-mono text-gray-500"
-                        )
+            if v["actions"]:
+                ui.separator().classes("my-2")
+                ui.label("Actions").classes(CLS_SECTION_SUBHEADER)
+                for i, a in enumerate(v["actions"], 1):
+                    with ui.row().classes("items-center gap-2"):
+                        ui.badge(str(i), color="grey").props("rounded").classes("text-xs")
+                        ui.label(a["description"]).classes("text-xs")
+                        if a["callee_qualified_name"]:
+                            ui.label(a["callee_qualified_name"]).classes(
+                                "text-xs font-mono text-gray-500"
+                            )
 
-        if v["postconditions"]:
-            ui.separator().classes("my-2")
-            ui.label("Post-conditions").classes(CLS_SECTION_SUBHEADER)
-            for c in v["postconditions"]:
-                with ui.row().classes("items-center gap-1"):
-                    ui.label(c["subject_qualified_name"]).classes("text-xs font-mono text-blue-300")
-                    ui.label(c["operator"]).classes("text-xs text-gray-500")
-                    ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
+            if v["postconditions"]:
+                ui.separator().classes("my-2")
+                ui.label("Post-conditions").classes(CLS_SECTION_SUBHEADER)
+                for c in v["postconditions"]:
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label(c["subject_qualified_name"]).classes("text-xs font-mono text-blue-300")
+                        ui.label(c["operator"]).classes("text-xs text-gray-500")
+                        ui.label(c["expected_value"]).classes("text-xs font-mono text-green-300")
+
+        # Raw view
+        raw_view = ui.column().classes("w-full")
+        raw_view.visible = False
+        with raw_view:
+            code_area = ui.textarea(
+                label="Edit JSON",
+                value=json.dumps(raw_dict, indent=2),
+            ).classes("w-full text-xs font-mono").props("input-class=font-mono")
+            with ui.row().classes("gap-2 mt-2"):
+                ui.button("Cancel", on_click=lambda: _toggle_raw()).props("flat size=sm")
+                ui.button("Save", on_click=lambda: _do_save()).props("color=positive size=sm")
+
+        def _toggle_raw():
+            raw_visible = raw_view.visible
+            raw_view.visible = not raw_visible
+            rendered.visible = raw_visible
+            if not raw_visible:
+                # Switching to raw — refresh JSON content from dict
+                code_area.value = json.dumps(raw_dict, indent=2)
+
+        async def _do_save():
+            try:
+                parsed = json.loads(code_area.value)
+            except json.JSONDecodeError as exc:
+                ui.notify(f"Invalid JSON: {exc}", type="negative")
+                return
+
+            if not isinstance(parsed, dict):
+                ui.notify("Expected a JSON object", type="negative")
+                return
+
+            # Update the local dict so the rendered view reflects changes
+            for key in ("method", "test_name", "description"):
+                if key in parsed:
+                    v[key] = parsed[key]
+            for key in ("preconditions", "actions", "postconditions"):
+                if key in parsed:
+                    v[key] = parsed[key]
+
+            try:
+                await on_save(v["id"], parsed)
+                ui.notify("Verification saved", type="positive")
+                _toggle_raw()
+            except Exception as exc:
+                ui.notify(f"Save failed: {exc}", type="negative")
 
 
 def render_triples_card(triples):

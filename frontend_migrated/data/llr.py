@@ -214,3 +214,93 @@ def delete_llr(refid: str) -> bool:
 
     llr.delete()
     return True
+
+
+def update_verification(vm_refid: str, data: dict) -> bool:
+    """Replace a verification method's conditions and actions from raw dict data.
+
+    Updates the VM's ``method``, ``test_name``, and ``description`` properties.
+    Deletes all existing Condition and Action children, then recreates them
+    from the ``preconditions``, ``actions``, and ``postconditions`` keys in
+    *data*.
+
+    Args:
+        vm_refid: The VerificationMethod's ``refid``.
+        data: Dict with keys ``method``, ``test_name``, ``description``,
+            ``preconditions`` (list of condition dicts), ``actions``
+            (list of action dicts), and ``postconditions`` (list of
+            condition dicts).  All condition dicts must have
+            ``subject_qualified_name``, ``operator``, and
+            ``expected_value``.  All action dicts must have
+            ``description``.
+
+    Returns:
+        ``True`` on success, ``False`` if the VM is not found.
+    """
+    vm = VerificationMethod.nodes.get_or_none(refid=vm_refid)
+    if not vm:
+        log.warning("VerificationMethod %s not found", vm_refid[:8])
+        return False
+
+    # Update basic properties
+    vm.method = data.get("method", vm.method)
+    vm.test_name = data.get("test_name", vm.test_name)
+    vm.description = data.get("description", vm.description)
+    vm.save()
+
+    # Delete existing conditions and actions
+    for c in vm.conditions.all():
+        vm.conditions.disconnect(c)
+        c.delete()
+    for a in vm.actions.all():
+        vm.actions.disconnect(a)
+        a.delete()
+
+    # Recreate preconditions
+    for i, cond in enumerate(data.get("preconditions", [])):
+        try:
+            c = Condition.save_new(
+                phase="pre",
+                order=i,
+                operator=cond.get("operator", "=="),
+                expected_value=cond.get("expected_value", ""),
+                subject_qualified_name=cond.get("subject_qualified_name", ""),
+                object_qualified_name=cond.get("object_qualified_name", ""),
+                layer="design",
+            )
+            vm.conditions.connect(c)
+        except Exception as exc:
+            log.warning("Failed to save precondition[%d] for VM %s: %s", i, vm_refid[:8], exc)
+
+    # Recreate actions
+    for i, action in enumerate(data.get("actions", [])):
+        try:
+            a = Action.save_new(
+                order=i,
+                description=action.get("description", ""),
+                caller_qualified_name=action.get("caller_qualified_name", ""),
+                callee_qualified_name=action.get("callee_qualified_name", ""),
+                layer="design",
+            )
+            vm.actions.connect(a)
+        except Exception as exc:
+            log.warning("Failed to save action[%d] for VM %s: %s", i, vm_refid[:8], exc)
+
+    # Recreate postconditions
+    for i, cond in enumerate(data.get("postconditions", [])):
+        try:
+            c = Condition.save_new(
+                phase="post",
+                order=i,
+                operator=cond.get("operator", "=="),
+                expected_value=cond.get("expected_value", ""),
+                subject_qualified_name=cond.get("subject_qualified_name", ""),
+                object_qualified_name=cond.get("object_qualified_name", ""),
+                layer="design",
+            )
+            vm.conditions.connect(c)
+        except Exception as exc:
+            log.warning("Failed to save postcondition[%d] for VM %s: %s", i, vm_refid[:8], exc)
+
+    log.info("Updated VerificationMethod %s", vm_refid[:8])
+    return True
