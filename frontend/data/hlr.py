@@ -157,22 +157,10 @@ def decompose_hlr(hlr_id: int) -> dict:
         if not hlr:
             raise ValueError(f"HLR {hlr_id} not found")
 
-        siblings = repo.list_hlrs()
-        other_hlrs = [
-            {
-                "id": s.id,
-                "description": s.description,
-                "component__name": _get_component_name(s.component_id) if s.component_id else None,
-            }
-            for s in siblings
-            if s.id != hlr_id
-        ]
-
         component_name = _get_component_name(hlr.component_id) if hlr.component_id else ""
 
         decomposed = decompose(
             description=hlr.description,
-            other_hlrs=other_hlrs,
             component=component_name,
             dependency_context=hlr.dependency_context,
             prompt_log_file=prompt_log_file,

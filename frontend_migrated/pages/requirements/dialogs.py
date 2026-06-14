@@ -66,10 +66,18 @@ class CreateHLRDialog:
             return
         comp_name = self._comp.value if self._comp.value != "(none)" else None
         new_refid = await asyncio.to_thread(create_hlr, desc, comp_name)
+        short_id = new_refid[:8] + "…" if len(new_refid) > 8 else new_refid
         self._dialog.close()
-        ui.notify(f"Created HLR {new_refid}", type="positive")
+        ui.notify(f"Created HLR {short_id}", type="positive")
         if self._on_done:
             self._on_done()
+
+
+def _short_refid(refid: str) -> str:
+    """Return a shortened display form of a hex refid."""
+    if refid and len(refid) > 8:
+        return f"{refid[:8]}…"
+    return refid
 
 
 class DeleteHLRDialog:
@@ -84,7 +92,7 @@ class DeleteHLRDialog:
         """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_SM):
-            ui.label(f"Delete HLR {self._hlr_refid}?").classes("text-lg font-bold")
+            ui.label(f"Delete HLR {_short_refid(self._hlr_refid)}?").classes("text-lg font-bold")
             ui.label(
                 "This will also delete all child LLRs and their verifications."
             ).classes("text-sm text-gray-400 mt-1")
@@ -97,7 +105,7 @@ class DeleteHLRDialog:
     async def _on_delete(self):
         await asyncio.to_thread(delete_hlr, self._hlr_refid)
         self._dialog.close()
-        ui.notify(f"Deleted HLR {self._hlr_refid}", type="negative")
+        ui.notify(f"Deleted HLR {_short_refid(self._hlr_refid)}", type="negative")
         if self._on_done:
             self._on_done()
 
@@ -114,7 +122,7 @@ class DecomposeHLRDialog:
         """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_MD):
-            ui.label(f"Decompose HLR {self._hlr_refid}?").classes("text-lg font-bold")
+            ui.label(f"Decompose HLR {_short_refid(self._hlr_refid)}?").classes("text-lg font-bold")
             ui.label(
                 "This will run the decomposition agent to generate low-level "
                 "requirements and verification methods."
@@ -130,12 +138,15 @@ class DecomposeHLRDialog:
         ui.notify("Decomposing — this may take a moment…", type="info")
         try:
             result = await asyncio.to_thread(decompose_hlr, self._hlr_refid)
+            llrs = result.get("llrs_created", 0)
+            vms = result.get("verifications_created", 0)
             ui.notify(
-                f"Created {result['llrs_created']} LLRs and "
-                f"{result['verifications_created']} verifications",
+                f"Created {llrs} LLRs and {vms} verifications",
                 type="positive",
             )
         except Exception as e:
+            import traceback
+            logging.getLogger(__name__).error("Decomposition failed for HLR %s:\n%s", self._hlr_refid, traceback.format_exc())
             ui.notify(f"Decomposition failed: {e}", type="negative")
         if self._on_done:
             self._on_done()
@@ -153,7 +164,7 @@ class DesignHLRDialog:
         """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_MD):
-            ui.label(f"Design HLR {self._hlr_refid}?").classes("text-lg font-bold")
+            ui.label(f"Design HLR {_short_refid(self._hlr_refid)}?").classes("text-lg font-bold")
             ui.label(
                 "This will run the design agent to generate an OO design "
                 "and ontology graph from the requirements."
@@ -199,7 +210,7 @@ class AddLLRDialog:
         """Build and open the dialog.  Must be called from an async handler."""
         self._dialog = ui.dialog()
         with self._dialog, ui.card().classes(CLS_DIALOG_MD):
-            ui.label(f"Add LLR to HLR {self._hlr_refid}").classes(CLS_DIALOG_TITLE)
+            ui.label(f"Add LLR to HLR {_short_refid(self._hlr_refid)}").classes(CLS_DIALOG_TITLE)
             self._desc = ui.textarea("Description").classes("w-full")
             with ui.row().classes(CLS_DIALOG_ACTIONS):
                 ui.button("Cancel", on_click=self._dialog.close).props("flat")
@@ -213,7 +224,8 @@ class AddLLRDialog:
             ui.notify("Description is required", type="warning")
             return
         new_refid = await asyncio.to_thread(create_llr, self._hlr_refid, desc)
+        short_id = new_refid[:8] + "…" if len(new_refid) > 8 else new_refid
         self._dialog.close()
-        ui.notify(f"Created LLR {new_refid}", type="positive")
+        ui.notify(f"Created LLR {short_id}", type="positive")
         if self._on_done:
             self._on_done()

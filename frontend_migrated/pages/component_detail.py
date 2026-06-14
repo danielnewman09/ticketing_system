@@ -161,9 +161,10 @@ def render_requirements(hlrs):
         section_header("Requirements")
         for hlr in hlrs:
             llr_count = len(hlr.llrs.all())
+            short_id = hlr.refid[:8] + "…" if len(hlr.refid) > 8 else hlr.refid
             with ui.row().classes("items-start gap-2 py-2 w-full"):
                 ui.link(
-                    f"HLR {hlr.refid}",
+                    f"HLR {short_id}",
                     f"/hlr/{hlr.refid}",
                 ).classes("text-blue-400 text-sm no-underline min-w-[60px]")
                 ui.label(hlr.description).classes("text-sm flex-1")

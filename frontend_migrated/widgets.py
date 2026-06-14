@@ -566,15 +566,29 @@ def directory_picker(
     return dialog
 
 
+def _short_refid(refid: str) -> str:
+    """Return a shortened display form of a hex refid.
+
+    Shows the first 8 characters followed by an ellipsis, e.g.
+    ``'2c3463b2…'``.  This avoids displaying the full 32-character
+    hex UUID in badge text and UI labels.
+    """
+    if refid and len(refid) > 8:
+        return f"{refid[:8]}…"
+    return refid
+
+
 def render_hlr_card(hlr):
     """Render a single HLR as an expandable card with its LLR table."""
     llr_count = len(hlr["llrs"])
+    hlr_refid = hlr["refid"]
+    hlr_display = _short_refid(hlr_refid)
 
     with ui.card().classes("w-full mb-2"):
         with ui.row().classes("w-full items-start justify-between"):
             with ui.column().classes("flex-1 gap-0"):
                 with ui.row().classes("items-center gap-2"):
-                    ui.badge(f"HLR {hlr['id']}", color="blue").props("outline")
+                    ui.badge(f"HLR {hlr_display}", color="blue").props("outline")
                     if hlr["component"]:
                         ui.badge(hlr["component"], color="grey")
                     ui.badge(
@@ -583,17 +597,16 @@ def render_hlr_card(hlr):
                     ).classes("text-xs")
                 ui.label(hlr["description"]).classes("text-sm mt-1")
 
-            hlr_id = hlr["id"]
             with ui.button(icon="more_vert").props("flat round size=sm"):
                 with ui.menu():
                     ui.menu_item(
-                        "View Details", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}")
+                        "View Details", on_click=lambda h=hlr_refid: ui.navigate.to(f"/hlr/{h}")
                     )
                     ui.menu_item(
-                        "Add LLR", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}#add-llr")
+                        "Add LLR", on_click=lambda h=hlr_refid: ui.navigate.to(f"/hlr/{h}#add-llr")
                     )
                     ui.separator()
-                    ui.menu_item("Decompose", on_click=lambda h=hlr_id: ui.navigate.to(f"/hlr/{h}"))
+                    ui.menu_item("Decompose", on_click=lambda h=hlr_refid: ui.navigate.to(f"/hlr/{h}"))
 
         if hlr["llrs"]:
             with (
@@ -616,7 +629,7 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
     If *on_delete* is provided, a delete button is shown per row.
     """
     columns = [
-        {"name": "refid", "label": "ID", "field": "refid", "align": "left", "sortable": True},
+        {"name": "short_refid", "label": "ID", "field": "short_refid", "align": "left", "sortable": True},
         {"name": "description", "label": "Description", "field": "description", "align": "left"},
         {"name": "verification", "label": "Verification", "field": "verification", "align": "left"},
     ]
@@ -629,6 +642,7 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
     for llr in llrs:
         desc = llr["description"]
         full_descriptions[llr["refid"]] = desc
+        short_id = llr["refid"][:8] + "\u2026" if len(llr["refid"]) > 8 else llr["refid"]
         methods = [
             child["method"]
             for child in llr.get("composes", [])
@@ -637,6 +651,7 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
         rows.append(
             {
                 "refid": llr["refid"],
+                "short_refid": short_id,
                 "description": desc[:120] + ("..." if len(desc) > 120 else ""),
                 "verification": ", ".join(methods) if methods else "-",
             }

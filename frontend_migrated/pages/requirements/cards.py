@@ -13,6 +13,18 @@ from nicegui import ui
 from frontend_migrated.widgets import render_llr_table
 
 
+def _short_refid(refid: str) -> str:
+    """Return a shortened display form of a hex refid.
+
+    Shows the first 8 characters followed by an ellipsis, e.g.
+    ``'2c3463b2…'``.  This avoids displaying the full 32-character
+    hex UUID in badge text and UI labels.
+    """
+    if refid and len(refid) > 8:
+        return f"{refid[:8]}…"
+    return refid
+
+
 def render_hlr_card(
     hlr,
     *,
@@ -29,12 +41,13 @@ def render_hlr_card(
     """
     llr_count = len(hlr["llrs"])
     hlr_refid = hlr["refid"]
+    hlr_display_id = _short_refid(hlr_refid)
 
     with ui.card().classes("w-full mb-2"):
         with ui.row().classes("w-full items-start justify-between"):
             with ui.column().classes("flex-1 gap-0"):
                 with ui.row().classes("items-center gap-2"):
-                    ui.badge(f"HLR {hlr_refid}", color="blue").props("outline")
+                    ui.badge(f"HLR {hlr_display_id}", color="blue").props("outline")
                     if hlr["component"]:
                         ui.badge(hlr["component"], color="grey")
                     ui.badge(
