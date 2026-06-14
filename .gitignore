@@ -31,3 +31,6 @@ unit_test_data/
 
 # Agent integration test artifacts (prompts, responses, parsed data)
 tests/agents/__data__/
+
+# Agent UI screenshot tests
+tests/agents_ui/__screenshots__/
