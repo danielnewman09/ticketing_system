@@ -63,8 +63,112 @@ class LLRDetail(TypedDict):
 
 
 def fetch_llr_detail(refid: str) -> LLRDetail | None:
-    """Fetch all data needed for LLR detail page."""
-    raise NotImplementedError("fetch_llr_detail — requires backend_migrated data layer")
+    """Fetch all data needed for LLR detail page.
+
+    Uses neomodel objects for LLR/HLR/VM traversal and
+    ``CodeGraphNode.serialize()`` for dict production.
+    Returns ``None`` if the LLR is not found.
+    """
+    llr = LLR.nodes.get_or_none(refid=refid)
+    if not llr:
+        return None
+
+    # Parent HLR
+    hlr_nodes = llr.hlr.all()
+    hlr_data: HLRSummary | None = None
+    if hlr_nodes:
+        hlr = hlr_nodes[0]
+        comp_nodes = hlr.component.all()
+        hlr_data = {
+            "id": hlr.refid,
+            "description": hlr.description,
+            "component": comp_nodes[0].name if comp_nodes else None,
+        }
+
+    # Verification methods with conditions and actions
+    verifications: list[VerificationDetail] = []
+    for vm in llr.verification_methods.all():
+        cond_nodes = vm.conditions.all()
+        act_nodes = vm.actions.all()
+
+        preconditions: list[ConditionRow] = [
+            {
+                "subject_qualified_name": c.subject_qualified_name,
+                "operator": c.operator,
+                "expected_value": c.expected_value,
+            }
+            for c in cond_nodes
+            if c.phase == "pre"
+        ]
+        postconditions: list[ConditionRow] = [
+            {
+                "subject_qualified_name": c.subject_qualified_name,
+                "operator": c.operator,
+                "expected_value": c.expected_value,
+            }
+            for c in cond_nodes
+            if c.phase == "post"
+        ]
+        actions: list[ActionRow] = [
+            {
+                "order": a.order,
+                "description": a.description,
+                "callee_qualified_name": a.callee_qualified_name,
+                "caller_qualified_name": a.caller_qualified_name,
+            }
+            for a in act_nodes
+        ]
+
+        verifications.append({
+            "id": vm.refid,
+            "method": vm.method,
+            "test_name": vm.test_name,
+            "description": vm.description,
+            "preconditions": preconditions,
+            "actions": actions,
+            "postconditions": postconditions,
+        })
+
+    # Component names (through HLR)
+    components: list[str] = []
+    if hlr_nodes:
+        comp_nodes = hlr_nodes[0].component.all()
+        components = [c.name for c in comp_nodes if c.name]
+
+    # TRACES_TO triples — walk via neomodel relationship managers
+    triples: list[dict] = []
+    try:
+        seen = set()
+        for manager in (llr.traces_to_compounds, llr.traces_to_members, llr.traces_to_namespaces):
+            for target in manager.all():
+                qn = getattr(target, "qualified_name", "")
+                if not qn:
+                    continue
+                # Walk the target's outgoing edges
+                target_edges = target.serialize_edges()
+                for edge in target_edges:
+                    if edge["relation_type"] in ("IMPLEMENTED_BY", "TRACES_TO"):
+                        continue
+                    tgt_qn = edge.get("target_uid", "")
+                    key = (qn, edge["relation_type"], tgt_qn)
+                    if key not in seen and all(key):
+                        seen.add(key)
+                        triples.append({
+                            "subject": qn,
+                            "predicate": edge["relation_type"],
+                            "object": tgt_qn,
+                        })
+    except Exception:
+        log.warning("Failed to fetch LLR triples", exc_info=True)
+
+    return {
+        "id": llr.refid,
+        "description": llr.description,
+        "hlr": hlr_data,
+        "verifications": verifications,
+        "components": components,
+        "triples": triples,
+    }
 
 
 def create_llr(hlr_refid: str, description: str) -> str:
