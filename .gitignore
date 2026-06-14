@@ -28,3 +28,6 @@ tests/ui/__screenshots__/
 
 # Unit test serialized output (debugging)
 unit_test_data/
+
+# Agent integration test artifacts (prompts, responses, parsed data)
+tests/agents/__data__/

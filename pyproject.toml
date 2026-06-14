@@ -45,4 +45,5 @@ asyncio_mode = "auto"
 markers = [
     "screenshot: marks screenshot-capture tests (slow, requires Playwright)",
     "integration: marks tests that require a running application",
+    "agent: marks tests that call real LLM backends (network, API key required)",
 ]
