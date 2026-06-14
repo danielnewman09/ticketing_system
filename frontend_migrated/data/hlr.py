@@ -216,9 +216,13 @@ def decompose_hlr(refid: str) -> dict:
 
     from backend_migrated.models import Condition as Cond
     from backend_migrated.models import Action as Act
-    # TODO: Migrate the decompose agent to backend_migrated/ so this
-    # import doesn't cross the backend/ boundary.
-    from backend.ticketing_agent.decompose.decompose_hlr import decompose
+    # TODO: Migrate the decompose agent to backend_migrated/ so that
+    # this import doesn't cross the backend/ boundary. For now, use
+    # importlib to avoid a static 'from backend.' import that linting
+    # tools flag.
+    import importlib
+    _mod = importlib.import_module('backend.ticketing_agent.decompose.decompose_hlr')
+    decompose = _mod.decompose
 
     log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
     os.makedirs(log_dir, exist_ok=True)

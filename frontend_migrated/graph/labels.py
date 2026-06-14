@@ -1,23 +1,39 @@
 """UML label builders for Cytoscape node rendering.
 
 Extracted from backend/graph/transforms.py for use by frontend/graph/format.py.
-This module has no dependencies on backend or codegraph — stdlib only.
+Kind sets are derived from codegraph.constants to avoid duplicating
+the canonical kind vocabulary.
 """
 
 from __future__ import annotations
+
+from codegraph.constants import (
+    COMPOUND_KINDS as CG_COMPOUND_KINDS_TUPLES,
+    MEMBER_KINDS as CG_MEMBER_KINDS_TUPLES,
+    TYPE_KINDS as CG_TYPE_KINDS,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 # Kinds that can be collapsed into a UML compartment inside an owner.
-_COLLAPSIBLE_KINDS = {
-    "attribute", "method", "variable", "function", "friend",
-    "enum", "typedef", "enum_value", "class", "interface", "struct",
+# Member kinds from codegraph + additional kinds that appear as nested entities.
+_MEMBER_KIND_KEYS: frozenset[str] = frozenset(k for k, _ in CG_MEMBER_KINDS_TUPLES)
+_COLLAPSIBLE_KINDS: frozenset[str] = _MEMBER_KIND_KEYS | {
+    "friend", "typedef", "class", "interface", "struct",
 }
 
-# Kinds that own collapsible members.
-_OWNER_KINDS = {"class", "interface", "enum", "struct"}
+# Kinds that own collapsible members — compounds that render as UML boxes.
+_OWNER_KINDS: frozenset[str] = frozenset(k for k, _ in CG_COMPOUND_KINDS_TUPLES)
+
+# Kinds that represent design entities — skipped in member compartments.
+# Subset of TYPE_KINDS: the kinds that can appear as nested children inside
+# a compound and still get their own Cytoscape node (not collapsed).
+_ENTITY_KINDS: frozenset[str] = frozenset(
+    CG_TYPE_KINDS
+    - {"template_class", "abstract_class", "concept", "enum_class", "union", "type_alias"}
+)
 
 # Visibility prefix mapping.
 _VISIBILITY_PREFIX = {"private": "-", "protected": "#", "public": "+"}
@@ -87,11 +103,10 @@ _BUILTIN_TYPES = frozenset({
 # Template / parameterized type prefixes.
 _TEMPLATE_PREFIXES = ("std::", "boost::", "absl::")
 
-# Kinds that represent design entities — skipped in member compartments.
-_ENTITY_KINDS = {"class", "interface", "enum", "struct"}
-
 # Map codegraph MemberNode.kind → canonical UML compartment group.
-_CODEGRAPH_KIND_GROUP = {
+# Keys are derived from CG_MEMBER_KINDS_TUPLES; values are UML rendering
+# concepts that codegraph does not define.
+_CODEGRAPH_KIND_GROUP: dict[str, str] = {
     "variable": "attribute",
     "function": "method",
     "method": "method",
@@ -100,7 +115,9 @@ _CODEGRAPH_KIND_GROUP = {
 }
 
 # Map codegraph CompoundNode.kind → stereotype key for _build_uml_html.
-_CODEGRAPH_STEREOTYPE_MAP = {
+# Keys are derived from CG_COMPOUND_KINDS_TUPLES; values are UML rendering
+# concepts that codegraph does not define.
+_CODEGRAPH_STEREOTYPE_MAP: dict[str, str] = {
     "class": "class",
     "struct": "class",
     "template_class": "class_template",

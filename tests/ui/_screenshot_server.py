@@ -178,6 +178,85 @@ MOCK_REQUIREMENTS_DATA_FOR_PROJECT = {
 # Apply patches BEFORE importing page modules
 # ---------------------------------------------------------------------------
 
+# -- Mock ontology graph data (from integration_test_graph.json) --
+
+import json
+from pathlib import Path as _Path
+
+# Build Cytoscape-formatted graph data from the test fixture
+# by deserializing into a LayerGraph and converting.
+_DATA_DIR = _Path(__file__).parent.parent / "data"
+
+try:
+    from codegraph.graph import LayerGraph
+    from frontend_migrated.graph.format import layer_graph_to_cytoscape
+
+    _graph_json_path = _DATA_DIR / "integration_test_graph.json"
+    with open(_graph_json_path) as _f:
+        _graph_data = json.load(_f)
+    _layer_graph = LayerGraph.deserialize(_graph_data)
+    _cytoscape_raw = layer_graph_to_cytoscape(_layer_graph)
+
+    # Filter out edges whose source or target doesn't exist as a Cytoscape node.
+    # Cytoscape fails if edges reference non-existent node IDs.
+    # Collapsed members (methods, attributes) emit edges but aren't
+    # separate Cy nodes, and FileNode targets are also omitted.
+    _node_ids = {n["data"]["id"] for n in _cytoscape_raw["nodes"]}
+    _cytoscape_data = {
+        "nodes": _cytoscape_raw["nodes"],
+        "edges": [
+            e for e in _cytoscape_raw["edges"]
+            if e["data"]["source"] in _node_ids and e["data"]["target"] in _node_ids
+        ],
+    }
+except Exception:
+    # Fallback: minimal empty graph if deserialization fails
+    _cytoscape_data = {"nodes": [], "edges": []}
+
+
+MOCK_ONTOLOGY_GRAPH_DATA = _cytoscape_data
+
+MOCK_NODE_DETAIL = {
+    "properties": {
+        "name": "CalculatorEngine",
+        "qualified_name": "calc::CalculatorEngine",
+        "kind": "class",
+        "layer": "design",
+        "source": "calculator",
+        "component_id": None,
+        "visibility": "public",
+        "description": "The core calculator engine class that performs arithmetic operations.",
+        "brief_description": "The core calculator engine class",
+        "type_signature": "",
+        "argsstring": "",
+        "definition": "",
+        "file_path": "",
+        "line_number": None,
+        "source_type": "",
+        "is_static": False,
+        "is_const": False,
+        "is_virtual": False,
+        "is_abstract": False,
+        "is_final": False,
+        "specialization": "",
+    },
+    "outgoing": [
+        {"rel": "DEPENDS_ON", "target_qn": "calc::CalculatorResult", "target_name": "CalculatorResult", "target_labels": ["ClassNode"]},
+        {"rel": "REALIZES", "target_qn": "calc::ICalculator", "target_name": "ICalculator", "target_labels": ["InterfaceNode"]},
+    ],
+    "incoming": [],
+    "implemented_by": [],
+    "members": [
+        {"name": "add", "qualified_name": "calc::CalculatorEngine::add", "kind": "method", "visibility": "public", "type_signature": "CalculatorResult", "argsstring": "(double a, double b)"},
+        {"name": "validateInput", "qualified_name": "calc::CalculatorEngine::validateInput", "kind": "method", "visibility": "public", "type_signature": "bool", "argsstring": "(string input)"},
+        {"name": "precision", "qualified_name": "calc::CalculatorEngine::precision", "kind": "attribute", "visibility": "public", "type_signature": "int"},
+    ],
+    "codebase_members": [],
+    "available_types": [],
+}
+
+MOCK_DEPS_LINKS = {"nodes": [], "edges": []}
+
 _patches = [
     # Component pages
     patch(P["fetch_components"], return_value=MOCK_COMPONENTS),
@@ -210,6 +289,11 @@ _patches = [
     # Project page — scaffold
     patch(P["fetch_project_meta_scaffold"], return_value=MOCK_PROJECT_META),
     patch(P["fetch_components_scaffold"], return_value=MOCK_COMPONENTS),
+    # Ontology graph page
+    patch(P["fetch_ontology_graph_data_og"], return_value=MOCK_ONTOLOGY_GRAPH_DATA),
+    patch(P["fetch_graph_node_detail_og"], return_value=MOCK_NODE_DETAIL),
+    patch(P["resolve_node_id_by_qualified_name_og"], return_value=999999),
+    patch(P["fetch_design_dependency_links_data_og"], return_value=MOCK_DEPS_LINKS),
 ]
 
 # -- Mock ProjectFileTree for dependencies and scaffold --

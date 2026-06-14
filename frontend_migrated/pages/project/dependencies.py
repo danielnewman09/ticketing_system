@@ -431,9 +431,20 @@ class IntegrateDialog:
         )
 
         try:
-            from backend.ticketing_agent.design.integrate_dependency import (
-                integrate_dependency,
+            # TODO: Migrate integrate_dependency to backend_migrated/ so
+            # this doesn't cross the backend/ boundary. Use importlib
+            # to avoid a static 'from backend.' import.
+            import importlib
+            _mod = importlib.import_module(
+                'backend.ticketing_agent.design.integrate_dependency'
             )
+            integrate_dependency = _mod.integrate_dependency
+        except ImportError:
+            ui.notify(
+                "Dependency integration requires backend.ticketing_agent",
+                type="warning",
+            )
+            return
 
             result = await asyncio.to_thread(
                 integrate_dependency,

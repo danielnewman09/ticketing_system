@@ -59,6 +59,11 @@ PATCH_TARGETS = {
     "fetch_project_meta_scaffold": "frontend_migrated.pages.project.scaffold.fetch_project_meta",
     "fetch_components_scaffold": "frontend_migrated.pages.project.scaffold.fetch_components",
     "project_file_tree_scaffold": "frontend_migrated.pages.project.scaffold.ProjectFileTree",
+    # Ontology graph page
+    "fetch_ontology_graph_data_og": "frontend_migrated.pages.ontology_graph.fetch_ontology_graph_data",
+    "fetch_graph_node_detail_og": "frontend_migrated.pages.ontology_graph.fetch_graph_node_detail",
+    "resolve_node_id_by_qualified_name_og": "frontend_migrated.pages.ontology_graph.resolve_node_id_by_qualified_name",
+    "fetch_design_dependency_links_data_og": "frontend_migrated.pages.ontology_graph.fetch_design_dependency_links_data",
 }
 
 

@@ -10,25 +10,60 @@ from __future__ import annotations
 
 import logging
 
+from codegraph.constants import (
+    COMPOUND_KINDS as CG_COMPOUND_KINDS_TUPLES,
+    MEMBER_KINDS as CG_MEMBER_KINDS_TUPLES,
+    NAMESPACE_KINDS as CG_NAMESPACE_KINDS_TUPLES,
+    TYPE_KINDS as CG_TYPE_KINDS,
+)
 from codegraph.graph import CompositeEntry, LayerGraph
+from codegraph.models import (
+    FileNode, ImplementationNode, ParameterNode,
+)
 
 from frontend_migrated.graph.labels import (
     _CODEGRAPH_KIND_GROUP,
     _CODEGRAPH_STEREOTYPE_MAP,
-    _ENTITY_KINDS,
     _build_uml_html,
     _build_uml_label,
 )
 
 log = logging.getLogger(__name__)
 
+# ── Kind sets derived from codegraph.constants ──────────────────────────
+# codegraph defines these as ``[(kind, display), ...]`` tuples.  We extract
+# just the kind strings into sets for fast membership checks.
+
 # Namespace-like kinds whose children get parented in the Cytoscape tree.
-_NAMESPACE_KINDS = {"namespace", "module", "package"}
+_NAMESPACE_KINDS: frozenset[str] = frozenset(k for k, _ in CG_NAMESPACE_KINDS_TUPLES)
 
 # Compound-like kinds that are rendered as separate Cytoscape nodes
 # (as opposed to leaf members which are collapsed into UML labels).
-_COMPOUND_KINDS = {"class", "struct", "interface", "enum", "union", "template_class",
-                    "abstract_class", "enum_class", "module"}
+_COMPOUND_KINDS: frozenset[str] = frozenset(k for k, _ in CG_COMPOUND_KINDS_TUPLES)
+
+# Kinds that appear as nested child entities inside a compound and are
+# rendered as their own Cytoscape nodes (not collapsed into UML labels).
+# These are a subset of TYPE_KINDS — specifically, the kinds that can be
+# both a top-level compound AND a nested child (e.g. a class inside a class).
+_ENTITY_KINDS: frozenset[str] = frozenset(
+    CG_TYPE_KINDS
+    - {"template_class", "abstract_class", "concept", "enum_class", "union", "type_alias"}
+    # template_class, abstract_class, concept, enum_class, union → handled as compounds
+    # type_alias → never rendered as a nested child node
+)
+
+# Node kinds that belong in the ontology graph (design-level entities).
+# Anything not in this set is an implementation detail (file, implementation)
+# or a collapsed leaf (method, attribute, enumvalue, function) and is
+# either skipped entirely or folded into a parent compound's UML label.
+_ONTOLOGY_KINDS: frozenset[str] = _NAMESPACE_KINDS | _COMPOUND_KINDS | _ENTITY_KINDS
+
+# Node *types* (Python classes) that should never appear in the ontology
+# graph, even if they happen to be root entries in a LayerGraph.
+# Derived from codegraph model classes rather than hardcoded strings.
+_EXCLUDED_NODE_TYPES: frozenset[str] = frozenset(
+    cls.__name__ for cls in (FileNode, ImplementationNode, ParameterNode)
+)
 
 
 def _is_compound(node) -> bool:
@@ -41,6 +76,17 @@ def _is_compound(node) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _is_excluded_from_ontology(node) -> bool:
+    """Return True if a node type should never appear in the ontology graph.
+
+    FileNodes, ImplementationNodes, and ParameterNodes are implementation
+    details — they track which file a class is defined in, the source code
+    body of a method, or function parameters.  They have no place in a
+    design-level ontology visualization.
+    """
+    return type(node).__name__ in _EXCLUDED_NODE_TYPES
+
+
 def layer_graph_to_cytoscape(graph: LayerGraph) -> dict:
     """Walk CompositeEntry tree → Cytoscape {nodes, edges}.
 
@@ -51,6 +97,8 @@ def layer_graph_to_cytoscape(graph: LayerGraph) -> dict:
     seen: set[str] = set()
 
     for entry in graph.entries.values():
+        if _is_excluded_from_ontology(entry.node):
+            continue
         _walk_entry(entry, parent_id=None, nodes=nodes, edges=edges, seen=seen)
 
     return {"nodes": nodes, "edges": edges}
@@ -78,6 +126,8 @@ def _collect_skipped_member_refs(entry: CompositeEntry) -> list[tuple[str, str, 
             # This is a collapsed member — collect its references
             child_qname = getattr(child_entry.node, "qualified_name", "") or getattr(child_entry.node, "name", "")
             for rel_type, tgt_key, tgt_type in child_entry.references:
+                if tgt_type in _EXCLUDED_NODE_TYPES:
+                    continue
                 refs.append((child_qname, tgt_key, rel_type))
             # Also recurse into member's children (e.g. nested locals)
             refs.extend(_collect_skipped_member_refs(child_entry))
@@ -108,8 +158,11 @@ def _walk_entry(
     cy_node = _build_node(entry, parent_id=parent_id)
     nodes.append(cy_node)
 
-    # Emit this entry's own references
+    # Emit this entry's own references, skipping edges that target
+    # excluded node types (FileNode, ImplementationNode, etc.).
     for rel_type, target_key, target_type in entry.references:
+        if target_type in _EXCLUDED_NODE_TYPES:
+            continue
         edges.append(_build_edge(qname, target_key, rel_type))
 
     # Emit references from collapsed members (they won't be walked)

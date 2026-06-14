@@ -47,6 +47,7 @@ from frontend_migrated.data.ontology import (
     fetch_node_detail_full,
     fetch_ontology_data,
     fetch_ontology_graph_data,
+    filter_cross_layer_elements,
     resolve_node_id_by_qualified_name,
     update_member_type,
 )
@@ -96,6 +97,7 @@ __all__ = [
     # ontology
     "fetch_ontology_data",
     "fetch_ontology_graph_data",
+    "filter_cross_layer_elements",
     "fetch_hlr_graph_data",
     "fetch_graph_node_detail",
     "fetch_node_detail_full",

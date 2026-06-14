@@ -77,6 +77,10 @@ def ensure_migrated_constraints() -> bool:
             "FOR (l:LLR) ON (l.description)",
             "CREATE INDEX llr_layer IF NOT EXISTS "
             "FOR (l:LLR) ON (l.layer)",
+            "CREATE INDEX hlr_tags IF NOT EXISTS "
+            "FOR (h:HLR) ON (h.tags)",
+            "CREATE INDEX llr_tags IF NOT EXISTS "
+            "FOR (l:LLR) ON (l.tags)",
             "CREATE INDEX verificationmethod_method IF NOT EXISTS "
             "FOR (v:VerificationMethod) ON (v.method)",
             "CREATE INDEX verificationmethod_layer IF NOT EXISTS "
