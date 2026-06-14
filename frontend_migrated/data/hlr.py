@@ -375,7 +375,19 @@ def decompose_hlr(refid: str) -> dict:
 def design_single_hlr(refid: str) -> dict:
     """Run the design agent on an HLR and persist the ontology results.
 
-    TODO: Requires migrating ``design_and_persist_hlr`` and its
-    transitive dependencies to ``backend_migrated``.
+    Delegates to ``design_and_persist_hlr`` in
+    ``backend_migrated.agents.design_hlr`` which handles context
+    loading, pipeline execution, and persistence.
+
+    Returns dict with keys ``nodes_created``, ``triples_created``,
+    ``links_applied``.
     """
-    raise NotImplementedError("design_single_hlr — requires backend_migrated agent migration")
+    import os
+    from backend_migrated.agents.design_hlr import design_and_persist_hlr
+
+    log_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs"
+    )
+    os.makedirs(log_dir, exist_ok=True)
+
+    return design_and_persist_hlr(refid=refid, log_dir=log_dir)
