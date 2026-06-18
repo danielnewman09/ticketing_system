@@ -1,19 +1,12 @@
 """Migrated design agent — the canonical HLR design pipeline for
 ``backend_migrated``.
 
-The LLM design pipeline (``design_hlr`` in ``backend.ticketing_agent``)
-was built around integer requirement IDs (the LLM writes ``hlr:1``,
-``llr:3``, etc.).  Neomodel uses hex ``refid`` strings as identifiers.
+Runs a single tool loop that designs the OO class structure and
+resolves notional verification stubs to qualified design names.
+Uses the :class:`DesignToolDispatcher` (design + codegraph tools) and
+:class:`VerificationDispatcher` (verification resolution) together.
 
-This module bridges the two worlds:
-
-1. ``design_and_persist_hlr(refid)`` — complete entry point: loads
-   context from Neo4j via neomodel, runs the design pipeline, persists
-   ontology nodes / associations / TRACES_TO edges, returns a summary.
-
-2. ``design_hlr_migrated(hlr, llrs, ...)`` — lower-level: runs the
-   pipeline for given neomodel HLR/LLR instances and returns the
-   raw ``DesignHLRResult`` (without persistence).
+No imports from ``backend.ticketing_agent`` — fully migrated.
 
 Usage::
 
@@ -23,194 +16,433 @@ Usage::
         refid="2c3463b2…",
         log_dir="/path/to/logs",
     )
-    # → {"nodes_created": 5, "triples_created": 12, "links_applied": 8}
+    # → {"nodes_created": 5, "verifications_resolved": 8, "links_applied": 3}
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass, field
 
-from backend.ticketing_agent.design.design_hlr import (
-    design_hlr as _design_hlr_legacy,
-)
+from llm_caller import call_tool_loop
+
 from backend_migrated.models.requirement import HLR, LLR
+from backend_migrated.models.verification import VerificationMethod, Condition, Action
+from backend_migrated.tools.dispatcher import (
+    DesignToolDispatcher,
+    VerificationDispatcher,
+)
+from backend_migrated.requirements.formatting import format_hlrs_for_prompt
 
 log = logging.getLogger(__name__)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Result dataclass
+# ══════════════════════════════════════════════════════════════════════════
+
 @dataclass
 class DesignHLRResult:
-    """Output of ``design_hlr_migrated()``.
+    """Output of ``design_hlr()``.
 
-    Carries the same ``oo_design`` and ``ontology`` as the original
-    pipeline, plus ``links`` — a list of requirement-link dicts keyed
-    by ``refid`` strings instead of integer IDs.
+    Carries the LayerGraph-format design (list of CodeGraphNode dicts)
+    and resolved verifications (dict of LLR refid → verification method
+    lists).
     """
 
-    oo_design: object
-    ontology: object
-    verifications: dict = field(default_factory=dict)
-    links: list[dict] = field(default_factory=list)
+    design: list[dict] = field(default_factory=list)
+    verifications: dict[str, list[dict]] = field(default_factory=dict)
 
 
-def design_hlr_migrated(
+# ══════════════════════════════════════════════════════════════════════════
+# Notional verification stub loading
+# ══════════════════════════════════════════════════════════════════════════
+
+def _load_notional_verifications(llrs: list[LLR]) -> dict[str, list[dict]]:
+    """Load existing notional verification stubs from Neo4j for each LLR.
+
+    Returns a dict mapping LLR refid → list of verification dicts in
+    the format expected by the agent prompt.
+    """
+    llr_verifications: dict[str, list[dict]] = {}
+
+    for llr in llrs:
+        vms = llr.verification_methods.all()
+        if not vms:
+            continue
+
+        verifs_for_llr = []
+        for vm in vms:
+            vm_dict = {
+                "method": vm.method,
+                "test_name": vm.test_name or "",
+                "description": vm.description or "",
+                "preconditions": [],
+                "actions": [],
+                "postconditions": [],
+            }
+
+            conditions = vm.conditions.all()
+            for cond in sorted(conditions, key=lambda c: c.order):
+                cond_dict = {
+                    "subject_qualified_name": cond.subject_qualified_name or "",
+                    "operator": cond.operator or "==",
+                    "expected_value": cond.expected_value or "",
+                    "object_qualified_name": cond.object_qualified_name or "",
+                }
+                if cond.phase == "pre":
+                    vm_dict["preconditions"].append(cond_dict)
+                else:
+                    vm_dict["postconditions"].append(cond_dict)
+
+            actions = vm.actions.all()
+            for action in sorted(actions, key=lambda a: a.order):
+                vm_dict["actions"].append({
+                    "description": action.description or "",
+                    "callee_qualified_name": action.callee_qualified_name or "",
+                    "caller_qualified_name": action.caller_qualified_name or "",
+                })
+
+            verifs_for_llr.append(vm_dict)
+
+        if verifs_for_llr:
+            llr_verifications[llr.refid] = verifs_for_llr
+
+    return llr_verifications
+
+
+def _format_verifications_for_prompt(
+    llrs: list[LLR],
+    notional_verifications: dict[str, list[dict]],
+) -> str:
+    """Format LLRs with their notional verification stubs for the prompt."""
+    lines = []
+    for llr in llrs:
+        lines.append(f"LLR {llr.refid}: {llr.description}")
+        verifs = notional_verifications.get(llr.refid, [])
+        if verifs:
+            lines.append("  Verifications (notional — resolve to qualified names):")
+            for v in verifs:
+                label = v.get("test_name", "") or v.get("method", "")
+                lines.append(f"    [{v['method']}] {label}: {v.get('description', '')}")
+                if v.get("preconditions"):
+                    lines.append("      Pre-conditions:")
+                    for c in v["preconditions"]:
+                        lines.append(
+                            f"        {c.get('subject_qualified_name', '')} "
+                            f"{c.get('operator', '==')} "
+                            f"{c.get('expected_value', '')}"
+                        )
+                if v.get("actions"):
+                    lines.append("      Actions:")
+                    for a in v["actions"]:
+                        callee = a.get("callee_qualified_name", "")
+                        lines.append(
+                            f"        {a.get('description', '')}"
+                            + (f" → {callee}" if callee else "")
+                        )
+                if v.get("postconditions"):
+                    lines.append("      Post-conditions:")
+                    for c in v["postconditions"]:
+                        lines.append(
+                            f"        {c.get('subject_qualified_name', '')} "
+                            f"{c.get('operator', '==')} "
+                            f"{c.get('expected_value', '')}"
+                        )
+        else:
+            lines.append("  (No verification stubs)")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Prompt
+# ══════════════════════════════════════════════════════════════════════════
+
+SYSTEM_PROMPT = """\
+You are a software architect and verification engineer. Given design context
+and requirements, your job is to produce an object-oriented class design AND
+resolve verification stubs to reference real design elements.
+
+**Workflow:**
+
+1. **Design** — Use validate_design and check_class_name to produce a
+   sound OO class design. Call produce_oo_design when ready.
+2. **Resolve verifications** — Map each notional verification stub to
+   qualified names from your design. Call draft_verifications to check
+   that all references resolve.
+3. **Commit** — Call commit_design_and_verifications with the final
+   design and verifications as arguments.
+
+{specializations_section}
+{namespace_section}
+{as_built_section}
+{existing_classes_section}
+{intercomponent_section}
+
+### Design rules
+
+- Reference ONLY qualified names from the design context, dependency APIs,
+  intercomponent boundaries, or your own draft
+- Qualified names follow C++ convention: Namespace::ClassName::memberName
+- Use check_class_name to verify association targets before including them
+- Keep classes focused and cohesive
+
+### Verification resolution
+
+For each LLR, the notional verification stubs describe test scenarios
+using placeholder references like "Engine.result" or "Display.current_value".
+Your job is to translate each stub into a fully resolved verification
+method that references actual design members.
+
+For each verification stub:
+1. Identify what design element each reference targets
+2. Replace placeholder references with qualified names from your design
+3. Call draft_verifications to validate that every reference resolves
+4. If a reference can't resolve, either add the missing member to your
+   design via produce_oo_design, or use expected_value alone for literals
+
+<FORMAT-CONTRACT name="qualified-names">
+All `subject_qualified_name`, `object_qualified_name`, `callee_qualified_name`,
+and `caller_qualified_name` fields MUST use qualified names that exactly match
+the design context or the current draft.
+
+Pattern: <namespace>::<ClassName>::<memberName>
+
+Leave `caller_qualified_name` empty if the caller is the test harness.
+
+**Enum values:** When comparing against an enum value, reference the enum
+*attribute* as `subject_qualified_name` and put the enum *value* in
+`expected_value`. Do NOT use enum values as `subject_qualified_name`.
+
+Example:
+  subject_qualified_name: "calc::Calculator::error_signal"
+  operator: "=="
+  expected_value: "InvalidInput"
+</FORMAT-CONTRACT>
+
+<FORMAT-CONTRACT name="verification-key-format">
+The `verifications` field in `draft_verifications` MUST be a JSON object
+keyed by LLR refid (string), NOT by test name.
+
+Example: "verifications": {{ "abc123": [...], "def456": [...] }}
+Wrong:   "verifications": {{ "test_add": [...] }}
+</FORMAT-CONTRACT>
+
+You MUST use commit_design_and_verifications to return your final result.
+Pass the design (same list of CodeGraphNode dicts from produce_oo_design)
+and the verifications dict (same structure from draft_verifications) as
+arguments to commit_design_and_verifications.
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Core pipeline
+# ══════════════════════════════════════════════════════════════════════════
+
+def design_hlr(
     hlr: HLR,
     llrs: list[LLR],
     *,
-    other_hlrs: list[dict] | None = None,
+    prior_class_lookup: dict[str, str] | None = None,
+    dependency_lookup: dict[str, str] | None = None,
+    intercomponent_classes: list[dict] | None = None,
     component_namespace: str = "",
     sibling_namespaces: list[str] | None = None,
-    neo4j_session=None,
-    toolset=None,
     model: str = "",
     log_dir: str = "",
 ) -> DesignHLRResult:
-    """Design a single HLR — refid-aware wrapper around the legacy pipeline.
+    """Design a single HLR and resolve its verification stubs.
+
+    Runs a single tool loop that:
+    1. Designs the OO class structure (using DesignToolDispatcher)
+    2. Resolves notional verification stubs to qualified names (using
+       VerificationDispatcher)
+    3. Commits the combined result
 
     Args:
         hlr: Neomodel HLR instance.
         llrs: Neomodel LLR instances belonging to this HLR.
-        other_hlrs: Sibling HLR summaries (dicts with ``id``, ``description``).
-        component_namespace: C++ namespace for this component.
+        prior_class_lookup: Name → qualified_name from prior designs.
+        dependency_lookup: Name → qualified_name for dependency API classes.
+        intercomponent_classes: Inter-component boundary class dicts.
+        component_namespace: Required C++ namespace for this component.
         sibling_namespaces: Other component namespaces.
-        neo4j_session: Optional Neo4j session for container lookup.
-        toolset: Optional dependency graph toolset for discovery.
         model: LLM model override.
         log_dir: Directory for per-step prompt logs.
 
     Returns:
-        ``DesignHLRResult`` with ``oo_design``, ``ontology``, ``verifications``,
-        and ``links`` (requirement link dicts with string refids).
+        ``DesignHLRResult`` with ``design`` (LayerGraph-format nodes)
+        and ``verifications`` (LLR refid → verification method lists).
     """
-    # --- Build ID mappings: refid ↔ short integer alias ---
-    hlr_refid = hlr.refid
-    refid_to_alias: dict[str, int] = {}
-    alias_to_refid: dict[str, str] = {}
+    from backend_migrated.agents.design_oo_prompt import (
+        build_existing_classes_section,
+        build_intercomponent_section,
+        build_namespace_section,
+    )
 
-    next_id = 1
-    refid_to_alias[hlr_refid] = next_id
-    alias_to_refid[str(next_id)] = hlr_refid
-    next_id += 1
+    # --- Load notional verification stubs from Neo4j ---
+    notional_verifications = _load_notional_verifications(llrs)
 
-    llr_alias_map: dict[str, int] = {}  # llr_refid → alias
-    for l in llrs:
-        if l.refid not in refid_to_alias:
-            refid_to_alias[l.refid] = next_id
-            alias_to_refid[str(next_id)] = l.refid
-            llr_alias_map[l.refid] = next_id
-            next_id += 1
+    # --- Build requirements text for the prompt ---
+    hlr_line = f"HLR: {hlr.description}"
+    verifs_text = _format_verifications_for_prompt(llrs, notional_verifications)
+    requirements_text = f"{hlr_line}\n\n{verifs_text}"
 
-    # Build other HLR aliases (for context)
-    other_alias_map: dict[str, int] = {}
-    if other_hlrs:
-        for oh in other_hlrs:
-            oh_id = oh.get("id", "")
-            if oh_id and oh_id not in refid_to_alias:
-                refid_to_alias[oh_id] = next_id
-                alias_to_refid[str(next_id)] = oh_id
-                other_alias_map[oh_id] = next_id
-                next_id += 1
+    # --- Build prompt sections ---
+    namespace_section = (
+        build_namespace_section(component_namespace, sibling_namespaces or [])
+        if component_namespace
+        else ""
+    )
+    existing_section = (
+        build_existing_classes_section(intercomponent_classes or [])
+        if intercomponent_classes
+        else ""
+    )
+    intercomp_section = (
+        build_intercomponent_section(intercomponent_classes or [])
+        if intercomponent_classes
+        else ""
+    )
 
-    # --- Build HLR/LLR dicts with integer aliases ---
-    hlr_dict = {
-        "id": refid_to_alias[hlr_refid],
-        "description": hlr.description,
-        "component_id": None,
-        "component_name": "",
-        "component_namespace": component_namespace,
+    system = SYSTEM_PROMPT.format(
+        specializations_section="",
+        namespace_section=namespace_section,
+        as_built_section="",
+        existing_classes_section=existing_section,
+        intercomponent_section=intercomp_section,
+    )
+
+    # --- Component hint for user prompt ---
+    comp_nodes = hlr.component.all()
+    component_hint = ""
+    if comp_nodes:
+        comp = comp_nodes[0]
+        comp_name = comp.name or ""
+        if comp_name:
+            component_hint = (
+                f"\n\nThis requirement belongs to the architectural "
+                f"component: **{comp_name}**"
+            )
+            if component_namespace:
+                component_hint += f" (namespace: `{component_namespace}`)"
+            component_hint += (
+                ". Your class design should be scoped to this component.\n"
+            )
+            if comp.description:
+                component_hint += (
+                    f"\n### Component Description\n\n{comp.description}\n"
+                )
+
+    user_message = {
+        "role": "user",
+        "content": (
+            "Design the object-oriented class structure and resolve "
+            "verification stubs for the following requirements:\n\n"
+            f"{requirements_text}{component_hint}"
+        ),
     }
 
-    llr_dicts = [
-        {
-            "id": llr_alias_map[l.refid],
-            "description": l.description,
-            "hlr_id": refid_to_alias[hlr_refid],
-        }
-        for l in llrs
-    ]
+    messages = [user_message]
 
-    other_hlr_summaries = None
-    if other_hlrs:
-        other_hlr_summaries = [
-            {
-                "id": other_alias_map.get(oh["id"], 0),
-                "description": oh.get("description", ""),
-                "status": oh.get("status", "unknown"),
-            }
-            for oh in other_hlrs
-        ]
-
-    # --- Call the original pipeline ---
-    oo, ontology, verifications = _design_hlr_legacy(
-        hlr=hlr_dict,
-        llrs=llr_dicts,
-        other_hlr_summaries=other_hlr_summaries,
+    # --- Build dispatchers ---
+    design_disp = DesignToolDispatcher(
+        prior_class_lookup=prior_class_lookup or {},
+        dependency_lookup=dependency_lookup or {},
+        intercomponent_classes=intercomponent_classes or [],
         component_namespace=component_namespace,
-        sibling_namespaces=sibling_namespaces,
-        component_id=None,
-        neo4j_session=neo4j_session,
-        toolset=toolset,
-        model=model,
-        log_dir=log_dir,
+        sibling_namespaces=sibling_namespaces or [],
     )
+    verif_disp = VerificationDispatcher(design_dispatcher=design_disp)
 
-    # --- Convert integer requirement IDs back to refids ---
-    links: list[dict] = []
-    for link in ontology.requirement_links:
-        req_type = getattr(link, "requirement_type", "")
-        int_id = getattr(link, "requirement_id", 0)
-        subj_qn = getattr(link, "subject_qualified_name", "") or ""
-        obj_qn = getattr(link, "object_qualified_name", "") or ""
+    # --- Composite dispatch function ---
+    def dispatch(tool_name: str, tool_input: dict) -> str:
+        if tool_name in verif_disp._handlers:
+            return verif_disp.dispatch(tool_name, tool_input)
+        return design_disp.dispatch(tool_name, tool_input)
 
-        # Map integer ID back to refid
-        refid = alias_to_refid.get(str(int_id), str(int_id))
-        links.append({
-            "requirement_type": req_type,
-            "requirement_id": refid,
-            "subject_qualified_name": subj_qn,
-            "object_qualified_name": obj_qn,
-        })
+    # --- Combined tool schemas ---
+    all_tools = design_disp.all_tool_schemas + verif_disp.all_tool_schemas
+
+    # --- Run the tool loop ---
+    prompt_log = ""
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+        prompt_log = os.path.join(log_dir, f"design_verify_hlr_{hlr.refid[:8]}.md")
+
+    log.info(
+        "design_hlr: starting tool loop for HLR %s with %d tools",
+        hlr.refid[:8], len(all_tools),
+    )
+    try:
+        result = call_tool_loop(
+            system=system,
+            messages=messages,
+            tools=all_tools,
+            final_tool_name="commit_design_and_verifications",
+            tool_dispatcher=dispatch,
+            model=model,
+            max_tokens=65536,
+            max_turns=75,
+            prompt_log_file=prompt_log,
+        )
+    except Exception as exc:
+        log.error(
+            "design_hlr: tool loop failed for HLR %s: %s",
+            hlr.refid[:8], exc, exc_info=True,
+        )
+        raise
+
+    # --- Extract result ---
+    design_nodes = result.get("design", [])
+    verifications = result.get("verifications", {})
+
+    log.info(
+        "Design complete for HLR %s: %d design nodes, %d LLRs with verifications",
+        hlr.refid[:8], len(design_nodes), len(verifications),
+    )
 
     return DesignHLRResult(
-        oo_design=oo,
-        ontology=ontology,
+        design=design_nodes,
         verifications=verifications,
-        links=links,
     )
 
 
-# ---------------------------------------------------------------------------
+# ══════════════════════════════════════════════════════════════════════════
 # Full entry point — context loading + pipeline + persistence
-# ---------------------------------------------------------------------------
-
+# ══════════════════════════════════════════════════════════════════════════
 
 def design_and_persist_hlr(
     refid: str,
     *,
     log_dir: str = "",
 ) -> dict:
-    """Design a single HLR end-to-end: load context → run pipeline → persist.
+    """Design a single HLR end-to-end: load context → design + verify → persist.
 
     Reads the HLR and its LLRs from Neo4j via neomodel, gathers component
-    and namespace context, runs the design agent, persists the resulting
-    ontology nodes/associations/TRACES_TO edges, and returns a summary.
+    and namespace context, runs the design+verification agent, persists
+    the resulting design nodes and resolved verifications, and returns
+    a summary.
 
     Args:
         refid: The HLR's ``refid`` (hex UUID string).
         log_dir: Directory for per-step prompt logs.
 
     Returns:
-        Dict with keys ``nodes_created``, ``triples_created``,
-        ``links_applied``.
+        Dict with keys ``nodes_created``, ``verifications_resolved``,
+        ``conditions_created``, ``actions_created``, ``links_applied``.
 
     Raises:
         ValueError: If the HLR is not found or has no LLRs.
     """
     from codegraph.connection import get_session as get_neo
+    from codegraph.graph import LayerGraph
 
     # --- Load data from Neo4j via neomodel ---
+    log.info("design_and_persist_hlr: loading HLR %s", refid[:8])
     hlr = HLR.nodes.get_or_none(refid=refid)
     if not hlr:
         raise ValueError(f"HLR {refid} not found")
@@ -218,6 +450,10 @@ def design_and_persist_hlr(
     llr_nodes = hlr.llrs.all()
     if not llr_nodes:
         raise ValueError(f"HLR {refid} has no LLRs — decompose it first")
+    log.info(
+        "design_and_persist_hlr: found HLR %s with %d LLRs",
+        refid[:8], len(llr_nodes),
+    )
 
     # Component context
     comp_nodes = hlr.component.all()
@@ -234,110 +470,107 @@ def design_and_persist_hlr(
             if ns and ns not in sibling_namespaces:
                 sibling_namespaces.append(ns)
 
+    # Build intercomponent classes from previously designed HLRs
+    intercomponent_classes: list[dict] = []
+    for other_hlr in HLR.nodes.all():
+        if other_hlr.refid == refid:
+            continue
+        for target in other_hlr.design_compounds.all():
+            intercomponent_classes.append({
+                "qualified_name": target.qualified_name,
+                "name": target.name or "",
+                "kind": getattr(target, "kind", "class"),
+            })
+
     # --- Run the design pipeline ---
-    with get_neo() as neo4j_session:
-        result = design_hlr_migrated(
-            hlr=hlr,
-            llrs=llr_nodes,
-            other_hlrs=[
-                {"id": s.refid, "description": s.description}
-                for s in HLR.nodes.all()
-                if s.refid != refid
-            ],
-            component_namespace=component_namespace,
-            sibling_namespaces=sibling_namespaces or None,
-            neo4j_session=neo4j_session,
-            log_dir=log_dir,
-        )
+    log.info("design_and_persist_hlr: running design_hlr for %s", refid[:8])
+    result = design_hlr(
+        hlr=hlr,
+        llrs=llr_nodes,
+        intercomponent_classes=intercomponent_classes or None,
+        component_namespace=component_namespace,
+        sibling_namespaces=sibling_namespaces or None,
+        log_dir=log_dir,
+    )
+    log.info(
+        "design_and_persist_hlr: design_hlr returned %d design nodes, %d LLR verifications",
+        len(result.design), len(result.verifications),
+    )
 
-    ontology = result.ontology
-    requirement_links = result.links
-
-    # --- Persist ontology nodes ---
+    # --- Persist design to Neo4j via LayerGraph ---
     nodes_created = 0
-    qname_to_node: dict[str, object] = {}
-    for node in ontology.nodes:
-        qn = getattr(node, "qualified_name", "")
-        if qn and qn not in qname_to_node:
-            try:
-                node.save()
-                qname_to_node[qn] = node
-                nodes_created += 1
-            except Exception as exc:
-                log.warning("Failed to save ontology node %s: %s", qn, exc)
+    if result.design:
+        try:
+            graph = LayerGraph.deserialize(result.design)
+            graph.to_neo4j()
+            nodes_created = len(result.design)
+        except Exception as exc:
+            log.warning("Failed to persist design for HLR %s: %s", refid[:8], exc)
 
-    # --- Persist associations ---
-    triples_created = 0
-    with get_neo() as neo4j_session:
-        for assoc in ontology.associations:
-            subj = assoc.get("subject", "")
-            pred = assoc.get("predicate", "")
-            obj = assoc.get("object", "")
-            if not all([subj, pred, obj]):
-                continue
-            try:
-                query = (
-                    "MATCH (a {qualified_name: $subj}) "
-                    "MATCH (b {qualified_name: $obj}) "
-                    "WHERE (a:CompoundNode OR a:MemberNode OR a:NamespaceNode) "
-                    "  AND (b:CompoundNode OR b:MemberNode OR b:NamespaceNode) "
-                    "MERGE (a)-[r:" + pred + "]->(b) "
-                    "RETURN count(r) AS cnt"
-                )
-                neo4j_session.run(query, {"subj": subj, "obj": obj})
-                triples_created += 1
-            except Exception as exc:
-                log.warning(
-                    "Failed to create association %s -[%s]-> %s: %s",
-                    subj, pred, obj, exc,
-                )
+    # --- Persist resolved verifications ---
+    verifications_resolved = 0
+    conditions_created = 0
+    actions_created = 0
 
-    # --- Create TRACES_TO edges from HLR/LLR to design nodes ---
+    for llr_refid, verif_list in result.verifications.items():
+        llr = next((l for l in llr_nodes if l.refid == llr_refid), None)
+        if not llr:
+            log.warning("LLR refid %s not found, skipping verification persist", llr_refid)
+            continue
+
+        # Delete existing notional verifications for this LLR
+        for old_vm in llr.verification_methods.all():
+            old_vm.delete()
+
+        # Create resolved verifications
+        for v in verif_list:
+            vm, conditions, actions = VerificationMethod.from_llm_dict(v)
+            vm.save()
+            llr.verification_methods.connect(vm)
+            verifications_resolved += 1
+
+            for cond in conditions:
+                cond.save()
+                vm.conditions.connect(cond)
+                conditions_created += 1
+
+            for action in actions:
+                action.save()
+                vm.actions.connect(action)
+                actions_created += 1
+
+    # --- Create COMPOSES edges from HLR to design nodes ---
     links_applied = 0
-    for link in requirement_links:
-        req_type = link["requirement_type"]
-        req_id = link["requirement_id"]
-        subj_qn = link.get("subject_qualified_name", "")
-        obj_qn = link.get("object_qualified_name", "")
+    from codegraph.models.compound import CompoundNode
 
-        for qn in (subj_qn, obj_qn):
-            if not qn or qn not in qname_to_node:
-                continue
-            target = qname_to_node[qn]
-            try:
-                if req_type == "hlr" and req_id == refid:
-                    for mgr in (
-                        hlr.traces_to_compounds,
-                        hlr.traces_to_members,
-                        hlr.traces_to_namespaces,
-                    ):
-                        mgr.connect(target)
-                        links_applied += 1
-                        break
-                elif req_type == "llr":
-                    llr = next((l for l in llr_nodes if l.refid == req_id), None)
-                    if llr:
-                        for mgr in (
-                            llr.traces_to_compounds,
-                            llr.traces_to_members,
-                            llr.traces_to_namespaces,
-                        ):
-                            mgr.connect(target)
-                            links_applied += 1
-                            break
-            except Exception as exc:
-                log.warning(
-                    "Failed to TRACES_TO link %s -> %s: %s",
-                    req_id, qn, exc,
-                )
+    for node_dict in result.design:
+        qn = node_dict.get("qualified_name", "")
+        if not qn:
+            continue
+        kind = node_dict.get("kind", "")
+        # Only link HLR to top-level compound/class nodes (not members)
+        if kind not in ("class", "struct", "interface", "enum"):
+            continue
+        target_node = CompoundNode.nodes.get_or_none(qualified_name=qn)
+        if not target_node:
+            continue
+        try:
+            hlr.design_compounds.connect(target_node)
+            links_applied += 1
+        except Exception as exc:
+            log.warning("Failed to COMPOSES link HLR %s -> %s: %s", refid[:8], qn, exc)
 
     log.info(
-        "Design complete for HLR %s: %d nodes, %d triples, %d links",
-        refid[:8], nodes_created, triples_created, links_applied,
+        "Design+verify complete for HLR %s: %d nodes, %d verifications, "
+        "%d conditions, %d actions",
+        refid[:8], nodes_created, verifications_resolved,
+        conditions_created, actions_created,
     )
 
     return {
         "nodes_created": nodes_created,
-        "triples_created": triples_created,
+        "verifications_resolved": verifications_resolved,
+        "conditions_created": conditions_created,
+        "actions_created": actions_created,
         "links_applied": links_applied,
     }

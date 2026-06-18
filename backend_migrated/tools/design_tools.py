@@ -139,11 +139,9 @@ def _build_layer_graph_schema() -> dict:
 
         node_schemas.append(node_schema)
 
-    # Top-level: array of nodes (flat list — LayerGraph.deserialize accepts this)
-    # composes is handled recursively via a self-reference
-    # For simplicity, we use a broad schema since JSON Schema doesn't easily
-    # represent recursive oneOf + composes.
-    return {
+    # Top-level: object with a 'nodes' array property (OpenAI requires
+    # all tool input schemas to have type: object at the root).
+    nodes_array = {
         "type": "array",
         "items": {
             "oneOf": node_schemas,
@@ -159,6 +157,13 @@ def _build_layer_graph_schema() -> dict:
             "AttributeNode, EnumValueNode). Edges represent cross-references "
             "like INHERITS_FROM, REALIZES, DEPENDS_ON."
         ),
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "nodes": nodes_array,
+        },
+        "required": ["nodes"],
     }
 
 
@@ -211,10 +216,13 @@ CHECK_CLASS_NAME_SCHEMA = {
 PRODUCE_OO_DESIGN_SCHEMA = {
     "name": "produce_oo_design",
     "description": (
-        "Return the final object-oriented class design as a list of "
+        "Submit the final object-oriented class design as a list of "
         "CodeGraphNode dicts in the LayerGraph serialization format. "
-        "Call this ONLY after you are confident the design is correct — use "
-        "validate_design first to check for issues."
+        "The design is stored so that verification tools can validate "
+        "references against it. Call this AFTER you are confident the "
+        "design is correct — use validate_design first to check for "
+        "issues. After this, proceed to resolve verification stubs "
+        "using draft_verifications."
     ),
     "input_schema": _DIAGRAM_SCHEMA,
 }
@@ -260,6 +268,7 @@ def _collect_edges(nodes: list[dict]) -> list[dict]:
     for node in nodes:
         walk(node)
     return all_edges
+
 
 
 def _validate_oo_design(
@@ -378,13 +387,16 @@ def _validate_oo_design(
 # Handlers
 # ══════════════════════════════════════════════════════════════════════════
 
-def handle_validate_design(ctx: DesignToolDispatcher, tool_input: list[dict]) -> str:
+def handle_validate_design(ctx: DesignToolDispatcher, tool_input: dict) -> str:
     """Validate a draft OO design against the dispatcher's lookups.
 
-    ``tool_input`` is the list of CodeGraphNode dicts (the LLM produces
-    an array matching the LayerGraph serialization format).
+    ``tool_input`` is a dict with a ``nodes`` key containing the list
+    of CodeGraphNode dicts (the LLM produces an object matching the
+    LayerGraph serialization format).
     """
-    nodes: list[dict] = tool_input if isinstance(tool_input, list) else [tool_input]
+    nodes: list[dict] = tool_input.get("nodes", [])
+    if not nodes:
+        return json.dumps({"valid": False, "errors": ["No nodes provided"], "warnings": []})
     errors = _validate_oo_design(
         nodes,
         prior_class_lookup=ctx.prior_class_lookup,
@@ -399,6 +411,61 @@ def handle_validate_design(ctx: DesignToolDispatcher, tool_input: list[dict]) ->
         "valid": len(critical) == 0,
         "errors": critical,
         "warnings": warnings,
+    })
+
+
+def handle_produce_oo_design(ctx: DesignToolDispatcher, tool_input: dict) -> str:
+    """Store the final design on the dispatcher for verification tools.
+
+    ``tool_input`` is a dict with a ``nodes`` key containing the list
+    of CodeGraphNode dicts (the LLM produces an object matching the
+    LayerGraph serialization format).  The design is stored on
+    ``ctx.design_draft`` so that the verification dispatcher can
+    validate qname references against it.
+    """
+    nodes: list[dict] = tool_input.get("nodes", [])
+    if not nodes:
+        return json.dumps({
+            "stored": False,
+            "errors": ["No nodes provided"],
+        })
+
+    # Validate before storing
+    errors = _validate_oo_design(
+        nodes,
+        prior_class_lookup=ctx.prior_class_lookup,
+        dependency_lookup=ctx.dependency_lookup,
+        intercomponent_classes=ctx.intercomponent_classes,
+    )
+    critical = [e for e in errors if not e.startswith("Warning:")]
+    warnings = [e.replace("Warning: ", "") for e in errors if e.startswith("Warning:")]
+
+    if critical:
+        return json.dumps({
+            "stored": False,
+            "errors": critical,
+            "warnings": warnings,
+            "hint": "Fix errors and call produce_oo_design again.",
+        })
+
+    # Store the design
+    ctx.design_draft = nodes
+
+    # Update prior_class_lookup with the new design's classes
+    for node in nodes:
+        qn = node.get("qualified_name", "")
+        name = node.get("name", "")
+        if qn and name:
+            ctx.prior_class_lookup[name] = qn
+
+    return json.dumps({
+        "stored": True,
+        "warnings": warnings,
+        "hint": (
+            "Design stored. Now resolve verification stubs using "
+            "draft_verifications, then call "
+            "commit_design_and_verifications to finish."
+        ),
     })
 
 
@@ -467,5 +534,5 @@ def register_all(dispatcher: DesignToolDispatcher) -> None:
     )
     disp.register(
         "produce_oo_design", PRODUCE_OO_DESIGN_SCHEMA,
-        lambda _: json.dumps({"status": "terminal_tool"}),
+        lambda inp: handle_produce_oo_design(disp, inp),
     )
