@@ -121,13 +121,13 @@ class HLR(StructuredNode, CodeGraphNode):
     #    appears as a child of the Component entry.
     #    Example: Component("calculation_engine")-[:COMPOSES]->HLR("Handle errors")
     #
-    #  • TRACES_TO (outgoing) — HLR → CompoundNode | MethodNode | NamespaceNode
-    #    Links a requirement to the design-graph nodes it traces to.
-    #    Multiple RelationshipTo declarations with the same relation type
-    #    targeting different node classes are supported by neomodel;
-    #    CodeGraphNode.walk_edges() iterates all managers and includes
-    #    all TRACES_TO edges regardless of target type.
-    #    Example: HLR("Handle errors")-[:TRACES_TO]->ClassNode("calc::Calculator")
+    #  • COMPOSES (outgoing) — HLR → CompoundNode
+    #    The design-graph nodes (classes, interfaces, enums) that this
+    #    requirement composes.  Uses the same COMPOSES edge type as
+    #    HLR → LLR and Component → HLR so that the entire
+    #    requirement-to-design traceability lives in one composition
+    #    hierarchy.
+    #    Example: HLR("Handle errors")-[:COMPOSES]->ClassNode("calc::Calculator")
     # --------------------------------------------------------------------------
 
     llrs = RelationshipTo(
@@ -135,13 +135,10 @@ class HLR(StructuredNode, CodeGraphNode):
     component = RelationshipFrom(
         'backend_migrated.models.component.Component', 'COMPOSES')
 
-    # TRACES_TO relationships to design-graph nodes
-    traces_to_compounds = RelationshipTo(
-        'codegraph.models.compound.CompoundNode', 'TRACES_TO')
-    traces_to_members = RelationshipTo(
-        'codegraph.models.member.MethodNode', 'TRACES_TO')
-    traces_to_namespaces = RelationshipTo(
-        'codegraph.models.namespace.NamespaceNode', 'TRACES_TO')
+    # Design nodes composed by this requirement (COMPOSES, same edge
+    # type as HLR → LLR)
+    design_compounds = RelationshipTo(
+        'codegraph.models.compound.CompoundNode', 'COMPOSES')
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {"name", "description", "layer", "tags"}
@@ -252,13 +249,9 @@ class LLR(StructuredNode, CodeGraphNode):
     verification_methods = RelationshipTo(
         'backend_migrated.models.verification.VerificationMethod', 'COMPOSES')
 
-    # TRACES_TO relationships to design-graph nodes
-    traces_to_compounds = RelationshipTo(
-        'codegraph.models.compound.CompoundNode', 'TRACES_TO')
-    traces_to_members = RelationshipTo(
-        'codegraph.models.member.MethodNode', 'TRACES_TO')
-    traces_to_namespaces = RelationshipTo(
-        'codegraph.models.namespace.NamespaceNode', 'TRACES_TO')
+    # Design nodes composed by this LLR (COMPOSES, same edge type)
+    design_compounds = RelationshipTo(
+        'codegraph.models.compound.CompoundNode', 'COMPOSES')
 
     # --- Serialization contract ---
     _llm_fields: set[str] = {"name", "description", "layer", "tags"}

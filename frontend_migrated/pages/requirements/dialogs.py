@@ -180,10 +180,16 @@ class DesignHLRDialog:
         ui.notify("Designing — this may take a moment…", type="info")
         try:
             result = await asyncio.to_thread(design_single_hlr, self._hlr_refid)
+            nodes = result.get('nodes_created', 0)
+            verifs = result.get('verifications_resolved', 0)
+            conds = result.get('conditions_created', 0)
+            acts = result.get('actions_created', 0)
+            links = result.get('links_applied', 0)
             ui.notify(
-                f"Created {result['nodes_created']} nodes, "
-                f"{result['triples_created']} triples, "
-                f"{result['links_applied']} requirement links",
+                f"Created {nodes} design nodes, "
+                f"{verifs} verifications resolved, "
+                f"{conds} conditions, {acts} actions, "
+                f"{links} links",
                 type="positive",
             )
         except NotImplementedError:
@@ -192,6 +198,8 @@ class DesignHLRDialog:
                 type="warning",
             )
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             ui.notify(f"Design failed: {e}", type="negative")
         if self._on_done:
             self._on_done()

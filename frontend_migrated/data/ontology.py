@@ -6,7 +6,7 @@ the single data backend.  No imports from ``backend/`` — only from
 
 Architecture (Phase 5 — codegraph migration):
 - Read paths use GraphRepository → LayerGraph → layer_graph_to_cytoscape().
-- Requirement tag enrichment uses neomodel TRACES_TO relationships on
+- Requirement tag enrichment uses neomodel COMPOSES relationships on
   HLR/LLR nodes instead of raw Cypher queries.
 - The Cytoscape dict format is the single graph format for visualisation.
 """
@@ -210,10 +210,10 @@ def _enrich_with_requirement_tags(
     nodes: list[dict],
     mode: str = "none",
 ) -> list[dict]:
-    """Tag design nodes with HLR/LLR badges using neomodel TRACES_TO.
+    """Tag design nodes with HLR/LLR badges using neomodel COMPOSES.
 
-    Walks HLR and LLR neomodel nodes, follows their traces_to_*
-    relationship managers to find linked design nodes, and adds a
+    Walks HLR and LLR neomodel nodes, follows their ``design_compounds``
+    relationship manager to find linked design nodes, and adds a
     ``requirements`` key to matching Cytoscape node dicts.
 
     Args:
@@ -237,7 +237,7 @@ def _enrich_with_requirement_tags(
     if not qn_to_node:
         return nodes
 
-    # Walk HLR TRACES_TO targets
+    # Walk HLR COMPOSES targets
     try:
         from backend_migrated.models.requirement import HLR, LLR
 
@@ -246,31 +246,23 @@ def _enrich_with_requirement_tags(
             hlr_desc = (getattr(hlr, "description", "") or "")[:80]
             badge = {"id": hlr_id, "type": "HLR", "description": hlr_desc}
 
-            for manager in (hlr.traces_to_compounds, hlr.traces_to_members, hlr.traces_to_namespaces):
-                try:
-                    for target in manager.all():
-                        qn = getattr(target, "qualified_name", "")
-                        if qn in qn_to_node:
-                            qn_to_node[qn].setdefault("requirements", []).append(badge)
-                            qn_to_node[qn]["has_requirements"] = "true"
-                except Exception:
-                    pass  # best-effort — manager may not be initialised
+            for target in hlr.design_compounds.all():
+                qn = getattr(target, "qualified_name", "")
+                if qn in qn_to_node:
+                    qn_to_node[qn].setdefault("requirements", []).append(badge)
+                    qn_to_node[qn]["has_requirements"] = "true"
 
-        # Walk LLR TRACES_TO targets
+        # Walk LLR COMPOSES targets
         for llr in LLR.nodes.all():
             llr_id = getattr(llr, "id", None) or getattr(llr, "refid", "")
             llr_desc = (getattr(llr, "description", "") or "")[:80]
             badge = {"id": llr_id, "type": "LLR", "description": llr_desc}
 
-            for manager in (llr.traces_to_compounds, llr.traces_to_members, llr.traces_to_namespaces):
-                try:
-                    for target in manager.all():
-                        qn = getattr(target, "qualified_name", "")
-                        if qn in qn_to_node:
-                            qn_to_node[qn].setdefault("requirements", []).append(badge)
-                            qn_to_node[qn]["has_requirements"] = "true"
-                except Exception:
-                    pass  # best-effort
+            for target in llr.design_compounds.all():
+                qn = getattr(target, "qualified_name", "")
+                if qn in qn_to_node:
+                    qn_to_node[qn].setdefault("requirements", []).append(badge)
+                    qn_to_node[qn]["has_requirements"] = "true"
 
     except Exception:
         log.warning("Requirement tag enrichment failed — continuing without tags", exc_info=True)
@@ -279,10 +271,10 @@ def _enrich_with_requirement_tags(
 
 
 def _tag_direct_nodes_only(nodes: list[dict], hlr_id: str | int) -> None:
-    """Mark seed nodes directly linked to an HLR via TRACES_TO.
+    """Mark seed nodes directly linked to an HLR via COMPOSES.
 
-    Uses neomodel TRACES_TO relationship managers instead of raw Cypher.
-    Modifies nodes in-place.
+    Uses neomodel ``design_compounds`` relationship manager instead of
+    raw Cypher.  Modifies nodes in-place.
 
     Args:
         nodes: Cytoscape-format node dicts.
@@ -305,16 +297,12 @@ def _tag_direct_nodes_only(nodes: list[dict], hlr_id: str | int) -> None:
         hlr_desc = (getattr(hlr, "description", "") or "")[:80]
         badge = {"id": hlr_id, "type": "HLR", "description": hlr_desc}
 
-        # Collect traced qualified names
+        # Collect traced qualified names via COMPOSES
         seed_qns: set[str] = set()
-        for manager in (hlr.traces_to_compounds, hlr.traces_to_members, hlr.traces_to_namespaces):
-            try:
-                for target in manager.all():
-                    qn = getattr(target, "qualified_name", "")
-                    if qn:
-                        seed_qns.add(qn)
-            except Exception:
-                pass
+        for target in hlr.design_compounds.all():
+            qn = getattr(target, "qualified_name", "")
+            if qn:
+                seed_qns.add(qn)
 
         # Tag matching Cytoscape nodes
         for node in nodes:
@@ -455,7 +443,7 @@ def fetch_hlr_graph_data(
 ) -> dict:
     """Fetch the ontology subgraph around an HLR for Cytoscape.js.
 
-    Finds the HLR by refid (or legacy integer id), walks its TRACES_TO
+    Finds the HLR by refid (or legacy integer id), walks its COMPOSES
     relationships to find seed design nodes, builds a LayerGraph from
     those seeds using GraphRepository, and converts to Cytoscape format.
 
@@ -481,19 +469,15 @@ def fetch_hlr_graph_data(
             log.warning("HLR %s not found", hlr_id)
             return {"nodes": [], "edges": []}
 
-        # Collect seed qualified names from TRACES_TO relationships
+        # Collect seed qualified names from COMPOSES relationships
         seed_qns: list[str] = []
-        for manager in (hlr.traces_to_compounds, hlr.traces_to_members, hlr.traces_to_namespaces):
-            try:
-                for target in manager.all():
-                    qn = getattr(target, "qualified_name", "")
-                    if qn:
-                        seed_qns.append(qn)
-            except Exception:
-                pass
+        for target in hlr.design_compounds.all():
+            qn = getattr(target, "qualified_name", "")
+            if qn:
+                seed_qns.append(qn)
 
         if not seed_qns:
-            log.warning("HLR %s has no TRACES_TO targets", hlr_id)
+            log.warning("HLR %s has no COMPOSES design targets", hlr_id)
             return {"nodes": [], "edges": []}
 
         # Build a LayerGraph from the seed nodes using GraphRepository
@@ -657,38 +641,30 @@ def fetch_node_detail_full(qualified_name: str) -> NodeDetailFull | None:
             pass
     node_data["component"] = component_name
 
-    # Requirement tags: walk TRACES_TO on HLR/LLR nodes pointing at this qn
+    # Requirement tags: walk COMPOSES on HLR/LLR nodes pointing at this qn
     requirements: list[dict] = []
     try:
         from backend_migrated.models.requirement import HLR, LLR
 
         for hlr in HLR.nodes.all():
-            for manager in (hlr.traces_to_compounds, hlr.traces_to_members, hlr.traces_to_namespaces):
-                try:
-                    for target in manager.all():
-                        if getattr(target, "qualified_name", "") == qualified_name:
-                            requirements.append({
-                                "id": getattr(hlr, "id", None) or getattr(hlr, "refid", ""),
-                                "type": "HLR",
-                                "description": (getattr(hlr, "description", "") or "")[:80],
-                            })
-                            break  # found this HLR for this qn, no need to check other managers
-                except Exception:
-                    pass
+            for target in hlr.design_compounds.all():
+                if getattr(target, "qualified_name", "") == qualified_name:
+                    requirements.append({
+                        "id": getattr(hlr, "id", None) or getattr(hlr, "refid", ""),
+                        "type": "HLR",
+                        "description": (getattr(hlr, "description", "") or "")[:80],
+                    })
+                    break
 
         for llr in LLR.nodes.all():
-            for manager in (llr.traces_to_compounds, llr.traces_to_members, llr.traces_to_namespaces):
-                try:
-                    for target in manager.all():
-                        if getattr(target, "qualified_name", "") == qualified_name:
-                            requirements.append({
-                                "id": getattr(llr, "id", None) or getattr(llr, "refid", ""),
-                                "type": "LLR",
-                                "description": (getattr(llr, "description", "") or "")[:80],
-                            })
-                            break
-                except Exception:
-                    pass
+            for target in llr.design_compounds.all():
+                if getattr(target, "qualified_name", "") == qualified_name:
+                    requirements.append({
+                        "id": getattr(llr, "id", None) or getattr(llr, "refid", ""),
+                        "type": "LLR",
+                        "description": (getattr(llr, "description", "") or "")[:80],
+                    })
+                    break
     except Exception:
         log.debug("Requirement tag lookup failed for %s", qualified_name, exc_info=True)
 

@@ -373,16 +373,17 @@ def decompose_hlr(refid: str) -> dict:
 
 
 def design_single_hlr(refid: str) -> dict:
-    """Run the design agent on an HLR and persist the ontology results.
+    """Run the design agent on an HLR and persist the results.
 
     Delegates to ``design_and_persist_hlr`` in
     ``backend_migrated.agents.design_hlr`` which handles context
     loading, pipeline execution, and persistence.
 
-    Returns dict with keys ``nodes_created``, ``triples_created``,
-    ``links_applied``.
+    Returns dict with keys ``nodes_created``, ``verifications_resolved``,
+    ``conditions_created``, ``actions_created``, ``links_applied``.
     """
     import os
+    import traceback
     from backend_migrated.agents.design_hlr import design_and_persist_hlr
 
     log_dir = os.path.join(
@@ -390,4 +391,11 @@ def design_single_hlr(refid: str) -> dict:
     )
     os.makedirs(log_dir, exist_ok=True)
 
-    return design_and_persist_hlr(refid=refid, log_dir=log_dir)
+    try:
+        return design_and_persist_hlr(refid=refid, log_dir=log_dir)
+    except Exception as exc:
+        log.error(
+            "design_single_hlr failed for refid=%s: %s", refid[:8], exc,
+            exc_info=True,
+        )
+        raise

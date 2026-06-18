@@ -135,29 +135,28 @@ def fetch_llr_detail(refid: str) -> LLRDetail | None:
         comp_nodes = hlr_nodes[0].component.all()
         components = [c.name for c in comp_nodes if c.name]
 
-    # TRACES_TO triples — walk via neomodel relationship managers
+    # COMPOSES triples — walk via neomodel relationship managers
     triples: list[dict] = []
     try:
         seen = set()
-        for manager in (llr.traces_to_compounds, llr.traces_to_members, llr.traces_to_namespaces):
-            for target in manager.all():
-                qn = getattr(target, "qualified_name", "")
-                if not qn:
+        for target in llr.design_compounds.all():
+            qn = getattr(target, "qualified_name", "")
+            if not qn:
+                continue
+            # Walk the target's outgoing edges
+            target_edges = target.serialize_edges()
+            for edge in target_edges:
+                if edge["relation_type"] in ("IMPLEMENTED_BY", "COMPOSES"):
                     continue
-                # Walk the target's outgoing edges
-                target_edges = target.serialize_edges()
-                for edge in target_edges:
-                    if edge["relation_type"] in ("IMPLEMENTED_BY", "TRACES_TO"):
-                        continue
-                    tgt_qn = edge.get("target_uid", "")
-                    key = (qn, edge["relation_type"], tgt_qn)
-                    if key not in seen and all(key):
-                        seen.add(key)
-                        triples.append({
-                            "subject": qn,
-                            "predicate": edge["relation_type"],
-                            "object": tgt_qn,
-                        })
+                tgt_qn = edge.get("target_uid", "")
+                key = (qn, edge["relation_type"], tgt_qn)
+                if key not in seen and all(key):
+                    seen.add(key)
+                    triples.append({
+                        "subject": qn,
+                        "predicate": edge["relation_type"],
+                        "object": tgt_qn,
+                    })
     except Exception:
         log.warning("Failed to fetch LLR triples", exc_info=True)
 
