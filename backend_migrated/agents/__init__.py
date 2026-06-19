@@ -9,8 +9,14 @@ import from ``backend_migrated`` for data access and schemas — no imports
 from ``backend/``.
 """
 
-from backend_migrated.agents.decompose_hlr import decompose
+from backend_migrated.agents.decompose_hlr import decompose, decompose_and_persist_hlr
 from backend_migrated.agents.design_hlr import design_hlr, design_and_persist_hlr
 from backend_migrated.agents.scaffold_project import scaffold_project
 
-__all__ = ["decompose", "design_hlr", "design_and_persist_hlr", "scaffold_project"]
+__all__ = [
+    "decompose",
+    "decompose_and_persist_hlr",
+    "design_hlr",
+    "design_and_persist_hlr",
+    "scaffold_project",
+]

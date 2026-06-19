@@ -86,11 +86,22 @@ def _load_notional_verifications(llrs: list[LLR]) -> dict[str, list[dict]]:
 
             conditions = vm.conditions.all()
             for cond in sorted(conditions, key=lambda c: c.order):
+                # Traverse LEFT_OPERAND / RIGHT_OPERAND edges to get
+                # the target qualified names.
+                left_targets = cond.left_operand.all()
+                right_targets = cond.right_operand.all()
                 cond_dict = {
-                    "subject_qualified_name": cond.subject_qualified_name or "",
+                    "subject_qualified_name": left_targets[0].qualified_name if left_targets else "",
                     "operator": cond.operator or "==",
-                    "expected_value": cond.expected_value or "",
-                    "object_qualified_name": cond.object_qualified_name or "",
+                    # expected_value is now a transient attr — traverse
+                    # the RIGHT_OPERAND edge to get the value.  For
+                    # LiteralNode targets, use .value; for scaffold
+                    # nodes, use .qualified_name.
+                    "expected_value": (
+                        getattr(right_targets[0], "value", None) or
+                        right_targets[0].qualified_name
+                    ) if right_targets else "",
+                    "object_qualified_name": right_targets[0].qualified_name if right_targets else "",
                 }
                 if cond.phase == "pre":
                     vm_dict["preconditions"].append(cond_dict)
@@ -99,10 +110,12 @@ def _load_notional_verifications(llrs: list[LLR]) -> dict[str, list[dict]]:
 
             actions = vm.actions.all()
             for action in sorted(actions, key=lambda a: a.order):
+                callee_targets = action.callee.all()
+                caller_targets = action.caller.all()
                 vm_dict["actions"].append({
                     "description": action.description or "",
-                    "callee_qualified_name": action.callee_qualified_name or "",
-                    "caller_qualified_name": action.caller_qualified_name or "",
+                    "callee_qualified_name": callee_targets[0].qualified_name if callee_targets else "",
+                    "caller_qualified_name": caller_targets[0].qualified_name if caller_targets else "",
                 })
 
             verifs_for_llr.append(vm_dict)

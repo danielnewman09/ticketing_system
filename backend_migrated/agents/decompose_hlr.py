@@ -459,13 +459,133 @@ def decompose(
     return DecomposedRequirement.model_validate(result)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Full entry point — context loading + decomposition + persistence
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def decompose_and_persist_hlr(
+    refid: str,
+    *,
+    model: str = "",
+    log_dir: str = "",
+) -> dict:
+    """Decompose a single HLR end-to-end: load from Neo4j → decompose → persist.
+
+    Reads the HLR from Neo4j via neomodel, gathers component context,
+    runs the decomposition agent, persists the resulting LLRs, verification
+    methods, conditions, actions, and **scaffold CodeGraphNodes** to Neo4j,
+    and returns a summary.
+
+    Scaffold nodes (``ClassNode`` + ``AttributeNode`` with ``tags=["scaffold"]``)
+    are created from the notional references in verification stubs, providing
+    a rough structural scaffold that the design agent can see and design
+    against.  See :mod:`backend_migrated.requirements.persistence` for
+    details on the scaffold model.
+
+    Args:
+        refid: The HLR's ``refid`` (hex UUID string).
+        model: LLM model override.
+        log_dir: Directory for per-step prompt logs.
+
+    Returns:
+        Dict with keys from :class:`DecompositionResult` plus
+        ``hlr_refid`` and ``num_llrs``.
+
+    Raises:
+        ValueError: If the HLR is not found.
+    """
+    from backend_migrated.models.requirement import HLR
+    from backend_migrated.requirements.persistence import persist_decomposition
+
+    # --- Load HLR from Neo4j ---
+    log.info("decompose_and_persist_hlr: loading HLR %s", refid[:8])
+    hlr = HLR.nodes.get_or_none(refid=refid)
+    if not hlr:
+        raise ValueError(f"HLR {refid} not found")
+
+    hlr_description = hlr.description
+
+    # Component context
+    comp_nodes = hlr.component.all()
+    component_name = comp_nodes[0].name if comp_nodes else ""
+
+    # Dependency context (legacy property, may not exist)
+    dep_ctx = getattr(hlr, "dependency_context", None)
+
+    # --- Prompt log ---
+    prompt_log_file = ""
+    if log_dir:
+        import os
+        os.makedirs(log_dir, exist_ok=True)
+        prompt_log_file = os.path.join(log_dir, f"decompose_hlr_{refid[:8]}.md")
+
+    # --- Run decomposition agent ---
+    log.info("decompose_and_persist_hlr: running decompose for %s", refid[:8])
+    decomposed = decompose(
+        description=hlr_description,
+        component=component_name,
+        dependency_context=dep_ctx,
+        model=model,
+        prompt_log_file=prompt_log_file,
+    )
+
+    log.info(
+        "decompose_and_persist_hlr: decompose produced %d LLRs",
+        len(decomposed.low_level_requirements),
+    )
+    for i, llr_data in enumerate(decomposed.low_level_requirements):
+        log.info(
+            "  LLR[%d]: %s (verifications=%d)",
+            i,
+            llr_data.description[:80],
+            len(llr_data.verifications),
+        )
+
+    # --- Persist to Neo4j (LLRs + verifications + scaffold nodes) ---
+    log.info("decompose_and_persist_hlr: persisting for %s", refid[:8])
+    result = persist_decomposition(refid, decomposed)
+
+    log.info(
+        "Decomposition+persist complete for HLR %s: %d LLRs, %d VMs, "
+        "%d conditions, %d actions, %d scaffold classes, %d scaffold attributes",
+        refid[:8], result.llrs_created, result.verifications_created,
+        result.conditions_created, result.actions_created,
+        result.scaffold_classes, result.scaffold_attributes,
+    )
+
+    return {
+        "hlr_refid": refid,
+        "num_llrs": len(decomposed.low_level_requirements),
+        "llrs_created": result.llrs_created,
+        "verifications_created": result.verifications_created,
+        "conditions_created": result.conditions_created,
+        "actions_created": result.actions_created,
+        "scaffold_classes": result.scaffold_classes,
+        "scaffold_attributes": result.scaffold_attributes,
+        "operand_edges": result.operand_edges,
+        "scaffold_map": result.scaffold_map,
+    }
+
+
 if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
         print("Usage: python -m backend_migrated.agents.decompose_hlr 'description of requirement'")
+        print("       python -m backend_migrated.agents.decompose_hlr --refid <hlr_refid>")
         sys.exit(1)
 
-    description = " ".join(sys.argv[1:])
-    result = decompose(description)
-    print(json.dumps(result.model_dump(), indent=2))
+    if sys.argv[1] == "--refid":
+        if len(sys.argv) < 3:
+            print("Usage: python -m backend_migrated.agents.decompose_hlr --refid <hlr_refid>")
+            sys.exit(1)
+        from backend_migrated.connection import init_neo4j, close_neo4j
+        init_neo4j()
+        result = decompose_and_persist_hlr(refid=sys.argv[2])
+        print(json.dumps(result, indent=2, default=str))
+        close_neo4j()
+    else:
+        description = " ".join(sys.argv[1:])
+        result = decompose(description)
+        print(json.dumps(result.model_dump(), indent=2))

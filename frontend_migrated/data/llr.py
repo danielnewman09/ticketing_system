@@ -93,18 +93,24 @@ def fetch_llr_detail(refid: str) -> LLRDetail | None:
 
         preconditions: list[ConditionRow] = [
             {
-                "subject_qualified_name": c.subject_qualified_name,
+                "subject_qualified_name": c.left_operand.all()[0].qualified_name if c.left_operand.all() else "",
                 "operator": c.operator,
-                "expected_value": c.expected_value,
+                "expected_value": (
+                    getattr(c.right_operand.all()[0], "value", None)
+                    or c.right_operand.all()[0].qualified_name
+                ) if c.right_operand.all() else "",
             }
             for c in cond_nodes
             if c.phase == "pre"
         ]
         postconditions: list[ConditionRow] = [
             {
-                "subject_qualified_name": c.subject_qualified_name,
+                "subject_qualified_name": c.left_operand.all()[0].qualified_name if c.left_operand.all() else "",
                 "operator": c.operator,
-                "expected_value": c.expected_value,
+                "expected_value": (
+                    getattr(c.right_operand.all()[0], "value", None)
+                    or c.right_operand.all()[0].qualified_name
+                ) if c.right_operand.all() else "",
             }
             for c in cond_nodes
             if c.phase == "post"
@@ -113,8 +119,8 @@ def fetch_llr_detail(refid: str) -> LLRDetail | None:
             {
                 "order": a.order,
                 "description": a.description,
-                "callee_qualified_name": a.callee_qualified_name,
-                "caller_qualified_name": a.caller_qualified_name,
+                "callee_qualified_name": a.callee.all()[0].qualified_name if a.callee.all() else "",
+                "caller_qualified_name": a.caller.all()[0].qualified_name if a.caller.all() else "",
             }
             for a in act_nodes
         ]

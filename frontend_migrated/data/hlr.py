@@ -222,154 +222,36 @@ def delete_hlr(refid: str) -> bool:
 def decompose_hlr(refid: str) -> dict:
     """Run the decomposition agent on an HLR and persist results to Neo4j.
 
-    Reads the HLR and sibling HLRs from Neo4j, calls the LLM-based
-    ``decompose()`` function, then persists the resulting LLRs and
-    verification methods using neomodel models.
+    Delegates to ``decompose_and_persist_hlr`` in
+    ``backend_migrated.agents.decompose_hlr`` which handles HLR loading,
+    LLM decomposition, and persistence — including scaffold CodeGraphNode
+    creation from notional verification references.
 
     Returns a dict with keys:
-      llrs_created        — number of LLRs created
+      llrs_created          — number of LLRs created
       verifications_created — number of VerificationMethods created
+      conditions_created    — number of Conditions created
+      actions_created       — number of Actions created
+      scaffold_classes      — number of scaffold ClassNodes created
+      scaffold_attributes   — number of scaffold AttributeNodes created
+      operand_edges         — number of typed edges (LEFT_OPERAND, CALLEE, etc.)
     """
     import os
+    from backend_migrated.agents.decompose_hlr import decompose_and_persist_hlr
 
-    from backend_migrated.models import Condition as Cond
-    from backend_migrated.models import Action as Act
-    from backend_migrated.agents.decompose_hlr import decompose
-
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
+    log_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs"
+    )
     os.makedirs(log_dir, exist_ok=True)
-    prompt_log_file = os.path.join(log_dir, f"decompose_hlr_{refid}_raw.txt")
 
-    hlr = HLR.nodes.get_or_none(refid=refid)
-    if not hlr:
-        raise ValueError(f"HLR {refid} not found")
-    hlr_description = hlr.description
-
-    # dependency_context is a legacy property that may not be on every node
-    dep_ctx = getattr(hlr, "dependency_context", None)
-
-    # Get the HLR's component name
-    comp_nodes = hlr.component.all()
-    component_name = comp_nodes[0].name if comp_nodes else ""
-
-    # Run decomposition agent
-    decomposed = decompose(
-        description=hlr_description,
-        component=component_name,
-        dependency_context=dep_ctx,
-        prompt_log_file=prompt_log_file,
-    )
-
-    log.info(
-        "Decomposition of HLR %s produced %d LLRs",
-        refid[:8],
-        len(decomposed.low_level_requirements),
-    )
-    for i, llr_data in enumerate(decomposed.low_level_requirements):
-        log.info(
-            "  LLR[%d]: %s (verifications=%d)",
-            i,
-            llr_data.description[:80],
-            len(llr_data.verifications),
+    try:
+        return decompose_and_persist_hlr(refid=refid, log_dir=log_dir)
+    except Exception as exc:
+        log.error(
+            "decompose_hlr failed for refid=%s: %s", refid[:8], exc,
+            exc_info=True,
         )
-
-    # Persist results using neomodel models.
-    # Each LLR/VM/Condition/Action is saved individually so that a single
-    # bad record doesn't abort the entire batch — partial progress is
-    # better than losing everything.
-    llrs_created = 0
-    verifications_created = 0
-    errors: list[str] = []
-
-    for li, llr_data in enumerate(decomposed.low_level_requirements):
-        try:
-            llr = LLR.save_new(description=llr_data.description, layer="design")
-        except Exception as exc:
-            log.error("Failed to save LLR[%d]: %s", li, exc, exc_info=True)
-            errors.append(f"LLR[{li}]: {exc}")
-            continue
-
-        try:
-            hlr.llrs.connect(llr)
-        except Exception as exc:
-            log.warning("Failed to connect LLR[%d] to HLR: %s", li, exc)
-            # Still count the LLR — it exists even if the edge failed
-
-        llrs_created += 1
-        log.info("Saved LLR[%d] refid=%s", li, llr.refid[:8])
-
-        for vi, v in enumerate(llr_data.verifications):
-            try:
-                vm = VerificationMethod.save_new(
-                    method=v["method"],
-                    test_name=v.get("test_name", "") or "",
-                    description=v.get("description", "") or "",
-                    layer="design",
-                )
-                llr.verification_methods.connect(vm)
-                verifications_created += 1
-                log.info("Saved VM[%d] for LLR[%d] refid=%s", vi, li, vm.refid[:8])
-            except Exception as exc:
-                log.error(
-                    "Failed to save VM[%d] for LLR[%d]: %s", vi, li, exc, exc_info=True,
-                )
-                errors.append(f"LLR[{li}].VM[{vi}]: {exc}")
-                continue
-
-            for i, cond in enumerate(v.get("preconditions", [])):
-                try:
-                    c = Cond.save_new(
-                        phase="pre",
-                        order=i,
-                        operator=cond["operator"],
-                        expected_value=cond.get("expected_value", cond.get("expected", "")),
-                        subject_qualified_name=cond["subject_qualified_name"],
-                        object_qualified_name=cond.get("object_qualified_name", ""),
-                        layer="design",
-                    )
-                    vm.conditions.connect(c)
-                except Exception as exc:
-                    log.warning("Failed to save precondition[%d] for LLR[%d].VM[%d]: %s", i, li, vi, exc)
-
-            for i, action in enumerate(v.get("actions", [])):
-                try:
-                    a = Act.save_new(
-                        order=i,
-                        description=action["description"],
-                        caller_qualified_name=action.get("caller_qualified_name", ""),
-                        callee_qualified_name=action.get("callee_qualified_name", ""),
-                        layer="design",
-                    )
-                    vm.actions.connect(a)
-                except Exception as exc:
-                    log.warning("Failed to save action[%d] for LLR[%d].VM[%d]: %s", i, li, vi, exc)
-
-            for i, cond in enumerate(v.get("postconditions", [])):
-                try:
-                    c = Cond.save_new(
-                        phase="post",
-                        order=i,
-                        operator=cond["operator"],
-                        expected_value=cond.get("expected_value", cond.get("expected", "")),
-                        subject_qualified_name=cond["subject_qualified_name"],
-                        object_qualified_name=cond.get("object_qualified_name", ""),
-                        layer="design",
-                    )
-                    vm.conditions.connect(c)
-                except Exception as exc:
-                    log.warning("Failed to save postcondition[%d] for LLR[%d].VM[%d]: %s", i, li, vi, exc)
-
-    if errors:
-        log.warning(
-            "Decomposition completed with %d errors: %s",
-            len(errors),
-            "; ".join(errors[:5]),
-        )
-
-    return {
-        "llrs_created": llrs_created,
-        "verifications_created": verifications_created,
-    }
+        raise
 
 
 def design_single_hlr(refid: str) -> dict:

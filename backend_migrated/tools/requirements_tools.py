@@ -47,6 +47,31 @@ log = logging.getLogger(__name__)
 # Internal helpers
 # ══════════════════════════════════════════════════════════════════════════
 
+def _get_expected_value_from_edge(cond) -> str:
+    """Traverse the RIGHT_OPERAND edge to get the expected value.
+
+    The ``expected_value`` string property has been removed from
+    Condition nodes.  Instead, the right-hand side of the assertion is
+    a ``RIGHT_OPERAND`` edge pointing to either a ``LiteralNode``
+    (for primitive values) or a scaffold node (for enum values /
+    notional references).
+
+    For ``LiteralNode`` targets, returns the ``value`` property.
+    For other targets (AttributeNode, ClassNode), returns the
+    ``qualified_name``.
+    """
+    targets = cond.right_operand.all()
+    if not targets:
+        return ""
+    target = targets[0]
+    # LiteralNode has a 'value' property
+    val = getattr(target, "value", None)
+    if val is not None:
+        return val
+    # Fall back to qualified_name for scaffold nodes
+    return getattr(target, "qualified_name", "")
+
+
 def _serialize_hlr_brief(hlr) -> dict:
     """Serialize an HLR neomodel node to a brief dict (no children)."""
     return {
@@ -85,15 +110,23 @@ def _serialize_verification(vm) -> dict:
     pre_conditions = []
     post_conditions = []
     for cond in sorted(conditions, key=lambda c: c.order):
+        # Traverse LEFT_OPERAND / RIGHT_OPERAND edges to get the target
+        # qualified names — the string properties have been removed in
+        # favor of typed edges to scaffold/design nodes.
+        left_targets = cond.left_operand.all()
+        right_targets = cond.right_operand.all()
         cond_dict = {
             "refid": cond.refid,
             "name": cond.name or "",
             "phase": cond.phase,
             "order": cond.order,
             "operator": cond.operator,
-            "expected_value": cond.expected_value or "",
-            "subject_qualified_name": cond.subject_qualified_name or "",
-            "object_qualified_name": cond.object_qualified_name or "",
+            # expected_value is now a transient attr — traverse the
+            # RIGHT_OPERAND edge to get the value from the target node.
+            # LiteralNodes carry .value; scaffold nodes use .qualified_name.
+            "expected_value": _get_expected_value_from_edge(cond),
+            "subject_qualified_name": left_targets[0].qualified_name if left_targets else "",
+            "object_qualified_name": right_targets[0].qualified_name if right_targets else "",
             "description": cond.description or "",
         }
         if cond.phase == "pre":
@@ -112,8 +145,10 @@ def _serialize_verification(vm) -> dict:
             "name": action.name or "",
             "order": action.order,
             "description": action.description or "",
-            "caller_qualified_name": action.caller_qualified_name or "",
-            "callee_qualified_name": action.callee_qualified_name or "",
+            # Traverse CALLEE / CALLER edges to get the target
+            # qualified names — the string properties have been removed.
+            "caller_qualified_name": action.caller.all()[0].qualified_name if action.caller.all() else "",
+            "callee_qualified_name": action.callee.all()[0].qualified_name if action.callee.all() else "",
         }
         for action in sorted(actions, key=lambda a: a.order)
     ]
