@@ -29,7 +29,7 @@ Usage::
 
     # Design + verification agent (single tool loop)
     design_disp = DesignToolDispatcher(
-        prior_class_lookup={"Calculator": "calc::Calculator"},
+        prior_class_lookup={"Thermostat": "climate::Thermostat"},
     )
     verif_disp = VerificationDispatcher(design_dispatcher=design_disp)
 
@@ -68,12 +68,12 @@ class DesignToolDispatcher(CodeGraphDispatcher):
     Usage::
 
         d = DesignToolDispatcher(
-            prior_class_lookup={"Calc": "calc::CalcEngine"},
+            prior_class_lookup={"Thermostat": "climate::Thermostat"},
             dependency_lookup={"std::vector": "std::vector"},
             intercomponent_classes=[
                 {"qualified_name": "ui::Widget", "kind": "class", "name": "Widget"},
             ],
-            component_namespace="calc",
+            component_namespace="climate",
         )
         schemas = d.all_tool_schemas
         result = d.dispatch("check_class_name", {"name": "Widget"})

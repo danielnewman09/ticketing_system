@@ -60,7 +60,7 @@ def _get_expected_value_from_edge(cond) -> str:
     For other targets (AttributeNode, ClassNode), returns the
     ``qualified_name``.
     """
-    targets = cond.right_operand.all()
+    targets = get_typed_edge_targets(cond, "RIGHT_OPERAND")
     if not targets:
         return ""
     target = targets[0]
@@ -113,8 +113,8 @@ def _serialize_verification(vm) -> dict:
         # Traverse LEFT_OPERAND / RIGHT_OPERAND edges to get the target
         # qualified names — the string properties have been removed in
         # favor of typed edges to scaffold/design nodes.
-        left_targets = cond.left_operand.all()
-        right_targets = cond.right_operand.all()
+        left_targets = get_typed_edge_targets(cond, "LEFT_OPERAND")
+        right_targets = get_typed_edge_targets(cond, "RIGHT_OPERAND")
         cond_dict = {
             "refid": cond.refid,
             "name": cond.name or "",
@@ -125,8 +125,8 @@ def _serialize_verification(vm) -> dict:
             # RIGHT_OPERAND edge to get the value from the target node.
             # LiteralNodes carry .value; scaffold nodes use .qualified_name.
             "expected_value": _get_expected_value_from_edge(cond),
-            "subject_qualified_name": left_targets[0].qualified_name if left_targets else "",
-            "object_qualified_name": right_targets[0].qualified_name if right_targets else "",
+            "subject_qualified_name": left_targets[0]["qualified_name"] if left_targets else "",
+            "object_qualified_name": right_targets[0]["qualified_name"] if right_targets else "",
             "description": cond.description or "",
         }
         if cond.phase == "pre":
@@ -147,8 +147,8 @@ def _serialize_verification(vm) -> dict:
             "description": action.description or "",
             # Traverse CALLEE / CALLER edges to get the target
             # qualified names — the string properties have been removed.
-            "caller_qualified_name": action.caller.all()[0].qualified_name if action.caller.all() else "",
-            "callee_qualified_name": action.callee.all()[0].qualified_name if action.callee.all() else "",
+            "caller_qualified_name": get_typed_edge_targets(action, "CALLER")[0].qualified_name if get_typed_edge_targets(action, "CALLER") else "",
+            "callee_qualified_name": get_typed_edge_targets(action, "CALLEE")[0].qualified_name if get_typed_edge_targets(action, "CALLEE") else "",
         }
         for action in sorted(actions, key=lambda a: a.order)
     ]

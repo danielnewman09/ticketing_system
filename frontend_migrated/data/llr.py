@@ -20,6 +20,7 @@ import logging
 from typing import TypedDict
 
 from backend_migrated.models import HLR, LLR, VerificationMethod, Condition, Action
+from backend_migrated.models.verification import get_typed_edge_targets
 
 log = logging.getLogger(__name__)
 
@@ -91,39 +92,44 @@ def fetch_llr_detail(refid: str) -> LLRDetail | None:
         cond_nodes = vm.conditions.all()
         act_nodes = vm.actions.all()
 
-        preconditions: list[ConditionRow] = [
-            {
-                "subject_qualified_name": c.left_operand.all()[0].qualified_name if c.left_operand.all() else "",
+        preconditions: list[ConditionRow] = []
+        for c in cond_nodes:
+            if c.phase != "pre":
+                continue
+            left = get_typed_edge_targets(c, "LEFT_OPERAND")
+            right = get_typed_edge_targets(c, "RIGHT_OPERAND")
+            preconditions.append({
+                "subject_qualified_name": left[0]["qualified_name"] if left else "",
                 "operator": c.operator,
                 "expected_value": (
-                    getattr(c.right_operand.all()[0], "value", None)
-                    or c.right_operand.all()[0].qualified_name
-                ) if c.right_operand.all() else "",
-            }
-            for c in cond_nodes
-            if c.phase == "pre"
-        ]
-        postconditions: list[ConditionRow] = [
-            {
-                "subject_qualified_name": c.left_operand.all()[0].qualified_name if c.left_operand.all() else "",
+                    right[0].get("value") or right[0]["qualified_name"]
+                ) if right else "",
+            })
+
+        postconditions: list[ConditionRow] = []
+        for c in cond_nodes:
+            if c.phase != "post":
+                continue
+            left = get_typed_edge_targets(c, "LEFT_OPERAND")
+            right = get_typed_edge_targets(c, "RIGHT_OPERAND")
+            postconditions.append({
+                "subject_qualified_name": left[0]["qualified_name"] if left else "",
                 "operator": c.operator,
                 "expected_value": (
-                    getattr(c.right_operand.all()[0], "value", None)
-                    or c.right_operand.all()[0].qualified_name
-                ) if c.right_operand.all() else "",
-            }
-            for c in cond_nodes
-            if c.phase == "post"
-        ]
-        actions: list[ActionRow] = [
-            {
+                    right[0].get("value") or right[0]["qualified_name"]
+                ) if right else "",
+            })
+
+        actions: list[ActionRow] = []
+        for a in act_nodes:
+            callee = get_typed_edge_targets(a, "CALLEE")
+            caller = get_typed_edge_targets(a, "CALLER")
+            actions.append({
                 "order": a.order,
                 "description": a.description,
-                "callee_qualified_name": a.callee.all()[0].qualified_name if a.callee.all() else "",
-                "caller_qualified_name": a.caller.all()[0].qualified_name if a.caller.all() else "",
-            }
-            for a in act_nodes
-        ]
+                "callee_qualified_name": callee[0]["qualified_name"] if callee else "",
+                "caller_qualified_name": caller[0]["qualified_name"] if caller else "",
+            })
 
         verifications.append({
             "id": vm.refid,

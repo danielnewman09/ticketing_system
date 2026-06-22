@@ -261,8 +261,9 @@ def design_single_hlr(refid: str) -> dict:
     ``backend_migrated.agents.design_hlr`` which handles context
     loading, pipeline execution, and persistence.
 
-    Returns dict with keys ``nodes_created``, ``verifications_resolved``,
-    ``conditions_created``, ``actions_created``, ``links_applied``.
+    Returns dict with keys ``nodes_updated``, ``nodes_created``, ``edges_linked``,
+    ``verifications_resolved``, ``conditions_created``, ``actions_created``,
+    ``links_applied``, ``scaffold_retaged``, ``scaffold_cleaned``.
     """
     import os
     import traceback

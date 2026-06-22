@@ -175,7 +175,7 @@ def build_existing_classes_section(existing_classes: list[dict]) -> str:
 
     Args:
         existing_classes: List of dicts, each with keys:
-            - qualified_name: e.g., "calc::core::Calculator"
+            - qualified_name: e.g., "climate::core::Thermostat"
             - kind: e.g., "class", "interface", "enum"
             - description: what the class does
             - methods: list of {"name": str, "visibility": str} dicts

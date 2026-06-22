@@ -10,9 +10,9 @@ used in the *same* agent loop as the design tools.  The workflow is:
 4. Agent calls ``commit_design_and_verifications`` (terminal)
 
 The notional stubs come from the ``decompose`` phase and use placeholder
-references like ``Engine.result`` or ``Display.current_value``.  The
+references like ``Thermostat.current_reading`` or ``Display.shown_temp``.  The
 verification phase maps these to real qualified names from the design
-(e.g. ``calculation_engine::CalculationResult::result_value``).
+(e.g. ``climate_control::ClimateSensor::current_reading``).
 """
 
 from __future__ import annotations
@@ -161,7 +161,7 @@ DRAFT_VERIFICATIONS_SCHEMA = {
                             },
                             "test_name": {
                                 "type": "string",
-                                "description": "Snake_case test function name (e.g. 'test_add_returns_sum').",
+                                "description": "Snake_case test function name (e.g. 'test_set_target_returns_reading').",
                             },
                             "description": {
                                 "type": "string",

@@ -21,6 +21,9 @@ from pathlib import Path
 
 import pytest
 
+from backend_migrated.models.verification import get_typed_edge_targets
+from backend_migrated.requirements.persistence import persist_decomposition
+
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_NEO4J_INTEGRATION") != "1",
     reason="Set RUN_NEO4J_INTEGRATION=1 to run Neo4j integration tests",
@@ -102,88 +105,77 @@ def _make_decomposition():
 
     return DecomposedRequirementSchema(
         description="The Calculation Engine shall expose arithmetic operations",
-        low_level_requirements=[
-            {
-                "description": (
-                    "The Calculation Engine shall expose an addition "
-                    "operation that accepts two numeric operands and returns "
-                    "their sum. The operation rejects non-numeric inputs "
-                    "with an error signal."
-                ),
-                "verifications": [
-                    {
-                        "method": "automated",
-                        "test_name": "test_add_returns_sum_of_two_valid_operands",
-                        "description": (
-                            "Invoke the addition operation with numeric "
-                            "operands and verify the returned result is their sum."
-                        ),
-                        "preconditions": [
-                            {
-                                "subject_qualified_name": "Engine.is_initialized",
-                                "operator": "is_true",
-                                "expected": "true",
-                            },
-                        ],
-                        "actions": [
-                            {
-                                "description": (
-                                    "Invoke the add operation with operands 10 and 20"
-                                ),
-                                "callee_qualified_name": "Engine.add",
-                            },
-                        ],
-                        "postconditions": [
-                            {
-                                "subject_qualified_name": "Engine.result",
-                                "operator": "==",
-                                "expected": "30",
-                            },
-                            {
-                                "subject_qualified_name": "Engine.is_success",
-                                "operator": "is_true",
-                                "expected": "true",
-                            },
-                        ],
-                    },
-                    {
-                        "method": "automated",
-                        "test_name": "test_add_rejects_non_numeric_operand",
-                        "description": (
-                            "Invoke the addition operation with a non-numeric "
-                            "operand and verify the error signal indicates invalid input."
-                        ),
-                        "preconditions": [
-                            {
-                                "subject_qualified_name": "Engine.is_initialized",
-                                "operator": "is_true",
-                                "expected": "true",
-                            },
-                        ],
-                        "actions": [
-                            {
-                                "description": (
-                                    "Invoke the add operation with a non-numeric "
-                                    "string operand"
-                                ),
-                                "callee_qualified_name": "Engine.add",
-                            },
-                        ],
-                        "postconditions": [
-                            {
-                                "subject_qualified_name": "Engine.error_signal",
-                                "operator": "==",
-                                "expected": "InvalidInput",
-                            },
-                            {
-                                "subject_qualified_name": "Engine.is_success",
-                                "operator": "is_false",
-                                "expected": "false",
-                            },
-                        ],
-                    },
-                ],
-            },
+        nodes=[
+            # LLR
+            {"type": "LLR", "refid": "llr-1", "description": (
+                "The Calculation Engine shall expose an addition "
+                "operation that accepts two numeric operands and returns "
+                "their sum. The operation rejects non-numeric inputs "
+                "with an error signal."
+            ), "edges": [
+                {"relation_type": "COMPOSES", "target_uid": "vm-1", "target_type": "VerificationMethod"},
+                {"relation_type": "COMPOSES", "target_uid": "vm-2", "target_type": "VerificationMethod"},
+            ]},
+            # VM 1 — happy path
+            {"type": "VerificationMethod", "refid": "vm-1", "method": "automated",
+             "test_name": "test_add_returns_sum_of_two_valid_operands",
+             "description": "Invoke the addition operation with numeric operands and verify the returned result is their sum.",
+             "edges": [
+                {"relation_type": "COMPOSES", "target_uid": "cond-1", "target_type": "Condition"},
+                {"relation_type": "COMPOSES", "target_uid": "act-1", "target_type": "Action"},
+                {"relation_type": "COMPOSES", "target_uid": "cond-2", "target_type": "Condition"},
+                {"relation_type": "COMPOSES", "target_uid": "cond-3", "target_type": "Condition"},
+            ]},
+            {"type": "Condition", "refid": "cond-1", "phase": "pre", "operator": "is_true",
+             "edges": [
+                {"relation_type": "LEFT_OPERAND", "target_uid": "Engine::is_initialized", "target_type": "AttributeNode"},
+                {"relation_type": "RIGHT_OPERAND", "target_uid": "literal::true", "target_type": "LiteralNode"},
+            ]},
+            {"type": "Action", "refid": "act-1",
+             "description": "Invoke the add operation with operands 10 and 20",
+             "edges": [
+                {"relation_type": "CALLEE", "target_uid": "Engine::add", "target_type": "AttributeNode"},
+            ]},
+            {"type": "Condition", "refid": "cond-2", "phase": "post", "operator": "==",
+             "edges": [
+                {"relation_type": "LEFT_OPERAND", "target_uid": "Engine::result", "target_type": "AttributeNode"},
+                {"relation_type": "RIGHT_OPERAND", "target_uid": "literal::30", "target_type": "LiteralNode"},
+            ]},
+            {"type": "Condition", "refid": "cond-3", "phase": "post", "operator": "is_true",
+             "edges": [
+                {"relation_type": "LEFT_OPERAND", "target_uid": "Engine::is_success", "target_type": "AttributeNode"},
+                {"relation_type": "RIGHT_OPERAND", "target_uid": "literal::true", "target_type": "LiteralNode"},
+            ]},
+            # VM 2 — error path
+            {"type": "VerificationMethod", "refid": "vm-2", "method": "automated",
+             "test_name": "test_add_rejects_non_numeric_operand",
+             "description": "Invoke the addition operation with a non-numeric operand and verify the error signal indicates invalid input.",
+             "edges": [
+                {"relation_type": "COMPOSES", "target_uid": "cond-4", "target_type": "Condition"},
+                {"relation_type": "COMPOSES", "target_uid": "act-2", "target_type": "Action"},
+                {"relation_type": "COMPOSES", "target_uid": "cond-5", "target_type": "Condition"},
+                {"relation_type": "COMPOSES", "target_uid": "cond-6", "target_type": "Condition"},
+            ]},
+            {"type": "Condition", "refid": "cond-4", "phase": "pre", "operator": "is_true",
+             "edges": [
+                {"relation_type": "LEFT_OPERAND", "target_uid": "Engine::is_initialized", "target_type": "AttributeNode"},
+                {"relation_type": "RIGHT_OPERAND", "target_uid": "literal::true", "target_type": "LiteralNode"},
+            ]},
+            {"type": "Action", "refid": "act-2",
+             "description": "Invoke the add operation with a non-numeric string operand",
+             "edges": [
+                {"relation_type": "CALLEE", "target_uid": "Engine::add", "target_type": "AttributeNode"},
+            ]},
+            {"type": "Condition", "refid": "cond-5", "phase": "post", "operator": "==",
+             "edges": [
+                {"relation_type": "LEFT_OPERAND", "target_uid": "Engine::error_signal", "target_type": "AttributeNode"},
+                {"relation_type": "RIGHT_OPERAND", "target_uid": "InvalidInput", "target_type": "AttributeNode"},
+            ]},
+            {"type": "Condition", "refid": "cond-6", "phase": "post", "operator": "is_false",
+             "edges": [
+                {"relation_type": "LEFT_OPERAND", "target_uid": "Engine::is_success", "target_type": "AttributeNode"},
+                {"relation_type": "RIGHT_OPERAND", "target_uid": "literal::false", "target_type": "LiteralNode"},
+            ]},
         ],
     )
 
@@ -199,7 +191,6 @@ class TestScaffoldNodeCreation:
     def test_creates_scaffold_class_nodes(self, clean_neo4j):
         """ClassNode scaffold nodes should be created for each bare class reference."""
         from codegraph.models.compound import ClassNode
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -216,15 +207,14 @@ class TestScaffoldNodeCreation:
     def test_creates_scaffold_attribute_nodes(self, clean_neo4j):
         """AttributeNode scaffold nodes should be created for each member reference."""
         from codegraph.models.member import AttributeNode
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
 
         result = persist_decomposition(hlr.refid, decomp)
 
-        # Engine.result, Engine.add, Engine.is_initialized, Engine.is_success,
-        # Engine.error_signal — all become AttributeNode
+        # Engine::result, Engine::add, Engine::is_initialized, Engine::is_success,
+        # Engine::error_signal — all become AttributeNode
         expected_members = [
             "Engine::result",
             "Engine::add",
@@ -241,7 +231,6 @@ class TestScaffoldNodeCreation:
     def test_scaffold_attributes_are_composed_by_class(self, clean_neo4j):
         """COMPOSES edges should connect scaffold ClassNode → AttributeNode."""
         from codegraph.models.compound import ClassNode
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -260,17 +249,16 @@ class TestScaffoldNodeCreation:
 
     def test_all_members_are_attribute_kind(self, clean_neo4j):
         """Per the 'everything is an attribute' simplification, all members
-        (including methods like Engine.add) should be AttributeNode, not MethodNode.
+        (including methods like Engine::add) should be AttributeNode, not MethodNode.
         """
         from codegraph.models.member import MethodNode, AttributeNode
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
 
         persist_decomposition(hlr.refid, decomp)
 
-        # Engine.add is a callee (a method call), but should still be
+        # Engine::add is a callee (a method call), but should still be
         # an AttributeNode scaffold, not a MethodNode
         add_as_attr = AttributeNode.nodes.get_or_none(qualified_name="Engine::add")
         assert add_as_attr is not None
@@ -287,7 +275,6 @@ class TestTypedEdges:
     def test_left_operand_edges_to_scaffold(self, clean_neo4j):
         """LEFT_OPERAND edges should connect Condition nodes to scaffold nodes."""
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -312,7 +299,6 @@ class TestTypedEdges:
     def test_callee_edges_to_scaffold(self, clean_neo4j):
         """CALLEE edges should connect Action nodes to scaffold nodes."""
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -340,7 +326,6 @@ class TestEdgeReferences:
     def test_condition_subject_via_left_operand_edge(self, clean_neo4j):
         """LEFT_OPERAND edges should point to scaffold nodes with ::-separated qnames."""
         from backend_migrated.models.verification import Condition
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -350,9 +335,9 @@ class TestEdgeReferences:
         # Load saved conditions and traverse LEFT_OPERAND edges
         conditions = Condition.nodes.all()
         for cond in conditions:
-            left_targets = cond.left_operand.all()
+            left_targets = get_typed_edge_targets(cond, "LEFT_OPERAND")
             if left_targets:
-                qn = left_targets[0].qualified_name
+                qn = left_targets[0]["qualified_name"]
                 # Should use :: separator (scaffold format), not dot
                 assert "." not in qn, (
                     f"Scaffold qname should not contain dots: '{qn}'"
@@ -361,7 +346,6 @@ class TestEdgeReferences:
     def test_action_callee_via_callee_edge(self, clean_neo4j):
         """CALLEE edges should point to scaffold nodes with ::-separated qnames."""
         from backend_migrated.models.verification import Action
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -370,9 +354,9 @@ class TestEdgeReferences:
 
         actions = Action.nodes.all()
         for action in actions:
-            callee_targets = action.callee.all()
+            callee_targets = get_typed_edge_targets(action, "CALLEE")
             if callee_targets:
-                qn = callee_targets[0].qualified_name
+                qn = callee_targets[0]["qualified_name"]
                 assert "." not in qn, (
                     f"Scaffold qname should not contain dots: '{qn}'"
                 )
@@ -383,7 +367,6 @@ class TestEdgeReferences:
         the edges are the references.
         """
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -423,7 +406,6 @@ class TestExpectedValueEdges:
     def test_literal_nodes_created_for_primitive_values(self, clean_neo4j):
         """Primitive expected values (numbers, booleans) should create LiteralNode scaffolds."""
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -451,7 +433,6 @@ class TestExpectedValueEdges:
     def test_right_operand_edges_to_literals(self, clean_neo4j):
         """RIGHT_OPERAND edges should connect Conditions to LiteralNodes for primitive values."""
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -475,7 +456,6 @@ class TestExpectedValueEdges:
     def test_enum_value_creates_scaffold_not_literal(self, clean_neo4j):
         """Enum-like expected values (e.g. 'InvalidInput') should create scaffold AttributeNodes, not LiteralNodes."""
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -509,7 +489,6 @@ class TestExpectedValueEdges:
     def test_no_expected_value_string_property_persisted(self, clean_neo4j):
         """Condition nodes should NOT have expected_value as a stored property."""
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -530,7 +509,6 @@ class TestExpectedValueEdges:
     def test_literal_nodes_deduplicated(self, clean_neo4j):
         """Re-running decomposition should not duplicate LiteralNodes."""
         from neomodel import db
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -557,7 +535,6 @@ class TestDeduplication:
     def test_scaffold_nodes_deduplicated(self, clean_neo4j):
         """Running decomposition twice should not duplicate scaffold nodes."""
         from codegraph.models.compound import ClassNode
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -577,7 +554,6 @@ class TestDeduplication:
     def test_scaffold_shared_across_hlrs(self, clean_neo4j):
         """Two HLRs referencing the same notional class should share the scaffold."""
         from codegraph.models.compound import ClassNode
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr1 = _seed_hlr("HLR 1")
         hlr2 = _seed_hlr("HLR 2")
@@ -981,7 +957,6 @@ class TestArtifactSnapshot:
 
     def test_save_persisted_graph_snapshot(self, clean_neo4j, artifact_path):
         """Persist a mock decomposition and save all Neo4j nodes as artifacts."""
-        from backend_migrated.requirements.persistence import persist_decomposition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -1001,9 +976,7 @@ class TestArtifactSnapshot:
             "actions_created": result.actions_created,
             "scaffold_classes": result.scaffold_classes,
             "scaffold_attributes": result.scaffold_attributes,
-            "scaffold_literals": len(result.scaffold_map) - result.scaffold_classes - result.scaffold_attributes,
             "operand_edges": result.operand_edges,
-            "scaffold_map": result.scaffold_map,
         }
         json_payload = {
             "result": result_dict,

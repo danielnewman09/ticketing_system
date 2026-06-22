@@ -36,10 +36,6 @@ from backend_migrated.agents.decompose_hlr import (
 )
 from backend_migrated.requirements.schemas import (
     DecomposedRequirementSchema,
-    VerificationMethodSchema,
-    ConditionSchema,
-    ActionSchema,
-    detail_schema,
 )
 
 from tests.agents import agent
@@ -143,9 +139,9 @@ def _save_artifacts(
         "hlr_component": HLR_COMPONENT,
         "success": parsed_result is not None,
         "error": error,
-        "num_llrs": len(parsed_result.low_level_requirements) if parsed_result else 0,
+        "num_llrs": len([n for n in parsed_result.nodes if n.get("type") == "LLR"]) if parsed_result else 0,
         "total_verifications": (
-            sum(len(llr.verifications) for llr in parsed_result.low_level_requirements)
+            len([n for n in parsed_result.nodes if n.get("type") == "VerificationMethod"])
             if parsed_result else 0
         ),
     }
@@ -169,50 +165,30 @@ class TestDecomposeHLR:
     and assert structural properties of the result.
     """
 
-    def test_tool_schema_derived_from_neomodel(self):
-        """Verify the tool input_schema is generated from neomodel _detail_fields."""
+    def test_tool_schema_flat_node_format(self):
+        """Verify the tool input_schema uses a flat nodes list."""
         schema = TOOL_DEFINITION["input_schema"]
 
-        # The schema must have the expected top-level keys
         assert schema["type"] == "object"
         assert "description" in schema["properties"]
-        assert "low_level_requirements" in schema["properties"]
+        assert "nodes" in schema["properties"]
         assert "description" in schema["required"]
-        assert "low_level_requirements" in schema["required"]
+        assert "nodes" in schema["required"]
 
-        # The $defs must include LowLevelRequirementSchema
-        assert "LowLevelRequirementSchema" in schema.get("$defs", {})
-
-        # The verifications field must accept list[dict] (from neomodel-derived schema)
-        llr_def = schema["$defs"]["LowLevelRequirementSchema"]
-        assert "verifications" in llr_def["properties"]
-
-    def test_neomodel_detail_schemas(self):
-        """Verify detail_schema() produces correct JSON Schema from neomodel models."""
-        from backend_migrated.models.verification import (
-            VerificationMethod, Condition, Action,
+    def test_decompose_requirement_validates_flat_nodes(self):
+        """Verify DecomposedRequirementSchema validates flat node dicts."""
+        dr = DecomposedRequirementSchema(
+            description="Test HLR",
+            nodes=[
+                {"type": "LLR", "refid": "llr-1", "description": "Test LLR"},
+                {"type": "VerificationMethod", "refid": "vm-1", "method": "automated",
+                 "test_name": "test_x", "description": "Test"},
+            ],
         )
-
-        # VerificationMethod schema
-        vm_schema = detail_schema(VerificationMethod)
-        assert vm_schema["type"] == "object"
-        assert "method" in vm_schema["properties"]
-        assert "method" in vm_schema["required"]
-        assert "test_name" in vm_schema["properties"]
-        assert vm_schema["properties"]["method"]["type"] == "string"
-
-        # Condition schema
-        cond_schema = detail_schema(Condition)
-        assert "phase" in cond_schema["properties"]
-        assert "phase" in cond_schema["required"]
-        assert "subject_qualified_name" in cond_schema["properties"]
-        assert "operator" in cond_schema["properties"]
-        assert "expected_value" in cond_schema["properties"]
-
-        # Action schema
-        act_schema = detail_schema(Action)
-        assert "description" in act_schema["properties"]
-        assert "callee_qualified_name" in act_schema["properties"]
+        assert dr.description == "Test HLR"
+        assert len(dr.nodes) == 2
+        assert dr.nodes[0]["type"] == "LLR"
+        assert dr.nodes[1]["type"] == "VerificationMethod"
 
     def test_dependency_context_formatting(self):
         """Verify _format_dependency_context produces expected prompt text."""
@@ -237,7 +213,7 @@ class TestDecomposeHLR:
         from backend_migrated.agents.decompose_hlr import _recover_mixed_xml_json
 
         # Normal JSON — should pass through unchanged
-        normal = {"description": "test", "low_level_requirements": [{"description": "LLR1"}]}
+        normal = {"description": "test", "nodes": [{"type": "LLR", "refid": "llr-1", "description": "LLR1"}]}
         assert _recover_mixed_xml_json(normal) == normal
 
         # Mixed XML-in-JSON
@@ -245,9 +221,9 @@ class TestDecomposeHLR:
             "description": "The system shall compute</description>\n<parameter=low_level_requirements>\n[{\"description\": \"LLR1\"}]"
         }
         recovered = _recover_mixed_xml_json(mixed)
-        assert "low_level_requirements" in recovered
-        assert isinstance(recovered["low_level_requirements"], list)
-        assert recovered["low_level_requirements"][0]["description"] == "LLR1"
+        assert "nodes" in recovered
+        assert isinstance(recovered["nodes"], list)
+        assert recovered["nodes"][0]["description"] == "LLR1"
 
     def test_decompose_simple_hlr(self, artifact_path):
         """Decompose a simple HLR and save all intermediate data.
@@ -319,22 +295,22 @@ class TestDecomposeHLR:
         assert parsed_result.description, "Decomposed requirement has no description"
 
         # 3. Must produce at least one LLR
-        assert len(parsed_result.low_level_requirements) >= 1, (
-            f"Expected ≥1 LLR, got {len(parsed_result.low_level_requirements)}"
+        assert len([n for n in parsed_result.nodes if n.get("type") == "LLR"]) >= 1, (
+            f"Expected ≥1 LLR, got {len([n for n in parsed_result.nodes if n.get('type') == 'LLR'])}"
         )
 
         # 4. Each LLR must have a non-empty description
-        for i, llr in enumerate(parsed_result.low_level_requirements):
+        for i, llr in enumerate([n for n in parsed_result.nodes if n.get("type") == "LLR"]):
             assert llr.description, f"LLR[{i}] has empty description"
 
         # 5. Each LLR should have at least one verification
-        for i, llr in enumerate(parsed_result.low_level_requirements):
+        for i, llr in enumerate([n for n in parsed_result.nodes if n.get("type") == "LLR"]):
             assert len(llr.verifications) >= 1, (
                 f"LLR[{i}] '{llr.description[:40]}...' has no verifications"
             )
 
         # 6. Verifications must have a method
-        for i, llr in enumerate(parsed_result.low_level_requirements):
+        for i, llr in enumerate([n for n in parsed_result.nodes if n.get("type") == "LLR"]):
             for j, v in enumerate(llr.verifications):
                 assert "method" in v, (
                     f"LLR[{i}].verifications[{j}] missing 'method' field"
@@ -414,111 +390,38 @@ class TestDecomposeHLR:
 
         # Basic structural assertions
         assert parsed_result is not None, "decompose() returned None"
-        assert len(parsed_result.low_level_requirements) >= 1
-        """Verify VerificationMethod.from_llm_dict() constructs from raw LLM output."""
-        from backend_migrated.models.verification import VerificationMethod, Condition, Action
+        assert len([n for n in parsed_result.nodes if n.get("type") == "LLR"]) >= 1
 
-        vm_data = {
-            "method": "automated",
-            "test_name": "test_add_returns_sum",
-            "description": "Invoke the add operation with operands 10 and 20",
-            "preconditions": [
-                {"subject_qualified_name": "Engine.is_initialized", "operator": "is_true", "expected": "true"},
-            ],
-            "actions": [
-                {"description": "Invoke the add operation", "callee_qualified_name": "Engine.add"},
-            ],
-            "postconditions": [
-                {"subject_qualified_name": "Engine.result", "operator": "==", "expected_value": "30"},
-            ],
-        }
+    def test_layergraph_deserialize_flat_nodes(self):
+        """Verify LayerGraph.deserialize() handles flat verification node dicts."""
+        from codegraph.graph import LayerGraph
 
-        vm, conditions, actions = VerificationMethod.from_llm_dict(vm_data)
+        node_dicts = [
+            {"type": "LLR", "refid": "llr-1", "description": "Test LLR", "layer": "design", "name": "",
+             "edges": [{"relation_type": "COMPOSES", "target_uid": "vm-1", "target_type": "VerificationMethod"}]},
+            {"type": "VerificationMethod", "refid": "vm-1", "method": "automated", "test_name": "test_x",
+             "description": "Test", "layer": "design", "name": "",
+             "edges": [{"relation_type": "COMPOSES", "target_uid": "cond-1", "target_type": "Condition"}]},
+            {"type": "Condition", "refid": "cond-1", "phase": "pre", "operator": "==", "layer": "design", "name": "",
+             "edges": [
+                 {"relation_type": "LEFT_OPERAND", "target_uid": "Engine::result", "target_type": "AttributeNode"},
+                 {"relation_type": "RIGHT_OPERAND", "target_uid": "literal::30", "target_type": "LiteralNode"},
+             ]},
+            {"type": "AttributeNode", "qualified_name": "Engine::result", "name": "result", "kind": "attribute", "tags": ["scaffold"]},
+            {"type": "LiteralNode", "qualified_name": "literal::30", "name": "30", "kind": "literal",
+             "value": "30", "value_type": "int", "tags": ["scaffold"]},
+        ]
 
-        # VM properties
-        assert vm.method == "automated"
-        assert vm.test_name == "test_add_returns_sum"
-        assert vm.description == "Invoke the add operation with operands 10 and 20"
-        assert vm.layer == "design"
-        assert vm.name == ""
+        graph = LayerGraph.deserialize(node_dicts)
+        all_entries = list(graph._all_entries())
 
-        # Conditions — preconditions get phase="pre", postconditions get phase="post"
-        assert len(conditions) == 2
-        pre_cond = [c for c in conditions if c.phase == "pre"]
-        post_cond = [c for c in conditions if c.phase == "post"]
-        assert len(pre_cond) == 1
-        assert len(post_cond) == 1
+        llr_entry = next(e for e in all_entries if e.node.__class__.__name__ == "LLR")
+        assert "VerificationMethod" in llr_entry.children
 
-        # Pre-condition: "expected" → "expected_value" alias
-        assert pre_cond[0].subject_qualified_name == "Engine.is_initialized"
-        assert pre_cond[0].operator == "is_true"
-        assert pre_cond[0].expected_value == "true"  # "expected" → "expected_value"
-        assert pre_cond[0].order == 0
-
-        # Post-condition
-        assert post_cond[0].subject_qualified_name == "Engine.result"
-        assert post_cond[0].expected_value == "30"
-        assert post_cond[0].order == 0
-
-        # Actions
-        assert len(actions) == 1
-        assert actions[0].description == "Invoke the add operation"
-        assert actions[0].callee_qualified_name == "Engine.add"
-        assert actions[0].order == 0
-        assert actions[0].layer == "design"
-
-    def test_from_llm_dict_verification_method(self):
-        """Verify VerificationMethod.from_llm_dict() constructs from raw LLM output."""
-        from backend_migrated.models.verification import VerificationMethod, Condition, Action
-
-        vm_data = {
-            "method": "automated",
-            "test_name": "test_add_returns_sum",
-            "description": "Invoke the add operation with operands 10 and 20",
-            "preconditions": [
-                {"subject_qualified_name": "Engine.is_initialized", "operator": "is_true", "expected": "true"},
-            ],
-            "actions": [
-                {"description": "Invoke the add operation", "callee_qualified_name": "Engine.add"},
-            ],
-            "postconditions": [
-                {"subject_qualified_name": "Engine.result", "operator": "==", "expected_value": "30"},
-            ],
-        }
-
-        vm, conditions, actions = VerificationMethod.from_llm_dict(vm_data)
-
-        # VM properties
-        assert vm.method == "automated"
-        assert vm.test_name == "test_add_returns_sum"
-        assert vm.description == "Invoke the add operation with operands 10 and 20"
-        assert vm.layer == "design"
-        assert vm.name == ""
-
-        # Conditions — preconditions get phase="pre", postconditions get phase="post"
-        assert len(conditions) == 2
-        pre_cond = [c for c in conditions if c.phase == "pre"]
-        post_cond = [c for c in conditions if c.phase == "post"]
-        assert len(pre_cond) == 1
-        assert len(post_cond) == 1
-
-        # Pre-condition: "expected" → "expected_value" alias
-        assert pre_cond[0].subject_qualified_name == "Engine.is_initialized"
-        assert pre_cond[0].operator == "is_true"
-        assert pre_cond[0].expected_value == "true"  # "expected" → "expected_value"
-        assert pre_cond[0].order == 0
-
-        # Post-condition
-        assert post_cond[0].subject_qualified_name == "Engine.result"
-        assert post_cond[0].expected_value == "30"
-        assert post_cond[0].order == 0
-
-        # Actions
-        assert len(actions) == 1
-        assert actions[0].description == "Invoke the add operation"
-        assert actions[0].callee_qualified_name == "Engine.add"
-        assert actions[0].order == 0
-        assert actions[0].layer == "design"
+        cond_entry = next(e for e in all_entries if e.node.__class__.__name__ == "Condition")
+        assert len(cond_entry.references) == 2
+        rel_types = {r[0] for r in cond_entry.references}
+        assert rel_types == {"LEFT_OPERAND", "RIGHT_OPERAND"}
 
     def test_from_llm_dict_hlr_llr(self):
         """Verify HLR/LLR.from_llm_dict() constructs from raw LLM output."""
@@ -538,12 +441,11 @@ class TestDecomposeHLR:
         assert llr.name == ""
         assert llr.tags == ["design"]
 
-    def test_from_llm_dict_full_decomposition(self, artifact_path):
-        """Round-trip: load raw LLM response → neomodel objects → serialize → deserialize."""
+    def test_full_decomposition_round_trip(self, artifact_path):
+        """Round-trip: load raw LLM response → LayerGraph.deserialize() → verify structure."""
         import json
-        from codegraph.models.tags import CodeGraphNode
-        from backend_migrated.models.verification import VerificationMethod
-        from backend_migrated.models.requirement import HLR, LLR
+        from codegraph.graph import LayerGraph
+        from backend_migrated.models.requirement import HLR
 
         raw_path = artifact_path("decompose_hlr", "06_raw_response.json")
         if not raw_path.exists():
@@ -551,53 +453,34 @@ class TestDecomposeHLR:
 
         raw = json.loads(raw_path.read_text())
 
-        # The raw response should be a successful decomposition with a
-        # top-level "description" key.  If a previous run failed and
-        # wrote an error stub, skip.
-        if "description" not in raw:
+        if "description" not in raw or "nodes" not in raw:
             pytest.skip(
-                f"Raw response artifact is not a valid decomposition "
+                f"Raw response artifact is not a valid flat decomposition "
                 f"(keys: {sorted(raw.keys())}). Run test_decompose_simple_hlr first."
             )
 
-        # HLR
         hlr = HLR.from_llm_dict({"description": raw["description"]})
         assert hlr.description
         assert hlr.layer == "design"
 
-        # Each LLR + verifications
-        total_conditions = 0
-        total_actions = 0
-        for llr_data in raw["low_level_requirements"]:
-            llr = LLR.from_llm_dict({"description": llr_data["description"]})
-            assert llr.description
-            assert llr.layer == "design"
+        node_types = [n.get("type", "?") for n in raw["nodes"]]
+        total_conditions = node_types.count("Condition")
+        total_actions = node_types.count("Action")
+        total_llrs = node_types.count("LLR")
 
-            for vm_data in llr_data.get("verifications", []):
-                vm, conditions, actions = VerificationMethod.from_llm_dict(vm_data)
-                assert vm.method in ("automated", "review", "inspection")
-                assert vm.layer == "design"
-                total_conditions += len(conditions)
-                total_actions += len(actions)
+        graph = LayerGraph.deserialize(raw["nodes"])
+        all_entries = list(graph._all_entries())
+        assert any(e.node.__class__.__name__ == "LLR" for e in all_entries)
+        assert any(e.node.__class__.__name__ == "VerificationMethod" for e in all_entries)
 
-                # Round-trip: serialize → deserialize each condition
-                for cond in conditions:
-                    cond_dict = cond.serialize(fields="all")
-                    restored = CodeGraphNode.deserialize(cond_dict)
-                    assert isinstance(restored, type(cond))
-                    assert restored.phase == cond.phase
-                    assert restored.expected_value == cond.expected_value
-
-        # Save the round-trip report
         report = {
             "description": raw["description"][:80],
-            "num_llrs": len(raw["low_level_requirements"]),
+            "num_llrs": total_llrs,
             "total_conditions": total_conditions,
             "total_actions": total_actions,
         }
         report_path = artifact_path("decompose_hlr", "09_round_trip_report.json")
         report_path.write_text(json.dumps(report, indent=2))
 
-        # Sanity check — the raw response produced conditions and actions
-        assert total_conditions > 0, "No conditions deserialized from raw response"
-        assert total_actions > 0, "No actions deserialized from raw response"
+        assert total_conditions > 0, "No conditions in raw response"
+        assert total_actions > 0, "No actions in raw response"

@@ -14,6 +14,8 @@ NiceGUI slot context is lost.
 from __future__ import annotations
 
 import asyncio
+import logging
+import traceback
 from collections.abc import Callable
 
 from nicegui import ui
@@ -145,7 +147,6 @@ class DecomposeHLRDialog:
                 type="positive",
             )
         except Exception as e:
-            import traceback
             logging.getLogger(__name__).error("Decomposition failed for HLR %s:\n%s", self._hlr_refid, traceback.format_exc())
             ui.notify(f"Decomposition failed: {e}", type="negative")
         if self._on_done:
@@ -180,16 +181,17 @@ class DesignHLRDialog:
         ui.notify("Designing — this may take a moment…", type="info")
         try:
             result = await asyncio.to_thread(design_single_hlr, self._hlr_refid)
-            nodes = result.get('nodes_created', 0)
+            updated = result.get('nodes_updated', 0)
+            created = result.get('nodes_created', 0)
             verifs = result.get('verifications_resolved', 0)
-            conds = result.get('conditions_created', 0)
-            acts = result.get('actions_created', 0)
             links = result.get('links_applied', 0)
+            scaffold_cleaned = result.get('scaffold_cleaned', 0)
             ui.notify(
-                f"Created {nodes} design nodes, "
-                f"{verifs} verifications resolved, "
-                f"{conds} conditions, {acts} actions, "
-                f"{links} links",
+                f"Design complete: {updated} scaffold nodes promoted to design, "
+                f"{created} new nodes, "
+                f"{verifs} verifications preserved, "
+                f"{links} COMPOSES links"
+                + (f", {scaffold_cleaned} scaffold cleaned" if scaffold_cleaned else ""),
                 type="positive",
             )
         except NotImplementedError:

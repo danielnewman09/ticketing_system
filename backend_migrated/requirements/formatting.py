@@ -1,21 +1,11 @@
 """Formatting helpers for requirement data.
 
-Thin wrappers around the ``format()`` methods on the neomodel models.
-The heavy lifting is done by:
-
-- :meth:`HLR.format` — formats an HLR as a prompt line
-- :meth:`LLR.format` — formats an LLR with optional verifications
-- :meth:`VerificationMethod.format` — formats a VM with conditions/actions
-- :meth:`Condition.format` — formats a condition assertion
-- :meth:`Action.format` — formats an action step
-
-For new code, prefer calling ``node.format()`` directly on the neomodel
-instance instead of these dict-based wrappers.
+Provides dict-based formatting functions for agent prompts.  These
+helpers format verification stubs directly from dict data (the LLM
+output format) without constructing neomodel instances.
 """
 
 from __future__ import annotations
-
-from backend_migrated.models.verification import VerificationMethod
 
 
 def format_hlr_dict(hlr_dict: dict, include_component: bool = False) -> str:
@@ -48,11 +38,90 @@ def format_hlrs_for_prompt(
             for llr in [l for l in llrs if l.get("hlr_id") == hlr["id"]]:
                 lines.append(f"  {format_llr_dict(llr)}")
     if llrs:
-        unlinked = [l for l in llrs if l.get("hlr_id") is None]
+        unlinked = [l for l in llrs if l.get("lr_id") is None]
         if unlinked:
             lines.append("\nUnlinked LLRs:")
             for llr in unlinked:
                 lines.append(f"  {format_llr_dict(llr)}")
+    return "\n".join(lines)
+
+
+def _format_condition_from_dict(cond: dict) -> str:
+    """Format a condition dict (with edges) as a human-readable assertion."""
+    edges = cond.get("edges", [])
+    left = ""
+    right = ""
+    for e in edges:
+        if e.get("relation_type") == "LEFT_OPERAND":
+            left = e.get("target_uid", "")
+        elif e.get("relation_type") == "RIGHT_OPERAND":
+            right = e.get("target_uid", "")
+    operator = cond.get("operator", "==")
+    parts = [left, operator]
+    if right:
+        parts.append(right)
+    return " ".join(parts)
+
+
+def _format_action_from_dict(action: dict) -> str:
+    """Format an action dict (with edges) as a human-readable step."""
+    edges = action.get("edges", [])
+    callee = ""
+    caller = ""
+    for e in edges:
+        if e.get("relation_type") == "CALLEE":
+            callee = e.get("target_uid", "")
+        elif e.get("relation_type") == "CALLER":
+            caller = e.get("target_uid", "")
+    description = action.get("description", "")
+
+    if caller and callee:
+        core = f"{caller} → {callee}"
+    elif callee:
+        core = callee
+    else:
+        core = ""
+    if description and core:
+        return f"{core}: {description}"
+    if description:
+        return description
+    return core or "(no action)"
+
+
+def _format_verification_from_dict(v: dict) -> str:
+    """Format a verification dict as a human-readable block."""
+    title = f"[{v.get('method', 'automated')}]"
+    if v.get("test_name"):
+        title += f" {v['test_name']}"
+    lines = [f"  {title}"]
+    if v.get("description"):
+        lines.append(f"    {v['description']}")
+
+    pre = v.get("preconditions", [])
+    post = v.get("postconditions", [])
+    acts = v.get("actions", [])
+
+    if pre:
+        lines.append("    Pre-conditions:")
+        for c in pre:
+            lines.append(f"      {_format_condition_from_dict(c)}")
+    else:
+        lines.append("    Pre-conditions: (none)")
+
+    if acts:
+        lines.append("    Actions:")
+        for a in acts:
+            lines.append(f"      {_format_action_from_dict(a)}")
+    else:
+        lines.append("    Actions: (none)")
+
+    if post:
+        lines.append("    Post-conditions:")
+        for c in post:
+            lines.append(f"      {_format_condition_from_dict(c)}")
+    else:
+        lines.append("    Post-conditions: (none)")
+
     return "\n".join(lines)
 
 
@@ -62,15 +131,14 @@ def format_llrs_with_verifications_for_prompt(
 ) -> str:
     """Format LLRs with their full verification stubs for agent prompts.
 
-    Each verification dict is parsed via
-    :meth:`VerificationMethod.from_llm_dict` to produce neomodel
-    instances, then formatted with :meth:`VerificationMethod.format`.
+    Formats verification stubs directly from dict data — no neomodel
+    instances are constructed.
 
     Args:
         llrs: List of LLR dicts with at least id, description, hlr_id.
         llr_verifications: Dict mapping LLR ID to list of verification
             dicts (the raw LLM format with
-            preconditions/actions/postconditions).
+            preconditions/actions/postconditions and edges arrays).
 
     Returns:
         Formatted text suitable for inclusion in an agent prompt.
@@ -83,8 +151,7 @@ def format_llrs_with_verifications_for_prompt(
         if verifs:
             lines.append("  Verifications:")
             for v in verifs:
-                vm, conditions, actions = VerificationMethod.from_llm_dict(v)
-                lines.append(vm.format(conditions=conditions, actions=actions))
+                lines.append(_format_verification_from_dict(v))
         else:
             lines.append("  (No verification stubs)")
         lines.append("")

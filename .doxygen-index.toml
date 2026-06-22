@@ -1,0 +1,5 @@
+[project]
+name = "ticketing_system"
+language = "python"
+input_paths = ["backend"]
+exclude_patterns = ".venv __pycache__ .pytest_cache .ruff_cache"

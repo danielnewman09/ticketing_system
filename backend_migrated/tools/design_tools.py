@@ -203,8 +203,8 @@ CHECK_CLASS_NAME_SCHEMA = {
                 "type": "string",
                 "description": (
                     "A class, interface, or enum name to look up. "
-                    "Can be a bare name (e.g., 'Calculator') or a qualified name "
-                    "(e.g., 'calculation_engine::Calculator'). Supports substring matching."
+                    "Can be a bare name (e.g., 'Thermostat') or a qualified name "
+                    "(e.g., 'climate_control::Thermostat'). Supports substring matching."
                 ),
             },
         },

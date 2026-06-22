@@ -31,7 +31,7 @@ Usage::
 
     # Design + verification agent (single tool loop)
     design_disp = DesignToolDispatcher(
-        prior_class_lookup={"CalcEngine": "calc::CalcEngine"},
+        prior_class_lookup={"Thermostat": "climate::Thermostat"},
         dependency_lookup={"std::vector": "std::vector"},
     )
     verif_disp = VerificationDispatcher(design_dispatcher=design_disp)

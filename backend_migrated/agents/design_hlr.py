@@ -27,9 +27,11 @@ import os
 from dataclasses import dataclass, field
 
 from llm_caller import call_tool_loop
+from neomodel import db as neomodel_db
 
+from codegraph.models.tags import CodeGraphNode
 from backend_migrated.models.requirement import HLR, LLR
-from backend_migrated.models.verification import VerificationMethod, Condition, Action
+from backend_migrated.models.verification import VerificationMethod, Condition, Action, get_typed_edge_targets
 from backend_migrated.tools.dispatcher import (
     DesignToolDispatcher,
     VerificationDispatcher,
@@ -88,20 +90,20 @@ def _load_notional_verifications(llrs: list[LLR]) -> dict[str, list[dict]]:
             for cond in sorted(conditions, key=lambda c: c.order):
                 # Traverse LEFT_OPERAND / RIGHT_OPERAND edges to get
                 # the target qualified names.
-                left_targets = cond.left_operand.all()
-                right_targets = cond.right_operand.all()
+                left_targets = get_typed_edge_targets(cond, "LEFT_OPERAND")
+                right_targets = get_typed_edge_targets(cond, "RIGHT_OPERAND")
                 cond_dict = {
-                    "subject_qualified_name": left_targets[0].qualified_name if left_targets else "",
+                    "subject_qualified_name": left_targets[0]["qualified_name"] if left_targets else "",
                     "operator": cond.operator or "==",
                     # expected_value is now a transient attr — traverse
                     # the RIGHT_OPERAND edge to get the value.  For
                     # LiteralNode targets, use .value; for scaffold
                     # nodes, use .qualified_name.
                     "expected_value": (
-                        getattr(right_targets[0], "value", None) or
-                        right_targets[0].qualified_name
+                        right_targets[0].get("value") or
+                        right_targets[0]["qualified_name"]
                     ) if right_targets else "",
-                    "object_qualified_name": right_targets[0].qualified_name if right_targets else "",
+                    "object_qualified_name": right_targets[0]["qualified_name"] if right_targets else "",
                 }
                 if cond.phase == "pre":
                     vm_dict["preconditions"].append(cond_dict)
@@ -110,12 +112,12 @@ def _load_notional_verifications(llrs: list[LLR]) -> dict[str, list[dict]]:
 
             actions = vm.actions.all()
             for action in sorted(actions, key=lambda a: a.order):
-                callee_targets = action.callee.all()
-                caller_targets = action.caller.all()
+                callee_targets = get_typed_edge_targets(action, "CALLEE")
+                caller_targets = get_typed_edge_targets(action, "CALLER")
                 vm_dict["actions"].append({
                     "description": action.description or "",
-                    "callee_qualified_name": callee_targets[0].qualified_name if callee_targets else "",
-                    "caller_qualified_name": caller_targets[0].qualified_name if caller_targets else "",
+                    "callee_qualified_name": callee_targets[0]["qualified_name"] if callee_targets else "",
+                    "caller_qualified_name": caller_targets[0]["qualified_name"] if caller_targets else "",
                 })
 
             verifs_for_llr.append(vm_dict)
@@ -206,7 +208,7 @@ resolve verification stubs to reference real design elements.
 ### Verification resolution
 
 For each LLR, the notional verification stubs describe test scenarios
-using placeholder references like "Engine.result" or "Display.current_value".
+using placeholder references like "Thermostat.current_reading" or "Display.shown_temp".
 Your job is to translate each stub into a fully resolved verification
 method that references actual design members.
 
@@ -231,9 +233,9 @@ Leave `caller_qualified_name` empty if the caller is the test harness.
 `expected_value`. Do NOT use enum values as `subject_qualified_name`.
 
 Example:
-  subject_qualified_name: "calc::Calculator::error_signal"
+  subject_qualified_name: "climate::Thermostat::error_state"
   operator: "=="
-  expected_value: "InvalidInput"
+  expected_value: "SensorFault"
 </FORMAT-CONTRACT>
 
 <FORMAT-CONTRACT name="verification-key-format">
@@ -241,7 +243,7 @@ The `verifications` field in `draft_verifications` MUST be a JSON object
 keyed by LLR refid (string), NOT by test name.
 
 Example: "verifications": {{ "abc123": [...], "def456": [...] }}
-Wrong:   "verifications": {{ "test_add": [...] }}
+Wrong:   "verifications": {{ "test_set_target": [...] }}
 </FORMAT-CONTRACT>
 
 You MUST use commit_design_and_verifications to return your final result.
@@ -425,6 +427,360 @@ def design_hlr(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# Scaffold → design reconciliation helpers
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Instead of creating entirely new nodes via ``LayerGraph.to_neo4j()`` (which
+# produces tag-less nodes that ``graph_fetch(tag="design")`` can't find), we
+# *update* existing scaffold nodes in place — changing their ``tags`` from
+# ``["scaffold"]`` to ``["design"]``, updating their ``qualified_name``/
+# ``kind``/``visibility``/``type_signature`` to match the real design, and
+# changing their Neo4j label when the node type changes (e.g.
+# ``AttributeNode`` → ``MethodNode``).
+#
+# This preserves the verification edges (``LEFT_OPERAND``, ``CALLEE``, etc.)
+# that already connect Conditions/Actions to scaffold nodes.  Those edges use
+# Neo4j ``elementId`` (not the deterministic ``uid``), so updating a node's
+# properties doesn't break its edges.
+#
+# For design nodes that have no scaffold equivalent (e.g. new ``NamespaceNode``,
+# ``EnumNode``, private backing attributes), we create them fresh with
+# ``tags=["design"]``.
+
+
+def _last_segment(qn: str) -> str:
+    """Extract the last segment from a qualified name.
+
+    Handles both ``::`` (C++ convention) and ``.`` (notional convention)
+    separators, and leaves ``literal::`` prefixed names intact.
+    """
+    if not qn:
+        return ""
+    if qn.startswith("literal::"):
+        return qn
+    if "::" in qn:
+        return qn.rsplit("::", 1)[-1]
+    if "." in qn:
+        return qn.rsplit(".", 1)[-1]
+    return qn
+
+
+def _flatten_design_nodes(design_nodes: list[dict]) -> list[dict]:
+    """Flatten nested design node dicts (with ``composes`` children) into a flat list."""
+    flat: list[dict] = []
+
+    def _walk(node: dict) -> None:
+        flat.append(node)
+        for child in node.get("composes", []):
+            _walk(child)
+
+    for d in design_nodes:
+        _walk(d)
+    return flat
+
+
+def _update_scaffold_to_design(scaffold_node, design_dict: dict) -> bool:
+    """Update a scaffold node in place to become a design node via raw Cypher.
+
+    Changes the node's ``qualified_name``, ``name``, ``kind``, ``tags``,
+    ``uid`` (recomputed deterministically), and optionally ``type_signature``,
+    ``visibility``, ``brief_description``.  Also changes the Neo4j label when
+    the node type changes (e.g. ``AttributeNode`` → ``MethodNode``).
+
+    The node's ``elementId`` stays the same, so all existing edges
+    (``LEFT_OPERAND``, ``CALLEE``, ``COMPOSES``, etc.) remain intact.
+    """
+    from codegraph.uid import compute_uid, normalize_argsstring
+
+    dqn = design_dict.get("qualified_name", "")
+    if not dqn:
+        return False
+
+    dname = design_dict.get("name", "") or _last_segment(dqn)
+    dkind = design_dict.get("kind", "")
+    dtype = design_dict.get("type", "")
+    dts = design_dict.get("type_signature", "")
+    dvis = design_dict.get("visibility", "")
+    dbd = design_dict.get("brief_description", "")
+
+    # Compute new deterministic uid
+    if dtype == "MethodNode":
+        argsstring = design_dict.get("argsstring", "") or dts
+        new_uid = compute_uid(dqn, normalize_argsstring(argsstring))
+    else:
+        new_uid = compute_uid(dqn)
+
+    sn_type = type(scaffold_node).__name__
+    eid = neomodel_db.parse_element_id(scaffold_node.element_id)
+
+    # Build SET clause
+    set_parts = [
+        "n.qualified_name = $qn",
+        "n.name = $name",
+        "n.kind = $kind",
+        "n.tags = $tags",
+        "n.uid = $uid",
+    ]
+    params: dict = {
+        "eid": eid,
+        "qn": dqn,
+        "name": dname,
+        "kind": dkind,
+        "tags": ["design"],
+        "uid": new_uid,
+    }
+    if dts:
+        set_parts.append("n.type_signature = $ts")
+        params["ts"] = dts
+    if dvis:
+        set_parts.append("n.visibility = $vis")
+        params["vis"] = dvis
+    if dbd:
+        set_parts.append("n.brief_description = $bd")
+        params["bd"] = dbd
+
+    # Label change if type differs
+    label_ops = ""
+    if dtype and dtype != sn_type:
+        label_ops = f"REMOVE n:`{sn_type}` SET n:`{dtype}` "
+
+    query = (
+        f"MATCH (n) WHERE elementId(n) = $eid "
+        f"{label_ops}"
+        f"SET {', '.join(set_parts)}"
+    )
+    try:
+        neomodel_db.cypher_query(query, params)
+        log.info("Updated scaffold %s → %s (%s → %s)",
+                 getattr(scaffold_node, "qualified_name", "?"), dqn,
+                 sn_type, dtype or sn_type)
+        return True
+    except Exception as exc:
+        log.warning("Failed to update scaffold %s → %s: %s",
+                     getattr(scaffold_node, "qualified_name", "?"), dqn, exc)
+        return False
+
+
+def _create_design_node_fresh(design_dict: dict) -> bool:
+    """Create a new design node with ``tags=["design"]``.
+
+    Used for design nodes that have no scaffold equivalent (e.g. new
+    ``NamespaceNode``, ``EnumNode``, private backing attributes).
+    """
+    node_data = dict(design_dict)
+    node_data["tags"] = ["design"]
+    # Strip composes — we'll set up edges separately
+    node_data.pop("composes", None)
+    try:
+        node = CodeGraphNode.deserialize(node_data)
+        node.save()
+        log.info("Created design node: %s (%s)",
+                 node_data.get("qualified_name", "?"),
+                 node_data.get("type", "?"))
+        return True
+    except Exception as exc:
+        log.warning("Failed to create design node %s: %s",
+                     node_data.get("qualified_name", "?"), exc)
+        return False
+
+
+def _link_design_composes(flat_design: list[dict]) -> int:
+    """Create COMPOSES edges between design nodes based on qualified-name hierarchy.
+
+    For each node with a ``::``-separated qualified_name, creates a COMPOSES
+    edge from the parent (the prefix before the last ``::``) to this node.
+    Uses raw Cypher MERGE so edges are idempotent.
+    """
+    edges = 0
+    qnames = {d.get("qualified_name", "") for d in flat_design}
+    for d in flat_design:
+        qn = d.get("qualified_name", "")
+        if not qn or "::" not in qn:
+            continue
+        parent_qn = qn.rsplit("::", 1)[0]
+        if not parent_qn or parent_qn not in qnames:
+            continue
+        try:
+            neomodel_db.cypher_query(
+                "MATCH (s), (t) "
+                "WHERE s.qualified_name = $sqn AND t.qualified_name = $tqn "
+                "MERGE (s)-[:COMPOSES]->(t)",
+                {"sqn": parent_qn, "tqn": qn},
+            )
+            edges += 1
+        except Exception as exc:
+            log.warning("Failed to COMPOSES %s → %s: %s", parent_qn, qn, exc)
+    return edges
+
+
+def _retag_remaining_scaffold() -> int:
+    """Change ``tags`` from ``["scaffold"]`` to ``["design"]`` on scaffold
+    nodes that still have verification edges.
+
+    After matched scaffold nodes are updated, some scaffold-tagged nodes may
+    remain — typically ``LiteralNode`` s referenced by ``RIGHT_OPERAND``
+    edges from Conditions.  These are still part of the design's verification
+    data, so they should carry the ``design`` tag.
+    """
+    retagged = 0
+    try:
+        results, _ = neomodel_db.cypher_query(
+            "MATCH (n) WHERE 'scaffold' IN coalesce(n.tags, []) "
+            "AND EXISTS { MATCH ()-[r]->(n) WHERE type(r) IN ['LEFT_OPERAND','RIGHT_OPERAND','CALLEE','CALLER'] } "
+            "RETURN elementId(n)",
+        )
+        for (eid,) in results:
+            try:
+                neomodel_db.cypher_query(
+                    "MATCH (n) WHERE elementId(n) = $eid "
+                    "SET n.tags = ['design']",
+                    {"eid": eid},
+                )
+                retagged += 1
+            except Exception:
+                pass
+        if retagged:
+            log.info("Re-tagged %d scaffold nodes (still referenced by edges) to design", retagged)
+    except Exception as exc:
+        log.warning("Re-tagging remaining scaffold nodes failed: %s", exc)
+    return retagged
+
+
+def _cleanup_orphaned_scaffold_nodes(hlr_refid: str) -> int:
+    """Delete scaffold nodes that no longer have any relationships.
+
+    After reconciliation, scaffold nodes that lost all their edges (because
+    their referencing Conditions/Actions were from a different HLR that hasn't
+    been designed yet, or because they were duplicates) become fully isolated.
+    These are safe to delete.
+    """
+    cleaned = 0
+    try:
+        results, _ = neomodel_db.cypher_query(
+            "MATCH (n) WHERE 'scaffold' IN coalesce(n.tags, []) "
+            "AND NOT EXISTS { MATCH (n)-[r]-() } "
+            "RETURN elementId(n)",
+        )
+        for (eid,) in results:
+            try:
+                neomodel_db.cypher_query(
+                    "MATCH (n) WHERE elementId(n) = $eid "
+                    "DETACH DELETE n",
+                    {"eid": eid},
+                )
+                cleaned += 1
+            except Exception:
+                pass
+        if cleaned:
+            log.info("Cleaned up %d orphaned scaffold nodes for HLR %s",
+                     cleaned, hlr_refid[:8])
+    except Exception as exc:
+        log.warning("Scaffold cleanup failed for HLR %s: %s", hlr_refid[:8], exc)
+    return cleaned
+
+
+def _reconcile_design_with_scaffold(
+    hlr_refid: str,
+    design_nodes: list[dict],
+) -> dict:
+    """Reconcile the design with existing scaffold nodes.
+
+    Instead of creating entirely new nodes (which lose the verification-edge
+    bridge), updates scaffold nodes in place to become design nodes and
+    creates fresh nodes only for elements that have no scaffold equivalent.
+
+    Steps:
+      1. Flatten the nested design node dicts.
+      2. Fetch all scaffold nodes and index by the last segment of their
+         ``qualified_name`` (e.g. ``Thermostat::current_reading`` → ``current_reading``).
+      3. For each design node, try to match it to a scaffold node by last
+         segment.  If matched, update the scaffold node in place.
+      4. For unmatched design nodes, create them fresh with ``tags=["design"]``.
+      5. Create ``COMPOSES`` edges between all design nodes based on the
+         ``::``-separated qualified-name hierarchy.
+      6. Re-tag scaffold ``LiteralNode`` s that are still referenced by
+         verification edges.
+      7. Clean up orphaned scaffold nodes.
+
+    Does **not** touch verification Conditions/Actions — their edges
+    (``LEFT_OPERAND``, ``CALLEE``, etc.) already point to scaffold nodes
+    that are now updated to design nodes, so the bridge is preserved.
+
+    Returns:
+        Dict with ``nodes_updated``, ``nodes_created``, ``edges_linked``,
+        ``scaffold_retaged``, ``scaffold_cleaned``.
+    """
+    # 1. Flatten design nodes
+    flat = _flatten_design_nodes(design_nodes)
+    log.info("Reconciling design: %d flat nodes from %d root nodes",
+             len(flat), len(design_nodes))
+
+    # 2. Fetch scaffold nodes and index by last segment
+    scaffold_nodes = CodeGraphNode.fetch_all_by_tag("scaffold")
+    scaffold_by_seg: dict[str, list] = {}
+    for sn in scaffold_nodes:
+        qn = getattr(sn, "qualified_name", "") or ""
+        seg = _last_segment(qn)
+        if seg:
+            scaffold_by_seg.setdefault(seg, []).append(sn)
+    log.info("Found %d scaffold nodes indexed into %d segments",
+             len(scaffold_nodes), len(scaffold_by_seg))
+
+    # 3. Match design nodes to scaffold nodes
+    matched_pairs: list[tuple[object, dict]] = []
+    unmatched_design: list[dict] = []
+    used_scaffold_eids: set[str] = set()
+
+    for d in flat:
+        dqn = d.get("qualified_name", "")
+        dseg = _last_segment(dqn)
+        matched_sn = None
+        if dseg and dseg in scaffold_by_seg:
+            for sn in scaffold_by_seg[dseg]:
+                sn_eid = sn.element_id
+                if sn_eid not in used_scaffold_eids:
+                    matched_sn = sn
+                    used_scaffold_eids.add(sn_eid)
+                    break
+        if matched_sn is not None:
+            matched_pairs.append((matched_sn, d))
+        else:
+            unmatched_design.append(d)
+
+    log.info("Matched %d design nodes to scaffold, %d unmatched",
+             len(matched_pairs), len(unmatched_design))
+
+    # 4. Update matched scaffold nodes in place
+    nodes_updated = 0
+    for sn, d in matched_pairs:
+        if _update_scaffold_to_design(sn, d):
+            nodes_updated += 1
+
+    # 5. Create unmatched design nodes fresh
+    nodes_created = 0
+    for d in unmatched_design:
+        if _create_design_node_fresh(d):
+            nodes_created += 1
+
+    # 6. Create COMPOSES edges between all design nodes
+    edges_linked = _link_design_composes(flat)
+
+    # 7. Re-tag scaffold LiteralNodes still referenced by verification edges
+    scaffold_retaged = _retag_remaining_scaffold()
+
+    # 8. Clean up orphaned scaffold nodes
+    scaffold_cleaned = _cleanup_orphaned_scaffold_nodes(hlr_refid)
+
+    return {
+        "nodes_updated": nodes_updated,
+        "nodes_created": nodes_created,
+        "edges_linked": edges_linked,
+        "scaffold_retaged": scaffold_retaged,
+        "scaffold_cleaned": scaffold_cleaned,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # Full entry point — context loading + pipeline + persistence
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -445,15 +801,13 @@ def design_and_persist_hlr(
         log_dir: Directory for per-step prompt logs.
 
     Returns:
-        Dict with keys ``nodes_created``, ``verifications_resolved``,
-        ``conditions_created``, ``actions_created``, ``links_applied``.
+        Dict with keys ``nodes_updated``, ``nodes_created``, ``edges_linked``,
+        ``verifications_resolved``, ``conditions_created``, ``actions_created``,
+        ``links_applied``, ``scaffold_retaged``, ``scaffold_cleaned``.
 
     Raises:
         ValueError: If the HLR is not found or has no LLRs.
     """
-    from codegraph.connection import get_session as get_neo
-    from codegraph.graph import LayerGraph
-
     # --- Load data from Neo4j via neomodel ---
     log.info("design_and_persist_hlr: loading HLR %s", refid[:8])
     hlr = HLR.nodes.get_or_none(refid=refid)
@@ -510,49 +864,39 @@ def design_and_persist_hlr(
         len(result.design), len(result.verifications),
     )
 
-    # --- Persist design to Neo4j via LayerGraph ---
-    nodes_created = 0
+    # --- Reconcile design with scaffold (update in place, preserve edges) ---
+    # Instead of creating new tag-less nodes via graph.to_neo4j(),
+    # update existing scaffold nodes to become design nodes.
+    # This preserves the verification edges (LEFT_OPERAND, CALLEE, etc.)
+    # that already connect Conditions/Actions to scaffold nodes.
+    recon = {"nodes_updated": 0, "nodes_created": 0, "edges_linked": 0,
+             "scaffold_retaged": 0, "scaffold_cleaned": 0}
     if result.design:
         try:
-            graph = LayerGraph.deserialize(result.design)
-            graph.to_neo4j()
-            nodes_created = len(result.design)
+            recon = _reconcile_design_with_scaffold(refid, result.design)
         except Exception as exc:
-            log.warning("Failed to persist design for HLR %s: %s", refid[:8], exc)
+            log.warning("Design reconciliation failed for HLR %s: %s",
+                        refid[:8], exc, exc_info=True)
 
-    # --- Persist resolved verifications ---
-    verifications_resolved = 0
+    # --- Verifications: keep existing, they already point to scaffold nodes ---
+    # The decompose phase created VMs/Conditions/Actions with edges to
+    # scaffold nodes.  The scaffold nodes are now updated to design nodes
+    # (tags=["design"], new qualified_names, proper kinds).  The edges use
+    # Neo4j elementId, so they still point to the same (now-updated) nodes.
+    #
+    # We do NOT delete/recreate verifications — the bridge is preserved.
+    # The design agent's verification resolution was used for validation
+    # (ensuring all references resolve) during the tool loop.
+    verifications_resolved = len(result.verifications)
     conditions_created = 0
     actions_created = 0
-
     for llr_refid, verif_list in result.verifications.items():
-        llr = next((l for l in llr_nodes if l.refid == llr_refid), None)
-        if not llr:
-            log.warning("LLR refid %s not found, skipping verification persist", llr_refid)
-            continue
-
-        # Delete existing notional verifications for this LLR
-        for old_vm in llr.verification_methods.all():
-            old_vm.delete()
-
-        # Create resolved verifications
         for v in verif_list:
-            vm, conditions, actions = VerificationMethod.from_llm_dict(v)
-            vm.save()
-            llr.verification_methods.connect(vm)
-            verifications_resolved += 1
+            conditions_created += len(v.get("preconditions", []))
+            conditions_created += len(v.get("postconditions", []))
+            actions_created += len(v.get("actions", []))
 
-            for cond in conditions:
-                cond.save()
-                vm.conditions.connect(cond)
-                conditions_created += 1
-
-            for action in actions:
-                action.save()
-                vm.actions.connect(action)
-                actions_created += 1
-
-    # --- Create COMPOSES edges from HLR to design nodes ---
+    # --- Create COMPOSES edges from HLR to top-level design compounds ---
     links_applied = 0
     from codegraph.models.compound import CompoundNode
 
@@ -561,7 +905,6 @@ def design_and_persist_hlr(
         if not qn:
             continue
         kind = node_dict.get("kind", "")
-        # Only link HLR to top-level compound/class nodes (not members)
         if kind not in ("class", "struct", "interface", "enum"):
             continue
         target_node = CompoundNode.nodes.get_or_none(qualified_name=qn)
@@ -574,16 +917,23 @@ def design_and_persist_hlr(
             log.warning("Failed to COMPOSES link HLR %s -> %s: %s", refid[:8], qn, exc)
 
     log.info(
-        "Design+verify complete for HLR %s: %d nodes, %d verifications, "
-        "%d conditions, %d actions",
-        refid[:8], nodes_created, verifications_resolved,
+        "Design+verify complete for HLR %s: %d nodes updated, %d created, "
+        "%d COMPOSES edges, %d verifications (preserved), %d conditions, "
+        "%d actions, %d scaffold retaged, %d scaffold cleaned",
+        refid[:8], recon["nodes_updated"], recon["nodes_created"],
+        recon["edges_linked"], verifications_resolved,
         conditions_created, actions_created,
+        recon["scaffold_retaged"], recon["scaffold_cleaned"],
     )
 
     return {
-        "nodes_created": nodes_created,
+        "nodes_updated": recon["nodes_updated"],
+        "nodes_created": recon["nodes_created"],
+        "edges_linked": recon["edges_linked"],
         "verifications_resolved": verifications_resolved,
         "conditions_created": conditions_created,
         "actions_created": actions_created,
         "links_applied": links_applied,
+        "scaffold_retaged": recon["scaffold_retaged"],
+        "scaffold_cleaned": recon["scaffold_cleaned"],
     }
