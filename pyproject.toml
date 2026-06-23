@@ -20,7 +20,11 @@ dependencies = [
     "neomodel>=5.0",
     "codegraph>=0.2.0",
     "ddgs>=7.0",
+    "python-dotenv>=1.0",
 ]
+
+[project.scripts]
+ticketing-dashboard = "ticketing.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -34,7 +38,7 @@ dev = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend", "frontend"]
+packages = ["ticketing", "backend_migrated", "frontend_migrated"]
 
 [tool.black]
 line-length = 100
