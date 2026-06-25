@@ -31,7 +31,7 @@ from neomodel import db as neomodel_db
 
 from codegraph.models.tags import CodeGraphNode
 from backend_migrated.models.requirement import HLR, LLR
-from backend_migrated.models.verification import VerificationMethod, Condition, Action, get_typed_edge_targets
+from backend_migrated.models.verification import TestNode, AssertionNode, TestStepNode, get_typed_edge_targets
 from backend_migrated.tools.dispatcher import (
     DesignToolDispatcher,
     VerificationDispatcher,
@@ -71,30 +71,30 @@ def _load_notional_verifications(llrs: list[LLR]) -> dict[str, list[dict]]:
     llr_verifications: dict[str, list[dict]] = {}
 
     for llr in llrs:
-        vms = llr.verification_methods.all()
-        if not vms:
+        tests = llr.verification_methods.all()
+        if not tests:
             continue
 
         verifs_for_llr = []
-        for vm in vms:
+        for test_node in tests:
             vm_dict = {
-                "method": vm.method,
-                "test_name": vm.test_name or "",
-                "description": vm.description or "",
+                "method": test_node.method,
+                "test_name": test_node.test_name or "",
+                "description": test_node.description or "",
                 "preconditions": [],
                 "actions": [],
                 "postconditions": [],
             }
 
-            conditions = vm.conditions.all()
-            for cond in sorted(conditions, key=lambda c: c.order):
+            assertions = test_node.assertions.all()
+            for assertion in sorted(assertions, key=lambda a: a.order):
                 # Traverse LEFT_OPERAND / RIGHT_OPERAND edges to get
                 # the target qualified names.
-                left_targets = get_typed_edge_targets(cond, "LEFT_OPERAND")
-                right_targets = get_typed_edge_targets(cond, "RIGHT_OPERAND")
+                left_targets = get_typed_edge_targets(assertion, "LEFT_OPERAND")
+                right_targets = get_typed_edge_targets(assertion, "RIGHT_OPERAND")
                 cond_dict = {
                     "subject_qualified_name": left_targets[0]["qualified_name"] if left_targets else "",
-                    "operator": cond.operator or "==",
+                    "operator": assertion.operator or "==",
                     # expected_value is now a transient attr — traverse
                     # the RIGHT_OPERAND edge to get the value.  For
                     # LiteralNode targets, use .value; for scaffold
@@ -105,17 +105,17 @@ def _load_notional_verifications(llrs: list[LLR]) -> dict[str, list[dict]]:
                     ) if right_targets else "",
                     "object_qualified_name": right_targets[0]["qualified_name"] if right_targets else "",
                 }
-                if cond.phase == "pre":
+                if assertion.phase == "pre":
                     vm_dict["preconditions"].append(cond_dict)
                 else:
                     vm_dict["postconditions"].append(cond_dict)
 
-            actions = vm.actions.all()
-            for action in sorted(actions, key=lambda a: a.order):
-                callee_targets = get_typed_edge_targets(action, "CALLEE")
-                caller_targets = get_typed_edge_targets(action, "CALLER")
+            steps = test_node.steps.all()
+            for step in sorted(steps, key=lambda s: s.order):
+                callee_targets = get_typed_edge_targets(step, "CALLEE")
+                caller_targets = get_typed_edge_targets(step, "CALLER")
                 vm_dict["actions"].append({
-                    "description": action.description or "",
+                    "description": step.description or "",
                     "callee_qualified_name": callee_targets[0]["qualified_name"] if callee_targets else "",
                     "caller_qualified_name": caller_targets[0]["qualified_name"] if caller_targets else "",
                 })

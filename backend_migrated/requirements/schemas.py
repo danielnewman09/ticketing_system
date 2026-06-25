@@ -15,14 +15,15 @@ Schema structure::
 Each node dict has ``type``, node-specific properties, and an
 ``edges`` array with standard codegraph edge refs::
 
-    {"relation_type": "LEFT_OPERAND", "target_uid": "Engine.result", "target_type": "AttributeNode"}
+    {"relation_type": "LEFT_OPERAND", "target_uid": "Engine.result",
+     "target_type": "AttributeNode"}
 
-The LLM generates ``refid`` values for verification nodes (LLR,
-VerificationMethod, Condition, Action) and uses them as
-``target_uid`` in COMPOSES edges.  Typed edges (LEFT_OPERAND,
-RIGHT_OPERAND, CALLEE, CALLER) use notional references (e.g.
-``"Engine.result"``, ``"30"``) as ``target_uid`` — scaffold nodes
-for these targets are materialized during persistence.
+The LLM generates ``qualified_name`` for test nodes (TestNode,
+AssertionNode, TestStepNode) and uses them as ``target_uid``
+in COMPOSES edges.  Typed edges (LEFT_OPERAND, RIGHT_OPERAND,
+CALLEE, CALLER) use notional references (e.g. ``"Engine.result"``,
+``"30"``) as ``target_uid`` — scaffold nodes for these targets
+are materialized during persistence.
 """
 
 from __future__ import annotations

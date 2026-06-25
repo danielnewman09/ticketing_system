@@ -27,12 +27,9 @@ from __future__ import annotations
 
 import logging
 
-from codegraph.connection import (
-    _ensure_driver,
-    get_session,
-    verify_connectivity,
-)
-from codegraph.config import NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER
+from codegraph import get_session as _cg_get_session, verify_connectivity as _cg_verify_connectivity
+from codegraph import NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER
+from codegraph.persistence.connection import _ensure_driver
 from neomodel import db as neomodel_db
 
 log = logging.getLogger(__name__)
@@ -73,11 +70,11 @@ class Neo4jSessionManager:
 
     def session(self):
         """Return a Neo4j driver session as a context manager."""
-        return get_session()
+        return _cg_get_session()
 
     def verify_connectivity(self) -> bool:
         """Check that Neo4j is reachable."""
-        return verify_connectivity()
+        return _cg_verify_connectivity()
 
     def get_driver(self):
         """Return the underlying neomodel driver (for callers that need it)."""

@@ -7,16 +7,16 @@ nodes (placeholder ClassNode/AttributeNode/LiteralNode with
 output are auto-created by ``LayerGraph.deserialize(create_missing=True)``
 — a general codegraph feature.
 
-All nodes (verification nodes AND scaffold nodes) are persisted via
-``create_or_update`` with ``merge_by`` on the node's unique property.
-Scaffold nodes with the same ``uid`` (deterministic hash of
-``qualified_name``) are upserted (shared across HLRs), while
-verification nodes with fresh ``refid`` values are always created new.
+All nodes (test nodes AND scaffold nodes) are persisted via
+``create_or_update`` with ``merge_by`` on the node's unique property
+(``uid`` for TestNode/AssertionNode/TestStepNode).  Scaffold nodes
+with the same ``uid`` (deterministic hash of ``qualified_name``)
+are upserted (shared across HLRs).
 
-Edges are created via raw Cypher ``MERGE`` because neomodel's
-``.connect()`` has a metaclass incompatibility with ``CodeGraphNode``
-subclasses (``issubclass`` returns ``False`` even when
-``type(x) is cls`` is ``True``).
+Verification nodes use codegraph's native TestNode / AssertionNode /
+TestStepNode / TestFixtureNode types.  COMPOSES edges from
+LLR → TestNode and TestNode → AssertionNode / TestStepNode are created
+via raw Cypher MERGE.
 
 Usage::
 
@@ -53,9 +53,10 @@ class DecompositionResult:
     """Summary of what persist_decomposition created in Neo4j."""
 
     llrs_created: int = 0
-    verifications_created: int = 0
-    conditions_created: int = 0
-    actions_created: int = 0
+    tests_created: int = 0
+    assertions_created: int = 0
+    steps_created: int = 0
+    fixtures_created: int = 0
     scaffold_classes: int = 0
     scaffold_attributes: int = 0
     operand_edges: int = 0
@@ -209,6 +210,8 @@ def persist_decomposition(
 
     # --- Create all edges via raw Cypher ---
     flat = graph._flat_index()
+    total_refs = 0
+    missing_targets = 0
     for entry in graph._all_entries():
         source_node = entry.node
 
@@ -219,27 +222,40 @@ def persist_decomposition(
 
         # Reference edges (LEFT_OPERAND, RIGHT_OPERAND, CALLEE, etc.)
         for relation_type, target_key, target_type in entry.references:
+            total_refs += 1
             target_entry = flat.get(target_key)
-            if target_entry is not None:
-                if _create_edge(source_node, target_entry.node, relation_type):
-                    result.operand_edges += 1
+            if target_entry is None:
+                missing_targets += 1
+                log.debug(
+                    "persist_decomposition: missing flat target for "
+                    "ref %s -> %s (key=%s)",
+                    relation_type, target_type, target_key[:20] if target_key else "?",
+                )
+                continue
+            if _create_edge(source_node, target_entry.node, relation_type):
+                result.operand_edges += 1
+    log.info(
+        "persist_decomposition: %d reference edges (%d missing targets)",
+        total_refs, missing_targets,
+    )
 
     # --- Connect LLRs to the HLR ---
     for entry in graph.entries.values():
         if isinstance(entry.node, LLR):
             _create_edge(hlr, entry.node, "COMPOSES")
             result.llrs_created += 1
-            for vm in entry.node.verification_methods.all():
-                result.verifications_created += 1
-                result.conditions_created += len(vm.conditions.all())
-                result.actions_created += len(vm.actions.all())
+            for test_node in entry.node.verification_methods.all():
+                result.tests_created += 1
+                result.assertions_created += len(test_node.assertions.all())
+                result.steps_created += len(test_node.steps.all())
+                result.fixtures_created += len(test_node.fixtures.all())
 
     log.info(
-        "persist_decomposition: HLR %s — %d LLRs, %d VMs, %d conditions, "
-        "%d actions, %d scaffold classes, %d scaffold attributes",
-        hlr_refid[:8], result.llrs_created, result.verifications_created,
-        result.conditions_created, result.actions_created,
-        result.scaffold_classes, result.scaffold_attributes,
+        "persist_decomposition: HLR %s — %d LLRs, %d tests, %d assertions, "
+        "%d steps, %d fixtures, %d scaffold classes, %d scaffold attributes",
+        hlr_refid[:8], result.llrs_created, result.tests_created,
+        result.assertions_created, result.steps_created,
+        result.fixtures_created, result.scaffold_classes, result.scaffold_attributes,
     )
 
     # --- Clean up orphaned scaffold nodes from previous runs ---
@@ -258,6 +274,37 @@ def persist_decomposition(
 # ══════════════════════════════════════════════════════════════════════════
 
 
+def _safe_all_entries(graph) -> list:
+    """Iteratively collect all CompositeEntry nodes with cycle detection.
+
+    Avoids ``graph._all_entries()`` which can recurse infinitely when the
+    codegraph library produces entry trees with cycles (e.g. due to
+    colliding empty-string keys from LLM-generated node dicts).
+    """
+    from collections import deque
+    result: list = []
+    seen: set[int] = set()
+    queue = deque(graph.entries.values())
+    while queue:
+        entry = queue.popleft()
+        eid = id(entry)
+        if eid in seen:
+            continue
+        seen.add(eid)
+        result.append(entry)
+        for type_children in entry.children.values():
+            for child in type_children.values():
+                if id(child) not in seen:
+                    queue.append(child)
+    return result
+
+
+def _safe_flat_index(graph, all_entries: list) -> dict:
+    """Build a flat key→CompositeEntry lookup without recursive walk."""
+    from codegraph.graph import LayerGraph
+    return {LayerGraph._node_key(e.node): e for e in all_entries}
+
+
 def _validate_scaffold_graph(graph) -> list[str]:
     """Validate that every scaffold node in the LayerGraph is reachable from verification.
 
@@ -265,10 +312,10 @@ def _validate_scaffold_graph(graph) -> list[str]:
     nodes, this function checks that no scaffold is orphaned — i.e., every
     scaffold node must be either:
 
-    - **Directly referenced** by a Condition or Action edge (LEFT_OPERAND,
-      RIGHT_OPERAND, CALLEE), or
-    - A **parent ClassNode** that has at least one child referenced by a
-      Condition/Action edge.
+    - **Directly referenced** by an AssertionNode or TestStepNode edge
+      (LEFT_OPERAND, RIGHT_OPERAND, CALLEE), or
+    - A **parent ClassNode** that has at least one child referenced by an
+      AssertionNode/TestStepNode edge.
 
     Returns
     -------
@@ -281,6 +328,11 @@ def _validate_scaffold_graph(graph) -> list[str]:
 
     errors: list[str] = []
 
+    # --- Safe iterative walk of all entries with cycle detection ---
+    # We avoid graph._all_entries() because a buggy codegraph version
+    # may produce entry trees with cycles that cause infinite recursion.
+    all_entries = _safe_all_entries(graph)
+
     # Collect all scaffold node UIDs that are directly referenced by
     # Condition/Action edges (LEFT_OPERAND, RIGHT_OPERAND, CALLEE, etc.)
     directly_referenced: set[str] = set()
@@ -288,7 +340,7 @@ def _validate_scaffold_graph(graph) -> list[str]:
     # Map: parent ClassNode UID -> set of child UIDs (via COMPOSES)
     parent_to_children: dict[str, set[str]] = {}
 
-    for entry in graph._all_entries():
+    for entry in all_entries:
         node = entry.node
         is_scaffold = hasattr(node, "has_tag") and node.has_tag("scaffold")
         if not is_scaffold:
@@ -304,23 +356,24 @@ def _validate_scaffold_graph(graph) -> list[str]:
                     child_uid = child_entry.node._uid_value() or ""
                     parent_to_children.setdefault(node_uid, set()).add(child_uid)
 
-    # Now check which scaffold UIDs are directly referenced by Condition/Action
-    for entry in graph._all_entries():
+    # Now check which scaffold UIDs are directly referenced by AssertionNode/TestStepNode
+    flat_index = _safe_flat_index(graph, all_entries)
+    for entry in all_entries:
         for relation_type, target_key, target_type in entry.references:
-            # Only count references from Condition/Action nodes
+            # Only count references from AssertionNode/TestStepNode nodes
             # (these are the verification-relevant edges)
             node = entry.node
             node_type_name = type(node).__name__
-            if node_type_name in ("Condition", "Action"):
+            if node_type_name in ("AssertionNode", "TestStepNode"):
                 # Resolve the target key to a UID
-                target_entry = graph._flat_index().get(target_key)
+                target_entry = flat_index.get(target_key)
                 if target_entry:
                     target_uid = target_entry.node._uid_value() or ""
                     if target_uid:
                         directly_referenced.add(target_uid)
 
     # Check every scaffold node
-    for entry in graph._all_entries():
+    for entry in all_entries:
         node = entry.node
         is_scaffold = hasattr(node, "has_tag") and node.has_tag("scaffold")
         if not is_scaffold:
@@ -351,7 +404,7 @@ def _validate_scaffold_graph(graph) -> list[str]:
             )
         else:
             errors.append(
-                f"Scaffold {node_type} '{node_qn}' is not referenced by any Condition/Action edge"
+                f"Scaffold {node_type} '{node_qn}' is not referenced by any AssertionNode/TestStepNode edge"
             )
 
     return errors
@@ -361,18 +414,19 @@ def _cleanup_orphaned_scaffolds() -> int:
     """Delete scaffold nodes that have no path to any verification method.
 
     A scaffold node is "orphaned" if it cannot be reached from any
-    Condition or Action via LEFT_OPERAND / RIGHT_OPERAND / CALLEE edges,
-    and (for ClassNodes) none of its COMPOSES children are reachable either.
+    AssertionNode or TestStepNode via LEFT_OPERAND / RIGHT_OPERAND / CALLEE
+    edges, and (for ClassNodes) none of its COMPOSES children are reachable
+    either.
 
     This runs after the new decomposition is persisted, cleaning up
     leftover scaffolds from previous runs that are no longer referenced.
 
     Returns the number of nodes deleted.
     """
-    # Find scaffold nodes that are NOT reachable from any Condition/Action.
+    # Find scaffold nodes that are NOT reachable from any AssertionNode/TestStepNode.
     # A scaffold is reachable if:
     #   - It has an incoming LEFT_OPERAND, RIGHT_OPERAND, or CALLEE edge
-    #     from a Condition or Action node, OR
+    #     from an AssertionNode or TestStepNode node, OR
     #   - It has a COMPOSES child that is reachable (for ClassNodes)
     #
     # We do this in Cypher: find all scaffold-tagged nodes, then filter
@@ -382,7 +436,7 @@ def _cleanup_orphaned_scaffolds() -> int:
     #         Condition/Action edges.
     query_direct = """
     MATCH (ca)-[r]->(s)
-    WHERE (ca:Condition OR ca:Action)
+    WHERE (ca:AssertionNode OR ca:TestStepNode)
       AND (r:LEFT_OPERAND OR r:RIGHT_OPERAND OR r:CALLEE)
       AND 'scaffold' IN s.tags
     RETURN DISTINCT elementId(s) AS eid
@@ -460,11 +514,13 @@ def _cleanup_orphaned_scaffolds() -> int:
 
 
 def _delete_llr_subtree(llr: LLR) -> None:
-    """Delete an LLR and its entire verification subtree."""
-    for vm in llr.verification_methods.all():
-        for cond in vm.conditions.all():
-            cond.delete()
-        for action in vm.actions.all():
-            action.delete()
-        vm.delete()
+    """Delete an LLR and its entire verification subtree (TestNode + assertions + steps + fixtures)."""
+    for test_node in llr.verification_methods.all():
+        for assertion in test_node.assertions.all():
+            assertion.delete()
+        for step in test_node.steps.all():
+            step.delete()
+        for fixture in test_node.fixtures.all():
+            fixture.delete()
+        test_node.delete()
     llr.delete()

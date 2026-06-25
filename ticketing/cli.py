@@ -17,6 +17,9 @@ Usage::
     # development mode with auto-reload
     ticketing-dashboard --reload
 
+    # stop a running dashboard (finds the process by port)
+    ticketing-dashboard --stop --port 8082
+
 The CLI resolves the project name and Neo4j settings from
 ``.doxygen-index.toml`` (or ``.codegraph.toml``) via
 :func:`codegraph.docker.load_container_config`, ensures the
@@ -30,7 +33,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import signal
+import socket
 import sys
+import time
 from pathlib import Path
 
 log = logging.getLogger("ticketing.cli")
@@ -96,6 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Open a browser tab on startup.",
     )
     parser.add_argument(
+        "--stop",
+        action="store_true",
+        help="Stop a running dashboard instance by finding the process "
+        "listening on --host/--port.",
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Verbose CLI logging.",
@@ -116,7 +129,7 @@ def _ensure_neo4j_container(project_dir: Path) -> str:
     ``NEO4J_*`` environment is already set — the dashboard can still
     run against an external Neo4j instance.
     """
-    from codegraph.docker import (
+    from codegraph.persistence.docker import (
         docker_available,
         load_container_config,
         start_container,
@@ -143,9 +156,172 @@ def _ensure_neo4j_container(project_dir: Path) -> str:
     return cfg.project_name
 
 
+def _is_port_open(host: str, port: int) -> bool:
+    """Return True if *something* is listening on *host:port*."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1.0)
+    try:
+        sock.connect((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        sock.close()
+
+
+def _find_listener_pids(port: int) -> list[int]:
+    """Find PIDs of processes listening on *port*.
+
+    Iterates over accessible processes and checks their network
+    connections.  This avoids ``psutil.net_connections()`` which
+    requires root on macOS.
+
+    In reload mode this returns the child worker; the caller should
+    walk parents to find the reloader.
+    """
+    import psutil
+
+    pids: list[int] = []
+    for proc in psutil.process_iter(["pid"]):
+        try:
+            for conn in proc.net_connections(kind="inet"):
+                if conn.status != psutil.CONN_LISTEN:
+                    continue
+                if conn.laddr and conn.laddr.port == port:
+                    pids.append(proc.pid)
+                    break  # one match per process is enough
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+    return pids
+
+
+def _is_ticketing_process(proc) -> bool:
+    """Heuristic: does *proc* look like the ticketing dashboard?
+
+    Matches Python processes whose command line references the
+    ticketing dashboard, nicegui, or uvicorn.  This avoids matching
+    shells whose working directory merely contains "ticketing".
+    """
+    import psutil
+
+    try:
+        parts = proc.cmdline()
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+    if not parts:
+        return False
+    # Must be a Python process.
+    exe = parts[0].lower()
+    if "python" not in exe:
+        return False
+    cmdline = " ".join(parts)
+    return any(kw in cmdline for kw in ("ticketing", "nicegui", "uvicorn"))
+
+
+def _stop_dashboard(host: str, port: int) -> int:
+    """Stop a running dashboard instance listening on *host:port*.
+
+    Discovery is port-based: we find the process (or its parent, in
+    reload mode) that is listening on *port*, verify it looks like the
+    ticketing dashboard, then send SIGTERM and wait up to 10 s for
+    graceful shutdown.  If the process does not exit, we escalate to
+    SIGKILL.
+
+    Returns:
+        0 on success, 1 if no dashboard was running, 2 on error.
+    """
+    import psutil
+
+    # 1. Liveness check — is anything listening on the port at all?
+    if not _is_port_open(host, port):
+        print(
+            f"Nothing is listening on {host}:{port} — dashboard is not running.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # 2. Find the PID(s) listening on the port.
+    listener_pids = _find_listener_pids(port)
+    if not listener_pids:
+        print(
+            f"Port {port} is open but no listener PID found (permissions?). "
+            "Try running as the same user that started the dashboard.",
+            file=sys.stderr,
+        )
+        return 2
+
+    # 3. Build the set of PIDs to signal.  In --reload mode the listener
+    #    is the child worker; we need its parent (the uvicorn reloader)
+    #    so the whole process tree exits cleanly.
+    targets: list[psutil.Process] = []
+    for pid in listener_pids:
+        try:
+            proc = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            continue
+        if not _is_ticketing_process(proc):
+            print(
+                f"Process {pid} is listening on port {port} but does not look "
+                f"like the ticketing dashboard (cmdline: {' '.join(proc.cmdline())}).",
+                file=sys.stderr,
+            )
+            return 2
+        targets.append(proc)
+
+    # Walk up to the topmost parent that is also a ticketing/python process.
+    # This catches the uvicorn reloader parent in --reload mode.  Always
+    # include the original listener PID even if a parent is found.
+    final_pids: list[int] = []
+    for proc in targets:
+        top = proc
+        try:
+            for parent in proc.parents():
+                if _is_ticketing_process(parent):
+                    top = parent
+                else:
+                    break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+        if top.pid not in final_pids:
+            final_pids.append(top.pid)
+        # Also include the listener PID itself in case the parent is
+        # the reloader and doesn’t propagate the signal to the child.
+        if proc.pid not in final_pids:
+            final_pids.append(proc.pid)
+
+    # 4. SIGTERM the targets (parent first so the reloader cleans up children).
+    for pid in final_pids:
+        print(f"Stopping ticketing-dashboard (PID {pid})...", file=sys.stderr)
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+
+    # 5. Wait up to 10 s for the port to free up (graceful shutdown).
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if not _is_port_open(host, port):
+            print("Dashboard stopped.", file=sys.stderr)
+            return 0
+        time.sleep(0.25)
+
+    # 6. Escalate to SIGKILL.
+    print("Dashboard did not stop gracefully — sending SIGKILL.", file=sys.stderr)
+    for pid in final_pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+    # Give it a moment to die.
+    time.sleep(0.5)
+    print("Dashboard stopped.", file=sys.stderr)
+    return 0
+
+
 def _resolve_project_name(project_dir: Path) -> str:
     """Resolve just the project name from the TOML config (no Docker)."""
-    from codegraph.docker import load_container_config
+    from codegraph.persistence.docker import load_container_config
 
     return load_container_config(project_dir).project_name
 
@@ -172,6 +348,10 @@ def main(argv: list[str] | None = None) -> int:
     if not project_dir.is_dir():
         print(f"Error: project directory not found: {project_dir}", file=sys.stderr)
         return 2
+
+    # ── Stop mode: find and stop the dashboard by port ──
+    if args.stop:
+        return _stop_dashboard(args.host, args.port)
 
     # 1. Load the project's .env and sync codegraph.config BEFORE any
     #    codegraph import freezes a stale database_url. If the container

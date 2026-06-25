@@ -31,7 +31,7 @@ from codegraph.models import (
     FunctionNode,
     DefineNode,
 )
-from codegraph.repository import GraphRepository
+from codegraph import GraphRepository
 from neomodel.properties import Property
 
 from frontend_migrated.graph.format import (

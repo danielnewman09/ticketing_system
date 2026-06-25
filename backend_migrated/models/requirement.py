@@ -231,11 +231,11 @@ class LLR(StructuredNode, CodeGraphNode):
     #    This is the same COMPOSES pattern used by Namespace → Class →
     #    Method in the codegraph — the parent "composes" its parts.
     #
-    #  • COMPOSES (outgoing) — LLR → VerificationMethod
-    #    An LLR composes its verification methods.  In a LayerGraph,
-    #    VerificationMethods appear as children of their LLR entry
-    #    under ``entry.children["VerificationMethod"]``.
-    #    Example: LLR("Validate inputs")-[:COMPOSES]->VerificationMethod("Unit test")
+    #  • COMPOSES (outgoing) — LLR → TestNode
+    #    An LLR composes its test nodes (verification methods).  In a LayerGraph,
+    #    TestNodes appear as children of their LLR entry
+    #    under ``entry.children["TestNode"]``.
+    #    Example: LLR("Validate inputs")-[:COMPOSES]->TestNode("test_validate")
     # --------------------------------------------------------------------------
 
     # --- Tags & provenance ------------------------------------------------------
@@ -247,7 +247,7 @@ class LLR(StructuredNode, CodeGraphNode):
     hlr = RelationshipFrom(
         'backend_migrated.models.requirement.HLR', 'COMPOSES')
     verification_methods = RelationshipTo(
-        'backend_migrated.models.verification.VerificationMethod', 'COMPOSES')
+        'codegraph.models.test.TestNode', 'COMPOSES')
 
     # Design nodes composed by this LLR (COMPOSES, same edge type)
     design_compounds = RelationshipTo(
@@ -289,20 +289,19 @@ class LLR(StructuredNode, CodeGraphNode):
 
         Args:
             hlr_id: Optional HLR identifier for the prefix line.
-            verifications: List of ``(VerificationMethod, conditions, actions)``
-                tuples as returned by
-                :meth:`VerificationMethod.from_llm_dict`.
+            verifications: List of ``(TestNode, assertions, steps)``
+                tuples as returned by the verification loading helpers.
 
         Returns:
             Multi-line formatted string.
         """
         prefix = f"LLR {hlr_id}: " if hlr_id else "LLR: "
         lines = [f"{prefix}{self.description}"]
-        from backend_migrated.models.verification import VerificationMethod
+        from backend_migrated.models.verification import TestNode
         if verifications:
             lines.append("  Verifications:")
-            for vm, conditions, actions in verifications:
-                lines.append(vm.format(conditions=conditions, actions=actions))
+            for test_node, assertions, steps in verifications:
+                lines.append(test_node.format(conditions=assertions, actions=steps))
         else:
             lines.append("  (No verification stubs)")
         lines.append("")

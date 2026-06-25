@@ -50,9 +50,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from codegraph.repository import GraphRepository
-from codegraph.tools.dispatcher import CodeGraphDispatcher, ToolDispatcher
-from codegraph.connection import get_session
+from codegraph import GraphRepository
+from codegraph import CodeGraphDispatcher, ToolDispatcher
+from codegraph import get_session
 
 
 class DesignToolDispatcher(CodeGraphDispatcher):

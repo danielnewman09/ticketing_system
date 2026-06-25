@@ -41,12 +41,14 @@ def ensure_migrated_constraints() -> bool:
             "FOR (h:HLR) REQUIRE h.refid IS UNIQUE",
             "CREATE CONSTRAINT llr_refid IF NOT EXISTS "
             "FOR (l:LLR) REQUIRE l.refid IS UNIQUE",
-            "CREATE CONSTRAINT verificationmethod_refid IF NOT EXISTS "
-            "FOR (v:VerificationMethod) REQUIRE v.refid IS UNIQUE",
-            "CREATE CONSTRAINT condition_refid IF NOT EXISTS "
-            "FOR (c:Condition) REQUIRE c.refid IS UNIQUE",
-            "CREATE CONSTRAINT action_refid IF NOT EXISTS "
-            "FOR (a:Action) REQUIRE a.refid IS UNIQUE",
+            "CREATE CONSTRAINT testnode_uid IF NOT EXISTS "
+            "FOR (v:Test) REQUIRE v.uid IS UNIQUE",
+            "CREATE CONSTRAINT assertion_uid IF NOT EXISTS "
+            "FOR (c:Assertion) REQUIRE c.uid IS UNIQUE",
+            "CREATE CONSTRAINT teststep_uid IF NOT EXISTS "
+            "FOR (s:TestStep) REQUIRE s.uid IS UNIQUE",
+            "CREATE CONSTRAINT testfixture_uid IF NOT EXISTS "
+            "FOR (f:TestFixture) REQUIRE f.uid IS UNIQUE",
         ]:
             try:
                 session.run(stmt)
@@ -81,16 +83,20 @@ def ensure_migrated_constraints() -> bool:
             "FOR (h:HLR) ON (h.tags)",
             "CREATE INDEX llr_tags IF NOT EXISTS "
             "FOR (l:LLR) ON (l.tags)",
-            "CREATE INDEX verificationmethod_method IF NOT EXISTS "
-            "FOR (v:VerificationMethod) ON (v.method)",
-            "CREATE INDEX verificationmethod_layer IF NOT EXISTS "
-            "FOR (v:VerificationMethod) ON (v.layer)",
-            "CREATE INDEX condition_phase IF NOT EXISTS "
-            "FOR (c:Condition) ON (c.phase)",
-            "CREATE INDEX condition_layer IF NOT EXISTS "
-            "FOR (c:Condition) ON (c.layer)",
-            "CREATE INDEX action_layer IF NOT EXISTS "
-            "FOR (a:Action) ON (a.layer)",
+            "CREATE INDEX testnode_test_name IF NOT EXISTS "
+            "FOR (v:Test) ON (v.test_name)",
+            "CREATE INDEX testnode_method IF NOT EXISTS "
+            "FOR (v:Test) ON (v.method)",
+            "CREATE INDEX testnode_tags IF NOT EXISTS "
+            "FOR (v:Test) ON (v.tags)",
+            "CREATE INDEX assertion_phase IF NOT EXISTS "
+            "FOR (a:Assertion) ON (a.phase)",
+            "CREATE INDEX assertion_tags IF NOT EXISTS "
+            "FOR (a:Assertion) ON (a.tags)",
+            "CREATE INDEX teststep_tags IF NOT EXISTS "
+            "FOR (s:TestStep) ON (s.tags)",
+            "CREATE INDEX testfixture_tags IF NOT EXISTS "
+            "FOR (f:TestFixture) ON (f.tags)",
         ]:
             try:
                 session.run(stmt)

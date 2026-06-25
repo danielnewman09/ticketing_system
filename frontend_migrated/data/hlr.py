@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import logging
 
-from backend_migrated.models import Component, HLR, LLR, VerificationMethod
+from backend_migrated.models import Component, HLR, LLR, TestNode
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def _get_session():
     codegraph and cannot be expressed as neomodel queries on a single
     node type.  ``get_session`` calls ``_ensure_driver`` internally.
     """
-    from codegraph.connection import get_session
+    from codegraph import get_session
     return get_session()
 
 
@@ -105,7 +105,7 @@ def fetch_requirements_data() -> dict:
             unlinked_llrs.append(llr.serialize(fields="all", nested=True))
 
     # --- Aggregate counts ---
-    total_verifications = len(VerificationMethod.nodes.all())
+    total_verifications = len(TestNode.nodes.all())
 
     # Design-graph counts span all code-level node types — use raw Cypher.
     with _get_session() as ns:

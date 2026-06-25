@@ -106,17 +106,18 @@ array with standard codegraph edge refs::
 | type | UID field | Purpose |
 |---|---|---|
 | ``"LLR"`` | ``refid`` | Low-level requirement |
-| ``"VerificationMethod"`` | ``refid`` | Verification method (automated/review/inspection) |
-| ``"Condition"`` | ``refid`` | Pre- or post-condition assertion |
-| ``"Action"`` | ``refid`` | Stimulus step in a verification |
+| ``"TestNode"`` | ``qualified_name`` | Verification method (automated/review/inspection) |
+| ``"AssertionNode"`` | ``qualified_name`` | Pre- or post-condition assertion |
+| ``"TestStepNode"`` | ``qualified_name`` | Stimulus step in a verification |
 
-Each verification node needs a unique ``refid`` (any string, e.g.
-``"llr-1"``, ``"vm-1"``, ``"cond-1"``).  Use these refids as
-``target_uid`` in ``COMPOSES`` edges to wire the hierarchy:
+Each verification node needs a unique ``qualified_name`` (any string, e.g.
+``"vm::set_target::test_reading"``, ``"cond::pre::is_calibrated"``).
+Use these qualified_names as ``target_uid`` in ``COMPOSES`` edges to wire
+the hierarchy:
 
-  LLR -[:COMPOSES]-> VerificationMethod -[:COMPOSES]-> Condition / Action
+  LLR -[:COMPOSES]-> TestNode -[:COMPOSES]-> AssertionNode / TestStepNode
 
-### Condition properties
+### AssertionNode properties
 
 | Property | Required | Description |
 |---|---|---|
@@ -124,18 +125,18 @@ Each verification node needs a unique ``refid`` (any string, e.g.
 | ``operator`` | yes | Comparison operator (``"=="``, ``"is_true"``, etc.) |
 | ``description`` | no | Human-readable description |
 
-### Condition edges
+### AssertionNode edges
 
 - ``LEFT_OPERAND`` — the subject being checked (target_type: ``"AttributeNode"``)
 - ``RIGHT_OPERAND`` — the expected value (target_type: ``"LiteralNode"`` for primitives, ``"AttributeNode"`` for enum/notional)
 
-### Action properties
+### TestStepNode properties
 
 | Property | Required | Description |
 |---|---|---|
 | ``description`` | yes | Human-readable description of the step |
 
-### Action edges
+### TestStepNode edges
 
 - ``CALLEE`` — the notional operation being invoked (target_type: ``"AttributeNode"``)
 
@@ -225,35 +226,39 @@ is defined whether this is one LLR of many or a standalone requirement.
 ### Happy-path verification (as flat node dicts)
 
 <Good>
-{"type": "VerificationMethod", "refid": "vm-1", "method": "automated",
+{"type": "TestNode", "qualified_name": "vm::set_target::test_valid_input_reading",
  "test_name": "test_set_target_returns_current_reading_for_valid_input",
+ "method": "automated",
  "description": "Invoke the set_target operation with a valid temperature and verify the returned reading matches the target.",
  "edges": [
-   {"relation_type": "COMPOSES", "target_uid": "cond-1", "target_type": "Condition"},
-   {"relation_type": "COMPOSES", "target_uid": "act-1", "target_type": "Action"},
-   {"relation_type": "COMPOSES", "target_uid": "cond-2", "target_type": "Condition"},
-   {"relation_type": "COMPOSES", "target_uid": "cond-3", "target_type": "Condition"}
+   {"relation_type": "COMPOSES", "target_uid": "cond::pre::is_calibrated", "target_type": "AssertionNode"},
+   {"relation_type": "COMPOSES", "target_uid": "step::invoke_set_target", "target_type": "TestStepNode"},
+   {"relation_type": "COMPOSES", "target_uid": "cond::post::reading_matches", "target_type": "AssertionNode"},
+   {"relation_type": "COMPOSES", "target_uid": "cond::post::is_active", "target_type": "AssertionNode"}
  ]}
 
-{"type": "Condition", "refid": "cond-1", "phase": "pre", "operator": "is_true",
+{"type": "AssertionNode", "qualified_name": "cond::pre::is_calibrated",
+ "phase": "pre", "operator": "is_true",
  "edges": [
    {"relation_type": "LEFT_OPERAND", "target_uid": "Thermostat::is_calibrated", "target_type": "AttributeNode"},
    {"relation_type": "RIGHT_OPERAND", "target_uid": "true", "target_type": "LiteralNode"}
  ]}
 
-{"type": "Action", "refid": "act-1",
+{"type": "TestStepNode", "qualified_name": "step::invoke_set_target",
  "description": "Invoke the set_target operation with target temperature 72",
  "edges": [
    {"relation_type": "CALLEE", "target_uid": "Thermostat::set_target", "target_type": "AttributeNode"}
  ]}
 
-{"type": "Condition", "refid": "cond-2", "phase": "post", "operator": "==",
+{"type": "AssertionNode", "qualified_name": "cond::post::reading_matches",
+ "phase": "post", "operator": "==",
  "edges": [
    {"relation_type": "LEFT_OPERAND", "target_uid": "Thermostat::current_reading", "target_type": "AttributeNode"},
    {"relation_type": "RIGHT_OPERAND", "target_uid": "72", "target_type": "LiteralNode"}
  ]}
 
-{"type": "Condition", "refid": "cond-3", "phase": "post", "operator": "is_true",
+{"type": "AssertionNode", "qualified_name": "cond::post::is_active",
+ "phase": "post", "operator": "is_true",
  "edges": [
    {"relation_type": "LEFT_OPERAND", "target_uid": "Thermostat::is_active", "target_type": "AttributeNode"},
    {"relation_type": "RIGHT_OPERAND", "target_uid": "true", "target_type": "LiteralNode"}
@@ -263,35 +268,39 @@ is defined whether this is one LLR of many or a standalone requirement.
 ### Error-path verification
 
 <Good>
-{"type": "VerificationMethod", "refid": "vm-2", "method": "automated",
+{"type": "TestNode", "qualified_name": "vm::set_target::test_out_of_range",
  "test_name": "test_set_target_rejects_out_of_range_temperature",
+ "method": "automated",
  "description": "Invoke the set_target operation with an out-of-range temperature and verify the error state indicates a sensor fault.",
  "edges": [
-   {"relation_type": "COMPOSES", "target_uid": "cond-4", "target_type": "Condition"},
-   {"relation_type": "COMPOSES", "target_uid": "act-2", "target_type": "Action"},
-   {"relation_type": "COMPOSES", "target_uid": "cond-5", "target_type": "Condition"},
-   {"relation_type": "COMPOSES", "target_uid": "cond-6", "target_type": "Condition"}
+   {"relation_type": "COMPOSES", "target_uid": "cond::pre::calibrated_pre_error", "target_type": "AssertionNode"},
+   {"relation_type": "COMPOSES", "target_uid": "step::invoke_oob_set_target", "target_type": "TestStepNode"},
+   {"relation_type": "COMPOSES", "target_uid": "cond::post::error_state", "target_type": "AssertionNode"},
+   {"relation_type": "COMPOSES", "target_uid": "cond::post::inactive", "target_type": "AssertionNode"}
  ]}
 
-{"type": "Condition", "refid": "cond-4", "phase": "pre", "operator": "is_true",
+{"type": "AssertionNode", "qualified_name": "cond::pre::calibrated_pre_error",
+ "phase": "pre", "operator": "is_true",
  "edges": [
    {"relation_type": "LEFT_OPERAND", "target_uid": "Thermostat::is_calibrated", "target_type": "AttributeNode"},
    {"relation_type": "RIGHT_OPERAND", "target_uid": "true", "target_type": "LiteralNode"}
  ]}
 
-{"type": "Action", "refid": "act-2",
+{"type": "TestStepNode", "qualified_name": "step::invoke_oob_set_target",
  "description": "Invoke the set_target operation with an out-of-range temperature of 200",
  "edges": [
    {"relation_type": "CALLEE", "target_uid": "Thermostat::set_target", "target_type": "AttributeNode"}
  ]}
 
-{"type": "Condition", "refid": "cond-5", "phase": "post", "operator": "==",
+{"type": "AssertionNode", "qualified_name": "cond::post::error_state",
+ "phase": "post", "operator": "==",
  "edges": [
    {"relation_type": "LEFT_OPERAND", "target_uid": "Thermostat::error_state", "target_type": "AttributeNode"},
    {"relation_type": "RIGHT_OPERAND", "target_uid": "SensorFault", "target_type": "AttributeNode"}
  ]}
 
-{"type": "Condition", "refid": "cond-6", "phase": "post", "operator": "is_false",
+{"type": "AssertionNode", "qualified_name": "cond::post::inactive",
+ "phase": "post", "operator": "is_false",
  "edges": [
    {"relation_type": "LEFT_OPERAND", "target_uid": "Thermostat::is_active", "target_type": "AttributeNode"},
    {"relation_type": "RIGHT_OPERAND", "target_uid": "false", "target_type": "LiteralNode"}
@@ -301,8 +310,9 @@ is defined whether this is one LLR of many or a standalone requirement.
 ### Empty verification — WRONG
 
 <Bad>
-{"type": "VerificationMethod", "refid": "vm-3", "method": "automated",
+{"type": "TestNode", "qualified_name": "vm::set_target::test_works",
  "test_name": "test_set_target_returns_reading",
+ "method": "automated",
  "description": "Verify the set_target operation works.",
  "edges": []}
 
@@ -337,21 +347,22 @@ reading this would have to guess the entire test scenario.
 Your decomposition will be validated before it is persisted. If any of
 these rules fail, the decomposition is REJECTED and nothing is saved:
 
-1. Every LLR must have at least one VerificationMethod (COMPOSES edge).
-2. Every VerificationMethod must have at least one Action (COMPOSES edge).
-3. Every VerificationMethod must have at least one pre-condition (phase="pre")
-   AND at least one post-condition (phase="post").
-4. Every Condition must have both a LEFT_OPERAND and a RIGHT_OPERAND edge.
-5. Every Action must have a CALLEE edge to a scaffold target (AttributeNode
-   or ClassNode).
-6. Every VerificationMethod must reference at least one scaffold node
-   (AttributeNode, LiteralNode, or ClassNode) through its Conditions/Actions.
-7. Every VerificationMethod must be owned by at least one LLR.
-8. Every scaffold target UID referenced by Conditions/Actions must be
-   reachable from an LLR through the LLR → VM → Condition/Action chain.
+1. Every LLR must have at least one TestNode (COMPOSES edge).
+2. Every TestNode must have at least one TestStepNode (COMPOSES edge).
+3. Every TestNode must have at least one pre-condition (phase="pre" AssertionNode)
+   AND at least one post-condition (phase="post" AssertionNode).
+4. Every AssertionNode must have both a LEFT_OPERAND and a RIGHT_OPERAND edge.
+5. Every TestStepNode must have a CALLEE edge to a scaffold target
+   (AttributeNode or ClassNode).
+6. Every TestNode must reference at least one scaffold node (AttributeNode,
+   LiteralNode, or ClassNode) through its AssertionNodes/TestStepNodes.
+7. Every TestNode must be owned by at least one LLR.
+8. Every scaffold target UID referenced by AssertionNode/TestStepNode edges
+   must be reachable from an LLR through the
+   LLR → TestNode → AssertionNode/TestStepNode chain.
 
-If you produce a scaffold reference that no verification method uses, or a
-verification method with no scaffold references, the decomposition is invalid.
+If you produce a scaffold reference that no test uses, or a test with no
+scaffold references, the decomposition is invalid.
 </HARD-VALIDATION>
 
 You MUST use the decompose_requirement tool to return your result.
@@ -485,21 +496,25 @@ def validate_decomposition(nodes: list[dict]) -> list[DecompositionViolation]:
 
     Hard rules
     ----------
-    1. **LLR_HAS_VM** — Every LLR must COMPOSES at least one VerificationMethod.
-    2. **VM_HAS_ACTION** — Every VM must COMPOSES at least one Action.
-    3. **VM_HAS_PRE_POST** — Every VM must COMPOSES ≥1 pre-condition and ≥1 post-condition.
-    4. **CONDITION_HAS_OPERANDS** — Every Condition must have LEFT_OPERAND and RIGHT_OPERAND edges.
-    5. **ACTION_HAS_CALLEE** — Every Action must have a CALLEE edge to a scaffold target.
-    6. **VM_REACHES_SCAFFOLD** — Every VM must reach ≥1 scaffold node through its Conditions/Actions.
+    1. **LLR_HAS_TEST** — Every LLR must COMPOSES at least one TestNode.
+    2. **TEST_HAS_STEP** — Every TestNode must COMPOSES at least one TestStepNode.
+    3. **TEST_HAS_PRE_POST** — Every TestNode must COMPOSES ≥1 pre-condition AssertionNode
+       and ≥1 post-condition AssertionNode.
+    4. **ASSERTION_HAS_OPERANDS** — Every AssertionNode must have LEFT_OPERAND and
+       RIGHT_OPERAND edges.
+    5. **STEP_HAS_CALLEE** — Every TestStepNode must have a CALLEE edge to a scaffold
+       target.
+    6. **TEST_REACHES_SCAFFOLD** — Every TestNode must reach ≥1 scaffold node through
+       its AssertionNodes/TestStepNodes.
     7. **SCAFFOLD_IS_REFERENCED** — Every scaffold target referenced by
-       Conditions/Actions must belong to a VM that is owned by an LLR.
+       AssertionNodes/TestStepNodes must belong to a TestNode that is owned by an LLR.
        Additionally, no scaffold target should be "dangling" — every
-       target_uid must appear in at least one Condition/Action edge that
-       is reachable from an LLR → VM → Condition/Action path.
+       target_uid must appear in at least one AssertionNode/TestStepNode edge that
+       is reachable from an LLR → TestNode → AssertionNode/TestStepNode path.
     8. **NO_ORPHAN_SCAFFOLD_UIDS** — Every distinct scaffold target UID
        (AttributeNode/LiteralNode/ClassNode) referenced by edges must be
-       reachable from at least one LLR through the LLR → VM →
-       Condition/Action → scaffold chain.  This catches scaffold nodes
+       reachable from at least one LLR through the LLR → TestNode →
+       AssertionNode/TestStepNode → scaffold chain.  This catches scaffold nodes
        that are created but never touched by any verification.
 
     Returns
@@ -513,92 +528,93 @@ def validate_decomposition(nodes: list[dict]) -> list[DecompositionViolation]:
     # --- Index nodes by refid and type ---
     nodes_by_refid: dict[str, dict] = {}
     llr_ids: set[str] = set()
-    vm_ids: set[str] = set()
+    test_ids: set[str] = set()
     cond_ids: set[str] = set()
     action_ids: set[str] = set()
 
     for n in nodes:
         ntype = n.get("type", "")
-        refid = n.get("refid", "")
-        if refid:
-            nodes_by_refid[refid] = n
+        # LLM may use legacy type names or new names — accept both
+        ident = n.get("refid") or n.get("qualified_name", "")
+        if ident:
+            nodes_by_refid[ident] = n
         if ntype == "LLR":
-            llr_ids.add(refid)
-        elif ntype == "VerificationMethod":
-            vm_ids.add(refid)
-        elif ntype == "Condition":
-            cond_ids.add(refid)
-        elif ntype == "Action":
-            action_ids.add(refid)
+            llr_ids.add(ident)
+        elif ntype == "TestNode":
+            test_ids.add(ident)
+        elif ntype == "AssertionNode":
+            cond_ids.add(ident)
+        elif ntype == "TestStepNode":
+            action_ids.add(ident)
 
     # --- Build adjacency from COMPOSES edges ---
-    # LLR -> [VM refids], VM -> [Condition refids], VM -> [Action refids]
-    llr_to_vms: dict[str, list[str]] = {}
-    vm_to_conds: dict[str, list[str]] = {}
-    vm_to_actions: dict[str, list[str]] = {}
+    # LLR -> [TestNode ids], TestNode -> [AssertionNode ids], TestNode -> [TestStepNode ids]
+    llr_to_tests: dict[str, list[str]] = {}
+    test_to_conds: dict[str, list[str]] = {}
+    test_to_actions: dict[str, list[str]] = {}
 
     for n in nodes:
-        refid = n.get("refid", "")
+        ident = n.get("refid") or n.get("qualified_name", "")
         ntype = n.get("type", "")
         for e in n.get("edges", []):
             rt = e.get("relation_type", "")
             tuid = e.get("target_uid", "")
             if rt != "COMPOSES":
                 continue
-            if ntype == "LLR" and tuid in vm_ids:
-                llr_to_vms.setdefault(refid, []).append(tuid)
-            elif ntype == "VerificationMethod":
+            if ntype == "LLR" and tuid in test_ids:
+                llr_to_tests.setdefault(ident, []).append(tuid)
+            elif ntype == "TestNode":
                 if tuid in cond_ids:
-                    vm_to_conds.setdefault(refid, []).append(tuid)
+                    test_to_conds.setdefault(ident, []).append(tuid)
                 elif tuid in action_ids:
-                    vm_to_actions.setdefault(refid, []).append(tuid)
+                    test_to_actions.setdefault(ident, []).append(tuid)
 
-    # --- Collect scaffold references from Condition/Action edges ---
-    # scaffold_uid -> [(owner_refid, relation_type)]
+    # --- Collect scaffold references from AssertionNode/TestStepNode edges ---
+    # scaffold_uid -> [(owner_id, relation_type)]
     scaffold_refs: dict[str, list[tuple[str, str]]] = {}
-    # condition/action refid -> set of scaffold UIDs it references
-    cond_action_scaffolds: dict[str, set[str]] = {}
+    # assertion/step id -> set of scaffold UIDs it references
+    verif_scaffolds: dict[str, set[str]] = {}
 
     for n in nodes:
-        refid = n.get("refid", "")
+        ident = n.get("refid") or n.get("qualified_name", "")
         ntype = n.get("type", "")
-        if ntype not in ("Condition", "Action"):
+        if ntype not in ("AssertionNode", "TestStepNode"):
             continue
         for e in n.get("edges", []):
             ttype = e.get("target_type", "")
             tuid = e.get("target_uid", "")
             rt = e.get("relation_type", "")
             if ttype in ("AttributeNode", "LiteralNode", "ClassNode") and tuid:
-                scaffold_refs.setdefault(tuid, []).append((refid, rt))
-                cond_action_scaffolds.setdefault(refid, set()).add(tuid)
+                scaffold_refs.setdefault(tuid, []).append((ident, rt))
+                verif_scaffolds.setdefault(ident, set()).add(tuid)
 
-    # --- Rule 1: Every LLR has ≥1 VM ---
+    # --- Rule 1: Every LLR has ≥1 TestNode ---
     for llr_id in sorted(llr_ids):
-        vms = llr_to_vms.get(llr_id, [])
-        if not vms:
+        tests = llr_to_tests.get(llr_id, [])
+        if not tests:
             violations.append(DecompositionViolation(
-                rule="LLR_HAS_VM",
-                message=f"LLR {llr_id} has no verification methods (no COMPOSES edge to a VerificationMethod)",
+                rule="LLR_HAS_TEST",
+                message=f"LLR {llr_id} has no tests (no COMPOSES edge to a TestNode)",
                 context=llr_id,
             ))
 
-    # --- Determine which VMs are owned by at least one LLR ---
-    vms_owned_by_llr: set[str] = set()
-    for vm_list in llr_to_vms.values():
-        vms_owned_by_llr.update(vm_list)
+    # --- Determine which TestNodes are owned by at least one LLR ---
+    tests_owned_by_llr: set[str] = set()
+    for test_list in llr_to_tests.values():
+        tests_owned_by_llr.update(test_list)
 
-    # --- Rule 2: Every VM has ≥1 Action ---
-    # Rule 3: Every VM has ≥1 pre and ≥1 post condition ---
-    for vm_id in sorted(vm_ids):
-        actions = vm_to_actions.get(vm_id, [])
+    # --- Rule 2: Every TestNode has ≥1 TestStepNode ---
+    # Rule 3: Every TestNode has ≥1 pre and ≥1 post AssertionNode ---
+    for test_id in sorted(test_ids):
+        actions = test_to_actions.get(test_id, [])
         if not actions:
             violations.append(DecompositionViolation(
-                rule="VM_HAS_ACTION",
-                message=f"VerificationMethod {vm_id} has no actions (no COMPOSES edge to an Action)",
-                context=vm_id,
+                rule="TEST_HAS_STEP",
+                message=f"TestNode {test_id} has no steps (no COMPOSES edge to a TestStepNode)",
+                context=test_id,
             ))
 
-        cond_list = vm_to_conds.get(vm_id, [])
+        cond_list = test_to_conds.get(test_id, [])
         has_pre = any(
             nodes_by_refid.get(cid, {}).get("phase") == "pre"
             for cid in cond_list
@@ -609,43 +625,45 @@ def validate_decomposition(nodes: list[dict]) -> list[DecompositionViolation]:
         )
         if not has_pre:
             violations.append(DecompositionViolation(
-                rule="VM_HAS_PRE_POST",
-                message=f"VerificationMethod {vm_id} has no pre-conditions",
-                context=vm_id,
+                rule="TEST_HAS_PRE_POST",
+                message=f"TestNode {test_id} has no pre-conditions (no phase='pre' AssertionNode)",
+                context=test_id,
             ))
         if not has_post:
             violations.append(DecompositionViolation(
-                rule="VM_HAS_PRE_POST",
-                message=f"VerificationMethod {vm_id} has no post-conditions",
-                context=vm_id,
+                rule="TEST_HAS_PRE_POST",
+                message=f"TestNode {test_id} has no post-conditions (no phase='post' AssertionNode)",
+                context=test_id,
             ))
 
-    # --- Rule 4: Every Condition has LEFT_OPERAND and RIGHT_OPERAND ---
+    # --- Rule 4: Every AssertionNode has LEFT_OPERAND and RIGHT_OPERAND ---
     for n in nodes:
-        if n.get("type") != "Condition":
+        ntype = n.get("type", "")
+        if ntype != "AssertionNode":
             continue
-        refid = n.get("refid", "?")
+        ident = n.get("refid") or n.get("qualified_name", "?")
         edges = n.get("edges", [])
         has_left = any(e.get("relation_type") == "LEFT_OPERAND" for e in edges)
         has_right = any(e.get("relation_type") == "RIGHT_OPERAND" for e in edges)
         if not has_left:
             violations.append(DecompositionViolation(
-                rule="CONDITION_HAS_OPERANDS",
-                message=f"Condition {refid} has no LEFT_OPERAND edge",
-                context=refid,
+                rule="ASSERTION_HAS_OPERANDS",
+                message=f"AssertionNode {ident} has no LEFT_OPERAND edge",
+                context=ident,
             ))
         if not has_right:
             violations.append(DecompositionViolation(
-                rule="CONDITION_HAS_OPERANDS",
-                message=f"Condition {refid} has no RIGHT_OPERAND edge",
-                context=refid,
+                rule="ASSERTION_HAS_OPERANDS",
+                message=f"AssertionNode {ident} has no RIGHT_OPERAND edge",
+                context=ident,
             ))
 
-    # --- Rule 5: Every Action has a CALLEE edge to a scaffold target ---
+    # --- Rule 5: Every TestStepNode has a CALLEE edge to a scaffold target ---
     for n in nodes:
-        if n.get("type") != "Action":
+        ntype = n.get("type", "")
+        if ntype != "TestStepNode":
             continue
-        refid = n.get("refid", "?")
+        ident = n.get("refid") or n.get("qualified_name", "?")
         edges = n.get("edges", [])
         callee_edges = [
             e for e in edges
@@ -654,41 +672,41 @@ def validate_decomposition(nodes: list[dict]) -> list[DecompositionViolation]:
         ]
         if not callee_edges:
             violations.append(DecompositionViolation(
-                rule="ACTION_HAS_CALLEE",
-                message=f"Action {refid} has no CALLEE edge to a scaffold target (AttributeNode/ClassNode)",
-                context=refid,
+                rule="STEP_HAS_CALLEE",
+                message=f"TestStepNode {ident} has no CALLEE edge to a scaffold target (AttributeNode/ClassNode)",
+                context=ident,
             ))
 
-    # --- Rule 6: Every VM reaches ≥1 scaffold node ---
-    for vm_id in sorted(vm_ids):
-        cond_action_ids = set(vm_to_conds.get(vm_id, [])) | set(vm_to_actions.get(vm_id, []))
-        vm_scaffolds: set[str] = set()
-        for ca_id in cond_action_ids:
-            vm_scaffolds |= cond_action_scaffolds.get(ca_id, set())
-        if not vm_scaffolds:
+    # --- Rule 6: Every TestNode reaches ≥1 scaffold node ---
+    for test_id in sorted(test_ids):
+        ca_ids = set(test_to_conds.get(test_id, [])) | set(test_to_actions.get(test_id, []))
+        test_scaffolds: set[str] = set()
+        for ca_id in ca_ids:
+            test_scaffolds |= verif_scaffolds.get(ca_id, set())
+        if not test_scaffolds:
             violations.append(DecompositionViolation(
-                rule="VM_REACHES_SCAFFOLD",
-                message=f"VerificationMethod {vm_id} does not reference any scaffold nodes through its Conditions/Actions",
-                context=vm_id,
+                rule="TEST_REACHES_SCAFFOLD",
+                message=f"TestNode {test_id} does not reference any scaffold nodes through its AssertionNodes/TestStepNodes",
+                context=test_id,
             ))
 
-    # --- Rule 7: Every VM is owned by at least one LLR ---
-    for vm_id in sorted(vm_ids):
-        if vm_id not in vms_owned_by_llr:
+    # --- Rule 7: Every TestNode is owned by at least one LLR ---
+    for test_id in sorted(test_ids):
+        if test_id not in tests_owned_by_llr:
             violations.append(DecompositionViolation(
-                rule="VM_HAS_OWNER",
-                message=f"VerificationMethod {vm_id} is not owned by any LLR (no LLR has a COMPOSES edge to it)",
-                context=vm_id,
+                rule="TEST_HAS_OWNER",
+                message=f"TestNode {test_id} is not owned by any LLR (no LLR has a COMPOSES edge to it)",
+                context=test_id,
             ))
 
-    # --- Rule 8: Every scaffold UID is reachable from an LLR → VM → Cond/Action chain ---
-    # Build the set of scaffold UIDs that are reachable from owned VMs
+    # --- Rule 8: Every scaffold UID is reachable from an LLR → TestNode → Assertion/Step chain ---
+    # Build the set of scaffold UIDs that are reachable from owned TestNodes
     reachable_scaffolds: set[str] = set()
-    for llr_id, vm_list in llr_to_vms.items():
-        for vm_id in vm_list:
-            ca_ids = set(vm_to_conds.get(vm_id, [])) | set(vm_to_actions.get(vm_id, []))
+    for llr_id, test_list in llr_to_tests.items():
+        for test_id in test_list:
+            ca_ids = set(test_to_conds.get(test_id, [])) | set(test_to_actions.get(test_id, []))
             for ca_id in ca_ids:
-                reachable_scaffolds |= cond_action_scaffolds.get(ca_id, set())
+                reachable_scaffolds |= verif_scaffolds.get(ca_id, set())
 
     for uid in sorted(scaffold_refs.keys()):
         if uid not in reachable_scaffolds:
@@ -878,20 +896,21 @@ def decompose_and_persist_hlr(
     result = persist_decomposition(refid, decomposed)
 
     log.info(
-        "Decomposition+persist complete for HLR %s: %d LLRs, %d VMs, "
-        "%d conditions, %d actions, %d scaffold classes, %d scaffold attributes",
-        refid[:8], result.llrs_created, result.verifications_created,
-        result.conditions_created, result.actions_created,
-        result.scaffold_classes, result.scaffold_attributes,
+        "Decomposition+persist complete for HLR %s: %d LLRs, %d tests, "
+        "%d assertions, %d steps, %d fixtures, %d scaffold classes, %d scaffold attributes",
+        refid[:8], result.llrs_created, result.tests_created,
+        result.assertions_created, result.steps_created,
+        result.fixtures_created, result.scaffold_classes, result.scaffold_attributes,
     )
 
     return {
         "hlr_refid": refid,
         "num_llrs": len([n for n in decomposed.nodes if n.get("type") == "LLR"]),
         "llrs_created": result.llrs_created,
-        "verifications_created": result.verifications_created,
-        "conditions_created": result.conditions_created,
-        "actions_created": result.actions_created,
+        "tests_created": result.tests_created,
+        "assertions_created": result.assertions_created,
+        "steps_created": result.steps_created,
+        "fixtures_created": result.fixtures_created,
         "scaffold_classes": result.scaffold_classes,
         "scaffold_attributes": result.scaffold_attributes,
         "operand_edges": result.operand_edges,

@@ -5,7 +5,7 @@ Each tool has a ``SCHEMA`` dict and a ``handle_*(ctx, tool_input)``
 function registered by ``register_all(dispatcher)`` on a
 :class:`RequirementsDispatcher`.
 
-Uses neomodel ORM for HLR/LLR/VerificationMethod/Condition/Action
+Uses neomodel ORM for HLR/LLR/TestNode/AssertionNode/TestStepNode
 queries and the dispatcher's ``session()`` context manager for raw
 Cypher when needed.
 
@@ -94,42 +94,40 @@ def _serialize_llr_brief(llr) -> dict:
     }
 
 
-def _serialize_verification(vm) -> dict:
-    """Serialize a VerificationMethod neomodel node with its conditions and actions."""
+def _serialize_verification(test_node) -> dict:
+    """Serialize a TestNode neomodel node with its assertions and steps."""
     result = {
-        "refid": vm.refid,
-        "name": vm.name or "",
-        "method": vm.method,
-        "test_name": vm.test_name or "",
-        "description": vm.description or "",
-        "layer": vm.layer,
+        "refid": getattr(test_node, "refid", "") or "",
+        "name": test_node.name or "",
+        "method": test_node.method,
+        "test_name": test_node.test_name or "",
+        "description": test_node.description or "",
+        "tags": list(test_node.tags) if test_node.tags else [],
     }
 
-    # Collect conditions grouped by phase
-    conditions = vm.conditions.all()
+    # Collect assertions grouped by phase
+    assertions = test_node.assertions.all()
     pre_conditions = []
     post_conditions = []
-    for cond in sorted(conditions, key=lambda c: c.order):
+    for assertion in sorted(assertions, key=lambda a: a.order):
         # Traverse LEFT_OPERAND / RIGHT_OPERAND edges to get the target
-        # qualified names — the string properties have been removed in
-        # favor of typed edges to scaffold/design nodes.
-        left_targets = get_typed_edge_targets(cond, "LEFT_OPERAND")
-        right_targets = get_typed_edge_targets(cond, "RIGHT_OPERAND")
+        # qualified names.
+        left_targets = get_typed_edge_targets(assertion, "LEFT_OPERAND")
+        right_targets = get_typed_edge_targets(assertion, "RIGHT_OPERAND")
         cond_dict = {
-            "refid": cond.refid,
-            "name": cond.name or "",
-            "phase": cond.phase,
-            "order": cond.order,
-            "operator": cond.operator,
+            "refid": getattr(assertion, "refid", "") or "",
+            "name": assertion.name or "",
+            "phase": assertion.phase,
+            "order": assertion.order,
+            "operator": assertion.operator,
             # expected_value is now a transient attr — traverse the
             # RIGHT_OPERAND edge to get the value from the target node.
-            # LiteralNodes carry .value; scaffold nodes use .qualified_name.
-            "expected_value": _get_expected_value_from_edge(cond),
+            "expected_value": _get_expected_value_from_edge(assertion),
             "subject_qualified_name": left_targets[0]["qualified_name"] if left_targets else "",
             "object_qualified_name": right_targets[0]["qualified_name"] if right_targets else "",
-            "description": cond.description or "",
+            "description": assertion.description or "",
         }
-        if cond.phase == "pre":
+        if assertion.phase == "pre":
             pre_conditions.append(cond_dict)
         else:
             post_conditions.append(cond_dict)
@@ -137,20 +135,18 @@ def _serialize_verification(vm) -> dict:
     result["preconditions"] = pre_conditions
     result["postconditions"] = post_conditions
 
-    # Collect actions sorted by order
-    actions = vm.actions.all()
+    # Collect steps sorted by order
+    steps = test_node.steps.all()
     result["actions"] = [
         {
-            "refid": action.refid,
-            "name": action.name or "",
-            "order": action.order,
-            "description": action.description or "",
-            # Traverse CALLEE / CALLER edges to get the target
-            # qualified names — the string properties have been removed.
-            "caller_qualified_name": get_typed_edge_targets(action, "CALLER")[0].qualified_name if get_typed_edge_targets(action, "CALLER") else "",
-            "callee_qualified_name": get_typed_edge_targets(action, "CALLEE")[0].qualified_name if get_typed_edge_targets(action, "CALLEE") else "",
+            "refid": getattr(step, "refid", "") or "",
+            "name": step.name or "",
+            "order": step.order,
+            "description": step.description or "",
+            "caller_qualified_name": get_typed_edge_targets(step, "CALLER")[0].get("qualified_name", "") if get_typed_edge_targets(step, "CALLER") else "",
+            "callee_qualified_name": get_typed_edge_targets(step, "CALLEE")[0].get("qualified_name", "") if get_typed_edge_targets(step, "CALLEE") else "",
         }
-        for action in sorted(actions, key=lambda a: a.order)
+        for step in sorted(steps, key=lambda s: s.order)
     ]
 
     return result

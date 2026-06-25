@@ -19,7 +19,7 @@ import logging
 
 from typing import TypedDict
 
-from backend_migrated.models import HLR, LLR, VerificationMethod, Condition, Action
+from backend_migrated.models import HLR, LLR, TestNode, AssertionNode, TestStepNode
 from backend_migrated.models.verification import get_typed_edge_targets
 
 log = logging.getLogger(__name__)
@@ -89,8 +89,8 @@ def fetch_llr_detail(refid: str) -> LLRDetail | None:
     # Verification methods with conditions and actions
     verifications: list[VerificationDetail] = []
     for vm in llr.verification_methods.all():
-        cond_nodes = vm.conditions.all()
-        act_nodes = vm.actions.all()
+        cond_nodes = vm.assertions.all()
+        act_nodes = vm.steps.all()
 
         preconditions: list[ConditionRow] = []
         for c in cond_nodes:
@@ -248,9 +248,9 @@ def update_verification(vm_refid: str, data: dict) -> bool:
     Returns:
         ``True`` on success, ``False`` if the VM is not found.
     """
-    vm = VerificationMethod.nodes.get_or_none(refid=vm_refid)
+    vm = TestNode.nodes.get_or_none(refid=vm_refid)
     if not vm:
-        log.warning("VerificationMethod %s not found", vm_refid[:8])
+        log.warning("TestNode %s not found", vm_refid[:8])
         return False
 
     # Update basic properties
@@ -259,59 +259,50 @@ def update_verification(vm_refid: str, data: dict) -> bool:
     vm.description = data.get("description", vm.description)
     vm.save()
 
-    # Delete existing conditions and actions
-    for c in vm.conditions.all():
-        vm.conditions.disconnect(c)
+    # Delete existing assertions and steps
+    for c in vm.assertions.all():
+        vm.assertions.disconnect(c)
         c.delete()
-    for a in vm.actions.all():
-        vm.actions.disconnect(a)
+    for a in vm.steps.all():
+        vm.steps.disconnect(a)
         a.delete()
 
     # Recreate preconditions
     for i, cond in enumerate(data.get("preconditions", [])):
         try:
-            c = Condition.save_new(
+            c = AssertionNode.save_new(
                 phase="pre",
                 order=i,
                 operator=cond.get("operator", "=="),
-                expected_value=cond.get("expected_value", ""),
-                subject_qualified_name=cond.get("subject_qualified_name", ""),
-                object_qualified_name=cond.get("object_qualified_name", ""),
-                layer="design",
+                description=cond.get("expected_value", ""),
             )
-            vm.conditions.connect(c)
+            vm.assertions.connect(c)
         except Exception as exc:
             log.warning("Failed to save precondition[%d] for VM %s: %s", i, vm_refid[:8], exc)
 
     # Recreate actions
     for i, action in enumerate(data.get("actions", [])):
         try:
-            a = Action.save_new(
+            a = TestStepNode.save_new(
                 order=i,
                 description=action.get("description", ""),
-                caller_qualified_name=action.get("caller_qualified_name", ""),
-                callee_qualified_name=action.get("callee_qualified_name", ""),
-                layer="design",
             )
-            vm.actions.connect(a)
+            vm.steps.connect(a)
         except Exception as exc:
             log.warning("Failed to save action[%d] for VM %s: %s", i, vm_refid[:8], exc)
 
     # Recreate postconditions
     for i, cond in enumerate(data.get("postconditions", [])):
         try:
-            c = Condition.save_new(
+            c = AssertionNode.save_new(
                 phase="post",
                 order=i,
                 operator=cond.get("operator", "=="),
-                expected_value=cond.get("expected_value", ""),
-                subject_qualified_name=cond.get("subject_qualified_name", ""),
-                object_qualified_name=cond.get("object_qualified_name", ""),
-                layer="design",
+                description=cond.get("expected_value", ""),
             )
-            vm.conditions.connect(c)
+            vm.assertions.connect(c)
         except Exception as exc:
             log.warning("Failed to save postcondition[%d] for VM %s: %s", i, vm_refid[:8], exc)
 
-    log.info("Updated VerificationMethod %s", vm_refid[:8])
+    log.info("Updated TestNode %s", vm_refid[:8])
     return True

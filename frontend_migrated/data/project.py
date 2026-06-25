@@ -17,7 +17,7 @@ import logging
 # Importing codegraph.config at module level ensures the neomodel
 # database URL is configured from environment variables before any
 # neomodel model is touched.
-from codegraph.config import config as _neo4j_config  # noqa: F401
+from codegraph.persistence.config import config as _neo4j_config  # noqa: F401
 
 from backend_migrated.models import Dependency, Language, ProjectMeta, Component
 
@@ -29,7 +29,7 @@ def _ensure_driver() -> None:
     sets the database URL.  This call ensures the driver object exists
     so that neomodel queries can proceed.  Safe to call multiple times.
     """
-    from codegraph.connection import _ensure_driver as _cg_ensure
+    from codegraph.persistence.connection import _ensure_driver as _cg_ensure
     _cg_ensure()
 
 

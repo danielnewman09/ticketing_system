@@ -48,6 +48,20 @@ DEFAULT_DATA_SUBDIR = ".ticketing"
 # ---------------------------------------------------------------------------
 
 
+def resolve_data_root(
+    project_dir: Path | str,
+    data_dir: Path | str | None = None,
+) -> Path:
+    """Return the project-local data directory, creating it if needed."""
+    project_dir = Path(project_dir).resolve()
+    if data_dir is not None:
+        root = Path(data_dir).resolve()
+    else:
+        root = project_dir / DEFAULT_DATA_SUBDIR
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def resolve_log_dir(
     project_dir: Path | str,
     data_dir: Path | str | None = None,
@@ -61,12 +75,10 @@ def resolve_log_dir(
             ``<project>/.ticketing``.
         log_dir: Explicit log dir override; defaults to ``<data_dir>/logs``.
     """
-    project_dir = Path(project_dir).resolve()
     if log_dir is not None:
         target = Path(log_dir).resolve()
     else:
-        parent = Path(data_dir).resolve() if data_dir else project_dir / DEFAULT_DATA_SUBDIR
-        target = parent / "logs"
+        target = resolve_data_root(project_dir, data_dir) / "logs"
     target.mkdir(parents=True, exist_ok=True)
     return target
 
@@ -95,7 +107,7 @@ def sync_neo4j_config(project_dir: Path | str) -> None:
     project_dir = Path(project_dir).resolve()
     load_dotenv(project_dir / ".env", override=True)
 
-    import codegraph.config as cfg
+    import codegraph.persistence.config as cfg
 
     uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
     user = os.environ.get("NEO4J_USER", "neo4j")
@@ -281,10 +293,13 @@ def run_dashboard(
 
     from nicegui import ui
 
-    ui.run(
-        title=f"Ticketing System — {project_name}",
-        host=host,
-        port=port,
-        reload=reload,
-        show=show,
-    )
+    try:
+        ui.run(
+            title=f"Ticketing System — {project_name}",
+            host=host,
+            port=port,
+            reload=reload,
+            show=show,
+        )
+    except KeyboardInterrupt:
+        pass

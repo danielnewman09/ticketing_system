@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from codegraph.graph import CompositeEntry, LayerGraph
-from codegraph.markdown import export_markdown
+from codegraph.export.markdown import export_markdown
 from codegraph.models.tags import CodeGraphNode
 
 if TYPE_CHECKING:

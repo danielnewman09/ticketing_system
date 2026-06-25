@@ -36,7 +36,7 @@ import logging
 import os
 import re
 
-from codegraph.config import config as _neo4j_config  # noqa: F401
+from codegraph.persistence.config import config as _neo4j_config  # noqa: F401
 
 from backend_migrated.models import Component, Dependency, Language, ProjectMeta
 
@@ -178,7 +178,7 @@ def detect_components_from_cmake(project_dir: str, project_name: str) -> list[st
 
 def _ensure_driver() -> None:
     """Ensure neomodel's database driver is initialised."""
-    from codegraph.connection import _ensure_driver as _cg_ensure
+    from codegraph.persistence.connection import _ensure_driver as _cg_ensure
     _cg_ensure()
 
 

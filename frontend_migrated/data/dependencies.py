@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from codegraph.repository import GraphRepository
+from codegraph import GraphRepository
 from codegraph.graph import LayerGraph, CompositeEntry
 
 from frontend_migrated.graph.format import layer_graph_to_cytoscape

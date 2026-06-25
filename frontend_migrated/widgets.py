@@ -646,7 +646,7 @@ def render_llr_table(llrs, on_delete=None, on_edit=None):
         methods = [
             child["method"]
             for child in llr.get("composes", [])
-            if child.get("type") == "VerificationMethod" and child.get("method")
+            if child.get("type") == "TestNode" and child.get("method")
         ]
         rows.append(
             {
