@@ -37,4 +37,5 @@ tests/agents_ui/__screenshots__/
 
 # Codegraph related stuff
 codegraph/
+
 .ticketing/dashboard.pid
