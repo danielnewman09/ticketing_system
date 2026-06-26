@@ -25,7 +25,7 @@ def _get_dep_config(dependency_name: str):
         A DepConfig instance (always non-None).
     """
     from doxygen_index.deps_config import DepConfig
-    from backend_migrated.models import Dependency
+    from codegraph_project.models import Dependency
 
     # Try exact refid match first (e.g. "conan::spdlog")
     # Then fall back to case-insensitive name match
@@ -64,7 +64,7 @@ def _tag_dependency_indexed(dependency_name: str) -> None:
     Args:
         dependency_name: Conan package name (case-insensitive).
     """
-    from backend_migrated.models import Dependency
+    from codegraph_project.models import Dependency
     from frontend_migrated.data.tags import _DEPENDENCY_PRESENCE_TAGS, _DEPENDENCY_HEALTH_TAGS
 
     # Same lookup strategy as _get_dep_config

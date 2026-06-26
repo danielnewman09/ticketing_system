@@ -425,7 +425,7 @@ class TestDecomposeHLR:
 
     def test_from_llm_dict_hlr_llr(self):
         """Verify HLR/LLR.from_llm_dict() constructs from raw LLM output."""
-        from backend_migrated.models.requirement import HLR, LLR
+        from codegraph_requirements.models import HLR, LLR
 
         # HLR from LLM dict (just description)
         hlr = HLR.from_llm_dict({"description": "The system shall compute arithmetic operations"})
@@ -445,7 +445,7 @@ class TestDecomposeHLR:
         """Round-trip: load raw LLM response → LayerGraph.deserialize() → verify structure."""
         import json
         from codegraph.graph import LayerGraph
-        from backend_migrated.models.requirement import HLR
+        from codegraph_requirements.models import HLR
 
         raw_path = artifact_path("decompose_hlr", "06_raw_response.json")
         if not raw_path.exists():

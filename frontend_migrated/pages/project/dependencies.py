@@ -317,7 +317,7 @@ class AddDependencyDialog:
         # the refid-autogeneration fix).  Try a name-based lookup instead.
         if comp_name and not component_refid:
             try:
-                from backend_migrated.models import Component as _Comp
+                from codegraph_project.models import Component as _Comp
                 existing = _Comp.nodes.get_or_none(name=comp_name)
                 if existing and existing.refid:
                     component_refid = existing.refid

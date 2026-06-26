@@ -40,7 +40,7 @@ log = logging.getLogger("decompose_and_scaffold")
 
 def main() -> None:
     from backend_migrated.connection import init_neo4j, close_neo4j
-    from backend_migrated.models.requirement import HLR
+    from codegraph_requirements.models import HLR
     from backend_migrated.agents.decompose_hlr import decompose_and_persist_hlr
 
     init_neo4j()

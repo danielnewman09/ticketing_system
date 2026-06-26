@@ -19,7 +19,8 @@ import logging
 
 from typing import TypedDict
 
-from backend_migrated.models import HLR, LLR, TestNode, AssertionNode, TestStepNode
+from codegraph_requirements.models import HLR, LLR
+from codegraph.models.test import TestNode, AssertionNode, TestStepNode
 from backend_migrated.models.verification import get_typed_edge_targets
 
 log = logging.getLogger(__name__)

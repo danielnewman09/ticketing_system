@@ -92,9 +92,9 @@ def clean_neo4j():
 
 def _seed_hlr(description: str = "Test HLR"):
     """Create a minimal HLR node and return its refid."""
-    from backend_migrated.models.requirement import HLR
+    from codegraph_requirements.models import HLR
 
-    hlr = HLR(description=description, layer="design", tags=["design"])
+    hlr = HLR(description=description, tags=["design"])
     hlr.save()
     return hlr
 
@@ -325,7 +325,7 @@ class TestEdgeReferences:
 
     def test_condition_subject_via_left_operand_edge(self, clean_neo4j):
         """LEFT_OPERAND edges should point to scaffold nodes with ::-separated qnames."""
-        from backend_migrated.models.verification import Condition
+        from codegraph.models.test import AssertionNode as Condition
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()
@@ -345,7 +345,7 @@ class TestEdgeReferences:
 
     def test_action_callee_via_callee_edge(self, clean_neo4j):
         """CALLEE edges should point to scaffold nodes with ::-separated qnames."""
-        from backend_migrated.models.verification import Action
+        from codegraph.models.test import TestStepNode as Action
 
         hlr = _seed_hlr()
         decomp = _make_decomposition()

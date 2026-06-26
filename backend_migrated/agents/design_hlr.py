@@ -30,7 +30,7 @@ from llm_caller import call_tool_loop
 from neomodel import db as neomodel_db
 
 from codegraph.models.tags import CodeGraphNode
-from backend_migrated.models.requirement import HLR, LLR
+from codegraph_requirements.models import HLR, LLR
 from backend_migrated.models.verification import TestNode, AssertionNode, TestStepNode, get_typed_edge_targets
 from backend_migrated.tools.dispatcher import (
     DesignToolDispatcher,

@@ -581,8 +581,8 @@ class TestRequirementTagEnrichment:
         mock_hlr.traces_to_members.all.return_value = []
         mock_hlr.traces_to_namespaces.all.return_value = []
 
-        with patch("backend_migrated.models.requirement.HLR") as MockHLR, \
-             patch("backend_migrated.models.requirement.LLR") as MockLLR:
+        with patch("codegraph_requirements.models.requirement.HLR") as MockHLR, \
+             patch("codegraph_requirements.models.requirement.LLR") as MockLLR:
             MockHLR.nodes.all.return_value = [mock_hlr]
             MockLLR.nodes.all.return_value = []
 
@@ -609,8 +609,8 @@ class TestRequirementTagEnrichment:
         nodes = [
             {"data": {"id": "dep1", "qualified_name": "Fl_Button", "source_type": "dependency", "name": "Fl_Button", "label": "Fl_Button"}},
         ]
-        with patch("backend_migrated.models.requirement.HLR") as MockHLR, \
-             patch("backend_migrated.models.requirement.LLR") as MockLLR:
+        with patch("codegraph_requirements.models.requirement.HLR") as MockHLR, \
+             patch("codegraph_requirements.models.requirement.LLR") as MockLLR:
             MockHLR.nodes.all.return_value = []
             MockLLR.nodes.all.return_value = []
             result = _enrich_with_requirement_tags(nodes, mode="hlr")
@@ -640,7 +640,7 @@ class TestTagDirectNodesOnly:
         mock_hlr.traces_to_members.all.return_value = []
         mock_hlr.traces_to_namespaces.all.return_value = []
 
-        with patch("backend_migrated.models.requirement.HLR") as MockHLR:
+        with patch("codegraph_requirements.models.requirement.HLR") as MockHLR:
             MockHLR.nodes.get_or_none.return_value = mock_hlr
             _tag_direct_nodes_only(nodes, hlr_id="hlr-123")
 
@@ -651,7 +651,7 @@ class TestTagDirectNodesOnly:
     def test_hlr_not_found_does_nothing(self):
         """If the HLR is not found, nodes should remain unchanged."""
         nodes = [{"data": {"id": "n1", "qualified_name": "ns::X", "label": "X"}}]
-        with patch("backend_migrated.models.requirement.HLR") as MockHLR:
+        with patch("codegraph_requirements.models.requirement.HLR") as MockHLR:
             MockHLR.nodes.get_or_none.return_value = None
             # Also make the fallback iteration return nothing
             MockHLR.nodes.all.return_value = []

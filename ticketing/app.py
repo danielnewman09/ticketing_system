@@ -166,7 +166,7 @@ def _seed_project_meta(project_name: str) -> None:
     to exist, so this runs after :func:`_ensure_constraints`.
     """
     try:
-        from backend_migrated.models import ProjectMeta
+        from codegraph_project.models import ProjectMeta
     except Exception:  # pragma: no cover — model import is environment-specific
         log.debug("ProjectMeta seeding skipped (models unavailable)", exc_info=True)
         return

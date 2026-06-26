@@ -833,7 +833,7 @@ def decompose_and_persist_hlr(
             validation (e.g., LLRs without verification methods, orphaned
             scaffold nodes, conditions without operands).
     """
-    from backend_migrated.models.requirement import HLR
+    from codegraph_requirements.models import HLR
     from backend_migrated.requirements.persistence import persist_decomposition
 
     # --- Load HLR from Neo4j ---

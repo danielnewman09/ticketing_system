@@ -1,11 +1,12 @@
-"""Neomodel node types that extend CodeGraphNode for project-management metadata.
+"""Neomodel node types re-exported from codegraph submodules.
 
-Provides ProjectMeta, Component, Language, Dependency, HLR, LLR,
-and TestNode / AssertionNode / TestStepNode / TestFixtureNode node models
-(re-exported from codegraph.models.test) for the project-management layer.
-These extend CodeGraphNode from codegraph to share serialization, registry,
-and relationship introspection infrastructure, while living in the same
-Neo4j database as code-level nodes (ClassNode, NamespaceNode, etc.).
+All project-management and requirement node models now live in:
+- codegraph_project.models: Component, ProjectMeta, Language, Dependency
+- codegraph_requirements.models: HLR, LLR
+- codegraph.models.test: TestNode, AssertionNode, TestStepNode, TestFixtureNode
+
+The ``get_typed_edge_targets`` helper remains in
+``backend_migrated.models.verification``.
 
 All project-management nodes participate in the COMPOSES hierarchy
 used by LayerGraph:
@@ -13,15 +14,11 @@ used by LayerGraph:
   Component \u2192 HLR \u2192 LLR \u2192 TestNode \u2192 AssertionNode / TestStepNode / TestFixtureNode
 
 NOTE: Before creating or querying nodes, neomodel's database connection
-must be configured. This is done by importing backend.db.neo4j.connection
-or by setting NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD environment variables.
+must be configured (import codegraph.config or set NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD).
 """
 
-from backend_migrated.models.component import Component
-from backend_migrated.models.dependency import Dependency
-from backend_migrated.models.language import Language
-from backend_migrated.models.project import ProjectMeta
-from backend_migrated.models.requirement import HLR, LLR
+from codegraph_project.models import Component, Dependency, Language, ProjectMeta
+from codegraph_requirements.models import HLR, LLR
 from backend_migrated.models.verification import (
     AssertionNode,
     TestFixtureNode,

@@ -58,7 +58,7 @@ from __future__ import annotations
 import logging
 import os
 
-from backend_migrated.models import Component, Dependency, Language, ProjectMeta
+from codegraph_project.models import Component, Dependency, Language, ProjectMeta
 
 log = logging.getLogger(__name__)
 

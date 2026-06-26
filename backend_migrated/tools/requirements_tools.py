@@ -360,7 +360,7 @@ def handle_get_requirement_hierarchy(
     ctx: RequirementsDispatcher, tool_input: dict,
 ) -> str:
     """Fetch the full HLR → LLR → Verification hierarchy by refid."""
-    from backend_migrated.models.requirement import HLR
+    from codegraph_requirements.models import HLR
 
     refid = tool_input.get("refid", "")
     if not refid:
@@ -382,7 +382,7 @@ def handle_get_llr_details(
     ctx: RequirementsDispatcher, tool_input: dict,
 ) -> str:
     """Fetch a single LLR with its verification methods by refid."""
-    from backend_migrated.models.requirement import LLR
+    from codegraph_requirements.models import LLR
 
     refid = tool_input.get("refid", "")
     if not refid:
@@ -410,7 +410,7 @@ def handle_search_requirements(
     ctx: RequirementsDispatcher, tool_input: dict,
 ) -> str:
     """Search HLRs and/or LLRs by description keyword."""
-    from backend_migrated.models.requirement import HLR, LLR
+    from codegraph_requirements.models import HLR, LLR
 
     query = tool_input.get("query", "")
     scope = tool_input.get("scope", "both")
@@ -459,7 +459,7 @@ def handle_list_requirements(
     ctx: RequirementsDispatcher, tool_input: dict,
 ) -> str:
     """List all HLRs, optionally filtered by component and layer."""
-    from backend_migrated.models.requirement import HLR
+    from codegraph_requirements.models import HLR
 
     component_name = tool_input.get("component_name")
     layer = tool_input.get("layer")
@@ -509,7 +509,7 @@ def handle_get_requirement_traces(
     ctx: RequirementsDispatcher, tool_input: dict,
 ) -> str:
     """Retrieve all COMPOSES edges from an HLR or LLR to design nodes."""
-    from backend_migrated.models.requirement import HLR, LLR
+    from codegraph_requirements.models import HLR, LLR
 
     refid = tool_input.get("refid", "")
     if not refid:

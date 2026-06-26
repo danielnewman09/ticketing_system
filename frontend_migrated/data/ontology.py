@@ -184,7 +184,7 @@ def _get_component_map() -> dict[int, str]:
     on pre-existing nodes) and fall back to the ``name``.
     """
     try:
-        from backend_migrated.models import Component
+        from codegraph_project.models import Component
         result: dict[int, str] = {}
         for comp in Component.nodes.all():
             # Legacy integer id may be preserved on pre-existing nodes
@@ -239,7 +239,7 @@ def _enrich_with_requirement_tags(
 
     # Walk HLR COMPOSES targets
     try:
-        from backend_migrated.models.requirement import HLR, LLR
+        from codegraph_requirements.models import HLR, LLR
 
         for hlr in HLR.nodes.all():
             hlr_id = getattr(hlr, "id", None) or getattr(hlr, "refid", "")
@@ -281,7 +281,7 @@ def _tag_direct_nodes_only(nodes: list[dict], hlr_id: str | int) -> None:
         hlr_id: The HLR's refid (string) or legacy integer id.
     """
     try:
-        from backend_migrated.models.requirement import HLR
+        from codegraph_requirements.models import HLR
 
         # Try lookup by refid (primary key)
         hlr = HLR.nodes.get_or_none(refid=str(hlr_id))
@@ -455,7 +455,7 @@ def fetch_hlr_graph_data(
             highlight + badges.
     """
     try:
-        from backend_migrated.models.requirement import HLR
+        from codegraph_requirements.models import HLR
 
         # Find the HLR node
         hlr = HLR.nodes.get_or_none(refid=str(hlr_id))
@@ -624,7 +624,7 @@ def fetch_node_detail_full(qualified_name: str) -> NodeDetailFull | None:
     component_name = ""
     if node_data["component_id"]:
         try:
-            from backend_migrated.models import Component
+            from codegraph_project.models import Component
             # Try to find Component by name (components are identified by name
             # in the migrated system, not by integer id)
             # component_id may refer to the legacy SQLAlchemy id
@@ -644,7 +644,7 @@ def fetch_node_detail_full(qualified_name: str) -> NodeDetailFull | None:
     # Requirement tags: walk COMPOSES on HLR/LLR nodes pointing at this qn
     requirements: list[dict] = []
     try:
-        from backend_migrated.models.requirement import HLR, LLR
+        from codegraph_requirements.models import HLR, LLR
 
         for hlr in HLR.nodes.all():
             for target in hlr.design_compounds.all():

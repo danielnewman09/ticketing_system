@@ -18,9 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from backend_migrated.models import Component, Language
-
-log = logging.getLogger(__name__)
+from codegraph_project.models import Component, Language
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +100,7 @@ def create_component(
     # Connect the component to the ProjectMeta singleton so that
     # ProjectMeta -[:COMPOSES]-> Component is always present.
     try:
-        from backend_migrated.models import ProjectMeta
+        from codegraph_project.models import ProjectMeta
         meta = ProjectMeta.get_singleton()
         meta.components.connect(comp)
     except Exception as exc:
@@ -229,7 +227,7 @@ def add_dependency(
     Returns:
         The refid of the Dependency node.
     """
-    from backend_migrated.models import Dependency
+    from codegraph_project.models import Dependency
 
     refid = f"{manager_name}::{dep_name}" if manager_name else dep_name.lower()
 
@@ -289,7 +287,7 @@ def update_dependency_index_config(
     Returns:
         True if the update succeeded.
     """
-    from backend_migrated.models import Dependency
+    from codegraph_project.models import Dependency
 
     dep = Dependency.nodes.get_or_none(refid=dep_refid)
     if dep is None:
@@ -310,7 +308,7 @@ def delete_dependency(dep_refid: str) -> bool:
 
     Also disconnects the dependency from all components that reference it.
     """
-    from backend_migrated.models import Dependency
+    from codegraph_project.models import Dependency
 
     dep = Dependency.nodes.get_or_none(refid=dep_refid)
     if dep is None:
@@ -365,7 +363,7 @@ def delete_dependency_manager(manager_name: str) -> bool:
     Returns:
         True if any dependencies were deleted, False otherwise.
     """
-    from backend_migrated.models import Dependency
+    from codegraph_project.models import Dependency
 
     deleted = 0
     for dep in Dependency.nodes.filter(manager_name=manager_name):

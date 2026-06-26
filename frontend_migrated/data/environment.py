@@ -38,7 +38,7 @@ import re
 
 from codegraph.persistence.config import config as _neo4j_config  # noqa: F401
 
-from backend_migrated.models import Component, Dependency, Language, ProjectMeta
+from codegraph_project.models import Component, Dependency, Language, ProjectMeta
 
 log = logging.getLogger(__name__)
 

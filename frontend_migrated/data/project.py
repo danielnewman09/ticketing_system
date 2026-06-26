@@ -19,7 +19,7 @@ import logging
 # neomodel model is touched.
 from codegraph.persistence.config import config as _neo4j_config  # noqa: F401
 
-from backend_migrated.models import Dependency, Language, ProjectMeta, Component
+from codegraph_project.models import Dependency, Language, ProjectMeta, Component
 
 
 def _ensure_driver() -> None:

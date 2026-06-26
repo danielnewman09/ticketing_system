@@ -13,7 +13,10 @@ from backend_migrated.connection import (
     get_neo4j,
     init_neo4j,
 )
-from backend_migrated.models import Component, Dependency, Language, ProjectMeta
+from codegraph_project.models import Component, Dependency, Language, ProjectMeta
+from codegraph_requirements.models import HLR, LLR
+from codegraph.models.test import TestNode, AssertionNode, TestStepNode, TestFixtureNode
+from backend_migrated.models.verification import get_typed_edge_targets
 
 __all__ = [
     # Connection management
@@ -22,9 +25,16 @@ __all__ = [
     "init_neo4j",
     "get_neo4j",
     "close_neo4j",
-    # Models
+    # Models (re-exported from codegraph)
     "Component",
     "Dependency",
     "Language",
     "ProjectMeta",
+    "HLR",
+    "LLR",
+    "TestNode",
+    "AssertionNode",
+    "TestStepNode",
+    "TestFixtureNode",
+    "get_typed_edge_targets",
 ]

@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 
 from neomodel import db
 
-from backend_migrated.models.requirement import HLR, LLR
+from codegraph_requirements.models import HLR, LLR
 from backend_migrated.requirements.schemas import DecomposedRequirementSchema
 
 log = logging.getLogger(__name__)

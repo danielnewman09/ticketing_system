@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
-from backend_migrated.models import ProjectMeta
+from codegraph_project.models import ProjectMeta
 from codegraph.models.tags import CodeGraphNode
 
 from nicegui import ui

@@ -19,7 +19,8 @@ class TestProjectMetaStructure:
 
     @pytest.fixture()
     def project_source(self) -> str:
-        with open("backend_migrated/models/project.py") as f:
+        import codegraph_project.models.project as _pm
+        with open(_pm.__file__) as f:
             return f.read()
 
     def test_project_meta_class_exists(self, project_source):
@@ -93,8 +94,8 @@ class TestProjectMetaExports:
     def test_models_init_exports_project_meta(self):
         with open("backend_migrated/models/__init__.py") as f:
             source = f.read()
-        assert "ProjectMeta" in source
-        assert "from backend_migrated.models.project import ProjectMeta" in source
+        assert "codegraph_project.models" in source
+        assert "from codegraph_project.models import ProjectMeta" in source
 
     def test_top_level_init_exports_project_meta(self):
         with open("backend_migrated/__init__.py") as f:
@@ -120,7 +121,8 @@ class TestProjectMetaSingleton:
 
     def test_get_singleton_creates_when_absent(self):
         """get_singleton should create the node when it doesn't exist."""
-        with open("backend_migrated/models/project.py") as f:
+        import codegraph_project.models.project as _pm
+        with open(_pm.__file__) as f:
             source = f.read()
 
         # Verify get_singleton uses refid="project" as lookup key
@@ -136,7 +138,8 @@ class TestProjectMetaSingleton:
 
     def test_update_singleton_modifies_fields(self):
         """update_singleton should set name, description, working_directory and save."""
-        with open("backend_migrated/models/project.py") as f:
+        import codegraph_project.models.project as _pm
+        with open(_pm.__file__) as f:
             source = f.read()
 
         # Check that update_singleton calls get_singleton first
@@ -211,10 +214,10 @@ class TestFrontendDataProject:
                     pytest.fail(f"Found import from old backend: {stripped}")
 
     def test_imports_backend_migrated_models(self):
-        with open("frontend_migrated/data/project.py") as f:
+        with open("backend_migrated/models/__init__.py") as f:
             source = f.read()
 
-        assert "from backend_migrated.models import" in source
+        assert "from codegraph_project.models import" in source
         assert "ProjectMeta" in source
 
     def test_fetch_environment_data_uses_serialize(self):

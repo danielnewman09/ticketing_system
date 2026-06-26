@@ -40,7 +40,9 @@ from __future__ import annotations
 
 import logging
 
-from backend_migrated.models import Component, HLR, LLR, TestNode
+from codegraph_project.models import Component
+from codegraph_requirements.models import HLR, LLR
+from codegraph.models.test import TestNode
 
 log = logging.getLogger(__name__)
 
